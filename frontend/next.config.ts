@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
     root: rootDir,
   },
   async rewrites() {
-    const apiUrl = process.env.BACKEND_INTERNAL_URL ?? 'http://localhost:3001';
+    const apiUrl = process.env.BACKEND_INTERNAL_URL ?? 'https://gestop-production.up.railway.app';
 
     return [
       {

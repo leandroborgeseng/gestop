@@ -66,14 +66,20 @@ export function clearStoredAuth() {
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getStoredAuth()?.accessToken;
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...(init?.headers ?? {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    cache: 'no-store',
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      cache: 'no-store',
+    });
+  } catch {
+    throw new Error('Falha de conexão com a API. Verifique se o backend está online e se a URL da API está configurada.');
+  }
 
   if (response.status === 401) {
     clearStoredAuth();
@@ -92,13 +98,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export async function login(email: string, password: string) {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch {
+    throw new Error('Falha de conexão com a API. Verifique se o backend está online e se a URL da API está configurada.');
+  }
 
   if (response.status === 401) {
     throw new Error('Credenciais inválidas.');
