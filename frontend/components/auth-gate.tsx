@@ -2,13 +2,22 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getStoredAuth, logout, StoredAuth } from '@/lib/api';
-import { LoadingState } from './ui-states';
+import { getStoredAuth, StoredAuth } from '@/lib/api';
+import { AppShell } from '@/components/layout/app-shell';
+import { PageContainer } from '@/components/layout/page-shell';
+import { Skeleton } from '@/components/ui/skeleton';
 
-export function AuthGate({ children, requiredPermissions = [] }: { children: React.ReactNode; requiredPermissions?: string[] }) {
+export function AuthGate({
+  children,
+  requiredPermissions = [],
+}: {
+  children: React.ReactNode;
+  requiredPermissions?: string[];
+}) {
   const router = useRouter();
   const [auth, setAuth] = useState<StoredAuth | null>(null);
   const [checking, setChecking] = useState(true);
+  const [denied, setDenied] = useState(false);
 
   useEffect(() => {
     const stored = getStoredAuth();
@@ -18,17 +27,37 @@ export function AuthGate({ children, requiredPermissions = [] }: { children: Rea
       return;
     }
 
+    const hasPermission = requiredPermissions.every((permission) =>
+      stored.user.permissoes.includes(permission),
+    );
+
+    if (!hasPermission) {
+      setDenied(true);
+      router.replace('/login?reason=denied');
+      return;
+    }
+
     setAuth(stored);
     setChecking(false);
-  }, [router]);
+  }, [router, requiredPermissions]);
 
-  if (checking) {
+  if (checking || denied) {
     return (
-      <main className="gestop-shell p-4 md:p-6">
-        <div className="mx-auto max-w-4xl">
-          <LoadingState label="Verificando sessão..." />
-        </div>
-      </main>
+      <div className="gestop-shell">
+        <PageContainer>
+          <div className="space-y-4 py-8">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-72" />
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <Skeleton className="h-28" />
+              <Skeleton className="h-28" />
+              <Skeleton className="h-28" />
+              <Skeleton className="h-28" />
+            </div>
+            <Skeleton className="h-[420px]" />
+          </div>
+        </PageContainer>
+      </div>
     );
   }
 
@@ -36,92 +65,13 @@ export function AuthGate({ children, requiredPermissions = [] }: { children: Rea
     return null;
   }
 
-  const hasPermission = requiredPermissions.every((permission) => auth.user.permissoes.includes(permission));
-
-  if (!hasPermission) {
-    router.replace('/login?reason=denied');
-    return null;
-  }
-
   return (
-    <>
-      <div className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 md:px-6">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">GestOP</p>
-            <p className="text-sm text-slate-600">
-              {auth.user.nome} · {auth.user.perfis.join(', ')}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {auth.user.permissoes.includes('secretarias.gerenciar') ? (
-              <button
-                type="button"
-                onClick={() => router.push('/admin')}
-                className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
-              >
-                Administração
-              </button>
-            ) : null}
-            {auth.user.permissoes.includes('checklists.gerenciar') ? (
-              <button
-                type="button"
-                onClick={() => router.push('/checklists')}
-                className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
-              >
-                Checklists
-              </button>
-            ) : null}
-            {auth.user.permissoes.includes('fiscalizacoes.executar') ? (
-              <button
-                type="button"
-                onClick={() => router.push('/mobile')}
-                className="rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100"
-              >
-                Campo
-              </button>
-            ) : null}
-            {auth.user.permissoes.includes('chamados.gerenciar') ? (
-              <button
-                type="button"
-                onClick={() => router.push('/ordens-servico')}
-                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"
-              >
-                OS
-              </button>
-            ) : null}
-            {auth.user.permissoes.includes('dashboard.visualizar') ? (
-              <button
-                type="button"
-                onClick={() => router.push('/dashboard')}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Dashboard
-              </button>
-            ) : null}
-            {auth.user.permissoes.includes('auditoria.visualizar') ? (
-              <button
-                type="button"
-                onClick={() => router.push('/integracoes')}
-                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Integrações
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => {
-                logout();
-                router.replace('/login?reason=logout');
-              }}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Sair
-            </button>
-          </div>
-        </div>
-      </div>
+    <AppShell
+      userName={auth.user.nome}
+      userRoles={auth.user.perfis}
+      permissions={auth.user.permissoes}
+    >
       {children}
-    </>
+    </AppShell>
   );
 }

@@ -1,6 +1,12 @@
 'use client';
 
+import { SlidersHorizontal } from 'lucide-react';
 import { SecretariaOption, UnidadeFilters } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 
 const tipos = [
   ['ESCOLA', 'Escola'],
@@ -40,39 +46,39 @@ export function UnidadeFiltersPanel({
     onChange({});
   }
 
-  return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-slate-950">Consulta de próprios</h2>
-          <p className="text-sm text-slate-600">Filtre a lista e o mapa de forma sincronizada.</p>
-        </div>
-        <button
-          type="button"
-          onClick={clear}
-          className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-        >
-          Limpar
-        </button>
-      </div>
+  const activeCount = Object.values(filters).filter(Boolean).length;
 
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700">
-          Busca
-          <input
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
+        <div>
+          <CardTitle className="flex items-center gap-2">
+            <SlidersHorizontal className="h-4 w-4 text-blue-600" />
+            Consulta de próprios
+          </CardTitle>
+          <CardDescription className="mt-1">
+            Filtre a lista e o mapa de forma sincronizada.
+            {activeCount > 0 ? ` ${activeCount} filtro(s) ativo(s).` : ''}
+          </CardDescription>
+        </div>
+        <Button variant="secondary" size="sm" onClick={clear}>
+          Limpar
+        </Button>
+      </CardHeader>
+
+      <CardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Field label="Busca">
+          <Input
             value={filters.search ?? ''}
             onChange={(event) => update('search', event.target.value)}
             placeholder="Nome, endereço, código ou secretaria"
-            className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
           />
-        </label>
+        </Field>
 
-        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700">
-          Secretaria
-          <select
+        <Field label="Secretaria">
+          <Select
             value={filters.secretariaId ?? ''}
             onChange={(event) => update('secretariaId', event.target.value)}
-            className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">Todas</option>
             {secretarias.map((secretaria) => (
@@ -80,31 +86,24 @@ export function UnidadeFiltersPanel({
                 {secretaria.sigla} - {secretaria.nome}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
 
-        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700">
-          Tipo
-          <select
-            value={filters.tipo ?? ''}
-            onChange={(event) => update('tipo', event.target.value)}
-            className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-          >
+        <Field label="Tipo">
+          <Select value={filters.tipo ?? ''} onChange={(event) => update('tipo', event.target.value)}>
             <option value="">Todos</option>
             {tipos.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
 
-        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700">
-          Situação
-          <select
+        <Field label="Situação">
+          <Select
             value={filters.situacao ?? ''}
             onChange={(event) => update('situacao', event.target.value)}
-            className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">Todas</option>
             {situacoes.map(([value, label]) => (
@@ -112,38 +111,31 @@ export function UnidadeFiltersPanel({
                 {label}
               </option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
 
-        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700">
-          Pendências
-          <select
+        <Field label="Pendências">
+          <Select
             value={filters.pendencias ?? ''}
             onChange={(event) => update('pendencias', event.target.value)}
-            className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
           >
             <option value="">Todas</option>
             <option value="true">Somente com pendências</option>
             <option value="false">Sem pendências</option>
-          </select>
-        </label>
+          </Select>
+        </Field>
 
-        <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700">
-          Bairro
-          <select
-            value={filters.bairro ?? ''}
-            onChange={(event) => update('bairro', event.target.value)}
-            className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-          >
+        <Field label="Bairro">
+          <Select value={filters.bairro ?? ''} onChange={(event) => update('bairro', event.target.value)}>
             <option value="">Todos</option>
             {bairros.map((bairro) => (
               <option key={bairro} value={bairro}>
                 {bairro}
               </option>
             ))}
-          </select>
-        </label>
-      </div>
-    </section>
+          </Select>
+        </Field>
+      </CardContent>
+    </Card>
   );
 }

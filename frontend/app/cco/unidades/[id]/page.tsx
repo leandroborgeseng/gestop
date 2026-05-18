@@ -1,11 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   AlertTriangle,
-  ArrowLeft,
   Building2,
   CalendarClock,
   ClipboardList,
@@ -17,6 +15,7 @@ import {
 import { getUnidadeDetalhe } from '@/lib/api';
 import { UnidadeDetalhe } from '@/lib/types';
 import { AuthGate } from '@/components/auth-gate';
+import { PageShell } from '@/components/layout/page-shell';
 import { StatusBadge } from '@/components/status-badge';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 
@@ -53,21 +52,16 @@ export default function UnidadeDetalhePage() {
 
   return (
     <AuthGate>
-      <main className="gestop-shell p-4 md:p-6">
-        <div className="mx-auto max-w-6xl">
-          <Link
-            href="/cco"
-            className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar para CCO
-          </Link>
-
+      <PageShell
+        title={unidade?.nome ?? 'Detalhe do próprio'}
+        description={unidade ? `${unidade.tipo} · ${unidade.secretaria.sigla}` : 'Carregando informações da unidade'}
+        icon={Building2}
+        backHref="/cco"
+      >
           {error ? <ErrorState message={error} /> : null}
           {loading ? <LoadingState label="Carregando detalhe do próprio..." /> : null}
           {!loading && unidade ? <UnidadeDetalheView unidade={unidade} /> : null}
-        </div>
-      </main>
+      </PageShell>
     </AuthGate>
   );
 }

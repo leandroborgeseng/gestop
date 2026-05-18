@@ -1,9 +1,14 @@
 'use client';
 
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, Camera, CloudUpload, MapPin, RefreshCcw, Save } from 'lucide-react';
+import { Camera, CloudUpload, MapPin, RefreshCcw, Save, Smartphone } from 'lucide-react';
 import { AuthGate } from '@/components/auth-gate';
+import { PageShell } from '@/components/layout/page-shell';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Select } from '@/components/ui/select';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { getMobileFieldPackage, syncMobileInspection } from '@/lib/api';
 import { ChecklistItem, MobileFieldPackage, MobileQueuedInspection } from '@/lib/types';
@@ -163,51 +168,51 @@ export default function MobilePage() {
 
   return (
     <AuthGate requiredPermissions={['fiscalizacoes.executar']}>
-      <main className="gestop-shell min-h-screen p-3">
-        <div className="mx-auto max-w-md space-y-4">
-          <Link href="/cco" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm">
-            <ArrowLeft className="h-4 w-4" />
-            CCO
-          </Link>
-
-          <header className="rounded-3xl bg-blue-700 p-5 text-white shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wide text-blue-100">PWA Campo</p>
-            <h1 className="mt-2 text-2xl font-bold">Fiscalização offline</h1>
-            <p className="mt-2 text-sm text-blue-50">Preencha em campo, salve localmente e sincronize quando houver conexão.</p>
-          </header>
-
+      <PageShell
+        kicker="PWA Campo"
+        icon={Smartphone}
+        title="Fiscalização offline"
+        description="Preencha em campo, salve localmente e sincronize quando houver conexão."
+        backHref="/cco"
+      >
+        <div className="mx-auto max-w-2xl space-y-4 pb-28">
           {error ? <ErrorState message={error} /> : null}
-          {success ? <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">{success}</div> : null}
+          {success ? <Alert variant="success">{success}</Alert> : null}
           {loading ? <LoadingState label="Baixando pacote de campo..." /> : null}
 
           {fieldPackage ? (
             <>
-              <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-                <label className="mb-3 flex flex-col gap-1 text-sm font-semibold text-slate-700">
-                  Próprio público
-                  <select value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)} className="min-h-11 rounded-xl border border-slate-200 px-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configurar vistoria</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4 pt-0">
+                <Field label="Próprio público">
+                  <Select value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)}>
                     <option value="">Selecione</option>
                     {fieldPackage.unidades.map((unidade) => (
                       <option key={unidade.id} value={unidade.id}>{unidade.nome}</option>
                     ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700">
-                  Checklist
-                  <select value={checklistId} onChange={(e) => setChecklistId(e.target.value)} className="min-h-11 rounded-xl border border-slate-200 px-3">
+                  </Select>
+                </Field>
+                <Field label="Checklist">
+                  <Select value={checklistId} onChange={(e) => setChecklistId(e.target.value)}>
                     <option value="">Selecione</option>
                     {fieldPackage.checklists.map((checklist) => (
                       <option key={checklist.id} value={checklist.id}>{checklist.nome}</option>
                     ))}
-                  </select>
-                </label>
-              </section>
+                  </Select>
+                </Field>
+                </CardContent>
+              </Card>
 
               {selectedUnit ? (
-                <section className="rounded-3xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
-                  <p className="flex items-center gap-2 font-semibold text-slate-950"><MapPin className="h-4 w-4 text-blue-700" />{selectedUnit.nome}</p>
-                  <p className="mt-1">{selectedUnit.bairro ?? 'Sem bairro'} · raio {selectedUnit.raioValidacaoMetros} m</p>
-                </section>
+                <Card>
+                  <CardContent className="p-4 text-sm">
+                  <p className="flex items-center gap-2 font-semibold text-zinc-950"><MapPin className="h-4 w-4 text-blue-600" />{selectedUnit.nome}</p>
+                  <p className="mt-1 text-zinc-500">{selectedUnit.bairro ?? 'Sem bairro'} · raio {selectedUnit.raioValidacaoMetros} m</p>
+                  </CardContent>
+                </Card>
               ) : null}
 
               {selectedVersion ? (
@@ -215,29 +220,34 @@ export default function MobilePage() {
                   {selectedVersion.itens.map((item) => (
                     <ChecklistItemCard key={item.id} item={item} value={responses[item.id]} onChange={(patch) => updateResponse(item.id, patch)} onEvidence={(event) => handleEvidence(item.id, event)} />
                   ))}
-                  <button onClick={saveOffline} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-blue-700 px-4 font-bold text-white">
-                    <Save className="h-5 w-5" />
-                    Salvar na fila offline
-                  </button>
                 </section>
               ) : null}
 
-              <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between gap-3">
+              <Card>
+                <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="font-bold text-slate-950">Fila de sincronização</h2>
-                    <p className="text-sm text-slate-600">{queue.length} fiscalização(ões) pendente(s)</p>
+                    <h2 className="font-semibold text-zinc-950">Fila de sincronização</h2>
+                    <p className="text-sm text-zinc-500">{queue.length} fiscalização(ões) pendente(s)</p>
                   </div>
-                  <button disabled={queue.length === 0 || syncing} onClick={syncQueue} className="inline-flex items-center gap-2 rounded-xl bg-green-700 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">
+                  <Button variant="brand" disabled={queue.length === 0 || syncing} onClick={syncQueue}>
                     {syncing ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
                     Sincronizar
-                  </button>
+                  </Button>
+                </CardContent>
+              </Card>
+
+              {selectedVersion ? (
+                <div className="fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-20 border-t border-zinc-200/80 bg-white/95 px-4 py-3 backdrop-blur-xl lg:static lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
+                  <Button variant="brand" size="lg" className="w-full" onClick={saveOffline}>
+                    <Save className="h-5 w-5" />
+                    Salvar na fila offline
+                  </Button>
                 </div>
-              </section>
+              ) : null}
             </>
           ) : null}
         </div>
-      </main>
+      </PageShell>
     </AuthGate>
   );
 }
@@ -246,22 +256,24 @@ function ChecklistItemCard({ item, value, onChange, onEvidence }: { item: Checkl
   const current = value ?? { conformidade: 'CONFORME', comentario: '' };
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-wide text-blue-700">{item.codigo}</p>
-      <h3 className="mt-1 font-bold text-slate-950">{item.titulo}</h3>
-      <select value={current.conformidade} onChange={(e) => onChange({ conformidade: e.target.value as ResponseDraft['conformidade'] })} className="mt-3 min-h-11 w-full rounded-xl border border-slate-200 px-3">
+    <Card>
+      <CardContent className="space-y-3 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{item.codigo}</p>
+      <h3 className="text-base font-semibold text-zinc-950">{item.titulo}</h3>
+      <Select value={current.conformidade} onChange={(e) => onChange({ conformidade: e.target.value as ResponseDraft['conformidade'] })}>
         <option value="CONFORME">Conforme</option>
         <option value="NAO_CONFORME">Não conforme</option>
         <option value="NAO_APLICAVEL">Não aplicável</option>
-      </select>
-      <textarea value={current.comentario} onChange={(e) => onChange({ comentario: e.target.value })} placeholder="Observação" className="mt-3 min-h-24 w-full rounded-xl border border-slate-200 p-3 text-sm" />
-      <label className="mt-3 flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-slate-300 px-3 text-sm font-semibold text-slate-700">
+      </Select>
+      <textarea value={current.comentario} onChange={(e) => onChange({ comentario: e.target.value })} placeholder="Observação" className="min-h-24 w-full rounded-2xl border border-zinc-200 bg-white p-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10" />
+      <label className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
         <Camera className="h-4 w-4" />
         {current.evidenceDataUrl ? 'Foto anexada' : 'Anexar foto'}
         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onEvidence} />
       </label>
-      {item.exigeEvidencia ? <p className="mt-2 text-xs text-amber-700">Não conformidade exige evidência.</p> : null}
-    </div>
+      {item.exigeEvidencia ? <p className="text-xs text-amber-700">Não conformidade exige evidência.</p> : null}
+      </CardContent>
+    </Card>
   );
 }
 

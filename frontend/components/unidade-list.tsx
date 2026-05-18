@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, ClipboardList, MapPin } from 'lucide-react';
 import { UnidadeOperacional } from '@/lib/types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from './status-badge';
 import { EmptyState } from './ui-states';
 
@@ -15,54 +16,52 @@ export function UnidadeList({ unidades }: { unidades: UnidadeOperacional[] }) {
   }
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-bold text-slate-950">Próprios públicos</h2>
-          <p className="text-sm text-slate-600">{unidades.length} registro(s) na consulta atual.</p>
-        </div>
-      </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Próprios públicos</CardTitle>
+        <CardDescription>{unidades.length} registro(s) na consulta atual.</CardDescription>
+      </CardHeader>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200">
-        <div className="max-h-[620px] divide-y divide-slate-100 overflow-auto">
-          {unidades.map((unidade) => (
-            <Link
-              key={unidade.id}
-              href={`/cco/unidades/${unidade.id}`}
-              className="block bg-white p-4 transition hover:bg-blue-50/60"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="font-semibold text-slate-950">{unidade.nome}</h3>
-                    <StatusBadge situacao={unidade.situacao} />
-                  </div>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {unidade.codigoPatrimonial} · {unidade.secretaria.sigla} · {unidade.tipo}
-                  </p>
+      <CardContent className="space-y-3 pt-0">
+        {unidades.map((unidade) => (
+          <Link
+            key={unidade.id}
+            href={`/cco/unidades/${unidade.id}`}
+            className="group block rounded-2xl border border-zinc-200/80 bg-zinc-50/40 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-md"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold text-zinc-950">{unidade.nome}</h3>
+                  <StatusBadge situacao={unidade.situacao} />
                 </div>
-                <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-slate-400" />
+                <p className="mt-1 text-sm text-zinc-500">
+                  {unidade.codigoPatrimonial} · {unidade.secretaria.sigla} · {unidade.tipo}
+                </p>
               </div>
+              <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-zinc-300 transition group-hover:text-blue-600" />
+            </div>
 
-              <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2">
-                <span className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-blue-600" />
+            <div className="mt-4 grid gap-2 text-sm text-zinc-600 md:grid-cols-2">
+              <span className="flex items-center gap-2">
+                <MapPin className="h-4 w-4 shrink-0 text-blue-600" />
+                <span className="truncate">
                   {unidade.bairro ? `${unidade.bairro} · ` : ''}
                   {unidade.latitude !== null && unidade.longitude !== null
                     ? `${unidade.latitude.toFixed(5)}, ${unidade.longitude.toFixed(5)}`
                     : 'Sem localização'}
                 </span>
-                <span className="flex items-center gap-2">
-                  <ClipboardList className="h-4 w-4 text-blue-600" />
-                  {unidade.totais.fiscalizacoes} fiscalização(ões) ·{' '}
-                  {unidade.pendencias.naoConformidadesAbertas + unidade.pendencias.ordensServicoAbertas}{' '}
-                  pendência(s)
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-    </section>
+              </span>
+              <span className="flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 shrink-0 text-blue-600" />
+                {unidade.totais.fiscalizacoes} fiscalização(ões) ·{' '}
+                {unidade.pendencias.naoConformidadesAbertas + unidade.pendencias.ordensServicoAbertas}{' '}
+                pendência(s)
+              </span>
+            </div>
+          </Link>
+        ))}
+      </CardContent>
+    </Card>
   );
 }

@@ -1,9 +1,10 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, ClipboardList, GitBranch, Plus } from 'lucide-react';
+import { ClipboardList, GitBranch, Plus } from 'lucide-react';
 import { AuthGate } from '@/components/auth-gate';
+import { PageShell } from '@/components/layout/page-shell';
+import { Alert } from '@/components/ui/alert';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import {
   createChecklistVersion,
@@ -84,23 +85,15 @@ export default function ChecklistsPage() {
 
   return (
     <AuthGate requiredPermissions={['checklists.gerenciar']}>
-      <main className="gestop-shell p-4 md:p-6">
-        <div className="mx-auto max-w-7xl">
-          <Link href="/cco" className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar para CCO
-          </Link>
-
-          <header className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Construtor Operacional</p>
-            <h1 className="mt-2 text-3xl font-bold text-slate-950">Checklists e versionamento</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Crie modelos, edite versões em rascunho e publique versões imutáveis para fiscalizações futuras.
-            </p>
-          </header>
-
+      <PageShell
+        kicker="Construtor Operacional"
+        icon={ClipboardList}
+        title="Checklists e versionamento"
+        description="Crie modelos, edite versões em rascunho e publique versões imutáveis para fiscalizações futuras."
+        backHref="/cco"
+      >
           {error ? <div className="mb-4"><ErrorState message={error} /></div> : null}
-          {success ? <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">{success}</div> : null}
+          {success ? <Alert variant="success" className="mb-4">{success}</Alert> : null}
 
           {loading ? <LoadingState label="Carregando checklists..." /> : null}
 
@@ -166,8 +159,7 @@ export default function ChecklistsPage() {
               )}
             </div>
           ) : null}
-        </div>
-      </main>
+      </PageShell>
     </AuthGate>
   );
 }

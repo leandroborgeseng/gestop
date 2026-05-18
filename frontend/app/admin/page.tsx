@@ -1,9 +1,11 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, Building2, MapPin, UserRound } from 'lucide-react';
+import { Building2, MapPin, UserRound } from 'lucide-react';
 import { AuthGate } from '@/components/auth-gate';
+import { PageShell } from '@/components/layout/page-shell';
+import { Alert } from '@/components/ui/alert';
+import { Tabs } from '@/components/ui/tabs';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import {
   deleteAdminSecretaria,
@@ -72,41 +74,26 @@ export default function AdminPage() {
 
   return (
     <AuthGate requiredPermissions={['secretarias.gerenciar']}>
-      <main className="gestop-shell p-4 md:p-6">
-        <div className="mx-auto max-w-7xl">
-          <Link
-            href="/cco"
-            className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            Voltar para CCO
-          </Link>
-
-          <header className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Administração Base</p>
-            <h1 className="mt-2 text-3xl font-bold text-slate-950">Cadastros estruturais do GestOP</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Mantenha secretarias, próprios públicos e usuários. As alterações são registradas na trilha de auditoria.
-            </p>
-          </header>
-
+      <PageShell
+        kicker="Administração Base"
+        icon={Building2}
+        title="Cadastros estruturais do GestOP"
+        description="Mantenha secretarias, próprios públicos e usuários. As alterações são registradas na trilha de auditoria."
+        backHref="/cco"
+      >
           {error ? <div className="mb-4"><ErrorState message={error} /></div> : null}
-          {success ? (
-            <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">
-              {success}
-            </div>
-          ) : null}
+          {success ? <Alert variant="success" className="mb-4">{success}</Alert> : null}
 
-          <div className="mb-6 flex flex-wrap gap-2">
-            <TabButton active={tab === 'secretarias'} onClick={() => setTab('secretarias')} icon={Building2}>
-              Secretarias
-            </TabButton>
-            <TabButton active={tab === 'unidades'} onClick={() => setTab('unidades')} icon={MapPin}>
-              Próprios públicos
-            </TabButton>
-            <TabButton active={tab === 'usuarios'} onClick={() => setTab('usuarios')} icon={UserRound}>
-              Usuários
-            </TabButton>
+          <div className="mb-6">
+            <Tabs
+              value={tab}
+              onChange={(value) => setTab(value as Tab)}
+              items={[
+                { id: 'secretarias', label: 'Secretarias', icon: <Building2 className="h-4 w-4" /> },
+                { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" /> },
+                { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" /> },
+              ]}
+            />
           </div>
 
           {loading ? <LoadingState label="Carregando cadastros..." /> : null}
@@ -120,24 +107,8 @@ export default function AdminPage() {
           {!loading && tab === 'usuarios' ? (
             <UsuariosPanel secretarias={secretarias} usuarios={usuarios} perfis={perfis} mutate={mutate} />
           ) : null}
-        </div>
-      </main>
+      </PageShell>
     </AuthGate>
-  );
-}
-
-function TabButton({ active, onClick, icon: Icon, children }: { active: boolean; onClick: () => void; icon: typeof Building2; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold ${
-        active ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-      }`}
-    >
-      <Icon className="h-4 w-4" />
-      {children}
-    </button>
   );
 }
 

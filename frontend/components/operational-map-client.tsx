@@ -12,6 +12,8 @@ import {
   OSM_TILE_URL,
 } from '@/lib/franca-geo';
 import { UnidadeOperacional, UnidadeSituacao } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const situacaoMarkerColor: Record<UnidadeSituacao, string> = {
   OPERACIONAL: '#16a34a',
@@ -182,28 +184,21 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
   }, [located]);
 
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <div>
-          <h2 className="text-lg font-bold text-slate-950">Mapa CCO</h2>
-          <p className="text-sm text-slate-600">
-            Mapa de Franca/SP com próprios públicos georreferenciados.
-          </p>
+          <CardTitle>Mapa CCO</CardTitle>
+          <CardDescription>Mapa de Franca/SP com próprios públicos georreferenciados.</CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-            Referência: Frederico Moura, 1426
-          </span>
-          {semLocalizacao > 0 ? (
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
-              {semLocalizacao} sem localização
-            </span>
-          ) : null}
+          <Badge variant="brand">Referência: Frederico Moura, 1426</Badge>
+          {semLocalizacao > 0 ? <Badge variant="muted">{semLocalizacao} sem localização</Badge> : null}
         </div>
-      </div>
+      </CardHeader>
 
-      <div className="relative overflow-hidden rounded-2xl border border-blue-100">
-        <div ref={containerRef} className="h-[420px] w-full bg-slate-100" />
+      <CardContent className="pt-0">
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80">
+        <div ref={containerRef} className="h-[min(420px,60dvh)] w-full bg-zinc-100" />
 
         {located.length === 0 ? (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 p-6">
@@ -218,9 +213,9 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
         ) : null}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-600">
+      <div className="mt-4 flex flex-wrap gap-3 text-xs text-zinc-500">
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-green-600 ring-2 ring-white" />
+          <span className="h-3 w-3 rounded-full bg-emerald-600 ring-2 ring-white" />
           Operacional
         </span>
         <span className="inline-flex items-center gap-1.5">
@@ -236,6 +231,7 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
           Referência Cidade Nova
         </span>
       </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }

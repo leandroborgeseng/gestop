@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, RefreshCcw, Send } from 'lucide-react';
+import { Plug, RefreshCcw, Send } from 'lucide-react';
 import { AuthGate } from '@/components/auth-gate';
+import { PageShell } from '@/components/layout/page-shell';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { listIntegracoesEventos, retrySyncFalhas, sendMockNotification } from '@/lib/api';
 import { IntegracoesEventos } from '@/lib/types';
@@ -41,57 +44,63 @@ export default function IntegracoesPage() {
 
   return (
     <AuthGate requiredPermissions={['auditoria.visualizar']}>
-      <main className="gestop-shell p-4 md:p-6">
-        <div className="mx-auto max-w-6xl">
-          <Link href="/cco" className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-            <ArrowLeft className="h-4 w-4" /> CCO
-          </Link>
-          <header className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="text-xs font-bold uppercase tracking-wide text-blue-700">Integrações e resiliência</p>
-            <h1 className="mt-2 text-3xl font-bold text-slate-950">Eventos técnicos, notificações e sync</h1>
-          </header>
-          {error ? <ErrorState message={error} /> : null}
-          {success ? <div className="mb-4 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm font-semibold text-green-800">{success}</div> : null}
-          {loading ? <LoadingState label="Carregando eventos técnicos..." /> : null}
-          {eventos ? (
-            <section className="grid gap-6 lg:grid-cols-2">
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-slate-950">Falhas de sincronização</h2>
-                  <button onClick={retry} className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-3 py-2 text-sm font-bold text-white">
-                    <RefreshCcw className="h-4 w-4" /> Retentar
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {eventos.syncFalhas.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-200 p-4 text-sm">
-                      <strong>{item.status}</strong> · {item.clientEventId}
-                      <p className="text-slate-600">{item.conflitoMotivo ?? 'Aguardando processamento'} · tentativas {item.tentativas}</p>
-                    </div>
-                  ))}
-                  {eventos.syncFalhas.length === 0 ? <p className="text-sm text-slate-600">Nenhuma falha pendente.</p> : null}
-                </div>
-              </div>
-              <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-bold text-slate-950">Notificações mock</h2>
-                  <button onClick={notify} className="inline-flex items-center gap-2 rounded-xl bg-green-700 px-3 py-2 text-sm font-bold text-white">
-                    <Send className="h-4 w-4" /> Enviar teste
-                  </button>
-                </div>
-                <div className="space-y-3">
-                  {eventos.auditoriaIntegracoes.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-200 p-4 text-sm">
-                      <strong>{item.entidadeTipo}</strong> · {item.acao}
-                      <p className="text-slate-600">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          ) : null}
-        </div>
-      </main>
+      <PageShell
+        kicker="Integrações e resiliência"
+        icon={Plug}
+        title="Eventos técnicos, notificações e sync"
+        backHref="/cco"
+      >
+        {error ? <div className="mb-6"><ErrorState message={error} /></div> : null}
+        {success ? <Alert variant="success" className="mb-4">{success}</Alert> : null}
+        {loading ? <LoadingState label="Carregando eventos técnicos..." /> : null}
+
+        {eventos ? (
+          <section className="grid gap-6 lg:grid-cols-2">
+            <Card>
+              <CardHeader className="flex-row items-center justify-between space-y-0">
+                <CardTitle>Falhas de sincronização</CardTitle>
+                <Button variant="brand" size="sm" onClick={() => void retry()}>
+                  <RefreshCcw className="h-4 w-4" />
+                  Retentar
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                {eventos.syncFalhas.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-4 text-sm">
+                    <strong className="text-zinc-950">{item.status}</strong>
+                    <span className="text-zinc-500"> · {item.clientEventId}</span>
+                    <p className="mt-1 text-zinc-500">
+                      {item.conflitoMotivo ?? 'Aguardando processamento'} · tentativas {item.tentativas}
+                    </p>
+                  </div>
+                ))}
+                {eventos.syncFalhas.length === 0 ? (
+                  <p className="text-sm text-zinc-500">Nenhuma falha pendente.</p>
+                ) : null}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex-row items-center justify-between space-y-0">
+                <CardTitle>Notificações mock</CardTitle>
+                <Button variant="secondary" size="sm" onClick={() => void notify()}>
+                  <Send className="h-4 w-4" />
+                  Enviar teste
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                {eventos.auditoriaIntegracoes.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-zinc-200/80 p-4 text-sm">
+                    <strong className="text-zinc-950">{item.entidadeTipo}</strong>
+                    <span className="text-zinc-500"> · {item.acao}</span>
+                    <p className="mt-1 text-zinc-500">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </section>
+        ) : null}
+      </PageShell>
     </AuthGate>
   );
 }

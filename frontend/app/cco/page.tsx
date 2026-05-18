@@ -15,6 +15,9 @@ import { UnidadeFiltersPanel } from '@/components/unidade-filters';
 import { UnidadeList } from '@/components/unidade-list';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { AuthGate } from '@/components/auth-gate';
+import { PageShell } from '@/components/layout/page-shell';
+import { Badge } from '@/components/ui/badge';
+import { MetricSkeleton } from '@/components/ui/skeleton';
 
 export default function CcoPage() {
   const [filters, setFilters] = useState<UnidadeFilters>({});
@@ -24,6 +27,7 @@ export default function CcoPage() {
   const [unidades, setUnidades] = useState<UnidadeOperacional[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [bootLoading, setBootLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -43,6 +47,8 @@ export default function CcoPage() {
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : 'Erro inesperado ao carregar a CCO.');
+      } finally {
+        if (active) setBootLoading(false);
       }
     }
 
@@ -108,54 +114,39 @@ export default function CcoPage() {
 
   return (
     <AuthGate>
-      <main className="gestop-shell p-4 md:p-6">
-        <div className="mx-auto max-w-7xl">
-          <header className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <span className="inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-700">
-                  <Activity className="h-3.5 w-3.5" />
-                  Central de Controle Operacional
-                </span>
-                <h1 className="mt-3 text-3xl font-bold text-slate-950">Visão operacional dos próprios públicos</h1>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                  Consulta inicial para validar localização, situação operacional, fiscalizações e pendências das
-                  unidades cadastradas no GestOP.
-                </p>
-              </div>
-              <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                Ambiente protegido
-                <strong className="block text-slate-950">RBAC ativo</strong>
-              </div>
-            </div>
-          </header>
+      <PageShell
+        kicker="Central de Controle Operacional"
+        icon={Activity}
+        title="Visão operacional dos próprios públicos"
+        description="Consulta georreferenciada para validar localização, situação operacional, fiscalizações e pendências das unidades cadastradas."
+        action={<Badge variant="success">RBAC ativo</Badge>}
+      >
+        <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {bootLoading
+            ? Array.from({ length: 4 }).map((_, index) => <MetricSkeleton key={index} />)
+            : metricas.map((metrica) => <MetricCard key={metrica.title} {...metrica} />)}
+        </section>
 
-          <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {metricas.map((metrica) => (
-              <MetricCard key={metrica.title} {...metrica} />
-            ))}
-          </section>
-
-          <div className="mb-6">
-            <UnidadeFiltersPanel
-              filters={filters}
-              secretarias={secretarias}
-              bairros={bairros}
-              onChange={setFilters}
-            />
-          </div>
-
-          {error ? <ErrorState message={error} /> : null}
-          {loading ? (
-            <LoadingState />
-          ) : (
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.65fr)]">
-              <OperationalMap unidades={unidades} />
-              <UnidadeList unidades={unidades} />
-            </div>
-          )}
+        <div className="mb-6">
+          <UnidadeFiltersPanel
+            filters={filters}
+            secretarias={secretarias}
+            bairros={bairros}
+            onChange={setFilters}
+          />
         </div>
-      </main>
+
+        {error ? <div className="mb-6"><ErrorState message={error} /></div> : null}
+
+        {loading ? (
+          <LoadingState />
+        ) : (
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+            <OperationalMap unidades={unidades} />
+            <UnidadeList unidades={unidades} />
+          </div>
+        )}
+      </PageShell>
     </AuthGate>
   );
 }

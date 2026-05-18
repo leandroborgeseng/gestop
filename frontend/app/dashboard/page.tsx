@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { ArrowLeft, BarChart3 } from 'lucide-react';
+import { BarChart3, Building2, ClipboardCheck, DatabaseZap, ShieldAlert, Wrench } from 'lucide-react';
 import { AuthGate } from '@/components/auth-gate';
+import { PageShell } from '@/components/layout/page-shell';
+import { MetricCard } from '@/components/metric-card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { getDashboard, listAuditoria } from '@/lib/api';
 import { AuditoriaEvento, DashboardData } from '@/lib/types';
@@ -26,64 +28,65 @@ export default function DashboardPage() {
 
   return (
     <AuthGate requiredPermissions={['dashboard.visualizar']}>
-      <main className="gestop-shell p-4 md:p-6">
-        <div className="mx-auto max-w-7xl">
-          <Link href="/cco" className="mb-4 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-            <ArrowLeft className="h-4 w-4" /> CCO
-          </Link>
-          <header className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-blue-700"><BarChart3 className="h-4 w-4" />Monitoramento</p>
-            <h1 className="mt-2 text-3xl font-bold text-slate-950">Dashboard operacional e auditoria</h1>
-          </header>
-          {error ? <ErrorState message={error} /> : null}
-          {loading ? <LoadingState label="Carregando indicadores..." /> : null}
-          {dashboard ? (
-            <>
-              <section className="mb-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-                <Metric label="Próprios" value={dashboard.indicadores.totalUnidades} />
-                <Metric label="Fiscalizações" value={dashboard.indicadores.fiscalizacoes} />
-                <Metric label="Não conformidades" value={dashboard.indicadores.naoConformidades} />
-                <Metric label="OS abertas" value={dashboard.indicadores.ordensServico.abertas} />
-                <Metric label="OS em execução" value={dashboard.indicadores.ordensServico.emExecucao} />
-                <Metric label="Sync pendente" value={dashboard.indicadores.syncPendentes} />
-              </section>
-              <section className="grid gap-6 lg:grid-cols-2">
-                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="mb-4 text-lg font-bold text-slate-950">Pendências por secretaria</h2>
-                  <div className="space-y-3">
-                    {dashboard.pendenciasPorSecretaria.map((item) => (
-                      <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
-                        <strong>{item.sigla}</strong> - {item.nome}
-                        <p className="text-sm text-slate-600">{item.ordensPendentes} OS pendentes · {item.fiscalizacoes} fiscalizações</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <h2 className="mb-4 text-lg font-bold text-slate-950">Últimos eventos de auditoria</h2>
-                  <div className="max-h-[520px] space-y-3 overflow-auto">
-                    {auditoria.map((evento) => (
-                      <div key={evento.id} className="rounded-2xl border border-slate-200 p-3 text-sm">
-                        <strong>{evento.acao}</strong> em {evento.entidadeTipo}
-                        <p className="text-slate-600">{evento.usuario?.nome ?? 'Sistema'} · {new Date(evento.createdAt).toLocaleString('pt-BR')}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
-            </>
-          ) : null}
-        </div>
-      </main>
-    </AuthGate>
-  );
-}
+      <PageShell
+        kicker="Monitoramento"
+        icon={BarChart3}
+        title="Dashboard operacional e auditoria"
+        description="Indicadores consolidados, pendências por secretaria e trilha recente de auditoria."
+        backHref="/cco"
+      >
+        {error ? <div className="mb-6"><ErrorState message={error} /></div> : null}
+        {loading ? <LoadingState label="Carregando indicadores..." /> : null}
 
-function Metric({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-sm text-slate-600">{label}</p>
-      <strong className="mt-2 block text-3xl text-slate-950">{value}</strong>
-    </div>
+        {dashboard ? (
+          <>
+            <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+              <MetricCard title="Próprios" value={dashboard.indicadores.totalUnidades} hint="cadastrados" icon={Building2} />
+              <MetricCard title="Fiscalizações" value={dashboard.indicadores.fiscalizacoes} hint="registradas" icon={ClipboardCheck} />
+              <MetricCard title="Não conformidades" value={dashboard.indicadores.naoConformidades} hint="em acompanhamento" icon={ShieldAlert} />
+              <MetricCard title="OS abertas" value={dashboard.indicadores.ordensServico.abertas} hint="aguardando ação" icon={Wrench} />
+              <MetricCard title="OS em execução" value={dashboard.indicadores.ordensServico.emExecucao} hint="em andamento" icon={Wrench} />
+              <MetricCard title="Sync pendente" value={dashboard.indicadores.syncPendentes} hint="eventos offline" icon={DatabaseZap} />
+            </section>
+
+            <section className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Pendências por secretaria</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 pt-0">
+                  {dashboard.pendenciasPorSecretaria.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-4">
+                      <strong className="text-zinc-950">{item.sigla}</strong>
+                      <span className="text-zinc-500"> — {item.nome}</span>
+                      <p className="mt-1 text-sm text-zinc-500">
+                        {item.ordensPendentes} OS pendentes · {item.fiscalizacoes} fiscalizações
+                      </p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Últimos eventos de auditoria</CardTitle>
+                </CardHeader>
+                <CardContent className="max-h-[520px] space-y-3 overflow-auto pt-0">
+                  {auditoria.map((evento) => (
+                    <div key={evento.id} className="rounded-2xl border border-zinc-200/80 p-3 text-sm">
+                      <strong className="text-zinc-950">{evento.acao}</strong>
+                      <span className="text-zinc-500"> em {evento.entidadeTipo}</span>
+                      <p className="mt-1 text-zinc-500">
+                        {evento.usuario?.nome ?? 'Sistema'} · {new Date(evento.createdAt).toLocaleString('pt-BR')}
+                      </p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </section>
+          </>
+        ) : null}
+      </PageShell>
+    </AuthGate>
   );
 }
