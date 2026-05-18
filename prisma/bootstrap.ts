@@ -1,20 +1,36 @@
 import { Client } from 'pg';
+import { logError, logInfo, logStep, logWarn, maskDatabaseUrl } from './startup-log';
 
-const databaseUrl = process.env.DATABASE_URL;
+export async function runDatabaseBootstrap() {
+  const databaseUrl = process.env.DATABASE_URL;
 
-async function main() {
+  logStep('bootstrap', 'Verificando estado do banco antes das migrations');
+
   if (!databaseUrl) {
-    console.warn('DATABASE_URL nao configurada; bootstrap do banco ignorado.');
+    logWarn('bootstrap', 'DATABASE_URL nao configurada; bootstrap ignorado.');
     return;
   }
 
+  logInfo('bootstrap', `DATABASE_URL=${maskDatabaseUrl(databaseUrl)}`);
+
   const client = new Client({
     connectionString: databaseUrl,
+    connectionTimeoutMillis: 15_000,
   });
 
-  await client.connect();
-
   try {
+    logStep('bootstrap', 'Tentando conectar ao PostgreSQL...');
+    await client.connect();
+    logInfo('bootstrap', 'Conexao estabelecida com sucesso.');
+
+    const dbInfo = await client.query<{ db: string; user: string }>(`
+      SELECT current_database() AS db, current_user AS "user"
+    `);
+    logInfo(
+      'bootstrap',
+      `Banco=${dbInfo.rows[0]?.db ?? '?'} usuario=${dbInfo.rows[0]?.user ?? '?'}`,
+    );
+
     const hasMigrationsTable = await client.query<{ exists: boolean }>(`
       SELECT EXISTS (
         SELECT 1
@@ -24,44 +40,93 @@ async function main() {
       ) AS "exists"
     `);
 
-    if (!hasMigrationsTable.rows[0]?.exists) {
-      console.log('Tabela _prisma_migrations ainda nao existe; banco sera migrado normalmente.');
+    const migrationsTableExists = Boolean(hasMigrationsTable.rows[0]?.exists);
+    logInfo(
+      'bootstrap',
+      migrationsTableExists
+        ? 'Tabela _prisma_migrations encontrada.'
+        : 'Tabela _prisma_migrations ainda nao existe; banco sera migrado normalmente.',
+    );
+
+    if (!migrationsTableExists) {
       return;
     }
 
-    const failedMigrations = await client.query<{ migration_name: string }>(`
-      SELECT migration_name
+    const failedMigrations = await client.query<{ migration_name: string; logs: string | null }>(`
+      SELECT migration_name, logs
       FROM "_prisma_migrations"
       WHERE finished_at IS NULL
         AND rolled_back_at IS NULL
     `);
 
+    if (failedMigrations.rows.length > 0) {
+      logWarn(
+        'bootstrap',
+        `Migrations com falha detectadas: ${failedMigrations.rows.map((row) => row.migration_name).join(', ')}`,
+      );
+
+      for (const migration of failedMigrations.rows) {
+        if (migration.logs) {
+          logWarn('bootstrap', migration.logs.trim());
+        }
+      }
+    } else {
+      logInfo('bootstrap', 'Nenhuma migration com falha pendente.');
+    }
+
+    const hasUsuarioTable = await client.query<{ exists: boolean }>(`
+      SELECT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'Usuario'
+      ) AS "exists"
+    `);
+
+    const usuarioTableExists = Boolean(hasUsuarioTable.rows[0]?.exists);
+    logInfo(
+      'bootstrap',
+      usuarioTableExists ? 'Tabela Usuario encontrada.' : 'Tabela Usuario ainda nao existe.',
+    );
+
     const shouldReset =
-      process.env.RESET_DATABASE_ON_START === 'true' || failedMigrations.rows.length > 0;
+      process.env.RESET_DATABASE_ON_START === 'true' ||
+      process.env.FORCE_DB_RESET === 'true' ||
+      failedMigrations.rows.length > 0;
 
     if (!shouldReset) {
-      console.log('Nenhuma migration falha detectada; reset do banco ignorado.');
+      logInfo('bootstrap', 'Reset do schema public nao necessario.');
       return;
     }
 
-    console.warn(
-      `Resetando schema public antes das migrations. Motivo: ${
-        failedMigrations.rows.length > 0
-          ? `migration falha (${failedMigrations.rows.map((row) => row.migration_name).join(', ')})`
-          : 'RESET_DATABASE_ON_START=true'
-      }`,
-    );
+    const resetReason =
+      process.env.FORCE_DB_RESET === 'true'
+        ? 'FORCE_DB_RESET=true'
+        : process.env.RESET_DATABASE_ON_START === 'true'
+          ? 'RESET_DATABASE_ON_START=true'
+          : `migration falha (${failedMigrations.rows.map((row) => row.migration_name).join(', ')})`;
+
+    logWarn('bootstrap', `Resetando schema public. Motivo: ${resetReason}`);
 
     await client.query('DROP SCHEMA IF EXISTS public CASCADE');
+    logInfo('bootstrap', 'Schema public removido.');
+
     await client.query('CREATE SCHEMA public');
+    logInfo('bootstrap', 'Schema public recriado.');
+
     await client.query('GRANT ALL ON SCHEMA public TO public');
+    logInfo('bootstrap', 'Permissoes do schema public restauradas.');
+  } catch (error) {
+    logError('bootstrap', 'Falha ao preparar o banco de dados', error);
+    throw error;
   } finally {
     await client.end();
   }
 }
 
-main().catch((error) => {
-  console.error('Falha no bootstrap do banco.');
-  console.error(error);
-  process.exit(1);
-});
+if (require.main === module) {
+  runDatabaseBootstrap().catch((error) => {
+    logError('bootstrap', 'Encerrando por falha no bootstrap', error);
+    process.exit(1);
+  });
+}

@@ -2,11 +2,27 @@ import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
+function maskDatabaseUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.password) {
+      parsed.password = '****';
+    }
+    return parsed.toString();
+  } catch {
+    return '(url invalida)';
+  }
+}
+
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  private connected = false;
+
   constructor() {
     const connectionString =
       process.env.DATABASE_URL ?? 'postgresql://gestop:gestop@localhost:5432/gestop?schema=public';
+
+    console.log(`[GestOP:prisma] DATABASE_URL=${maskDatabaseUrl(connectionString)}`);
 
     super({
       adapter: new PrismaPg({ connectionString }),
@@ -16,12 +32,20 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   async onModuleInit() {
     try {
       await this.$connect();
+      this.connected = true;
+      const users = await this.usuario.count();
+      console.log(`[GestOP:prisma] Conexao OK. Usuarios no banco: ${users}`);
     } catch (error) {
+      this.connected = false;
       console.warn(
-        'Banco de dados indisponivel no boot. A API iniciou, mas consultas dependentes do Prisma falharao ate DATABASE_URL estar configurada.',
+        '[GestOP:prisma] Banco indisponivel no boot. A API subiu, mas endpoints com dados falharao.',
       );
       console.warn(error);
     }
+  }
+
+  isConnected() {
+    return this.connected;
   }
 
   async onModuleDestroy() {

@@ -21,6 +21,7 @@ import {
   UnidadeTipo,
 } from '@prisma/client';
 import { hashPassword } from '../src/auth/password';
+import { logError, logInfo, logStep, logWarn, maskDatabaseUrl } from './startup-log';
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://gestop:gestop@localhost:5432/gestop?schema=public';
@@ -54,15 +55,33 @@ async function resetDevData() {
 }
 
 async function main() {
-  const isProduction = process.env.NODE_ENV === 'production';
-  const existingUsers = await prisma.usuario.count();
+  logStep('seed', 'Iniciando seed do banco');
+  logInfo('seed', `NODE_ENV=${process.env.NODE_ENV ?? '(nao definido)'}`);
+  logInfo('seed', `DATABASE_URL=${maskDatabaseUrl(process.env.DATABASE_URL)}`);
 
-  if (isProduction && existingUsers > 0) {
-    console.log('Seed de produção ignorado: banco já possui usuários.');
+  const isProduction = process.env.NODE_ENV === 'production';
+  const forceSeed = process.env.FORCE_SEED_ON_START === 'true';
+
+  let existingUsers = 0;
+  try {
+    existingUsers = await prisma.usuario.count();
+    logInfo('seed', `Usuarios existentes: ${existingUsers}`);
+  } catch (error) {
+    logError('seed', 'Falha ao consultar tabela Usuario. As migrations foram aplicadas?', error);
+    throw error;
+  }
+
+  if (isProduction && existingUsers > 0 && !forceSeed) {
+    logWarn('seed', 'Seed de producao ignorado: banco ja possui usuarios.');
     return;
   }
 
+  if (forceSeed && existingUsers > 0) {
+    logWarn('seed', 'FORCE_SEED_ON_START=true: seed sera executado mesmo com usuarios existentes.');
+  }
+
   if (!isProduction) {
+    logInfo('seed', 'Ambiente de desenvolvimento: limpando dados anteriores.');
     await resetDevData();
   }
 
@@ -480,6 +499,15 @@ async function main() {
       correlationId: 'seed-dev-inicial',
     },
   });
+
+  const [secretarias, usuarios, unidadesCount] = await Promise.all([
+    prisma.secretaria.count(),
+    prisma.usuario.count(),
+    prisma.unidadePublica.count(),
+  ]);
+
+  logInfo('seed', `Seed concluido: ${secretarias} secretarias, ${unidadesCount} unidades, ${usuarios} usuarios.`);
+  logInfo('seed', 'Login inicial: admin.gestop@franca.sp.gov.br / Gestop@123');
 }
 
 main()
@@ -487,7 +515,7 @@ main()
     await prisma.$disconnect();
   })
   .catch(async (error) => {
-    console.error(error);
+    logError('seed', 'Falha ao executar seed', error);
     await prisma.$disconnect();
     process.exit(1);
   });

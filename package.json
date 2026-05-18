@@ -6,7 +6,7 @@
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "dev": "tsx watch src/main.ts",
-    "start": "node dist/prisma/bootstrap.js && prisma migrate deploy && node dist/prisma/seed.js && node dist/src/main.js",
+    "start": "node dist/prisma/startup.js && node dist/src/main.js",
     "test": "prisma generate && vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
