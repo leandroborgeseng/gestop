@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
 :root {
   --color-brand-primary: #0066cc;
@@ -32,4 +33,10 @@ a {
   background:
     radial-gradient(circle at top left, rgba(0, 102, 204, 0.08), transparent 28rem),
     var(--color-bg-surface);
+}
+
+.gestop-map-marker,
+.gestop-map-reference {
+  background: transparent;
+  border: 0;
 }
