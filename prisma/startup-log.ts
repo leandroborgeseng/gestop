@@ -44,6 +44,7 @@ export function logError(phase: string, message: string, error?: unknown) {
 
 export function logEnvSummary() {
   logStep('env', 'Resumo do ambiente de execucao');
+  logInfo('env', `GIT_COMMIT=${process.env.RAILWAY_GIT_COMMIT_SHA ?? process.env.GITHUB_SHA ?? '(nao definido)'}`);
   logInfo('env', `NODE_ENV=${process.env.NODE_ENV ?? '(nao definido)'}`);
   logInfo('env', `PORT=${process.env.PORT ?? '(nao definido)'}`);
   logInfo('env', `DATABASE_URL=${maskDatabaseUrl(process.env.DATABASE_URL)}`);
