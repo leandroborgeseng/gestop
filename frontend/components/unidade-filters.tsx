@@ -53,7 +53,7 @@ export function UnidadeFiltersPanel({
       <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
         <div>
           <CardTitle className="flex items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4 text-blue-600" />
+            <SlidersHorizontal className="h-4 w-4 text-[var(--color-brand-primary)]" />
             Consulta de próprios
           </CardTitle>
           <CardDescription className="mt-1">

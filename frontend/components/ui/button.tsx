@@ -3,14 +3,15 @@ import { cn } from '@/lib/cn';
 
 const variants = {
   primary:
-    'bg-zinc-900 text-white shadow-sm hover:bg-zinc-800 active:scale-[0.98] focus-visible:ring-zinc-900/30',
+    'bg-[var(--color-brand-primary)] text-white shadow-sm hover:bg-[var(--color-brand-primary-hover)] active:bg-[var(--color-brand-primary-active)] active:scale-[0.98] focus-visible:ring-[color-mix(in_srgb,var(--color-brand-primary)_30%,transparent)]',
   secondary:
-    'bg-white text-zinc-900 ring-1 ring-zinc-200 hover:bg-zinc-50 active:scale-[0.98] focus-visible:ring-zinc-300',
-  ghost: 'text-zinc-700 hover:bg-zinc-100 active:scale-[0.98] focus-visible:ring-zinc-200',
+    'bg-white text-[var(--color-text-primary)] ring-1 ring-[var(--color-border-subtle)] hover:bg-[var(--color-bg-muted)] active:scale-[0.98] focus-visible:ring-[var(--color-border-default)]',
+  ghost:
+    'text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-muted)] hover:text-[var(--color-text-primary)] active:scale-[0.98]',
   danger:
-    'bg-red-600 text-white shadow-sm hover:bg-red-700 active:scale-[0.98] focus-visible:ring-red-500/30',
+    'bg-[var(--color-feedback-danger)] text-white shadow-sm hover:brightness-95 active:scale-[0.98] focus-visible:ring-red-500/30',
   brand:
-    'bg-blue-600 text-white shadow-sm hover:bg-blue-700 active:scale-[0.98] focus-visible:ring-blue-500/30',
+    'bg-[var(--color-brand-primary)] text-white shadow-sm hover:bg-[var(--color-brand-primary-hover)] active:bg-[var(--color-brand-primary-active)] active:scale-[0.98] focus-visible:ring-[color-mix(in_srgb,var(--color-brand-primary)_30%,transparent)]',
 } as const;
 
 const sizes = {

@@ -15,6 +15,7 @@ import {
 } from '@/lib/navigation';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
+import { Logo, ProductLabel } from '@/components/brand/logo';
 
 function NavLink({
   item,
@@ -36,8 +37,8 @@ function NavLink({
       className={cn(
         'flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
         active
-          ? 'bg-zinc-900 text-white shadow-sm'
-          : 'text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950',
+          ? 'bg-[var(--color-brand-primary)] text-white shadow-sm'
+          : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-brand-primary-subtle)] hover:text-[var(--color-brand-primary)]',
         compact && 'flex-col gap-1 px-2 py-2 text-[11px]',
       )}
       aria-current={active ? 'page' : undefined}
@@ -61,12 +62,12 @@ export function DesktopSidebar({
   const items = getVisibleNavItems(permissions);
 
   return (
-    <aside className="hidden lg:flex lg:w-72 lg:flex-col lg:border-r lg:border-zinc-200/80 lg:bg-white/80 lg:backdrop-blur-xl">
-      <div className="border-b border-zinc-100 px-5 py-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">GestOP</p>
-        <h1 className="mt-2 text-lg font-semibold tracking-tight text-zinc-950">Central Operacional</h1>
-        <p className="mt-1 text-sm text-zinc-500">{userName}</p>
-        <p className="text-xs text-zinc-400">{userRoles.join(' · ')}</p>
+    <aside className="hidden lg:flex lg:w-72 lg:flex-col lg:border-r lg:border-[var(--color-border-subtle)] lg:bg-white/85 lg:backdrop-blur-xl">
+      <div className="border-b border-[var(--color-border-subtle)] px-5 py-6">
+        <Logo href="/cco" priority />
+        <ProductLabel className="mt-4" />
+        <p className="mt-3 text-sm font-medium text-[var(--color-text-primary)]">{userName}</p>
+        <p className="text-xs text-[var(--color-text-secondary)]">{userRoles.join(' · ')}</p>
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 p-4" aria-label="Navegação principal">
@@ -75,7 +76,7 @@ export function DesktopSidebar({
         ))}
       </nav>
 
-      <div className="border-t border-zinc-100 p-4">
+      <div className="border-t border-[var(--color-border-subtle)] p-4">
         <Button
           variant="secondary"
           className="w-full justify-start"
@@ -94,13 +95,13 @@ export function DesktopSidebar({
 
 export function MobileHeader({ userName }: { userName: string }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-zinc-200/80 bg-white/85 px-4 py-3 backdrop-blur-xl lg:hidden">
+    <header className="sticky top-0 z-30 border-b border-[var(--color-border-subtle)] bg-white/90 px-4 py-3 backdrop-blur-xl lg:hidden">
       <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-600">GestOP</p>
-          <p className="truncate text-sm font-medium text-zinc-950">{userName}</p>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Logo variant="mark" href="/cco" />
+          <ProductLabel />
         </div>
-        <div className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-600/10">
+        <div className="rounded-full bg-[var(--color-brand-accent-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-brand-accent)] ring-1 ring-[color-mix(in_srgb,var(--color-brand-accent)_20%,transparent)]">
           Online
         </div>
       </div>
@@ -126,7 +127,7 @@ export function MobileBottomNav({
   return (
     <>
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-zinc-200/80 bg-white/90 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border-subtle)] bg-white/90 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden"
         aria-label="Navegação mobile"
       >
         <div
@@ -143,7 +144,7 @@ export function MobileBottomNav({
                 href={item.href}
                 className={cn(
                   'flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold transition-all duration-200',
-                  active ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950',
+                  active ? 'bg-[var(--color-brand-primary)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-brand-primary-subtle)] hover:text-[var(--color-brand-primary)]',
                 )}
                 aria-current={active ? 'page' : undefined}
               >
@@ -159,7 +160,7 @@ export function MobileBottomNav({
               onClick={() => onMoreOpen(true)}
               className={cn(
                 'flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold transition-all duration-200',
-                moreOpen ? 'bg-zinc-900 text-white' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950',
+                moreOpen ? 'bg-[var(--color-brand-primary)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-brand-primary-subtle)] hover:text-[var(--color-brand-primary)]',
               )}
               aria-label="Abrir mais opções"
             >
@@ -211,7 +212,7 @@ export function AppShell({
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
-    <div className="gestop-app flex min-h-screen bg-zinc-50">
+    <div className="gestop-app flex min-h-screen bg-[var(--color-bg-surface)]">
       <DesktopSidebar userName={userName} userRoles={userRoles} permissions={permissions} />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileHeader userName={userName} />

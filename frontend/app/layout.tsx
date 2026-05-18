@@ -10,7 +10,11 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'GestOP | CCO',
-  description: 'Central de Controle Operacional do GestOP',
+  description: 'Central de Controle Operacional do GestOP — Prefeitura de Franca',
+  icons: {
+    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
@@ -22,7 +26,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
-  themeColor: '#ffffff',
+  themeColor: '#0066cc',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

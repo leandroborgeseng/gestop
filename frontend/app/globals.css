@@ -2,20 +2,46 @@
 @import "leaflet/dist/leaflet.css";
 
 :root {
-  --color-brand-primary: #2563eb;
-  --color-brand-primary-hover: #1d4ed8;
-  --color-brand-primary-subtle: #eff6ff;
+  /* servicePortal — designSystem.md */
+  --color-brand-primary: #0066cc;
+  --color-brand-primary-hover: #005bb5;
+  --color-brand-primary-active: #004c99;
+  --color-brand-primary-subtle: #eaf2ff;
+  --color-brand-accent: #0199dc;
+  --color-brand-accent-hover: #0188c4;
+  --color-brand-accent-subtle: #e6f6fc;
+
   --color-bg-canvas: #ffffff;
-  --color-bg-surface: #fafafa;
-  --color-bg-muted: #f4f4f5;
-  --color-text-primary: #09090b;
-  --color-text-secondary: #71717a;
-  --color-border-subtle: #e4e4e7;
-  --color-feedback-success: #059669;
+  --color-bg-surface: #f8fafc;
+  --color-bg-muted: #f1f5f9;
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #6b7280;
+  --color-border-subtle: #e5e7eb;
+  --color-border-default: #d1d5db;
+  --color-link: #0066cc;
+  --color-focus: #0066cc;
+
+  --color-feedback-success: #16a34a;
   --color-feedback-warning: #d97706;
   --color-feedback-danger: #dc2626;
+
   --gestop-radius: 1rem;
-  --gestop-shadow: 0 1px 2px rgba(9, 9, 11, 0.04), 0 8px 24px rgba(9, 9, 11, 0.04);
+  --gestop-shadow: 0 1px 2px rgba(0, 51, 102, 0.05), 0 8px 24px rgba(0, 51, 102, 0.06);
+  --gestop-gradient-brand: linear-gradient(135deg, #0066cc 0%, #0199dc 100%);
+}
+
+@theme inline {
+  --color-brand: var(--color-brand-primary);
+  --color-brand-hover: var(--color-brand-primary-hover);
+  --color-brand-active: var(--color-brand-primary-active);
+  --color-brand-subtle: var(--color-brand-primary-subtle);
+  --color-brand-accent: var(--color-brand-accent);
+  --color-brand-accent-subtle: var(--color-brand-accent-subtle);
+  --color-surface: var(--color-bg-surface);
+  --color-muted: var(--color-bg-muted);
+  --color-foreground: var(--color-text-primary);
+  --color-muted-foreground: var(--color-text-secondary);
+  --color-border: var(--color-border-subtle);
 }
 
 * {
@@ -57,8 +83,13 @@ a {
 .gestop-shell {
   min-height: 100dvh;
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.05), transparent 28rem),
+    radial-gradient(circle at top left, rgba(0, 102, 204, 0.06), transparent 28rem),
+    radial-gradient(circle at bottom right, rgba(1, 153, 220, 0.04), transparent 24rem),
     var(--color-bg-surface);
+}
+
+.gestop-brand-panel {
+  background: var(--gestop-gradient-brand);
 }
 
 .gestop-map-marker,
@@ -68,10 +99,10 @@ a {
 }
 
 :focus-visible {
-  outline: 2px solid rgba(37, 99, 235, 0.45);
+  outline: 2px solid color-mix(in srgb, var(--color-focus) 45%, transparent);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: rgba(37, 99, 235, 0.15);
+  background: color-mix(in srgb, var(--color-brand-primary) 18%, transparent);
 }

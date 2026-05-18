@@ -37,7 +37,7 @@ export function PageHeader({
       {backHref ? (
         <Link
           href={backHref}
-          className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-2xl px-3 text-sm font-semibold text-zinc-600 transition-colors hover:bg-white hover:text-zinc-950"
+          className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-2xl px-3 text-sm font-semibold text-[var(--color-text-secondary)] transition-colors hover:bg-white hover:text-[var(--color-text-primary)]"
         >
           <ArrowLeft className="h-4 w-4" />
           Voltar
@@ -48,13 +48,13 @@ export function PageHeader({
         <div className="max-w-3xl">
           {kicker ? (
             <div className="mb-3 flex items-center gap-2">
-              {Icon ? <Icon className="h-4 w-4 text-blue-600" aria-hidden /> : null}
+              {Icon ? <Icon className="h-4 w-4 text-[var(--color-brand-primary)]" aria-hidden /> : null}
               <Badge variant="brand">{kicker}</Badge>
             </div>
           ) : null}
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 md:text-3xl">{title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-[var(--color-text-primary)] md:text-3xl">{title}</h1>
           {description ? (
-            <p className="mt-2 text-sm leading-7 text-zinc-500 md:text-base">{description}</p>
+            <p className="mt-2 text-sm leading-7 text-[var(--color-text-secondary)] md:text-base">{description}</p>
           ) : null}
         </div>
         {action ? <div className="shrink-0">{action}</div> : null}

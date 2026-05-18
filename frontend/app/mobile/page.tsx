@@ -209,7 +209,7 @@ export default function MobilePage() {
               {selectedUnit ? (
                 <Card>
                   <CardContent className="p-4 text-sm">
-                  <p className="flex items-center gap-2 font-semibold text-zinc-950"><MapPin className="h-4 w-4 text-blue-600" />{selectedUnit.nome}</p>
+                  <p className="flex items-center gap-2 font-semibold text-[var(--color-text-primary)]"><MapPin className="h-4 w-4 text-[var(--color-brand-primary)]" />{selectedUnit.nome}</p>
                   <p className="mt-1 text-zinc-500">{selectedUnit.bairro ?? 'Sem bairro'} · raio {selectedUnit.raioValidacaoMetros} m</p>
                   </CardContent>
                 </Card>
@@ -258,7 +258,7 @@ function ChecklistItemCard({ item, value, onChange, onEvidence }: { item: Checkl
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{item.codigo}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-brand-primary)]">{item.codigo}</p>
       <h3 className="text-base font-semibold text-zinc-950">{item.titulo}</h3>
       <Select value={current.conformidade} onChange={(e) => onChange({ conformidade: e.target.value as ResponseDraft['conformidade'] })}>
         <option value="CONFORME">Conforme</option>

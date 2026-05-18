@@ -27,7 +27,7 @@ export function UnidadeList({ unidades }: { unidades: UnidadeOperacional[] }) {
           <Link
             key={unidade.id}
             href={`/cco/unidades/${unidade.id}`}
-            className="group block rounded-2xl border border-zinc-200/80 bg-zinc-50/40 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:bg-white hover:shadow-md"
+            className="group block rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]/40 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--color-brand-primary)_25%,transparent)] hover:bg-white hover:shadow-md"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
@@ -39,12 +39,12 @@ export function UnidadeList({ unidades }: { unidades: UnidadeOperacional[] }) {
                   {unidade.codigoPatrimonial} · {unidade.secretaria.sigla} · {unidade.tipo}
                 </p>
               </div>
-              <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-zinc-300 transition group-hover:text-blue-600" />
+              <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-[var(--color-border-default)] transition group-hover:text-[var(--color-brand-primary)]" />
             </div>
 
             <div className="mt-4 grid gap-2 text-sm text-zinc-600 md:grid-cols-2">
               <span className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 shrink-0 text-blue-600" />
+                <MapPin className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
                 <span className="truncate">
                   {unidade.bairro ? `${unidade.bairro} · ` : ''}
                   {unidade.latitude !== null && unidade.longitude !== null
@@ -53,7 +53,7 @@ export function UnidadeList({ unidades }: { unidades: UnidadeOperacional[] }) {
                 </span>
               </span>
               <span className="flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 shrink-0 text-blue-600" />
+                <ClipboardList className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
                 {unidade.totais.fiscalizacoes} fiscalização(ões) ·{' '}
                 {unidade.pendencias.naoConformidadesAbertas + unidade.pendencias.ordensServicoAbertas}{' '}
                 pendência(s)

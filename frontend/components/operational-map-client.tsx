@@ -56,9 +56,9 @@ function createReferenceIcon() {
       width:14px;
       height:14px;
       border-radius:9999px;
-      background:#2563eb;
+      background:#0066cc;
       border:2px solid white;
-      box-shadow:0 2px 8px rgba(37,99,235,.35);
+      box-shadow:0 2px 8px rgba(0,102,204,.35);
     "></span>`,
     iconSize: [14, 14],
     iconAnchor: [7, 7],
@@ -74,7 +74,7 @@ function buildPopupHtml(unidade: UnidadeOperacional) {
       </span>
       <a
         href="/cco/unidades/${unidade.id}"
-        style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#1d4ed8;"
+        style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;"
       >
         Ver detalhes →
       </a>
@@ -227,7 +227,7 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
           Inativa
         </span>
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-blue-600 ring-2 ring-white" />
+          <span className="h-3 w-3 rounded-full bg-[var(--color-brand-primary)] ring-2 ring-white" />
           Referência Cidade Nova
         </span>
       </div>

@@ -2,7 +2,8 @@
 
 import { FormEvent, Suspense, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { LockKeyhole, ShieldCheck } from 'lucide-react';
+import { LockKeyhole } from 'lucide-react';
+import { Logo } from '@/components/brand/logo';
 import { login } from '@/lib/api';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -87,16 +88,13 @@ function LoginContent() {
   return (
     <main className="gestop-shell flex min-h-dvh flex-col justify-center px-4 py-8 md:px-6">
       <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-        <section className="hidden rounded-[28px] bg-gradient-to-br from-zinc-950 via-zinc-900 to-blue-950 p-8 text-white shadow-2xl lg:block">
-          <div className="inline-flex rounded-2xl bg-white/10 p-3 backdrop-blur">
-            <ShieldCheck className="h-8 w-8" />
-          </div>
-          <h1 className="mt-6 text-4xl font-semibold tracking-tight">GestOP</h1>
-          <p className="mt-4 max-w-md text-sm leading-7 text-zinc-300">
-            Plataforma premium de gestão de ordens de serviço e fiscalização georreferenciada da Prefeitura de
-            Franca.
+        <section className="gestop-brand-panel hidden rounded-[28px] p-8 text-white shadow-2xl lg:block">
+          <Logo theme="light" variant="compact" priority />
+          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/70">GestOP</p>
+          <p className="mt-6 max-w-md text-sm leading-7 text-white/80">
+            Plataforma de gestão de ordens de serviço e fiscalização georreferenciada da Prefeitura de Franca.
           </p>
-          <div className="mt-8 rounded-[24px] border border-white/10 bg-white/5 p-5 text-sm text-zinc-300">
+          <div className="mt-8 rounded-[24px] border border-white/15 bg-white/10 p-5 text-sm text-white/85 backdrop-blur-sm">
             <strong className="block text-white">Acesso demo</strong>
             <p className="mt-2 leading-6">
               admin.gestop@franca.sp.gov.br
@@ -106,9 +104,13 @@ function LoginContent() {
           </div>
         </section>
 
-        <Card className="border-zinc-200/80 shadow-[var(--gestop-shadow)]">
+        <Card className="border-[var(--color-border-subtle)] shadow-[var(--gestop-shadow)]">
           <CardHeader>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+            <div className="mb-4 lg:hidden">
+              <Logo variant="compact" priority />
+              <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-brand-primary)]">GestOP</p>
+            </div>
+            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-[var(--color-brand-primary-subtle)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-brand-primary)]">
               <LockKeyhole className="h-3.5 w-3.5" />
               Acesso restrito
             </div>

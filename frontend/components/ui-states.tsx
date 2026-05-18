@@ -5,7 +5,7 @@ export function LoadingState({ label = 'Carregando dados operacionais...' }: { l
   return (
     <Card>
       <CardContent className="flex min-h-40 items-center justify-center py-10 text-zinc-500">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin text-blue-600" aria-hidden />
+        <Loader2 className="mr-2 h-5 w-5 animate-spin text-[var(--color-brand-primary)]" aria-hidden />
         <span className="text-sm font-medium">{label}</span>
       </CardContent>
     </Card>

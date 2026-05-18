@@ -16,7 +16,7 @@ export function Tabs({
   return (
     <div
       className={cn(
-        'flex gap-1 overflow-x-auto rounded-2xl bg-zinc-100/80 p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        'flex gap-1 overflow-x-auto rounded-2xl bg-[var(--color-bg-muted)]/80 p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         className,
       )}
       role="tablist"
@@ -35,8 +35,8 @@ export function Tabs({
             className={cn(
               'inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-all duration-200',
               active
-                ? 'bg-white text-zinc-950 shadow-sm'
-                : 'text-zinc-600 hover:text-zinc-900',
+                ? 'bg-white text-[var(--color-brand-primary)] shadow-sm'
+                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]',
             )}
           >
             {item.icon}
