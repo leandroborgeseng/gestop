@@ -1,0 +1,92 @@
+import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
+import { CurrentUser } from '../auth/current-user';
+import { JwtPayload } from '../auth/jwt';
+import { PermissionsGuard } from '../auth/permissions.guard';
+import { RequirePermissions } from '../auth/permissions';
+import { AdminService } from './admin.service';
+import { SecretariaDto, UnidadeDto, UsuarioDto } from './admin.dto';
+
+@UseGuards(AuthGuard, PermissionsGuard)
+@Controller('admin')
+export class AdminController {
+  constructor(private readonly adminService: AdminService) {}
+
+  @RequirePermissions('secretarias.gerenciar')
+  @Get('secretarias')
+  listSecretarias() {
+    return this.adminService.listSecretarias();
+  }
+
+  @RequirePermissions('secretarias.gerenciar')
+  @Post('secretarias')
+  createSecretaria(@Body() body: SecretariaDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.createSecretaria(body, user);
+  }
+
+  @RequirePermissions('secretarias.gerenciar')
+  @Put('secretarias/:id')
+  updateSecretaria(@Param('id') id: string, @Body() body: SecretariaDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.updateSecretaria(id, body, user);
+  }
+
+  @RequirePermissions('secretarias.gerenciar')
+  @Delete('secretarias/:id')
+  deleteSecretaria(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.adminService.deleteSecretaria(id, user);
+  }
+
+  @RequirePermissions('unidades.gerenciar')
+  @Get('unidades')
+  listUnidades() {
+    return this.adminService.listUnidades();
+  }
+
+  @RequirePermissions('unidades.gerenciar')
+  @Post('unidades')
+  createUnidade(@Body() body: UnidadeDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.createUnidade(body, user);
+  }
+
+  @RequirePermissions('unidades.gerenciar')
+  @Put('unidades/:id')
+  updateUnidade(@Param('id') id: string, @Body() body: UnidadeDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.updateUnidade(id, body, user);
+  }
+
+  @RequirePermissions('unidades.gerenciar')
+  @Delete('unidades/:id')
+  deleteUnidade(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.adminService.deleteUnidade(id, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Get('usuarios')
+  listUsuarios() {
+    return this.adminService.listUsuarios();
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Post('usuarios')
+  createUsuario(@Body() body: UsuarioDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.createUsuario(body, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Put('usuarios/:id')
+  updateUsuario(@Param('id') id: string, @Body() body: UsuarioDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.updateUsuario(id, body, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Delete('usuarios/:id')
+  deleteUsuario(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.adminService.deleteUsuario(id, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Get('perfis')
+  listPerfis() {
+    return this.adminService.listPerfis();
+  }
+}
