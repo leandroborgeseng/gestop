@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getStoredAuth, StoredAuth } from '@/lib/api';
 import { AppShell } from '@/components/layout/app-shell';
 import { PageContainer } from '@/components/layout/page-shell';
-import { Skeleton } from '@/components/ui/skeleton';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 export function AuthGate({
   children,
@@ -45,17 +45,7 @@ export function AuthGate({
     return (
       <div className="gestop-shell">
         <PageContainer>
-          <div className="space-y-4 py-8">
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-4 w-72" />
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <Skeleton className="h-28" />
-              <Skeleton className="h-28" />
-              <Skeleton className="h-28" />
-              <Skeleton className="h-28" />
-            </div>
-            <Skeleton className="h-[420px]" />
-          </div>
+          <PageSkeleton />
         </PageContainer>
       </div>
     );

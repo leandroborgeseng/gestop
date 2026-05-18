@@ -8,9 +8,11 @@ import { login } from '@/lib/api';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
+import { PageSkeleton } from '@/components/ui/skeleton';
+import { Surface } from '@/components/ui/surface';
 
 export default function LoginPage() {
   return (
@@ -23,14 +25,9 @@ export default function LoginPage() {
 function LoginSkeleton() {
   return (
     <main className="gestop-shell flex min-h-dvh items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardContent className="space-y-4 p-6">
-          <Skeleton className="h-8 w-40" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-full" />
-        </CardContent>
-      </Card>
+      <div className="w-full max-w-md">
+        <PageSkeleton />
+      </div>
     </main>
   );
 }
@@ -47,26 +44,14 @@ function LoginContent() {
     const reason = searchParams.get('reason');
 
     if (reason === 'expired') {
-      return {
-        variant: 'warning' as const,
-        text: 'Sua sessão expirou ou é necessária para acessar esta área.',
-      };
+      return { variant: 'warning' as const, text: 'Sua sessão expirou ou é necessária para acessar esta área.' };
     }
-
     if (reason === 'logout') {
-      return {
-        variant: 'success' as const,
-        text: 'Você saiu do sistema com segurança.',
-      };
+      return { variant: 'success' as const, text: 'Você saiu do sistema com segurança.' };
     }
-
     if (reason === 'denied') {
-      return {
-        variant: 'error' as const,
-        text: 'Seu perfil não tem permissão para acessar essa área.',
-      };
+      return { variant: 'error' as const, text: 'Seu perfil não tem permissão para acessar essa área.' };
     }
-
     return null;
   }, [searchParams]);
 
@@ -86,35 +71,41 @@ function LoginContent() {
   }
 
   return (
-    <main className="gestop-shell flex min-h-dvh flex-col justify-center px-4 py-8 md:px-6">
+    <main className="gestop-shell flex min-h-dvh flex-col justify-center px-4 py-8 sm:px-6">
       <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-        <section className="gestop-brand-panel hidden rounded-[28px] p-8 text-white shadow-2xl lg:block">
+        <Surface
+          elevation={3}
+          tone="default"
+          className="gestop-brand-panel hidden border-0 p-8 text-white lg:block"
+        >
           <Logo theme="light" variant="compact" priority />
-          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/70">GestOP</p>
-          <p className="mt-6 max-w-md text-sm leading-7 text-white/80">
+          <Chip variant="accent" className="mt-3 bg-white/15 text-white">
+            GestOP
+          </Chip>
+          <p className="md-body-lg mt-6 max-w-md text-white/85">
             Plataforma de gestão de ordens de serviço e fiscalização georreferenciada da Prefeitura de Franca.
           </p>
-          <div className="mt-8 rounded-[24px] border border-white/15 bg-white/10 p-5 text-sm text-white/85 backdrop-blur-sm">
-            <strong className="block text-white">Acesso demo</strong>
-            <p className="mt-2 leading-6">
+          <Surface tone="high" elevation={0} className="mt-8 border-white/15 bg-white/10 p-5 text-white backdrop-blur-sm">
+            <strong className="md-title-md block">Acesso demo</strong>
+            <p className="md-body-md mt-2">
               admin.gestop@franca.sp.gov.br
               <br />
               Senha: Gestop@123
             </p>
-          </div>
-        </section>
+          </Surface>
+        </Surface>
 
-        <Card className="border-[var(--color-border-subtle)] shadow-[var(--gestop-shadow)]">
+        <Card elevation={2} className="w-full">
           <CardHeader>
             <div className="mb-4 lg:hidden">
               <Logo variant="compact" priority />
-              <p className="mt-2 text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-brand-primary)]">GestOP</p>
+              <p className="md-label-md mt-2 text-[var(--color-brand-primary)]">GestOP</p>
             </div>
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-[var(--color-brand-primary-subtle)] px-3 py-1 text-xs font-semibold uppercase tracking-wide text-[var(--color-brand-primary)]">
+            <Chip variant="brand" className="mb-3 w-fit gap-1.5">
               <LockKeyhole className="h-3.5 w-3.5" />
               Acesso restrito
-            </div>
-            <CardTitle className="text-2xl">Entrar no sistema</CardTitle>
+            </Chip>
+            <CardTitle className="md-headline-md">Entrar no sistema</CardTitle>
             <CardDescription>Use seu usuário institucional para acessar a CCO.</CardDescription>
           </CardHeader>
 
@@ -122,7 +113,7 @@ function LoginContent() {
             {notice ? <Alert variant={notice.variant} className="mb-4">{notice.text}</Alert> : null}
             {error ? <Alert variant="error" className="mb-4">{error}</Alert> : null}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <Field label="E-mail">
                 <Input
                   value={email}
@@ -144,7 +135,7 @@ function LoginContent() {
                 />
               </Field>
 
-              <Button type="submit" variant="brand" size="lg" className="w-full" disabled={loading}>
+              <Button type="submit" variant="filled" size="lg" className="w-full" disabled={loading}>
                 {loading ? 'Entrando...' : 'Entrar'}
               </Button>
             </form>

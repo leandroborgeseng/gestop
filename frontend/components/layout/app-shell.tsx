@@ -35,16 +35,21 @@ function NavLink({
       href={item.href}
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition-all duration-200',
+        'relative flex items-center gap-3 rounded-[var(--md-shape-full)] px-4 py-2.5 md-label-lg transition-all duration-[var(--md-duration-short)]',
         active
-          ? 'bg-[var(--color-brand-primary)] text-white shadow-sm'
-          : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-brand-primary-subtle)] hover:text-[var(--color-brand-primary)]',
-        compact && 'flex-col gap-1 px-2 py-2 text-[11px]',
+          ? 'bg-[var(--color-brand-primary-subtle)] text-[var(--color-brand-primary)]'
+          : 'text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-container-low)] hover:text-[var(--md-on-surface)]',
+        compact && 'min-h-14 flex-col justify-center gap-1 px-2 py-2 md-label-md',
       )}
       aria-current={active ? 'page' : undefined}
     >
-      <Icon className={cn('shrink-0', compact ? 'h-5 w-5' : 'h-4 w-4')} />
-      <span className={cn(compact && 'truncate')}>{compact ? item.shortLabel ?? item.label : item.label}</span>
+      <Icon className={cn('shrink-0', compact ? 'h-6 w-6' : 'h-5 w-5')} />
+      <span className={cn(compact && 'max-w-full truncate')}>
+        {compact ? item.shortLabel ?? item.label : item.label}
+      </span>
+      {active && !compact ? (
+        <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-[var(--color-brand-primary)]" aria-hidden />
+      ) : null}
     </Link>
   );
 }
@@ -62,30 +67,34 @@ export function DesktopSidebar({
   const items = getVisibleNavItems(permissions);
 
   return (
-    <aside className="hidden lg:flex lg:w-72 lg:flex-col lg:border-r lg:border-[var(--color-border-subtle)] lg:bg-white/85 lg:backdrop-blur-xl">
-      <div className="border-b border-[var(--color-border-subtle)] px-5 py-6">
+    <aside className="hidden lg:flex lg:w-[17.5rem] lg:flex-col lg:border-r lg:border-[var(--md-outline-variant)] lg:bg-[var(--md-surface)]">
+      <div className="border-b border-[var(--md-outline-variant)] px-5 py-6">
         <Logo href="/cco" priority />
         <ProductLabel className="mt-4" />
-        <p className="mt-3 text-sm font-medium text-[var(--color-text-primary)]">{userName}</p>
-        <p className="text-xs text-[var(--color-text-secondary)]">{userRoles.join(' · ')}</p>
+        <div className="mt-4 rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] px-3 py-2.5">
+          <p className="md-title-md truncate text-[var(--md-on-surface)]">{userName}</p>
+          <p className="md-body-md mt-0.5 truncate text-[var(--md-on-surface-variant)]">
+            {userRoles.join(' · ')}
+          </p>
+        </div>
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1 p-4" aria-label="Navegação principal">
+      <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Navegação principal">
         {items.map((item) => (
           <NavLink key={item.id} item={item} active={pathname.startsWith(item.href)} />
         ))}
       </nav>
 
-      <div className="border-t border-[var(--color-border-subtle)] p-4">
+      <div className="border-t border-[var(--md-outline-variant)] p-4">
         <Button
-          variant="secondary"
+          variant="tonal"
           className="w-full justify-start"
           onClick={() => {
             logout();
             window.location.href = '/login?reason=logout';
           }}
         >
-          <LogOut className="h-4 w-4" />
+          <LogOut className="h-5 w-5" />
           Sair
         </Button>
       </div>
@@ -93,17 +102,20 @@ export function DesktopSidebar({
   );
 }
 
-export function MobileHeader({ userName }: { userName: string }) {
+export function MobileAppBar({ userName }: { userName: string }) {
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--color-border-subtle)] bg-white/90 px-4 py-3 backdrop-blur-xl lg:hidden">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
+    <header className="sticky top-0 z-30 border-b border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 backdrop-blur-md lg:hidden">
+      <div className="flex min-h-16 items-center justify-between gap-3 px-4">
+        <div className="flex min-w-0 items-center gap-3">
           <Logo variant="mark" href="/cco" />
-          <ProductLabel />
+          <div className="min-w-0">
+            <ProductLabel />
+            <p className="md-body-md mt-0.5 truncate text-[var(--md-on-surface-variant)]">{userName}</p>
+          </div>
         </div>
-        <div className="rounded-full bg-[var(--color-brand-accent-subtle)] px-2.5 py-1 text-[11px] font-semibold text-[var(--color-brand-accent)] ring-1 ring-[color-mix(in_srgb,var(--color-brand-accent)_20%,transparent)]">
+        <span className="inline-flex min-h-8 items-center rounded-[var(--md-shape-full)] bg-[var(--color-brand-accent-subtle)] px-3 md-label-md font-medium text-[var(--color-brand-accent)]">
           Online
-        </div>
+        </span>
       </div>
     </header>
   );
@@ -123,16 +135,17 @@ export function MobileBottomNav({
   const secondary = getSecondaryNavItems(permissions);
   const MoreIcon = MORE_NAV_ICON;
   const hasMore = secondary.length > 0;
+  const slotCount = hasMore ? 4 : Math.max(primary.length, 1);
 
   return (
     <>
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--color-border-subtle)] bg-white/90 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-md lg:hidden"
         aria-label="Navegação mobile"
       >
         <div
-          className={cn('grid gap-1', hasMore ? 'grid-cols-4' : `grid-cols-${Math.min(primary.length, 4)}`)}
-          style={{ gridTemplateColumns: `repeat(${hasMore ? 4 : Math.max(primary.length, 1)}, minmax(0, 1fr))` }}
+          className="grid gap-0.5"
+          style={{ gridTemplateColumns: `repeat(${slotCount}, minmax(0, 1fr))` }}
         >
           {primary.map((item) => {
             const Icon = item.icon;
@@ -143,13 +156,18 @@ export function MobileBottomNav({
                 key={item.id}
                 href={item.href}
                 className={cn(
-                  'flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold transition-all duration-200',
-                  active ? 'bg-[var(--color-brand-primary)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-brand-primary-subtle)] hover:text-[var(--color-brand-primary)]',
+                  'relative flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-[var(--md-shape-lg)] px-1 md-label-md font-medium transition-all duration-[var(--md-duration-short)]',
+                  active
+                    ? 'text-[var(--color-brand-primary)]'
+                    : 'text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-container-low)]',
                 )}
                 aria-current={active ? 'page' : undefined}
               >
-                <Icon className="h-5 w-5" />
-                <span>{item.shortLabel ?? item.label}</span>
+                {active ? (
+                  <span className="absolute inset-x-3 top-1 h-8 rounded-[var(--md-shape-full)] bg-[var(--color-brand-primary-subtle)]" aria-hidden />
+                ) : null}
+                <Icon className="relative h-6 w-6" />
+                <span className="relative max-w-full truncate">{item.shortLabel ?? item.label}</span>
               </Link>
             );
           })}
@@ -159,20 +177,25 @@ export function MobileBottomNav({
               type="button"
               onClick={() => onMoreOpen(true)}
               className={cn(
-                'flex min-h-14 flex-col items-center justify-center gap-1 rounded-2xl px-1 text-[11px] font-semibold transition-all duration-200',
-                moreOpen ? 'bg-[var(--color-brand-primary)] text-white' : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-brand-primary-subtle)] hover:text-[var(--color-brand-primary)]',
+                'relative flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-[var(--md-shape-lg)] px-1 md-label-md font-medium transition-all duration-[var(--md-duration-short)]',
+                moreOpen
+                  ? 'text-[var(--color-brand-primary)]'
+                  : 'text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-container-low)]',
               )}
               aria-label="Abrir mais opções"
             >
-              <MoreIcon className="h-5 w-5" />
-              <span>Mais</span>
+              {moreOpen ? (
+                <span className="absolute inset-x-3 top-1 h-8 rounded-[var(--md-shape-full)] bg-[var(--color-brand-primary-subtle)]" aria-hidden />
+              ) : null}
+              <MoreIcon className="relative h-6 w-6" />
+              <span className="relative">Mais</span>
             </button>
           ) : null}
         </div>
       </nav>
 
       <Sheet open={moreOpen} onClose={() => onMoreOpen(false)} title="Mais opções">
-        <div className="space-y-2">
+        <div className="space-y-1">
           {secondary.map((item) => (
             <NavLink
               key={item.id}
@@ -182,14 +205,14 @@ export function MobileBottomNav({
             />
           ))}
           <Button
-            variant="secondary"
+            variant="tonal"
             className="mt-4 w-full justify-start"
             onClick={() => {
               logout();
               window.location.href = '/login?reason=logout';
             }}
           >
-            <LogOut className="h-4 w-4" />
+            <LogOut className="h-5 w-5" />
             Sair da conta
           </Button>
         </div>
@@ -212,11 +235,11 @@ export function AppShell({
   const [moreOpen, setMoreOpen] = useState(false);
 
   return (
-    <div className="gestop-app flex min-h-screen bg-[var(--color-bg-surface)]">
+    <div className="gestop-app flex min-h-screen bg-[var(--md-surface-dim)]">
       <DesktopSidebar userName={userName} userRoles={userRoles} permissions={permissions} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileHeader userName={userName} />
-        <main className="gestop-main flex-1">{children}</main>
+        <MobileAppBar userName={userName} />
+        <main className="gestop-main flex-1 overflow-x-hidden">{children}</main>
         <MobileBottomNav permissions={permissions} moreOpen={moreOpen} onMoreOpen={setMoreOpen} />
       </div>
     </div>

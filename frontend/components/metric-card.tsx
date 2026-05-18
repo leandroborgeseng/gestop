@@ -16,15 +16,21 @@ export function MetricCard({
   className?: string;
 }) {
   return (
-    <Card className={cn('transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md', className)}>
-      <CardContent className="p-5">
+    <Card
+      elevation={1}
+      className={cn(
+        'transition-all duration-[var(--md-duration-short)] hover:-translate-y-0.5 hover:shadow-[var(--md-elevation-2)]',
+        className,
+      )}
+    >
+      <CardContent className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-[var(--color-text-secondary)]">{title}</p>
-            <strong className="mt-3 block text-3xl font-semibold tracking-tight text-[var(--color-text-primary)]">{value}</strong>
-            <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">{hint}</p>
+          <div className="min-w-0">
+            <p className="md-label-lg text-[var(--md-on-surface-variant)]">{title}</p>
+            <strong className="md-headline-md mt-2 block text-[var(--md-on-surface)]">{value}</strong>
+            <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">{hint}</p>
           </div>
-          <span className="rounded-2xl bg-[var(--color-brand-primary-subtle)] p-3 text-[var(--color-brand-primary)] ring-1 ring-[color-mix(in_srgb,var(--color-brand-primary)_12%,transparent)]">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--md-shape-md)] bg-[var(--color-brand-primary-subtle)] text-[var(--color-brand-primary)]">
             <Icon className="h-5 w-5" aria-hidden />
           </span>
         </div>

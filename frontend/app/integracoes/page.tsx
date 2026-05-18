@@ -50,50 +50,58 @@ export default function IntegracoesPage() {
         title="Eventos técnicos, notificações e sync"
         backHref="/cco"
       >
-        {error ? <div className="mb-6"><ErrorState message={error} /></div> : null}
+        {error ? <div className="mb-6"><ErrorState message={error} onRetry={() => void load()} /></div> : null}
         {success ? <Alert variant="success" className="mb-4">{success}</Alert> : null}
         {loading ? <LoadingState label="Carregando eventos técnicos..." /> : null}
 
         {eventos ? (
           <section className="grid gap-6 lg:grid-cols-2">
-            <Card>
+            <Card elevation={1}>
               <CardHeader className="flex-row items-center justify-between space-y-0">
                 <CardTitle>Falhas de sincronização</CardTitle>
-                <Button variant="brand" size="sm" onClick={() => void retry()}>
+                <Button variant="filled" size="sm" onClick={() => void retry()}>
                   <RefreshCcw className="h-4 w-4" />
                   Retentar
                 </Button>
               </CardHeader>
-              <CardContent className="space-y-3 pt-0">
+              <CardContent className="space-y-2 pt-0">
                 {eventos.syncFalhas.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-4 text-sm">
-                    <strong className="text-zinc-950">{item.status}</strong>
-                    <span className="text-zinc-500"> · {item.clientEventId}</span>
-                    <p className="mt-1 text-zinc-500">
+                  <div
+                    key={item.id}
+                    className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4 md-body-md"
+                  >
+                    <strong className="md-title-md text-[var(--md-on-surface)]">{item.status}</strong>
+                    <span className="text-[var(--md-on-surface-variant)]"> · {item.clientEventId}</span>
+                    <p className="mt-1 text-[var(--md-on-surface-variant)]">
                       {item.conflitoMotivo ?? 'Aguardando processamento'} · tentativas {item.tentativas}
                     </p>
                   </div>
                 ))}
                 {eventos.syncFalhas.length === 0 ? (
-                  <p className="text-sm text-zinc-500">Nenhuma falha pendente.</p>
+                  <p className="md-body-md py-4 text-[var(--md-on-surface-variant)]">Nenhuma falha pendente.</p>
                 ) : null}
               </CardContent>
             </Card>
 
-            <Card>
+            <Card elevation={1}>
               <CardHeader className="flex-row items-center justify-between space-y-0">
                 <CardTitle>Notificações mock</CardTitle>
-                <Button variant="secondary" size="sm" onClick={() => void notify()}>
+                <Button variant="tonal" size="sm" onClick={() => void notify()}>
                   <Send className="h-4 w-4" />
                   Enviar teste
                 </Button>
               </CardHeader>
-              <CardContent className="space-y-3 pt-0">
+              <CardContent className="space-y-2 pt-0">
                 {eventos.auditoriaIntegracoes.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-zinc-200/80 p-4 text-sm">
-                    <strong className="text-zinc-950">{item.entidadeTipo}</strong>
-                    <span className="text-zinc-500"> · {item.acao}</span>
-                    <p className="mt-1 text-zinc-500">{new Date(item.createdAt).toLocaleString('pt-BR')}</p>
+                  <div
+                    key={item.id}
+                    className="rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)] p-4 md-body-md"
+                  >
+                    <strong className="md-title-md text-[var(--md-on-surface)]">{item.entidadeTipo}</strong>
+                    <span className="text-[var(--md-on-surface-variant)]"> · {item.acao}</span>
+                    <p className="mt-1 text-[var(--md-on-surface-variant)]">
+                      {new Date(item.createdAt).toLocaleString('pt-BR')}
+                    </p>
                   </div>
                 ))}
               </CardContent>

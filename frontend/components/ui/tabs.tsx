@@ -16,7 +16,7 @@ export function Tabs({
   return (
     <div
       className={cn(
-        'flex gap-1 overflow-x-auto rounded-2xl bg-[var(--color-bg-muted)]/80 p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+        'flex gap-1 overflow-x-auto rounded-[var(--md-shape-lg)] bg-[var(--md-surface-container)] p-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
         className,
       )}
       role="tablist"
@@ -33,10 +33,10 @@ export function Tabs({
             aria-selected={active}
             onClick={() => onChange(item.id)}
             className={cn(
-              'inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl px-4 text-sm font-semibold transition-all duration-200',
+              'inline-flex min-h-11 shrink-0 items-center gap-2 rounded-[var(--md-shape-md)] px-4 md-label-lg transition-all duration-[var(--md-duration-short)]',
               active
-                ? 'bg-white text-[var(--color-brand-primary)] shadow-sm'
-                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]',
+                ? 'bg-[var(--md-surface)] text-[var(--color-brand-primary)] shadow-[var(--md-elevation-1)]'
+                : 'text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-container-high)] hover:text-[var(--md-on-surface)]',
             )}
           >
             {item.icon}

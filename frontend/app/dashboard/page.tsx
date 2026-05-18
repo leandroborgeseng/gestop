@@ -50,16 +50,19 @@ export default function DashboardPage() {
             </section>
 
             <section className="grid gap-6 lg:grid-cols-2">
-              <Card>
+              <Card elevation={1}>
                 <CardHeader>
                   <CardTitle>Pendências por secretaria</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-3 pt-0">
+                <CardContent className="space-y-2 pt-0">
                   {dashboard.pendenciasPorSecretaria.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-zinc-200/80 bg-zinc-50/50 p-4">
-                      <strong className="text-zinc-950">{item.sigla}</strong>
-                      <span className="text-zinc-500"> — {item.nome}</span>
-                      <p className="mt-1 text-sm text-zinc-500">
+                    <div
+                      key={item.id}
+                      className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4"
+                    >
+                      <strong className="md-title-md text-[var(--md-on-surface)]">{item.sigla}</strong>
+                      <span className="md-body-md text-[var(--md-on-surface-variant)]"> — {item.nome}</span>
+                      <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
                         {item.ordensPendentes} OS pendentes · {item.fiscalizacoes} fiscalizações
                       </p>
                     </div>
@@ -67,16 +70,19 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card elevation={1}>
                 <CardHeader>
                   <CardTitle>Últimos eventos de auditoria</CardTitle>
                 </CardHeader>
-                <CardContent className="max-h-[520px] space-y-3 overflow-auto pt-0">
+                <CardContent className="max-h-[520px] space-y-2 overflow-auto pt-0">
                   {auditoria.map((evento) => (
-                    <div key={evento.id} className="rounded-2xl border border-zinc-200/80 p-3 text-sm">
-                      <strong className="text-zinc-950">{evento.acao}</strong>
-                      <span className="text-zinc-500"> em {evento.entidadeTipo}</span>
-                      <p className="mt-1 text-zinc-500">
+                    <div
+                      key={evento.id}
+                      className="rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)] p-3"
+                    >
+                      <strong className="md-title-md text-[var(--md-on-surface)]">{evento.acao}</strong>
+                      <span className="md-body-md text-[var(--md-on-surface-variant)]"> em {evento.entidadeTipo}</span>
+                      <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
                         {evento.usuario?.nome ?? 'Sistema'} · {new Date(evento.createdAt).toLocaleString('pt-BR')}
                       </p>
                     </div>

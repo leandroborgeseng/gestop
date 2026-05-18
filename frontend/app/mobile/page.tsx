@@ -6,7 +6,9 @@ import { AuthGate } from '@/components/auth-gate';
 import { PageShell } from '@/components/layout/page-shell';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Fab } from '@/components/ui/fab';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
 import { Select } from '@/components/ui/select';
 import { ErrorState, LoadingState } from '@/components/ui-states';
@@ -175,14 +177,14 @@ export default function MobilePage() {
         description="Preencha em campo, salve localmente e sincronize quando houver conexão."
         backHref="/cco"
       >
-        <div className="mx-auto max-w-2xl space-y-4 pb-28">
+        <div className="mx-auto max-w-2xl space-y-4 pb-32">
           {error ? <ErrorState message={error} /> : null}
           {success ? <Alert variant="success">{success}</Alert> : null}
           {loading ? <LoadingState label="Baixando pacote de campo..." /> : null}
 
           {fieldPackage ? (
             <>
-              <Card>
+              <Card elevation={1}>
                 <CardHeader>
                   <CardTitle>Configurar vistoria</CardTitle>
                 </CardHeader>
@@ -207,10 +209,15 @@ export default function MobilePage() {
               </Card>
 
               {selectedUnit ? (
-                <Card>
-                  <CardContent className="p-4 text-sm">
-                  <p className="flex items-center gap-2 font-semibold text-[var(--color-text-primary)]"><MapPin className="h-4 w-4 text-[var(--color-brand-primary)]" />{selectedUnit.nome}</p>
-                  <p className="mt-1 text-zinc-500">{selectedUnit.bairro ?? 'Sem bairro'} · raio {selectedUnit.raioValidacaoMetros} m</p>
+                <Card elevation={1}>
+                  <CardContent className="p-4">
+                  <p className="md-title-md flex items-center gap-2 text-[var(--md-on-surface)]">
+                    <MapPin className="h-4 w-4 text-[var(--color-brand-primary)]" />
+                    {selectedUnit.nome}
+                  </p>
+                  <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+                    {selectedUnit.bairro ?? 'Sem bairro'} · raio {selectedUnit.raioValidacaoMetros} m
+                  </p>
                   </CardContent>
                 </Card>
               ) : null}
@@ -223,13 +230,13 @@ export default function MobilePage() {
                 </section>
               ) : null}
 
-              <Card>
+              <Card elevation={1}>
                 <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="font-semibold text-zinc-950">Fila de sincronização</h2>
-                    <p className="text-sm text-zinc-500">{queue.length} fiscalização(ões) pendente(s)</p>
+                    <h2 className="md-title-md text-[var(--md-on-surface)]">Fila de sincronização</h2>
+                    <p className="md-body-md text-[var(--md-on-surface-variant)]">{queue.length} fiscalização(ões) pendente(s)</p>
                   </div>
-                  <Button variant="brand" disabled={queue.length === 0 || syncing} onClick={syncQueue}>
+                  <Button variant="filled" disabled={queue.length === 0 || syncing} onClick={syncQueue}>
                     {syncing ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
                     Sincronizar
                   </Button>
@@ -237,12 +244,10 @@ export default function MobilePage() {
               </Card>
 
               {selectedVersion ? (
-                <div className="fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-20 border-t border-zinc-200/80 bg-white/95 px-4 py-3 backdrop-blur-xl lg:static lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none">
-                  <Button variant="brand" size="lg" className="w-full" onClick={saveOffline}>
-                    <Save className="h-5 w-5" />
-                    Salvar na fila offline
-                  </Button>
-                </div>
+                <Fab extended onClick={saveOffline} aria-label="Salvar na fila offline">
+                  <Save className="h-5 w-5" />
+                  <span>Salvar offline</span>
+                </Fab>
               ) : null}
             </>
           ) : null}
@@ -256,22 +261,27 @@ function ChecklistItemCard({ item, value, onChange, onEvidence }: { item: Checkl
   const current = value ?? { conformidade: 'CONFORME', comentario: '' };
 
   return (
-    <Card>
-      <CardContent className="space-y-3 p-4">
-      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--color-brand-primary)]">{item.codigo}</p>
-      <h3 className="text-base font-semibold text-zinc-950">{item.titulo}</h3>
+    <Card elevation={1}>
+      <CardContent className="space-y-4 p-4">
+      <Chip variant="brand">{item.codigo}</Chip>
+      <h3 className="md-title-md text-[var(--md-on-surface)]">{item.titulo}</h3>
       <Select value={current.conformidade} onChange={(e) => onChange({ conformidade: e.target.value as ResponseDraft['conformidade'] })}>
         <option value="CONFORME">Conforme</option>
         <option value="NAO_CONFORME">Não conforme</option>
         <option value="NAO_APLICAVEL">Não aplicável</option>
       </Select>
-      <textarea value={current.comentario} onChange={(e) => onChange({ comentario: e.target.value })} placeholder="Observação" className="min-h-24 w-full rounded-2xl border border-zinc-200 bg-white p-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-500/10" />
-      <label className="flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
-        <Camera className="h-4 w-4" />
+      <textarea
+        value={current.comentario}
+        onChange={(e) => onChange({ comentario: e.target.value })}
+        placeholder="Observação"
+        className="min-h-28 w-full rounded-[var(--md-shape-sm)] border border-[var(--md-outline)] bg-[var(--md-surface-container-lowest)] p-4 md-body-md focus:border-[var(--color-brand-primary)] focus:outline-none focus:ring-4 focus:ring-[color-mix(in_srgb,var(--color-brand-primary)_12%,transparent)]"
+      />
+      <label className="flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-[var(--md-shape-md)] border border-dashed border-[var(--md-outline)] bg-[var(--md-surface-container-low)] px-3 md-label-lg text-[var(--md-on-surface-variant)] transition hover:bg-[var(--md-surface-container)]">
+        <Camera className="h-5 w-5" />
         {current.evidenceDataUrl ? 'Foto anexada' : 'Anexar foto'}
         <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onEvidence} />
       </label>
-      {item.exigeEvidencia ? <p className="text-xs text-amber-700">Não conformidade exige evidência.</p> : null}
+      {item.exigeEvidencia ? <p className="md-body-md text-amber-700">Não conformidade exige evidência.</p> : null}
       </CardContent>
     </Card>
   );

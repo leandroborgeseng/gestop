@@ -5,6 +5,11 @@ import { Building2, MapPin, UserRound } from 'lucide-react';
 import { AuthGate } from '@/components/auth-gate';
 import { PageShell } from '@/components/layout/page-shell';
 import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
+import { FormGrid, FormSection, RecordItem, RecordList } from '@/components/ui/form-section';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
 import { Tabs } from '@/components/ui/tabs';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import {
@@ -81,32 +86,32 @@ export default function AdminPage() {
         description="Mantenha secretarias, próprios públicos e usuários. As alterações são registradas na trilha de auditoria."
         backHref="/cco"
       >
-          {error ? <div className="mb-4"><ErrorState message={error} /></div> : null}
-          {success ? <Alert variant="success" className="mb-4">{success}</Alert> : null}
+        {error ? <div className="mb-4"><ErrorState message={error} onRetry={() => void load()} /></div> : null}
+        {success ? <Alert variant="success" className="mb-4">{success}</Alert> : null}
 
-          <div className="mb-6">
-            <Tabs
-              value={tab}
-              onChange={(value) => setTab(value as Tab)}
-              items={[
-                { id: 'secretarias', label: 'Secretarias', icon: <Building2 className="h-4 w-4" /> },
-                { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" /> },
-                { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" /> },
-              ]}
-            />
-          </div>
+        <div className="mb-6">
+          <Tabs
+            value={tab}
+            onChange={(value) => setTab(value as Tab)}
+            items={[
+              { id: 'secretarias', label: 'Secretarias', icon: <Building2 className="h-4 w-4" /> },
+              { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" /> },
+              { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" /> },
+            ]}
+          />
+        </div>
 
-          {loading ? <LoadingState label="Carregando cadastros..." /> : null}
+        {loading ? <LoadingState label="Carregando cadastros..." /> : null}
 
-          {!loading && tab === 'secretarias' ? (
-            <SecretariasPanel secretarias={secretarias} mutate={mutate} />
-          ) : null}
-          {!loading && tab === 'unidades' ? (
-            <UnidadesPanel secretarias={secretarias} unidades={unidades} mutate={mutate} />
-          ) : null}
-          {!loading && tab === 'usuarios' ? (
-            <UsuariosPanel secretarias={secretarias} usuarios={usuarios} perfis={perfis} mutate={mutate} />
-          ) : null}
+        {!loading && tab === 'secretarias' ? (
+          <SecretariasPanel secretarias={secretarias} mutate={mutate} />
+        ) : null}
+        {!loading && tab === 'unidades' ? (
+          <UnidadesPanel secretarias={secretarias} unidades={unidades} mutate={mutate} />
+        ) : null}
+        {!loading && tab === 'usuarios' ? (
+          <UsuariosPanel secretarias={secretarias} usuarios={usuarios} perfis={perfis} mutate={mutate} />
+        ) : null}
       </PageShell>
     </AuthGate>
   );
@@ -131,22 +136,34 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
   }
 
   return (
-    <AdminGrid
-      form={
-        <form onSubmit={submit} className="space-y-3">
-          <Input name="nome" label="Nome" required />
-          <Input name="sigla" label="Sigla" required />
-          <Input name="responsavelNome" label="Responsável" />
-          <Input name="responsavelEmail" label="E-mail do responsável" type="email" />
-          <SubmitButton>Cadastrar secretaria</SubmitButton>
+    <FormGrid>
+      <FormSection title="Nova secretaria">
+        <form onSubmit={submit} className="space-y-4">
+          <Field label="Nome"><Input name="nome" required /></Field>
+          <Field label="Sigla"><Input name="sigla" required /></Field>
+          <Field label="Responsável"><Input name="responsavelNome" /></Field>
+          <Field label="E-mail do responsável"><Input name="responsavelEmail" type="email" /></Field>
+          <Button type="submit" variant="filled" className="w-full">Cadastrar secretaria</Button>
         </form>
-      }
-      list={secretarias.map((secretaria) => (
-        <Row key={secretaria.id} title={`${secretaria.sigla} - ${secretaria.nome}`} subtitle={secretaria.responsavelNome ?? 'Sem responsável'} active={secretaria.ativo}>
-          <button onClick={() => mutate(() => deleteAdminSecretaria(secretaria.id), 'Secretaria inativada.')} className="text-sm font-semibold text-red-700">Inativar</button>
-        </Row>
-      ))}
-    />
+      </FormSection>
+      <FormSection title="Registros">
+        <RecordList empty="Nenhuma secretaria cadastrada.">
+          {secretarias.map((secretaria) => (
+            <RecordItem
+              key={secretaria.id}
+              title={`${secretaria.sigla} — ${secretaria.nome}`}
+              subtitle={secretaria.responsavelNome ?? 'Sem responsável'}
+              active={secretaria.ativo}
+              actions={
+                <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminSecretaria(secretaria.id), 'Secretaria inativada.')}>
+                  Inativar
+                </Button>
+              }
+            />
+          ))}
+        </RecordList>
+      </FormSection>
+    </FormGrid>
   );
 }
 
@@ -175,30 +192,52 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
   }
 
   return (
-    <AdminGrid
-      form={
-        <form onSubmit={submit} className="space-y-3">
-          <Select name="secretariaId" label="Secretaria" options={secretarias.map((s) => [s.id, `${s.sigla} - ${s.nome}`])} required />
-          <Input name="codigoPatrimonial" label="Código patrimonial" required />
-          <Input name="nome" label="Nome do próprio" required />
-          <Select name="tipo" label="Tipo" options={tipos.map((tipo) => [tipo, tipo])} required />
-          <Input name="endereco" label="Endereço" required />
-          <Input name="bairro" label="Bairro" />
-          <Input name="cep" label="CEP" />
-          <div className="grid gap-3 md:grid-cols-3">
-            <Input name="latitude" label="Latitude" type="number" step="0.000001" required />
-            <Input name="longitude" label="Longitude" type="number" step="0.000001" required />
-            <Input name="raioValidacaoMetros" label="Raio (m)" type="number" defaultValue="200" />
+    <FormGrid>
+      <FormSection title="Novo próprio">
+        <form onSubmit={submit} className="space-y-4">
+          <Field label="Secretaria">
+            <Select name="secretariaId" required>
+              {secretarias.map((s) => (
+                <option key={s.id} value={s.id}>{s.sigla} — {s.nome}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Código patrimonial"><Input name="codigoPatrimonial" required /></Field>
+          <Field label="Nome"><Input name="nome" required /></Field>
+          <Field label="Tipo">
+            <Select name="tipo" required>
+              {tipos.map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
+            </Select>
+          </Field>
+          <Field label="Endereço"><Input name="endereco" required /></Field>
+          <Field label="Bairro"><Input name="bairro" /></Field>
+          <Field label="CEP"><Input name="cep" /></Field>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Latitude"><Input name="latitude" type="number" step="0.000001" required /></Field>
+            <Field label="Longitude"><Input name="longitude" type="number" step="0.000001" required /></Field>
+            <Field label="Raio (m)"><Input name="raioValidacaoMetros" type="number" defaultValue="200" /></Field>
           </div>
-          <SubmitButton>Cadastrar próprio</SubmitButton>
+          <Button type="submit" variant="filled" className="w-full">Cadastrar próprio</Button>
         </form>
-      }
-      list={unidades.map((unidade) => (
-        <Row key={unidade.id} title={unidade.nome} subtitle={`${unidade.codigoPatrimonial} · ${unidade.secretaria.sigla} · ${unidade.bairro ?? 'sem bairro'}`} active={unidade.ativo}>
-          <button onClick={() => mutate(() => deleteAdminUnidade(unidade.id), 'Próprio público inativado.')} className="text-sm font-semibold text-red-700">Inativar</button>
-        </Row>
-      ))}
-    />
+      </FormSection>
+      <FormSection title="Registros">
+        <RecordList empty="Nenhum próprio cadastrado.">
+          {unidades.map((unidade) => (
+            <RecordItem
+              key={unidade.id}
+              title={unidade.nome}
+              subtitle={`${unidade.codigoPatrimonial} · ${unidade.secretaria.sigla} · ${unidade.bairro ?? 'sem bairro'}`}
+              active={unidade.ativo}
+              actions={
+                <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
+                  Inativar
+                </Button>
+              }
+            />
+          ))}
+        </RecordList>
+      </FormSection>
+    </FormGrid>
   );
 }
 
@@ -227,90 +266,46 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
   }
 
   return (
-    <AdminGrid
-      form={
-        <form onSubmit={submit} className="space-y-3">
-          <Input name="nome" label="Nome" required />
-          <Input name="email" label="E-mail" type="email" required />
-          <Input name="cpf" label="CPF" />
-          <Input name="telefone" label="Telefone" />
-          <Input name="cargo" label="Cargo" />
-          <Input name="senha" label="Senha inicial" defaultValue="Gestop@123" />
-          <Select name="secretariaId" label="Secretaria" options={[['', 'Sem secretaria'], ...secretarias.map((s) => [s.id, `${s.sigla} - ${s.nome}`])]} />
-          <Select name="perfilId" label="Perfil" options={perfis.map((p) => [p.id, p.nome])} required />
-          <SubmitButton>Cadastrar usuário</SubmitButton>
+    <FormGrid>
+      <FormSection title="Novo usuário">
+        <form onSubmit={submit} className="space-y-4">
+          <Field label="Nome"><Input name="nome" required /></Field>
+          <Field label="E-mail"><Input name="email" type="email" required /></Field>
+          <Field label="CPF"><Input name="cpf" /></Field>
+          <Field label="Telefone"><Input name="telefone" /></Field>
+          <Field label="Cargo"><Input name="cargo" /></Field>
+          <Field label="Senha inicial"><Input name="senha" defaultValue="Gestop@123" /></Field>
+          <Field label="Secretaria">
+            <Select name="secretariaId">
+              <option value="">Sem secretaria</option>
+              {secretarias.map((s) => <option key={s.id} value={s.id}>{s.sigla} — {s.nome}</option>)}
+            </Select>
+          </Field>
+          <Field label="Perfil">
+            <Select name="perfilId" required>
+              {perfis.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            </Select>
+          </Field>
+          <Button type="submit" variant="filled" className="w-full">Cadastrar usuário</Button>
         </form>
-      }
-      list={usuarios.map((usuario) => (
-        <Row key={usuario.id} title={usuario.nome} subtitle={`${usuario.email} · ${usuario.perfis.map((p) => p.perfil.nome).join(', ') || 'sem perfil'}`} active={usuario.ativo}>
-          <button onClick={() => mutate(() => deleteAdminUsuario(usuario.id), 'Usuário inativado.')} className="text-sm font-semibold text-red-700">Inativar</button>
-        </Row>
-      ))}
-    />
-  );
-}
-
-function AdminGrid({ form, list }: { form: React.ReactNode; list: React.ReactNode[] }) {
-  return (
-    <div className="grid gap-6 lg:grid-cols-[420px_1fr]">
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-bold text-slate-950">Novo cadastro</h2>
-        {form}
-      </section>
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-lg font-bold text-slate-950">Registros</h2>
-        <div className="space-y-3">{list.length ? list : <p className="text-sm text-slate-600">Nenhum registro.</p>}</div>
-      </section>
-    </div>
-  );
-}
-
-function Row({ title, subtitle, active, children }: { title: string; subtitle: string; active: boolean; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 p-4">
-      <div>
-        <p className="font-semibold text-slate-950">{title}</p>
-        <p className="text-sm text-slate-600">{subtitle}</p>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${active ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-          {active ? 'Ativo' : 'Inativo'}
-        </span>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) {
-  const { label, ...inputProps } = props;
-  return (
-    <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700">
-      {label}
-      <input {...inputProps} className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100" />
-    </label>
-  );
-}
-
-function Select({ label, options, ...props }: React.SelectHTMLAttributes<HTMLSelectElement> & { label: string; options: string[][] }) {
-  return (
-    <label className="flex flex-col gap-1 text-sm font-semibold text-slate-700">
-      {label}
-      <select {...props} className="min-h-11 rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100">
-        {options.map(([value, text]) => (
-          <option key={value} value={value}>
-            {text}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function SubmitButton({ children }: { children: React.ReactNode }) {
-  return (
-    <button type="submit" className="min-h-11 w-full rounded-xl bg-blue-700 px-4 font-bold text-white hover:bg-blue-800">
-      {children}
-    </button>
+      </FormSection>
+      <FormSection title="Registros">
+        <RecordList empty="Nenhum usuário cadastrado.">
+          {usuarios.map((usuario) => (
+            <RecordItem
+              key={usuario.id}
+              title={usuario.nome}
+              subtitle={`${usuario.email} · ${usuario.perfis.map((p) => p.perfil.nome).join(', ') || 'sem perfil'}`}
+              active={usuario.ativo}
+              actions={
+                <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminUsuario(usuario.id), 'Usuário inativado.')}>
+                  Inativar
+                </Button>
+              }
+            />
+          ))}
+        </RecordList>
+      </FormSection>
+    </FormGrid>
   );
 }

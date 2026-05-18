@@ -10,13 +10,15 @@ import {
   MapPin,
   UserRound,
   Wrench,
-  type LucideIcon,
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
 import { UnidadeDetalhe } from '@/lib/types';
 import { AuthGate } from '@/components/auth-gate';
 import { PageShell } from '@/components/layout/page-shell';
+import { MetricCard } from '@/components/metric-card';
 import { StatusBadge } from '@/components/status-badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Chip } from '@/components/ui/chip';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 
 export default function UnidadeDetalhePage() {
@@ -58,9 +60,9 @@ export default function UnidadeDetalhePage() {
         icon={Building2}
         backHref="/cco"
       >
-          {error ? <ErrorState message={error} /> : null}
-          {loading ? <LoadingState label="Carregando detalhe do próprio..." /> : null}
-          {!loading && unidade ? <UnidadeDetalheView unidade={unidade} /> : null}
+        {error ? <ErrorState message={error} /> : null}
+        {loading ? <LoadingState label="Carregando detalhe do próprio..." /> : null}
+        {!loading && unidade ? <UnidadeDetalheView unidade={unidade} /> : null}
       </PageShell>
     </AuthGate>
   );
@@ -69,107 +71,105 @@ export default function UnidadeDetalhePage() {
 function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
   return (
     <div className="space-y-6">
-      <header className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-blue-700">
-                {unidade.codigoPatrimonial}
-              </span>
-              <StatusBadge situacao={unidade.situacao} />
-            </div>
-            <h1 className="mt-3 text-3xl font-bold text-slate-950">{unidade.nome}</h1>
-            <p className="mt-2 text-sm text-slate-600">
-              {unidade.tipo} · {unidade.secretaria.sigla} - {unidade.secretaria.nome}
-            </p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Raio de validação
-            <strong className="block text-2xl text-slate-950">{unidade.raioValidacaoMetros} m</strong>
-          </div>
-        </div>
-      </header>
-
-      <section className="grid gap-6 lg:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-950">
-            <Building2 className="h-5 w-5 text-blue-700" />
-            Dados cadastrais
-          </h2>
-          <dl className="grid gap-4 text-sm md:grid-cols-2">
-            <Info label="Endereço" value={unidade.endereco} />
-            <Info label="Bairro" value={unidade.bairro ?? 'Não informado'} />
-            <Info label="CEP" value={unidade.cep ?? 'Não informado'} />
-            <Info label="Secretaria" value={`${unidade.secretaria.sigla} - ${unidade.secretaria.nome}`} />
-            <Info label="Responsável" value={unidade.secretaria.responsavelNome ?? 'Não informado'} />
-            <Info label="E-mail" value={unidade.secretaria.responsavelEmail ?? 'Não informado'} />
-          </dl>
-        </div>
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-950">
-            <MapPin className="h-5 w-5 text-blue-700" />
-            Localização
-          </h2>
-          {unidade.latitude !== null && unidade.longitude !== null ? (
-            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
-              <p className="text-sm font-semibold text-slate-700">Coordenadas cadastradas</p>
-              <p className="mt-2 text-2xl font-bold text-slate-950">
-                {unidade.latitude.toFixed(6)}, {unidade.longitude.toFixed(6)}
-              </p>
-              <p className="mt-3 text-sm text-slate-600">
-                Essas coordenadas serão usadas na validação do raio de check-in em campo.
+      <Card elevation={2}>
+        <CardContent className="p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip variant="brand">{unidade.codigoPatrimonial}</Chip>
+                <StatusBadge situacao={unidade.situacao} />
+              </div>
+              <h1 className="md-headline-md mt-3 text-[var(--md-on-surface)]">{unidade.nome}</h1>
+              <p className="md-body-md mt-2 text-[var(--md-on-surface-variant)]">
+                {unidade.tipo} · {unidade.secretaria.sigla} — {unidade.secretaria.nome}
               </p>
             </div>
-          ) : (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-800">
-              Este próprio ainda não possui localização cadastrada.
+            <div className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] px-4 py-3 md-body-md text-[var(--md-on-surface-variant)]">
+              Raio de validação
+              <strong className="md-headline-md mt-0.5 block text-[var(--md-on-surface)]">
+                {unidade.raioValidacaoMetros} m
+              </strong>
             </div>
-          )}
-        </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <section className="grid gap-6 lg:grid-cols-2">
+        <Card elevation={1}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-[var(--color-brand-primary)]" />
+              Dados cadastrais
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <dl className="grid gap-4 sm:grid-cols-2">
+              <Info label="Endereço" value={unidade.endereco} />
+              <Info label="Bairro" value={unidade.bairro ?? 'Não informado'} />
+              <Info label="CEP" value={unidade.cep ?? 'Não informado'} />
+              <Info label="Secretaria" value={`${unidade.secretaria.sigla} — ${unidade.secretaria.nome}`} />
+              <Info label="Responsável" value={unidade.secretaria.responsavelNome ?? 'Não informado'} />
+              <Info label="E-mail" value={unidade.secretaria.responsavelEmail ?? 'Não informado'} />
+            </dl>
+          </CardContent>
+        </Card>
+
+        <Card elevation={1}>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-[var(--color-brand-primary)]" />
+              Localização
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {unidade.latitude !== null && unidade.longitude !== null ? (
+              <div className="rounded-[var(--md-shape-md)] bg-[var(--color-brand-primary-subtle)] p-5">
+                <p className="md-label-lg text-[var(--color-brand-primary)]">Coordenadas cadastradas</p>
+                <p className="md-headline-md mt-2 text-[var(--md-on-surface)]">
+                  {unidade.latitude.toFixed(6)}, {unidade.longitude.toFixed(6)}
+                </p>
+                <p className="md-body-md mt-3 text-[var(--md-on-surface-variant)]">
+                  Essas coordenadas serão usadas na validação do raio de check-in em campo.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-[var(--md-shape-md)] bg-amber-50 p-5 md-body-md text-amber-800">
+                Este próprio ainda não possui localização cadastrada.
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-3">
-        <ResumoCard
-          icon={ClipboardList}
-          label="Fiscalizações"
-          value={unidade.totais.fiscalizacoes}
-          hint="registradas para este próprio"
-        />
-        <ResumoCard
-          icon={AlertTriangle}
-          label="Não conformidades"
-          value={unidade.pendencias.naoConformidadesAbertas}
-          hint="abertas ou em triagem"
-        />
-        <ResumoCard
-          icon={Wrench}
-          label="Ordens de serviço"
-          value={unidade.pendencias.ordensServicoAbertas}
-          hint="ativas no momento"
-        />
+      <section className="grid gap-4 sm:grid-cols-3">
+        <MetricCard icon={ClipboardList} title="Fiscalizações" value={unidade.totais.fiscalizacoes} hint="registradas para este próprio" />
+        <MetricCard icon={AlertTriangle} title="Não conformidades" value={unidade.pendencias.naoConformidadesAbertas} hint="abertas ou em triagem" />
+        <MetricCard icon={Wrench} title="Ordens de serviço" value={unidade.pendencias.ordensServicoAbertas} hint="ativas no momento" />
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
         <Panel title="Últimas fiscalizações">
           {unidade.ultimasFiscalizacoes.length === 0 ? (
-            <p className="text-sm text-slate-600">Nenhuma fiscalização registrada.</p>
+            <p className="md-body-md text-[var(--md-on-surface-variant)]">Nenhuma fiscalização registrada.</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {unidade.ultimasFiscalizacoes.map((fiscalizacao) => (
-                <div key={fiscalizacao.id} className="rounded-2xl border border-slate-200 p-4">
+                <div
+                  key={fiscalizacao.id}
+                  className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="font-semibold text-slate-950">
+                      <p className="md-title-md text-[var(--md-on-surface)]">
                         {fiscalizacao.checklistVersao.checklist.nome} v{fiscalizacao.checklistVersao.versao}
                       </p>
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
                         {fiscalizacao.status} · {fiscalizacao.origem}
                       </p>
                     </div>
-                    <CalendarClock className="h-5 w-5 text-slate-400" />
+                    <CalendarClock className="h-5 w-5 text-[var(--md-outline)]" />
                   </div>
-                  <p className="mt-3 flex items-center gap-2 text-sm text-slate-600">
+                  <p className="md-body-md mt-3 flex items-center gap-2 text-[var(--md-on-surface-variant)]">
                     <UserRound className="h-4 w-4" />
                     {fiscalizacao.agente.nome}
                   </p>
@@ -180,29 +180,31 @@ function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
         </Panel>
 
         <Panel title="Pendências e ordens relacionadas">
-          <div className="space-y-4">
+          <div className="space-y-3">
             {unidade.pendenciasDetalhadas.naoConformidades.length === 0 &&
             unidade.pendenciasDetalhadas.ordensServico.length === 0 ? (
-              <p className="text-sm text-slate-600">Nenhuma pendência ativa para este próprio.</p>
+              <p className="md-body-md text-[var(--md-on-surface-variant)]">Nenhuma pendência ativa para este próprio.</p>
             ) : null}
 
             {unidade.pendenciasDetalhadas.naoConformidades.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
+              <div key={item.id} className="rounded-[var(--md-shape-md)] bg-amber-50 p-4">
+                <Chip variant="warning" className="mb-2">
                   {item.severidade} · {item.status}
+                </Chip>
+                <p className="md-title-md text-[var(--md-on-surface)]">
+                  {item.item.codigo} — {item.item.titulo}
                 </p>
-                <p className="mt-1 font-semibold text-slate-950">{item.item.codigo} - {item.item.titulo}</p>
-                <p className="mt-1 text-sm text-slate-700">{item.descricao}</p>
+                <p className="md-body-md mt-1 text-amber-900/80">{item.descricao}</p>
               </div>
             ))}
 
             {unidade.pendenciasDetalhadas.ordensServico.map((ordem) => (
-              <div key={ordem.id} className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+              <div key={ordem.id} className="rounded-[var(--md-shape-md)] bg-[var(--color-brand-primary-subtle)] p-4">
+                <Chip variant="brand" className="mb-2">
                   {ordem.codigo} · {ordem.status} · {ordem.prioridade}
-                </p>
-                <p className="mt-1 font-semibold text-slate-950">{ordem.titulo}</p>
-                <p className="mt-1 text-sm text-slate-700">
+                </Chip>
+                <p className="md-title-md text-[var(--md-on-surface)]">{ordem.titulo}</p>
+                <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
                   Responsável: {ordem.responsavel?.nome ?? 'não atribuído'}
                 </p>
               </div>
@@ -217,38 +219,19 @@ function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</dt>
-      <dd className="mt-1 font-medium text-slate-900">{value}</dd>
-    </div>
-  );
-}
-
-function ResumoCard({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: number;
-  hint: string;
-}) {
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <Icon className="h-5 w-5 text-blue-700" />
-      <p className="mt-3 text-sm font-medium text-slate-600">{label}</p>
-      <strong className="mt-1 block text-3xl font-bold text-slate-950">{value}</strong>
-      <p className="mt-1 text-xs text-slate-500">{hint}</p>
+      <dt className="md-label-md text-[var(--md-on-surface-variant)]">{label}</dt>
+      <dd className="md-body-md mt-1 font-medium text-[var(--md-on-surface)]">{value}</dd>
     </div>
   );
 }
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h2 className="mb-4 text-lg font-bold text-slate-950">{title}</h2>
-      {children}
-    </section>
+    <Card elevation={1}>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0">{children}</CardContent>
+    </Card>
   );
 }

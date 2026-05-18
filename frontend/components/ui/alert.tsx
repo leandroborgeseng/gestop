@@ -3,19 +3,19 @@ import { cn } from '@/lib/cn';
 
 const variants = {
   info: {
-    className: 'border-blue-200/80 bg-blue-50/80 text-blue-900',
+    className: 'border-[color-mix(in_srgb,var(--color-brand-primary)_20%,transparent)] bg-[var(--color-brand-primary-subtle)] text-[var(--color-brand-primary)]',
     icon: Info,
   },
   success: {
-    className: 'border-emerald-200/80 bg-emerald-50/80 text-emerald-900',
+    className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
     icon: CheckCircle2,
   },
   warning: {
-    className: 'border-amber-200/80 bg-amber-50/80 text-amber-900',
+    className: 'border-amber-200 bg-amber-50 text-amber-800',
     icon: AlertTriangle,
   },
   error: {
-    className: 'border-red-200/80 bg-red-50/80 text-red-900',
+    className: 'border-red-200 bg-red-50 text-red-800',
     icon: AlertTriangle,
   },
 } as const;
@@ -37,14 +37,16 @@ export function Alert({
   return (
     <div
       role="alert"
-      className={cn('rounded-2xl border px-4 py-3 text-sm', config.className, className)}
+      className={cn(
+        'flex items-start gap-3 rounded-[var(--md-shape-md)] border px-4 py-3 md-body-md',
+        config.className,
+        className,
+      )}
     >
-      <div className="flex items-start gap-3">
-        <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-        <div>
-          {title ? <p className="font-semibold">{title}</p> : null}
-          <div className={cn(title ? 'mt-1' : undefined)}>{children}</div>
-        </div>
+      <Icon className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+      <div className="min-w-0 flex-1">
+        {title ? <p className="md-label-lg">{title}</p> : null}
+        <div className={cn(title ? 'mt-1' : undefined)}>{children}</div>
       </div>
     </div>
   );

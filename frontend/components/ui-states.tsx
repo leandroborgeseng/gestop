@@ -1,39 +1,62 @@
-import { AlertTriangle, Loader2, MapPinOff } from 'lucide-react';
+import { Loader2, MapPinOff, SearchX } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
-export function LoadingState({ label = 'Carregando dados operacionais...' }: { label?: string }) {
+export function LoadingState({ label = 'Carregando dados...' }: { label?: string }) {
   return (
-    <Card>
-      <CardContent className="flex min-h-40 items-center justify-center py-10 text-zinc-500">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin text-[var(--color-brand-primary)]" aria-hidden />
-        <span className="text-sm font-medium">{label}</span>
+    <Card elevation={1}>
+      <CardContent className="flex min-h-44 flex-col items-center justify-center gap-3 py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-[var(--color-brand-primary)]" aria-hidden />
+        <span className="md-body-md text-[var(--md-on-surface-variant)]">{label}</span>
       </CardContent>
     </Card>
   );
 }
 
-export function EmptyState({ title, description }: { title: string; description: string }) {
+export function EmptyState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: React.ReactNode;
+}) {
   return (
-    <Card className="border-dashed">
-      <CardContent className="py-12 text-center">
-        <MapPinOff className="mx-auto mb-3 h-8 w-8 text-zinc-400" aria-hidden />
-        <h3 className="text-base font-semibold text-zinc-950">{title}</h3>
-        <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-500">{description}</p>
+    <Card elevation={0} className="border-dashed bg-[var(--md-surface-container-low)]">
+      <CardContent className="flex flex-col items-center py-14 text-center">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-[var(--md-shape-full)] bg-[var(--md-surface-container)]">
+          <SearchX className="h-7 w-7 text-[var(--md-on-surface-variant)]" aria-hidden />
+        </div>
+        <h3 className="md-title-lg text-[var(--md-on-surface)]">{title}</h3>
+        <p className="md-body-md mt-2 max-w-md text-[var(--md-on-surface-variant)]">{description}</p>
+        {action ? <div className="mt-6">{action}</div> : null}
       </CardContent>
     </Card>
   );
 }
 
-export function ErrorState({ message }: { message: string }) {
+export function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry?: () => void;
+}) {
   return (
-    <Card className="border-red-200/80 bg-red-50/50">
-      <CardContent className="py-5">
-        <div className="flex items-start gap-3 text-red-900">
-          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
-          <div>
-            <p className="font-semibold">Não foi possível carregar</p>
-            <p className="mt-1 text-sm leading-6 text-red-800/90">{message}</p>
-          </div>
+    <Card elevation={1} className="border-red-200 bg-red-50/60">
+      <CardContent className="flex items-start gap-4 py-5">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--md-shape-full)] bg-red-100">
+          <MapPinOff className="h-5 w-5 text-red-700" aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="md-title-md text-red-900">Não foi possível carregar</p>
+          <p className="md-body-md mt-1 text-red-800/90">{message}</p>
+          {onRetry ? (
+            <Button variant="tonal" size="sm" className="mt-4" onClick={onRetry}>
+              Tentar novamente
+            </Button>
+          ) : null}
         </div>
       </CardContent>
     </Card>

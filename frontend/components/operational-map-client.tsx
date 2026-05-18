@@ -184,7 +184,7 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
   }, [located]);
 
   return (
-    <Card>
+    <Card elevation={1}>
       <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <div>
           <CardTitle>Mapa CCO</CardTitle>
@@ -197,15 +197,15 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
       </CardHeader>
 
       <CardContent className="pt-0">
-      <div className="relative overflow-hidden rounded-2xl border border-zinc-200/80">
-        <div ref={containerRef} className="h-[min(420px,60dvh)] w-full bg-zinc-100" />
+      <div className="relative overflow-hidden rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)]">
+        <div ref={containerRef} className="h-[min(420px,60dvh)] w-full bg-[var(--md-surface-container-low)]" />
 
         {located.length === 0 ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/70 p-6">
-            <div className="max-w-sm rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-lg">
-              <MapPinOff className="mx-auto mb-3 h-8 w-8 text-slate-400" />
-              <h3 className="font-semibold text-slate-900">Nenhuma unidade com localização</h3>
-              <p className="mt-1 text-sm text-slate-600">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--md-surface)]/75 p-6">
+            <div className="max-w-sm rounded-[var(--md-shape-lg)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-5 text-center shadow-[var(--md-elevation-3)]">
+              <MapPinOff className="mx-auto mb-3 h-8 w-8 text-[var(--md-on-surface-variant)]" />
+              <h3 className="md-title-md text-[var(--md-on-surface)]">Nenhuma unidade com localização</h3>
+              <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
                 O mapa exibe Franca/SP. Cadastre latitude e longitude nos próprios para ver os marcadores.
               </p>
             </div>
@@ -213,7 +213,7 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
         ) : null}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3 text-xs text-zinc-500">
+      <div className="mt-4 flex flex-wrap gap-3 md-label-md text-[var(--md-on-surface-variant)]">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-3 w-3 rounded-full bg-emerald-600 ring-2 ring-white" />
           Operacional

@@ -16,33 +16,33 @@ export function UnidadeList({ unidades }: { unidades: UnidadeOperacional[] }) {
   }
 
   return (
-    <Card>
+    <Card elevation={1}>
       <CardHeader>
         <CardTitle>Próprios públicos</CardTitle>
         <CardDescription>{unidades.length} registro(s) na consulta atual.</CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-3 pt-0">
+      <CardContent className="space-y-2 pt-0">
         {unidades.map((unidade) => (
           <Link
             key={unidade.id}
             href={`/cco/unidades/${unidade.id}`}
-            className="group block rounded-2xl border border-[var(--color-border-subtle)] bg-[var(--color-bg-surface)]/40 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-[color-mix(in_srgb,var(--color-brand-primary)_25%,transparent)] hover:bg-white hover:shadow-md"
+            className="group flex flex-col gap-3 rounded-[var(--md-shape-md)] border border-transparent bg-[var(--md-surface-container-low)] p-4 transition-all duration-[var(--md-duration-short)] hover:border-[color-mix(in_srgb,var(--color-brand-primary)_20%,transparent)] hover:bg-[var(--md-surface)] hover:shadow-[var(--md-elevation-1)] active:scale-[0.99]"
           >
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="font-semibold text-zinc-950">{unidade.nome}</h3>
+                  <h3 className="md-title-md text-[var(--md-on-surface)]">{unidade.nome}</h3>
                   <StatusBadge situacao={unidade.situacao} />
                 </div>
-                <p className="mt-1 text-sm text-zinc-500">
+                <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
                   {unidade.codigoPatrimonial} · {unidade.secretaria.sigla} · {unidade.tipo}
                 </p>
               </div>
-              <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-[var(--color-border-default)] transition group-hover:text-[var(--color-brand-primary)]" />
+              <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-[var(--md-outline)] transition group-hover:text-[var(--color-brand-primary)]" />
             </div>
 
-            <div className="mt-4 grid gap-2 text-sm text-zinc-600 md:grid-cols-2">
+            <div className="grid gap-2 md-body-md text-[var(--md-on-surface-variant)] md:grid-cols-2">
               <span className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
                 <span className="truncate">

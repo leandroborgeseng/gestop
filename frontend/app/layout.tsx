@@ -1,6 +1,7 @@
 import './globals.css';
 import { Inter } from 'next/font/google';
 import type { Metadata, Viewport } from 'next';
+import { SnackbarProvider } from '@/components/ui/snackbar';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -32,7 +33,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.variable} antialiased`}>{children}</body>
+      <body className={`${inter.variable} antialiased`}>
+        <SnackbarProvider>{children}</SnackbarProvider>
+      </body>
     </html>
   );
 }

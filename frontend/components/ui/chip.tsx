@@ -1,15 +1,15 @@
 import { cn } from '@/lib/cn';
 
 const variants = {
-  default: 'bg-[var(--md-surface-container-high)] text-[var(--md-on-surface-variant)]',
+  default: 'bg-[var(--md-surface-container-low)] text-[var(--md-on-surface-variant)]',
+  brand: 'bg-[var(--color-brand-primary-subtle)] text-[var(--color-brand-primary)]',
   success: 'bg-emerald-50 text-emerald-700',
   warning: 'bg-amber-50 text-amber-700',
   danger: 'bg-red-50 text-red-700',
-  brand: 'bg-[var(--color-brand-primary-subtle)] text-[var(--color-brand-primary)]',
-  muted: 'bg-[var(--md-surface-container-low)] text-[var(--md-on-surface-variant)]',
+  accent: 'bg-[var(--color-brand-accent-subtle)] text-[var(--color-brand-accent)]',
 } as const;
 
-export function Badge({
+export function Chip({
   className,
   variant = 'default',
   children,
@@ -21,7 +21,7 @@ export function Badge({
   return (
     <span
       className={cn(
-        'inline-flex min-h-7 items-center rounded-[var(--md-shape-full)] px-2.5 py-1 md-label-md font-medium',
+        'inline-flex min-h-8 items-center gap-1.5 rounded-[var(--md-shape-full)] px-3 py-1 md-label-md font-medium',
         variants[variant],
         className,
       )}
