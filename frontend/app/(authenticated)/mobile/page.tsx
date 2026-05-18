@@ -2,7 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { Camera, CloudUpload, MapPin, RefreshCcw, Save, Smartphone } from 'lucide-react';
-import { AuthGate } from '@/components/auth-gate';
+import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -169,7 +169,7 @@ export default function MobilePage() {
   }
 
   return (
-    <AuthGate requiredPermissions={['fiscalizacoes.executar']}>
+    <RequirePermissions permissions={['fiscalizacoes.executar']}>
       <PageShell
         kicker="PWA Campo"
         icon={Smartphone}
@@ -253,7 +253,7 @@ export default function MobilePage() {
           ) : null}
         </div>
       </PageShell>
-    </AuthGate>
+    </RequirePermissions>
   );
 }
 

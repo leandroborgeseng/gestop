@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ClipboardList, GitBranch, Plus } from 'lucide-react';
-import { AuthGate } from '@/components/auth-gate';
+import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -90,7 +90,7 @@ export default function ChecklistsPage() {
   }
 
   return (
-    <AuthGate requiredPermissions={['checklists.gerenciar']}>
+    <RequirePermissions permissions={['checklists.gerenciar']}>
       <PageShell
         kicker="Construtor Operacional"
         icon={ClipboardList}
@@ -170,7 +170,7 @@ export default function ChecklistsPage() {
           </div>
         ) : null}
       </PageShell>
-    </AuthGate>
+    </RequirePermissions>
   );
 }
 

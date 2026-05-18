@@ -1,15 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LogOut } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { logout } from '@/lib/api';
 import {
-  getPrimaryNavItems,
-  getSecondaryNavItems,
+  getMobileNav,
   getVisibleNavItems,
+  isNavActive,
   MORE_NAV_ICON,
   type NavItem,
 } from '@/lib/navigation';
@@ -33,6 +33,7 @@ function NavLink({
   return (
     <Link
       href={item.href}
+      prefetch
       onClick={onClick}
       className={cn(
         'relative flex items-center gap-3 rounded-[var(--md-shape-full)] px-4 py-2.5 md-label-lg transition-all duration-[var(--md-duration-short)]',
@@ -43,12 +44,15 @@ function NavLink({
       )}
       aria-current={active ? 'page' : undefined}
     >
-      <Icon className={cn('shrink-0', compact ? 'h-6 w-6' : 'h-5 w-5')} />
-      <span className={cn(compact && 'max-w-full truncate')}>
+      <Icon className={cn('relative z-[1] shrink-0', compact ? 'h-6 w-6' : 'h-5 w-5')} />
+      <span className={cn('relative z-[1]', compact && 'max-w-full truncate')}>
         {compact ? item.shortLabel ?? item.label : item.label}
       </span>
       {active && !compact ? (
-        <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-[var(--color-brand-primary)]" aria-hidden />
+        <span
+          className="pointer-events-none absolute inset-y-2 left-0 w-1 rounded-full bg-[var(--color-brand-primary)]"
+          aria-hidden
+        />
       ) : null}
     </Link>
   );
@@ -81,7 +85,7 @@ export function DesktopSidebar({
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3" aria-label="Navegação principal">
         {items.map((item) => (
-          <NavLink key={item.id} item={item} active={pathname.startsWith(item.href)} />
+          <NavLink key={item.id} item={item} active={isNavActive(pathname, item.href)} />
         ))}
       </nav>
 
@@ -131,43 +135,45 @@ export function MobileBottomNav({
   onMoreOpen: (open: boolean) => void;
 }) {
   const pathname = usePathname();
-  const primary = getPrimaryNavItems(permissions);
-  const secondary = getSecondaryNavItems(permissions);
+  const { primary, secondary, hasMore } = getMobileNav(permissions);
   const MoreIcon = MORE_NAV_ICON;
-  const hasMore = secondary.length > 0;
-  const slotCount = hasMore ? 4 : Math.max(primary.length, 1);
+  const slotCount = hasMore ? primary.length + 1 : primary.length;
 
   return (
     <>
       <nav
-        className="fixed inset-x-0 bottom-0 z-30 border-t border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-md lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 px-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur-md lg:hidden"
         aria-label="Navegação mobile"
       >
         <div
           className="grid gap-0.5"
-          style={{ gridTemplateColumns: `repeat(${slotCount}, minmax(0, 1fr))` }}
+          style={{ gridTemplateColumns: `repeat(${Math.max(slotCount, 1)}, minmax(0, 1fr))` }}
         >
           {primary.map((item) => {
             const Icon = item.icon;
-            const active = pathname.startsWith(item.href);
+            const active = isNavActive(pathname, item.href);
 
             return (
               <Link
                 key={item.id}
                 href={item.href}
+                prefetch
                 className={cn(
                   'relative flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-[var(--md-shape-lg)] px-1 md-label-md font-medium transition-all duration-[var(--md-duration-short)]',
                   active
                     ? 'text-[var(--color-brand-primary)]'
-                    : 'text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-container-low)]',
+                    : 'text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-container-low)] active:bg-[var(--md-surface-container)]',
                 )}
                 aria-current={active ? 'page' : undefined}
               >
                 {active ? (
-                  <span className="absolute inset-x-3 top-1 h-8 rounded-[var(--md-shape-full)] bg-[var(--color-brand-primary-subtle)]" aria-hidden />
+                  <span
+                    className="pointer-events-none absolute inset-x-3 top-1 h-8 rounded-[var(--md-shape-full)] bg-[var(--color-brand-primary-subtle)]"
+                    aria-hidden
+                  />
                 ) : null}
-                <Icon className="relative h-6 w-6" />
-                <span className="relative max-w-full truncate">{item.shortLabel ?? item.label}</span>
+                <Icon className="relative z-[1] h-6 w-6" />
+                <span className="relative z-[1] max-w-full truncate">{item.shortLabel ?? item.label}</span>
               </Link>
             );
           })}
@@ -180,15 +186,18 @@ export function MobileBottomNav({
                 'relative flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-[var(--md-shape-lg)] px-1 md-label-md font-medium transition-all duration-[var(--md-duration-short)]',
                 moreOpen
                   ? 'text-[var(--color-brand-primary)]'
-                  : 'text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-container-low)]',
+                  : 'text-[var(--md-on-surface-variant)] hover:bg-[var(--md-surface-container-low)] active:bg-[var(--md-surface-container)]',
               )}
               aria-label="Abrir mais opções"
             >
               {moreOpen ? (
-                <span className="absolute inset-x-3 top-1 h-8 rounded-[var(--md-shape-full)] bg-[var(--color-brand-primary-subtle)]" aria-hidden />
+                <span
+                  className="pointer-events-none absolute inset-x-3 top-1 h-8 rounded-[var(--md-shape-full)] bg-[var(--color-brand-primary-subtle)]"
+                  aria-hidden
+                />
               ) : null}
-              <MoreIcon className="relative h-6 w-6" />
-              <span className="relative">Mais</span>
+              <MoreIcon className="relative z-[1] h-6 w-6" />
+              <span className="relative z-[1]">Mais</span>
             </button>
           ) : null}
         </div>
@@ -200,7 +209,7 @@ export function MobileBottomNav({
             <NavLink
               key={item.id}
               item={item}
-              active={pathname.startsWith(item.href)}
+              active={isNavActive(pathname, item.href)}
               onClick={() => onMoreOpen(false)}
             />
           ))}
@@ -234,12 +243,19 @@ export function AppShell({
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
 
+  useEffect(() => {
+    const refreshLayout = () => window.dispatchEvent(new Event('resize'));
+    refreshLayout();
+    const timer = window.setTimeout(refreshLayout, 250);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <div className="gestop-app flex min-h-screen bg-[var(--md-surface-dim)]">
       <DesktopSidebar userName={userName} userRoles={userRoles} permissions={permissions} />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileAppBar userName={userName} />
-        <main className="gestop-main flex-1 overflow-x-hidden">{children}</main>
+        <main className="gestop-main relative z-0 flex-1 overflow-x-hidden">{children}</main>
         <MobileBottomNav permissions={permissions} moreOpen={moreOpen} onMoreOpen={setMoreOpen} />
       </div>
     </div>

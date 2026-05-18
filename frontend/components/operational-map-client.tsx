@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { MapPinOff } from 'lucide-react';
 import {
@@ -82,21 +82,87 @@ function buildPopupHtml(unidade: UnidadeOperacional) {
   `;
 }
 
+function refreshMapSize(map: L.Map) {
+  map.invalidateSize({ animate: false });
+
+  requestAnimationFrame(() => {
+    map.invalidateSize({ animate: false });
+  });
+
+  window.setTimeout(() => {
+    map.invalidateSize({ animate: false });
+  }, 120);
+
+  window.setTimeout(() => {
+    map.invalidateSize({ animate: false });
+  }, 400);
+}
+
 export function OperationalMapClient({ unidades }: { unidades: UnidadeOperacional[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const referenceMarkerRef = useRef<L.Marker | null>(null);
+  const [containerReady, setContainerReady] = useState(false);
 
   const located = unidades.filter(
     (unidade) => unidade.latitude !== null && unidade.longitude !== null,
   );
   const semLocalizacao = unidades.length - located.length;
 
+  const markContainerReady = useCallback(() => {
+    const node = containerRef.current;
+    if (!node) return;
+    if (node.offsetWidth > 0 && node.offsetHeight > 0) {
+      setContainerReady(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) return;
+
+    markContainerReady();
+
+    const resizeObserver = new ResizeObserver(() => {
+      markContainerReady();
+      if (mapRef.current) {
+        refreshMapSize(mapRef.current);
+      }
+    });
+
+    resizeObserver.observe(node);
+
+    const intersectionObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting) && mapRef.current) {
+          refreshMapSize(mapRef.current);
+        }
+      },
+      { threshold: 0.01 },
+    );
+
+    intersectionObserver.observe(node);
+
+    const handleWindowResize = () => {
+      if (mapRef.current) {
+        refreshMapSize(mapRef.current);
+      }
+    };
+
+    window.addEventListener('resize', handleWindowResize);
+
+    return () => {
+      resizeObserver.disconnect();
+      intersectionObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+    };
+  }, [markContainerReady]);
+
   useEffect(() => {
     configureLeafletIcons();
 
-    if (!containerRef.current || mapRef.current) {
+    if (!containerReady || !containerRef.current || mapRef.current) {
       return;
     }
 
@@ -130,20 +196,15 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
       .addTo(map);
 
     mapRef.current = map;
-
-    const resizeObserver = new ResizeObserver(() => {
-      map.invalidateSize();
-    });
-    resizeObserver.observe(containerRef.current);
+    refreshMapSize(map);
 
     return () => {
-      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
       markersLayerRef.current = null;
       referenceMarkerRef.current = null;
     };
-  }, []);
+  }, [containerReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -181,10 +242,12 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
         { padding: [24, 24] },
       );
     }
+
+    refreshMapSize(map);
   }, [located]);
 
   return (
-    <Card elevation={1}>
+    <Card elevation={1} className="overflow-visible">
       <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <div>
           <CardTitle>Mapa CCO</CardTitle>
@@ -197,40 +260,40 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
       </CardHeader>
 
       <CardContent className="pt-0">
-      <div className="relative overflow-hidden rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)]">
-        <div ref={containerRef} className="h-[min(420px,60dvh)] w-full bg-[var(--md-surface-container-low)]" />
+        <div className="gestop-map-shell relative rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)]">
+          <div ref={containerRef} className="gestop-map-canvas" />
 
-        {located.length === 0 ? (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--md-surface)]/75 p-6">
-            <div className="max-w-sm rounded-[var(--md-shape-lg)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-5 text-center shadow-[var(--md-elevation-3)]">
-              <MapPinOff className="mx-auto mb-3 h-8 w-8 text-[var(--md-on-surface-variant)]" />
-              <h3 className="md-title-md text-[var(--md-on-surface)]">Nenhuma unidade com localização</h3>
-              <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
-                O mapa exibe Franca/SP. Cadastre latitude e longitude nos próprios para ver os marcadores.
-              </p>
+          {located.length === 0 ? (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--md-surface)]/75 p-6">
+              <div className="max-w-sm rounded-[var(--md-shape-lg)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-5 text-center shadow-[var(--md-elevation-3)]">
+                <MapPinOff className="mx-auto mb-3 h-8 w-8 text-[var(--md-on-surface-variant)]" />
+                <h3 className="md-title-md text-[var(--md-on-surface)]">Nenhuma unidade com localização</h3>
+                <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+                  O mapa exibe Franca/SP. Cadastre latitude e longitude nos próprios para ver os marcadores.
+                </p>
+              </div>
             </div>
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
 
-      <div className="mt-4 flex flex-wrap gap-3 md-label-md text-[var(--md-on-surface-variant)]">
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-emerald-600 ring-2 ring-white" />
-          Operacional
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-amber-600 ring-2 ring-white" />
-          Com pendências
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-red-600 ring-2 ring-white" />
-          Inativa
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded-full bg-[var(--color-brand-primary)] ring-2 ring-white" />
-          Referência Cidade Nova
-        </span>
-      </div>
+        <div className="mt-4 flex flex-wrap gap-3 md-label-md text-[var(--md-on-surface-variant)]">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full bg-emerald-600 ring-2 ring-white" />
+            Operacional
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full bg-amber-600 ring-2 ring-white" />
+            Com pendências
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full bg-red-600 ring-2 ring-white" />
+            Inativa
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full bg-[var(--color-brand-primary)] ring-2 ring-white" />
+            Referência Cidade Nova
+          </span>
+        </div>
       </CardContent>
     </Card>
   );

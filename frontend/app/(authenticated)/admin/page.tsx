@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Building2, MapPin, UserRound } from 'lucide-react';
-import { AuthGate } from '@/components/auth-gate';
+import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -78,7 +78,7 @@ export default function AdminPage() {
   }
 
   return (
-    <AuthGate requiredPermissions={['secretarias.gerenciar']}>
+    <RequirePermissions permissions={['secretarias.gerenciar']}>
       <PageShell
         kicker="Administração Base"
         icon={Building2}
@@ -113,7 +113,7 @@ export default function AdminPage() {
           <UsuariosPanel secretarias={secretarias} usuarios={usuarios} perfis={perfis} mutate={mutate} />
         ) : null}
       </PageShell>
-    </AuthGate>
+    </RequirePermissions>
   );
 }
 

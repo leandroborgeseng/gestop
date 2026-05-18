@@ -79,27 +79,43 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+const MAX_BOTTOM_SLOTS = 4;
+
 export function getVisibleNavItems(permissions: string[]) {
   return NAV_ITEMS.filter((item) => !item.permission || permissions.includes(item.permission));
 }
 
-export function getPrimaryNavItems(permissions: string[]) {
+export function getMobileNav(permissions: string[]) {
   const visible = getVisibleNavItems(permissions);
-  const primary = visible.filter((item) => item.mobilePrimary);
 
-  if (primary.length <= 4) {
-    return primary;
+  if (visible.length <= MAX_BOTTOM_SLOTS) {
+    return { primary: visible, secondary: [], hasMore: false };
   }
 
-  return primary.slice(0, 3);
+  const primaryCandidates = visible.filter((item) => item.mobilePrimary);
+  const primary = (primaryCandidates.length > 0 ? primaryCandidates : visible).slice(0, MAX_BOTTOM_SLOTS - 1);
+  const primaryIds = new Set(primary.map((item) => item.id));
+  const secondary = visible.filter((item) => !primaryIds.has(item.id));
+
+  return { primary, secondary, hasMore: secondary.length > 0 };
 }
 
-export function getSecondaryNavItems(permissions: string[]) {
-  const visible = getVisibleNavItems(permissions);
-  const primary = getPrimaryNavItems(permissions);
-  const primaryIds = new Set(primary.map((item) => item.id));
+/** @deprecated Use getMobileNav().primary */
+export function getPrimaryNavItems(permissions: string[]) {
+  return getMobileNav(permissions).primary;
+}
 
-  return visible.filter((item) => !primaryIds.has(item.id));
+/** @deprecated Use getMobileNav().secondary */
+export function getSecondaryNavItems(permissions: string[]) {
+  return getMobileNav(permissions).secondary;
+}
+
+export function isNavActive(pathname: string, href: string) {
+  if (href === '/cco') {
+    return pathname === '/cco' || pathname.startsWith('/cco/');
+  }
+
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export const MORE_NAV_ICON = LayoutGrid;

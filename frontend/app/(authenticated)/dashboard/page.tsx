@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { BarChart3, Building2, ClipboardCheck, DatabaseZap, ShieldAlert, Wrench } from 'lucide-react';
-import { AuthGate } from '@/components/auth-gate';
+import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
 import { MetricCard } from '@/components/metric-card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +27,7 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <AuthGate requiredPermissions={['dashboard.visualizar']}>
+    <RequirePermissions permissions={['dashboard.visualizar']}>
       <PageShell
         kicker="Monitoramento"
         icon={BarChart3}
@@ -93,6 +93,6 @@ export default function DashboardPage() {
           </>
         ) : null}
       </PageShell>
-    </AuthGate>
+    </RequirePermissions>
   );
 }

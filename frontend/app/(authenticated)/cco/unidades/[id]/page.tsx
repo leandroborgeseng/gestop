@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
 import { UnidadeDetalhe } from '@/lib/types';
-import { AuthGate } from '@/components/auth-gate';
 import { PageShell } from '@/components/layout/page-shell';
 import { MetricCard } from '@/components/metric-card';
 import { StatusBadge } from '@/components/status-badge';
@@ -53,7 +52,6 @@ export default function UnidadeDetalhePage() {
   }, [params.id]);
 
   return (
-    <AuthGate>
       <PageShell
         title={unidade?.nome ?? 'Detalhe do próprio'}
         description={unidade ? `${unidade.tipo} · ${unidade.secretaria.sigla}` : 'Carregando informações da unidade'}
@@ -64,7 +62,6 @@ export default function UnidadeDetalhePage() {
         {loading ? <LoadingState label="Carregando detalhe do próprio..." /> : null}
         {!loading && unidade ? <UnidadeDetalheView unidade={unidade} /> : null}
       </PageShell>
-    </AuthGate>
   );
 }
 

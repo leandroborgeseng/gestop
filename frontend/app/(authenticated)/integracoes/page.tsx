@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Plug, RefreshCcw, Send } from 'lucide-react';
-import { AuthGate } from '@/components/auth-gate';
+import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -43,7 +43,7 @@ export default function IntegracoesPage() {
   }
 
   return (
-    <AuthGate requiredPermissions={['auditoria.visualizar']}>
+    <RequirePermissions permissions={['auditoria.visualizar']}>
       <PageShell
         kicker="Integrações e resiliência"
         icon={Plug}
@@ -109,6 +109,6 @@ export default function IntegracoesPage() {
           </section>
         ) : null}
       </PageShell>
-    </AuthGate>
+    </RequirePermissions>
   );
 }

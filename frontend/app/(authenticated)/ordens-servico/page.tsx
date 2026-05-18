@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { GitBranch, Wrench } from 'lucide-react';
-import { AuthGate } from '@/components/auth-gate';
+import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,7 +40,7 @@ export default function OrdensServicoPage() {
   }
 
   return (
-    <AuthGate requiredPermissions={['chamados.gerenciar']}>
+    <RequirePermissions permissions={['chamados.gerenciar']}>
       <PageShell
         kicker="Ordens de Serviço"
         icon={Wrench}
@@ -104,7 +104,7 @@ export default function OrdensServicoPage() {
           </section>
         ) : null}
       </PageShell>
-    </AuthGate>
+    </RequirePermissions>
   );
 }
 

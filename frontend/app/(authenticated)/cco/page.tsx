@@ -14,7 +14,6 @@ import { OperationalMap } from '@/components/operational-map';
 import { UnidadeFiltersPanel } from '@/components/unidade-filters';
 import { UnidadeList } from '@/components/unidade-list';
 import { ErrorState, LoadingState } from '@/components/ui-states';
-import { AuthGate } from '@/components/auth-gate';
 import { PageShell } from '@/components/layout/page-shell';
 import { Badge } from '@/components/ui/badge';
 import { MetricSkeleton } from '@/components/ui/skeleton';
@@ -113,7 +112,6 @@ export default function CcoPage() {
   );
 
   return (
-    <AuthGate>
       <PageShell
         kicker="Central de Controle Operacional"
         icon={Activity}
@@ -138,15 +136,14 @@ export default function CcoPage() {
 
         {error ? <div className="mb-6"><ErrorState message={error} /></div> : null}
 
-        {loading ? (
-          <LoadingState />
-        ) : (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-            <OperationalMap unidades={unidades} />
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+          <OperationalMap unidades={unidades} />
+          {loading && unidades.length === 0 ? (
+            <LoadingState label="Carregando próprios..." />
+          ) : (
             <UnidadeList unidades={unidades} />
-          </div>
-        )}
+          )}
+        </div>
       </PageShell>
-    </AuthGate>
   );
 }

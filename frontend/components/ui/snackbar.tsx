@@ -52,7 +52,7 @@ export function SnackbarProvider({ children }: { children: React.ReactNode }) {
     <SnackbarContext.Provider value={value}>
       {children}
       <div
-        className="pointer-events-none fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-center gap-2 px-4 lg:bottom-6"
+        className="pointer-events-none fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-30 flex flex-col items-center gap-2 px-4 lg:bottom-6"
         aria-live="polite"
       >
         {queue.map((item) => (
