@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "Node16",
     "declaration": true,
     "removeComments": true,
     "emitDecoratorMetadata": true,
@@ -10,13 +10,12 @@
     "sourceMap": true,
     "outDir": "./dist",
     "incremental": true,
-    "ignoreDeprecations": "6.0",
     "strict": true,
     "strictPropertyInitialization": false,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "moduleResolution": "node",
-    "types": ["node", "vitest/globals"]
+    "moduleResolution": "Node16",
+    "types": ["node"]
   },
   "include": ["src/**/*.ts", "prisma/**/*.ts", "vitest.config.ts"],
   "exclude": ["node_modules", "dist"]
