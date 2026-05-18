@@ -117,6 +117,22 @@ async function inspectDatabase(phase: string) {
     if (hasUsuarioTable) {
       const users = await client.query<{ count: string }>('SELECT COUNT(*)::text AS count FROM "Usuario"');
       logInfo(phase, `Usuarios cadastrados: ${users.rows[0]?.count ?? '0'}`);
+
+      const sampleUsers = await client.query<{ email: string; nome: string }>(`
+        SELECT email, nome
+        FROM "Usuario"
+        ORDER BY email
+        LIMIT 5
+      `);
+
+      for (const user of sampleUsers.rows) {
+        logInfo(phase, `Usuario seed: ${user.email} (${user.nome})`);
+      }
+
+      const secretarias = await client.query<{ count: string }>(
+        'SELECT COUNT(*)::text AS count FROM "Secretaria"',
+      );
+      logInfo(phase, `Secretarias cadastradas: ${secretarias.rows[0]?.count ?? '0'}`);
     }
   } finally {
     await client.end();
