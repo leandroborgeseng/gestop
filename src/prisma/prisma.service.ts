@@ -17,12 +17,11 @@ function maskDatabaseUrl(url: string) {
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private connected = false;
+  private static bootLogged = false;
 
   constructor() {
     const connectionString =
       process.env.DATABASE_URL ?? 'postgresql://gestop:gestop@localhost:5432/gestop?schema=public';
-
-    console.log(`[GestOP:prisma] DATABASE_URL=${maskDatabaseUrl(connectionString)}`);
 
     super({
       adapter: new PrismaPg({ connectionString }),
@@ -33,8 +32,15 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     try {
       await this.$connect();
       this.connected = true;
-      const users = await this.usuario.count();
-      console.log(`[GestOP:prisma] Conexao OK. Usuarios no banco: ${users}`);
+
+      if (!PrismaService.bootLogged) {
+        PrismaService.bootLogged = true;
+        const connectionString =
+          process.env.DATABASE_URL ?? 'postgresql://gestop:gestop@localhost:5432/gestop?schema=public';
+        console.log(`[GestOP:prisma] DATABASE_URL=${maskDatabaseUrl(connectionString)}`);
+        const users = await this.usuario.count();
+        console.log(`[GestOP:prisma] Conexao OK. Usuarios no banco: ${users}`);
+      }
     } catch (error) {
       this.connected = false;
       console.warn(

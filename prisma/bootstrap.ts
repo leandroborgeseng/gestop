@@ -52,6 +52,25 @@ export async function runDatabaseBootstrap() {
       return;
     }
 
+    const cleanedDuplicates = await client.query<{ migration_name: string }>(`
+      DELETE FROM "_prisma_migrations" AS stale
+      WHERE stale.rolled_back_at IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM "_prisma_migrations" AS applied
+          WHERE applied.migration_name = stale.migration_name
+            AND applied.finished_at IS NOT NULL
+        )
+      RETURNING stale.migration_name
+    `);
+
+    if (cleanedDuplicates.rows.length > 0) {
+      logInfo(
+        'bootstrap',
+        `Registros revertidos duplicados removidos: ${[...new Set(cleanedDuplicates.rows.map((row) => row.migration_name))].join(', ')}`,
+      );
+    }
+
     const failedMigrations = await client.query<{ migration_name: string; logs: string | null }>(`
       SELECT migration_name, logs
       FROM "_prisma_migrations"
