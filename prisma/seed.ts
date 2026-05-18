@@ -54,7 +54,18 @@ async function resetDevData() {
 }
 
 async function main() {
-  await resetDevData();
+  const isProduction = process.env.NODE_ENV === 'production';
+  const existingUsers = await prisma.usuario.count();
+
+  if (isProduction && existingUsers > 0) {
+    console.log('Seed de produção ignorado: banco já possui usuários.');
+    return;
+  }
+
+  if (!isProduction) {
+    await resetDevData();
+  }
+
   const defaultPasswordHash = hashPassword('Gestop@123', 'gestop-dev-seed-salt');
 
   const [educacao, saude, servicos] = await Promise.all([
