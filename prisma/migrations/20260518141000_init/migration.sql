@@ -1,9 +1,6 @@
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 
--- EnablePostGIS
-CREATE EXTENSION IF NOT EXISTS postgis;
-
 -- CreateEnum
 CREATE TYPE "UnidadeTipo" AS ENUM ('ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO', 'ESPACO_ESPORTIVO', 'OUTRO');
 
@@ -711,61 +708,22 @@ ALTER TABLE "DashboardSnapshot" ADD CONSTRAINT "DashboardSnapshot_secretariaId_f
 -- AddForeignKey
 ALTER TABLE "DashboardSnapshot" ADD CONSTRAINT "DashboardSnapshot_unidadeId_fkey" FOREIGN KEY ("unidadeId") REFERENCES "UnidadePublica"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- Geospatial generated columns and GiST indexes
+-- Geolocation range constraints
 ALTER TABLE "UnidadePublica"
   ADD CONSTRAINT "UnidadePublica_latitude_range_check" CHECK ("latitude" BETWEEN -90 AND 90),
-  ADD CONSTRAINT "UnidadePublica_longitude_range_check" CHECK ("longitude" BETWEEN -180 AND 180),
-  ADD COLUMN "localizacao" geography(Point, 4326)
-    GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint("longitude"::double precision, "latitude"::double precision), 4326)::geography) STORED;
-
-CREATE INDEX "UnidadePublica_localizacao_gist" ON "UnidadePublica" USING GIST ("localizacao");
+  ADD CONSTRAINT "UnidadePublica_longitude_range_check" CHECK ("longitude" BETWEEN -180 AND 180);
 
 ALTER TABLE "Fiscalizacao"
   ADD CONSTRAINT "Fiscalizacao_checkin_latitude_range_check" CHECK ("checkinLatitude" IS NULL OR "checkinLatitude" BETWEEN -90 AND 90),
   ADD CONSTRAINT "Fiscalizacao_checkin_longitude_range_check" CHECK ("checkinLongitude" IS NULL OR "checkinLongitude" BETWEEN -180 AND 180),
   ADD CONSTRAINT "Fiscalizacao_checkout_latitude_range_check" CHECK ("checkoutLatitude" IS NULL OR "checkoutLatitude" BETWEEN -90 AND 90),
-  ADD CONSTRAINT "Fiscalizacao_checkout_longitude_range_check" CHECK ("checkoutLongitude" IS NULL OR "checkoutLongitude" BETWEEN -180 AND 180),
-  ADD COLUMN "checkinLocalizacao" geography(Point, 4326)
-    GENERATED ALWAYS AS (
-      CASE
-        WHEN "checkinLatitude" IS NULL OR "checkinLongitude" IS NULL THEN NULL
-        ELSE ST_SetSRID(ST_MakePoint("checkinLongitude"::double precision, "checkinLatitude"::double precision), 4326)::geography
-      END
-    ) STORED,
-  ADD COLUMN "checkoutLocalizacao" geography(Point, 4326)
-    GENERATED ALWAYS AS (
-      CASE
-        WHEN "checkoutLatitude" IS NULL OR "checkoutLongitude" IS NULL THEN NULL
-        ELSE ST_SetSRID(ST_MakePoint("checkoutLongitude"::double precision, "checkoutLatitude"::double precision), 4326)::geography
-      END
-    ) STORED;
-
-CREATE INDEX "Fiscalizacao_checkinLocalizacao_gist" ON "Fiscalizacao" USING GIST ("checkinLocalizacao");
-CREATE INDEX "Fiscalizacao_checkoutLocalizacao_gist" ON "Fiscalizacao" USING GIST ("checkoutLocalizacao");
+  ADD CONSTRAINT "Fiscalizacao_checkout_longitude_range_check" CHECK ("checkoutLongitude" IS NULL OR "checkoutLongitude" BETWEEN -180 AND 180);
 
 ALTER TABLE "Evidencia"
   ADD CONSTRAINT "Evidencia_latitude_range_check" CHECK ("latitude" IS NULL OR "latitude" BETWEEN -90 AND 90),
-  ADD CONSTRAINT "Evidencia_longitude_range_check" CHECK ("longitude" IS NULL OR "longitude" BETWEEN -180 AND 180),
-  ADD COLUMN "localizacao" geography(Point, 4326)
-    GENERATED ALWAYS AS (
-      CASE
-        WHEN "latitude" IS NULL OR "longitude" IS NULL THEN NULL
-        ELSE ST_SetSRID(ST_MakePoint("longitude"::double precision, "latitude"::double precision), 4326)::geography
-      END
-    ) STORED;
-
-CREATE INDEX "Evidencia_localizacao_gist" ON "Evidencia" USING GIST ("localizacao");
+  ADD CONSTRAINT "Evidencia_longitude_range_check" CHECK ("longitude" IS NULL OR "longitude" BETWEEN -180 AND 180);
 
 ALTER TABLE "NaoConformidade"
   ADD CONSTRAINT "NaoConformidade_latitude_range_check" CHECK ("latitude" IS NULL OR "latitude" BETWEEN -90 AND 90),
-  ADD CONSTRAINT "NaoConformidade_longitude_range_check" CHECK ("longitude" IS NULL OR "longitude" BETWEEN -180 AND 180),
-  ADD COLUMN "localizacao" geography(Point, 4326)
-    GENERATED ALWAYS AS (
-      CASE
-        WHEN "latitude" IS NULL OR "longitude" IS NULL THEN NULL
-        ELSE ST_SetSRID(ST_MakePoint("longitude"::double precision, "latitude"::double precision), 4326)::geography
-      END
-    ) STORED;
-
-CREATE INDEX "NaoConformidade_localizacao_gist" ON "NaoConformidade" USING GIST ("localizacao");
+  ADD CONSTRAINT "NaoConformidade_longitude_range_check" CHECK ("longitude" IS NULL OR "longitude" BETWEEN -180 AND 180);
 

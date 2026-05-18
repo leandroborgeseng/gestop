@@ -6,7 +6,7 @@
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "dev": "tsx watch src/main.ts",
-    "start": "prisma migrate deploy && node dist/prisma/seed.js && node dist/src/main.js",
+    "start": "prisma migrate resolve --rolled-back 20260518141000_init || true && prisma migrate deploy && node dist/prisma/seed.js && node dist/src/main.js",
     "test": "prisma generate && vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
