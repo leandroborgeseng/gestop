@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
 import { ChecklistsModule } from './checklists/checklists.module';
-import { HealthController } from './health.controller';
+import { HealthController, RootController } from './health.controller';
 import { IntegracoesModule } from './integracoes/integracoes.module';
 import { MobileModule } from './mobile/mobile.module';
 import { MonitoramentoModule } from './monitoramento/monitoramento.module';
@@ -25,7 +25,7 @@ import { PrismaService } from './prisma/prisma.service';
     IntegracoesModule,
     OperacionalModule,
   ],
-  controllers: [HealthController],
+  controllers: [RootController, HealthController],
   providers: [PrismaService],
   exports: [PrismaService],
 })
