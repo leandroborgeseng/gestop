@@ -5,11 +5,8 @@ import { PrismaClient } from '@prisma/client';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   constructor() {
-    const connectionString = process.env.DATABASE_URL;
-
-    if (!connectionString) {
-      throw new Error('DATABASE_URL nao configurada');
-    }
+    const connectionString =
+      process.env.DATABASE_URL ?? 'postgresql://gestop:gestop@localhost:5432/gestop?schema=public';
 
     super({
       adapter: new PrismaPg({ connectionString }),
@@ -17,7 +14,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
-    await this.$connect();
+    try {
+      await this.$connect();
+    } catch (error) {
+      console.warn(
+        'Banco de dados indisponivel no boot. A API iniciou, mas consultas dependentes do Prisma falharao ate DATABASE_URL estar configurada.',
+      );
+      console.warn(error);
+    }
   }
 
   async onModuleDestroy() {
