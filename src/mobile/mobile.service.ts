@@ -13,13 +13,17 @@ import {
   Severidade,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
+import { OrdensServicoService } from '../ordens-servico/ordens-servico.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { MobileSyncFiscalizacaoDto } from './mobile.dto';
 import { validateMobileCheckin, validateMobileResponse } from './mobile.rules';
 
 @Injectable()
 export class MobileService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ordensServicoService: OrdensServicoService,
+  ) {}
 
   async getFieldPackage() {
     const [unidades, checklists] = await Promise.all([
@@ -186,6 +190,10 @@ export class MobileService {
               enviadaEm: new Date(),
             },
           });
+        }
+
+        if (naoConformidadeId) {
+          await this.ordensServicoService.generateForNaoConformidadeTx(tx, naoConformidadeId, user.sub);
         }
       }
 

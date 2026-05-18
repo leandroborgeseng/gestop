@@ -265,3 +265,83 @@ export type MobileQueuedInspection = {
     }>;
   }>;
 };
+
+export type OrdemServicoResumo = {
+  id: string;
+  codigo: string;
+  titulo: string;
+  descricao: string;
+  prioridade: string;
+  status: string;
+  origem: string;
+  abertaEm: string;
+  prazoEm?: string | null;
+  secretaria: SecretariaOption;
+  unidade: {
+    id: string;
+    nome: string;
+    codigoPatrimonial: string;
+  };
+  responsavel?: {
+    id: string;
+    nome: string;
+  } | null;
+  naoConformidade?: {
+    id: string;
+    descricao: string;
+    severidade: string;
+    status: string;
+    fiscalizacaoId: string;
+    item: {
+      codigo: string;
+      titulo: string;
+    };
+  } | null;
+};
+
+export type DashboardData = {
+  indicadores: {
+    totalUnidades: number;
+    fiscalizacoes: number;
+    naoConformidades: number;
+    ordensServico: {
+      abertas: number;
+      emExecucao: number;
+      concluidas: number;
+    };
+    syncPendentes: number;
+  };
+  pendenciasPorSecretaria: Array<{
+    id: string;
+    sigla: string;
+    nome: string;
+    ordensPendentes: number;
+    fiscalizacoes: number;
+  }>;
+};
+
+export type AuditoriaEvento = {
+  id: string;
+  acao: string;
+  entidadeTipo: string;
+  entidadeId?: string | null;
+  createdAt: string;
+  usuario?: {
+    id: string;
+    nome: string;
+    email: string;
+  } | null;
+};
+
+export type IntegracoesEventos = {
+  syncFalhas: Array<{
+    id: string;
+    clientEventId: string;
+    deviceId: string;
+    status: string;
+    conflitoMotivo?: string | null;
+    tentativas: number;
+    recebidoEm: string;
+  }>;
+  auditoriaIntegracoes: AuditoriaEvento[];
+};

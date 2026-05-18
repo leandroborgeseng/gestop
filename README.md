@@ -60,6 +60,15 @@ API:
 - `POST /checklists/versions/:versionId/publish`
 - `GET /mobile/field-package`
 - `POST /mobile/sync/fiscalizacoes`
+- `GET /ordens-servico`
+- `GET /ordens-servico/:id`
+- `PUT /ordens-servico/:id`
+- `POST /ordens-servico/gerar/nao-conformidades/:id`
+- `GET /monitoramento/dashboard`
+- `GET /monitoramento/auditoria`
+- `GET /integracoes/eventos`
+- `POST /integracoes/notificar`
+- `POST /integracoes/sync/retry`
 
 Frontend:
 
@@ -69,6 +78,9 @@ Frontend:
 - `/admin`: administracao de secretarias, proprios publicos e usuarios.
 - `/checklists`: construtor de checklists, versões e publicação.
 - `/mobile`: PWA de campo para execução offline de fiscalizações.
+- `/ordens-servico`: visualização de OS geradas e origem.
+- `/dashboard`: indicadores operacionais e auditoria.
+- `/integracoes`: eventos técnicos, notificações mock e retentativa de sync.
 
 ## Usuarios Seed
 

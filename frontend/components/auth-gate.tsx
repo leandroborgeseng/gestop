@@ -81,6 +81,33 @@ export function AuthGate({ children, requiredPermissions = [] }: { children: Rea
                 Campo
               </button>
             ) : null}
+            {auth.user.permissoes.includes('chamados.gerenciar') ? (
+              <button
+                type="button"
+                onClick={() => router.push('/ordens-servico')}
+                className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-100"
+              >
+                OS
+              </button>
+            ) : null}
+            {auth.user.permissoes.includes('dashboard.visualizar') ? (
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard')}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Dashboard
+              </button>
+            ) : null}
+            {auth.user.permissoes.includes('auditoria.visualizar') ? (
+              <button
+                type="button"
+                onClick={() => router.push('/integracoes')}
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Integrações
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => {

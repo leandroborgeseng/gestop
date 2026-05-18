@@ -6,10 +6,14 @@ import {
   AdminUsuario,
   ChecklistModel,
   ChecklistVersao,
+  AuditoriaEvento,
+  DashboardData,
+  IntegracoesEventos,
   LoginResponse,
   MobileFieldPackage,
   MobileQueuedInspection,
   OperacionalResumo,
+  OrdemServicoResumo,
   SecretariaOption,
   UnidadeDetalhe,
   UnidadeFilters,
@@ -244,5 +248,41 @@ export function syncMobileInspection(payload: MobileQueuedInspection) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+  });
+}
+
+export function listOrdensServico() {
+  return request<OrdemServicoResumo[]>('/ordens-servico');
+}
+
+export function updateOrdemServico(id: string, payload: Record<string, unknown>) {
+  return request<OrdemServicoResumo>(`/ordens-servico/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getDashboard() {
+  return request<DashboardData>('/monitoramento/dashboard');
+}
+
+export function listAuditoria() {
+  return request<AuditoriaEvento[]>('/monitoramento/auditoria');
+}
+
+export function listIntegracoesEventos() {
+  return request<IntegracoesEventos>('/integracoes/eventos');
+}
+
+export function retrySyncFalhas() {
+  return request<{ reenfileirados: number }>('/integracoes/sync/retry', { method: 'POST' });
+}
+
+export function sendMockNotification(evento: string, payload: unknown) {
+  return request<unknown>('/integracoes/notificar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ evento, payload }),
   });
 }
