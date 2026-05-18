@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { resolveBackendUrl } from '@/lib/backend-url';
 
-function resolveBackendUrl() {
-  if (process.env.BACKEND_INTERNAL_URL) {
-    return process.env.BACKEND_INTERNAL_URL.replace(/\/$/, '');
-  }
-
-  const port = process.env.BACKEND_PORT ?? '8080';
-  return `http://gestop.railway.internal:${port}`;
-}
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   const backendUrl = resolveBackendUrl();
@@ -53,7 +48,7 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
 
     return NextResponse.json(
       {
-        message: 'Backend indisponivel. Verifique BACKEND_INTERNAL_URL no servico frontend.',
+        message: 'Backend indisponivel. Configure BACKEND_INTERNAL_URL no servico frontend do Railway.',
         backendUrl,
         targetUrl,
         error: message,

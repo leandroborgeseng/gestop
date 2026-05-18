@@ -20,8 +20,19 @@ import {
   UnidadeOperacional,
 } from './types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '/api-gestop';
+// Sempre usa proxy interno do Next.js no browser.
+// NEXT_PUBLIC_API_URL apontando para URL externa quebra login no Railway.
+const API_BASE_URL = '/api-gestop';
 const AUTH_STORAGE_KEY = 'gestop.auth';
+
+async function readApiError(response: Response, fallback: string) {
+  try {
+    const payload = (await response.json()) as { message?: string; error?: string };
+    return payload.message ?? payload.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 export type StoredAuth = {
   accessToken: string;
@@ -77,8 +88,9 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       },
       cache: 'no-store',
     });
-  } catch {
-    throw new Error('Falha de conexão com a API. Verifique se o backend está online e se a URL da API está configurada.');
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'erro de rede';
+    throw new Error(`Falha de conexao com a API (${API_BASE_URL}). ${detail}`);
   }
 
   if (response.status === 401) {
@@ -91,7 +103,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    throw new Error(`Falha ao consultar API (${response.status})`);
+    throw new Error(await readApiError(response, `Falha ao consultar API (${response.status})`));
   }
 
   return response.json() as Promise<T>;
@@ -108,8 +120,9 @@ export async function login(email: string, password: string) {
       },
       body: JSON.stringify({ email, password }),
     });
-  } catch {
-    throw new Error('Falha de conexão com a API. Verifique se o backend está online e se a URL da API está configurada.');
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'erro de rede';
+    throw new Error(`Falha de conexao com a API (${API_BASE_URL}). ${detail}`);
   }
 
   if (response.status === 401) {
@@ -117,7 +130,7 @@ export async function login(email: string, password: string) {
   }
 
   if (!response.ok) {
-    throw new Error(`Falha ao autenticar (${response.status})`);
+    throw new Error(await readApiError(response, `Falha ao autenticar (${response.status})`));
   }
 
   const data = (await response.json()) as LoginResponse;

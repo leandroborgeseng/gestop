@@ -1,13 +1,8 @@
 import { NextResponse } from 'next/server';
+import { resolveBackendUrl } from '@/lib/backend-url';
 
-function resolveBackendUrl() {
-  if (process.env.BACKEND_INTERNAL_URL) {
-    return process.env.BACKEND_INTERNAL_URL.replace(/\/$/, '');
-  }
-
-  const port = process.env.BACKEND_PORT ?? '8080';
-  return `http://gestop.railway.internal:${port}`;
-}
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const backendUrl = resolveBackendUrl();
@@ -18,11 +13,11 @@ export async function GET() {
       fetch(`${backendUrl}/health/db`, { cache: 'no-store' }),
     ]);
 
-    const health = await healthResponse.json();
-    const db = await dbResponse.json();
+    const health = healthResponse.ok ? await healthResponse.json() : { status: healthResponse.status };
+    const db = dbResponse.ok ? await dbResponse.json() : { status: dbResponse.status };
 
     return NextResponse.json({
-      status: 'ok',
+      status: healthResponse.ok && dbResponse.ok ? 'ok' : 'degraded',
       frontend: {
         nodeEnv: process.env.NODE_ENV ?? null,
         backendUrl,
