@@ -15,7 +15,6 @@ import { ErrorState, LoadingState } from '@/components/ui-states';
 import {
   deleteAdminSecretaria,
   deleteAdminUnidade,
-  deleteAdminUsuario,
   listAdminPerfis,
   listAdminSecretarias,
   listAdminUnidades,
@@ -241,55 +240,139 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
   );
 }
 
+function usuarioPayloadFromForm(form: FormData, defaultPerfil: string, ativo: boolean, editingId?: string) {
+  const senha = String(form.get('senha') || '').trim();
+  const payload: Record<string, unknown> = {
+    secretariaId: String(form.get('secretariaId') || ''),
+    nome: String(form.get('nome')),
+    email: String(form.get('email')),
+    cpf: String(form.get('cpf') || ''),
+    telefone: String(form.get('telefone') || ''),
+    cargo: String(form.get('cargo') || ''),
+    perfilIds: [String(form.get('perfilId') || defaultPerfil)].filter(Boolean),
+    ativo,
+  };
+
+  if (editingId) {
+    if (senha) {
+      payload.senha = senha;
+    }
+  } else {
+    payload.senha = senha || 'Gestop@123';
+  }
+
+  return payload;
+}
+
+function usuarioPayloadFromRecord(usuario: AdminUsuario, ativo: boolean) {
+  return {
+    secretariaId: usuario.secretariaId ?? '',
+    nome: usuario.nome,
+    email: usuario.email,
+    cpf: usuario.cpf ?? '',
+    telefone: usuario.telefone ?? '',
+    cargo: usuario.cargo ?? '',
+    perfilIds: usuario.perfis.map((item) => item.perfil.id),
+    ativo,
+  };
+}
+
 function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias: AdminSecretaria[]; usuarios: AdminUsuario[]; perfis: AdminPerfil[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<void> }) {
   const defaultPerfil = useMemo(() => perfis[0]?.id ?? '', [perfis]);
+  const [editing, setEditing] = useState<AdminUsuario | null>(null);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const isEdit = Boolean(editing);
     await mutate(
       () =>
-        saveAdminUsuario({
-          secretariaId: String(form.get('secretariaId') || ''),
-          nome: String(form.get('nome')),
-          email: String(form.get('email')),
-          cpf: String(form.get('cpf') || ''),
-          telefone: String(form.get('telefone') || ''),
-          cargo: String(form.get('cargo') || ''),
-          senha: String(form.get('senha') || 'Gestop@123'),
-          perfilIds: [String(form.get('perfilId') || defaultPerfil)].filter(Boolean),
-          ativo: true,
-        }),
-      'Usuário cadastrado.',
+        saveAdminUsuario(
+          usuarioPayloadFromForm(form, defaultPerfil, editing?.ativo ?? true, editing?.id),
+          editing?.id,
+        ),
+      isEdit ? 'Usuário atualizado.' : 'Usuário cadastrado.',
     );
+    setEditing(null);
     event.currentTarget.reset();
   }
 
+  async function toggleAtivo(usuario: AdminUsuario) {
+    const nextAtivo = !usuario.ativo;
+    await mutate(
+      () => saveAdminUsuario(usuarioPayloadFromRecord(usuario, nextAtivo), usuario.id),
+      nextAtivo ? 'Usuário reativado.' : 'Usuário inativado.',
+    );
+    if (editing?.id === usuario.id) {
+      setEditing({ ...usuario, ativo: nextAtivo });
+    }
+  }
+
+  const editingPerfilId = editing?.perfis[0]?.perfil.id ?? defaultPerfil;
+
   return (
     <FormGrid>
-      <FormSection title="Novo usuário">
-        <form onSubmit={submit} className="space-y-4">
-          <Field label="Nome"><Input name="nome" required /></Field>
-          <Field label="E-mail"><Input name="email" type="email" required /></Field>
-          <Field label="CPF"><Input name="cpf" /></Field>
-          <Field label="Telefone"><Input name="telefone" /></Field>
-          <Field label="Cargo"><Input name="cargo" /></Field>
-          <Field label="Senha inicial"><Input name="senha" defaultValue="Gestop@123" /></Field>
+      <FormSection title={editing ? 'Editar usuário' : 'Novo usuário'}>
+        <form key={editing?.id ?? 'new'} onSubmit={submit} className="space-y-4">
+          <Field label="Nome">
+            <Input name="nome" required defaultValue={editing?.nome} />
+          </Field>
+          <Field label="E-mail">
+            <Input name="email" type="email" required defaultValue={editing?.email} />
+          </Field>
+          <Field label="CPF">
+            <Input name="cpf" defaultValue={editing?.cpf ?? ''} />
+          </Field>
+          <Field label="Telefone">
+            <Input name="telefone" defaultValue={editing?.telefone ?? ''} />
+          </Field>
+          <Field label="Cargo">
+            <Input name="cargo" defaultValue={editing?.cargo ?? ''} />
+          </Field>
+          <Field label={editing ? 'Nova senha (opcional)' : 'Senha inicial'}>
+            <Input
+              name="senha"
+              type="password"
+              autoComplete="new-password"
+              placeholder={editing ? 'Deixe em branco para manter a atual' : undefined}
+              defaultValue={editing ? '' : 'Gestop@123'}
+            />
+          </Field>
           <Field label="Secretaria">
-            <Select name="secretariaId">
+            <Select name="secretariaId" defaultValue={editing?.secretariaId ?? ''}>
               <option value="">Sem secretaria</option>
-              {secretarias.map((s) => <option key={s.id} value={s.id}>{s.sigla} — {s.nome}</option>)}
+              {secretarias.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.sigla} — {s.nome}
+                </option>
+              ))}
             </Select>
           </Field>
           <Field label="Perfil">
-            <Select name="perfilId" required>
-              {perfis.map((p) => <option key={p.id} value={p.id}>{p.nome}</option>)}
+            <Select name="perfilId" required defaultValue={editingPerfilId}>
+              {perfis.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome}
+                </option>
+              ))}
             </Select>
           </Field>
-          <Button type="submit" variant="filled" className="w-full">Cadastrar usuário</Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="submit" variant="filled" className="w-full sm:flex-1">
+              {editing ? 'Salvar alterações' : 'Cadastrar usuário'}
+            </Button>
+            {editing ? (
+              <Button type="button" variant="outlined" className="w-full sm:flex-1" onClick={() => setEditing(null)}>
+                Cancelar edição
+              </Button>
+            ) : null}
+          </div>
         </form>
       </FormSection>
       <FormSection title="Registros">
+        <p className="md-body-sm mb-4 text-[var(--md-on-surface-variant)]">
+          O sistema não remove usuários do banco: inativar impede o login; use Reativar para restaurar o acesso.
+        </p>
         <RecordList empty="Nenhum usuário cadastrado.">
           {usuarios.map((usuario) => (
             <RecordItem
@@ -298,9 +381,20 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
               subtitle={`${usuario.email} · ${usuario.perfis.map((p) => p.perfil.nome).join(', ') || 'sem perfil'}`}
               active={usuario.ativo}
               actions={
-                <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminUsuario(usuario.id), 'Usuário inativado.')}>
-                  Inativar
-                </Button>
+                <div className="flex flex-wrap items-center gap-1">
+                  <Button variant="text" size="sm" onClick={() => setEditing(usuario)}>
+                    Editar
+                  </Button>
+                  {usuario.ativo ? (
+                    <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(usuario)}>
+                      Inativar
+                    </Button>
+                  ) : (
+                    <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(usuario)}>
+                      Reativar
+                    </Button>
+                  )}
+                </div>
               }
             />
           ))}
