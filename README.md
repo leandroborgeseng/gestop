@@ -102,3 +102,4 @@ Todos os usuarios seed usam a senha `Gestop@123`.
 - `src/operacional`: consultas da CCO e mapeamento operacional de proprios.
 - `frontend/app/cco`: jornada de leitura operacional em Next.js.
 - `docs/modelo-dados.md`: diagrama textual e decisoes de modelagem.
+- `docs/publicacao-github-railway.md`: publicacao no GitHub e deploy no Railway.
