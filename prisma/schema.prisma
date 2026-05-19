@@ -1,0 +1,595 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UnidadeTipo {
+  ESCOLA
+  UBS
+  PRACA
+  PREDIO_ADMINISTRATIVO
+  ESPACO_ESPORTIVO
+  OUTRO
+}
+
+enum ChecklistEscopo {
+  GLOBAL
+  SECRETARIA
+  UNIDADE_TIPO
+  UNIDADE
+}
+
+enum ChecklistVersaoStatus {
+  RASCUNHO
+  PUBLICADA
+  ARQUIVADA
+}
+
+enum ChecklistItemTipo {
+  TEXTO
+  NUMERO
+  BOOLEANO
+  MULTIPLA_ESCOLHA
+  FOTO
+  ASSINATURA
+  DATA
+}
+
+enum FiscalizacaoStatus {
+  PLANEJADA
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
+  SINCRONIZACAO_PENDENTE
+}
+
+enum FiscalizacaoOrigem {
+  ROTINA
+  CHAMADO
+  AVULSA
+  OFFLINE
+}
+
+enum ConformidadeStatus {
+  CONFORME
+  NAO_CONFORME
+  NAO_APLICAVEL
+}
+
+enum EvidenciaTipo {
+  FOTO
+  VIDEO
+  AUDIO
+  DOCUMENTO
+  ASSINATURA
+}
+
+enum NaoConformidadeStatus {
+  ABERTA
+  EM_TRIAGEM
+  OS_GERADA
+  RESOLVIDA
+  CANCELADA
+}
+
+enum Severidade {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum OrdemServicoStatus {
+  ABERTA
+  EM_TRIAGEM
+  ATRIBUIDA
+  EM_EXECUCAO
+  CONCLUIDA
+  IMPEDIDA
+  CANCELADA
+}
+
+enum OrdemServicoPrioridade {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum OrdemServicoOrigem {
+  MANUAL
+  NAO_CONFORMIDADE
+  QR_CODE
+  INTEGRACAO
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  LOGIN
+  LOGOUT
+  STATUS_CHANGE
+  SYNC
+  PERMISSION_CHANGE
+}
+
+enum OfflineOperacao {
+  CREATE
+  UPDATE
+  DELETE
+  UPSERT
+}
+
+enum OfflineSyncStatus {
+  PENDENTE
+  PROCESSANDO
+  SINCRONIZADO
+  CONFLITO
+  FALHOU
+  IGNORADO
+}
+
+enum EntidadeSincronizavel {
+  FISCALIZACAO
+  RESPOSTA_CHECKLIST
+  EVIDENCIA
+  NAO_CONFORMIDADE
+  ORDEM_SERVICO
+}
+
+enum DashboardEscopo {
+  GERAL
+  SECRETARIA
+  UNIDADE
+}
+
+model Secretaria {
+  id              String   @id @default(uuid())
+  nome            String
+  sigla           String   @unique
+  descricao       String?
+  responsavelNome String?
+  responsavelEmail String?
+  ativo           Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  unidades          UnidadePublica[]
+  usuarios          Usuario[]
+  checklists        Checklist[]
+  fiscalizacoes     Fiscalizacao[]
+  ordensServico     OrdemServico[]
+  dashboardSnapshots DashboardSnapshot[]
+
+  @@index([ativo])
+}
+
+model UnidadePublica {
+  id                    String      @id @default(uuid())
+  secretariaId          String
+  codigoPatrimonial     String      @unique
+  nome                  String
+  tipo                  UnidadeTipo
+  endereco              String
+  bairro                String?
+  cep                   String?
+  latitude              Decimal     @db.Decimal(10, 7)
+  longitude             Decimal     @db.Decimal(10, 7)
+  raioValidacaoMetros   Int         @default(200)
+  ativo                 Boolean     @default(true)
+  metadata              Json?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+
+  secretaria       Secretaria       @relation(fields: [secretariaId], references: [id], onDelete: Restrict)
+  fiscalizacoes    Fiscalizacao[]
+  naoConformidades NaoConformidade[]
+  ordensServico    OrdemServico[]
+  dashboardSnapshots DashboardSnapshot[]
+
+  @@index([secretariaId])
+  @@index([tipo])
+  @@index([ativo])
+  @@index([latitude, longitude])
+}
+
+model Usuario {
+  id            String    @id @default(uuid())
+  secretariaId  String?
+  nome          String
+  email         String    @unique
+  cpf           String?   @unique
+  senhaHash     String
+  telefone      String?
+  cargo         String?
+  ativo         Boolean   @default(true)
+  ultimoLoginAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  secretaria       Secretaria?       @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
+  perfis           UsuarioPerfil[]
+  checklistVersoes ChecklistVersao[]  @relation("ChecklistVersaoPublicadoPor")
+  fiscalizacoes    Fiscalizacao[]     @relation("FiscalizacaoAgente")
+  naoConformidades NaoConformidade[]  @relation("NaoConformidadeRegistradaPor")
+  ordensSolicitadas OrdemServico[]    @relation("OrdemSolicitante")
+  ordensResponsavel OrdemServico[]    @relation("OrdemResponsavel")
+  historicosStatus  HistoricoStatus[] @relation("HistoricoAlteradoPor")
+  logsAuditoria     LogAuditoria[]    @relation("AuditoriaUsuario")
+  syncEvents        OfflineSyncEvent[] @relation("SyncUsuario")
+
+  @@index([secretariaId])
+  @@index([ativo])
+}
+
+model Perfil {
+  id          String   @id @default(uuid())
+  nome        String   @unique
+  descricao   String?
+  sistema     Boolean  @default(false)
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  usuarios    UsuarioPerfil[]
+  permissoes  PerfilPermissao[]
+}
+
+model Permissao {
+  id          String   @id @default(uuid())
+  chave       String   @unique
+  descricao   String?
+  modulo      String
+  createdAt   DateTime @default(now())
+
+  perfis      PerfilPermissao[]
+
+  @@index([modulo])
+}
+
+model UsuarioPerfil {
+  usuarioId String
+  perfilId  String
+  createdAt DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  perfil  Perfil  @relation(fields: [perfilId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, perfilId])
+}
+
+model PerfilPermissao {
+  perfilId    String
+  permissaoId String
+  createdAt   DateTime @default(now())
+
+  perfil    Perfil    @relation(fields: [perfilId], references: [id], onDelete: Cascade)
+  permissao Permissao @relation(fields: [permissaoId], references: [id], onDelete: Cascade)
+
+  @@id([perfilId, permissaoId])
+}
+
+model Checklist {
+  id            String          @id @default(uuid())
+  secretariaId  String?
+  unidadeId     String?
+  nome          String
+  descricao     String?
+  escopo        ChecklistEscopo @default(GLOBAL)
+  unidadeTipo   UnidadeTipo?
+  ativo         Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  secretaria Secretaria?      @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
+  versoes    ChecklistVersao[]
+
+  @@index([secretariaId])
+  @@index([escopo])
+  @@index([ativo])
+}
+
+model ChecklistVersao {
+  id             String                @id @default(uuid())
+  checklistId    String
+  versao         Int
+  status         ChecklistVersaoStatus @default(RASCUNHO)
+  estrutura      Json?
+  publicadoAt    DateTime?
+  publicadoPorId String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  checklist    Checklist       @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  publicadoPor Usuario?        @relation("ChecklistVersaoPublicadoPor", fields: [publicadoPorId], references: [id], onDelete: SetNull)
+  itens        ChecklistItem[]
+  fiscalizacoes Fiscalizacao[]
+
+  @@unique([checklistId, versao])
+  @@index([status])
+  @@index([publicadoPorId])
+}
+
+model ChecklistItem {
+  id                  String            @id @default(uuid())
+  checklistVersaoId   String
+  ordem               Int
+  codigo              String
+  titulo              String
+  descricao           String?
+  tipo                ChecklistItemTipo
+  obrigatorio         Boolean           @default(false)
+  geraNaoConformidade Boolean           @default(false)
+  exigeEvidencia      Boolean           @default(false)
+  opcoes              Json?
+  peso                Int               @default(0)
+  ativo               Boolean           @default(true)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  checklistVersao  ChecklistVersao    @relation(fields: [checklistVersaoId], references: [id], onDelete: Cascade)
+  respostas        RespostaChecklist[]
+  naoConformidades NaoConformidade[]
+
+  @@unique([checklistVersaoId, codigo])
+  @@index([checklistVersaoId, ordem])
+}
+
+model Fiscalizacao {
+  id                    String              @id @default(uuid())
+  clientId              String?             @unique
+  secretariaId          String
+  unidadeId             String
+  checklistVersaoId     String
+  agenteId              String
+  status                FiscalizacaoStatus  @default(PLANEJADA)
+  origem                FiscalizacaoOrigem  @default(ROTINA)
+  iniciadaEm            DateTime?
+  concluidaEm           DateTime?
+  checkinLatitude       Decimal?            @db.Decimal(10, 7)
+  checkinLongitude      Decimal?            @db.Decimal(10, 7)
+  checkinPrecisaoMetros Decimal?            @db.Decimal(8, 2)
+  checkoutLatitude      Decimal?            @db.Decimal(10, 7)
+  checkoutLongitude     Decimal?            @db.Decimal(10, 7)
+  checkoutPrecisaoMetros Decimal?           @db.Decimal(8, 2)
+  distanciaCheckinMetros Decimal?           @db.Decimal(10, 2)
+  dentroRaioPermitido   Boolean?
+  observacoes           String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  secretaria      Secretaria       @relation(fields: [secretariaId], references: [id], onDelete: Restrict)
+  unidade         UnidadePublica    @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
+  checklistVersao ChecklistVersao   @relation(fields: [checklistVersaoId], references: [id], onDelete: Restrict)
+  agente          Usuario           @relation("FiscalizacaoAgente", fields: [agenteId], references: [id], onDelete: Restrict)
+  respostas       RespostaChecklist[]
+  evidencias      Evidencia[]
+  naoConformidades NaoConformidade[]
+
+  @@index([secretariaId])
+  @@index([unidadeId])
+  @@index([checklistVersaoId])
+  @@index([agenteId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model RespostaChecklist {
+  id              String             @id @default(uuid())
+  fiscalizacaoId  String
+  itemId          String
+  conformidade    ConformidadeStatus?
+  valorTexto      String?
+  valorNumero     Decimal?           @db.Decimal(14, 4)
+  valorBooleano   Boolean?
+  valorJson       Json?
+  comentario      String?
+  respondidoEm    DateTime           @default(now())
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  fiscalizacao     Fiscalizacao      @relation(fields: [fiscalizacaoId], references: [id], onDelete: Cascade)
+  item             ChecklistItem     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  evidencias       Evidencia[]
+  naoConformidade  NaoConformidade?
+
+  @@unique([fiscalizacaoId, itemId])
+  @@index([itemId])
+  @@index([conformidade])
+}
+
+model Evidencia {
+  id                 String        @id @default(uuid())
+  fiscalizacaoId      String?
+  respostaId          String?
+  naoConformidadeId   String?
+  ordemServicoId      String?
+  tipo                EvidenciaTipo
+  url                 String
+  storageKey          String?
+  mimeType            String?
+  tamanhoBytes        Int?
+  checksum            String?
+  latitude            Decimal?      @db.Decimal(10, 7)
+  longitude           Decimal?      @db.Decimal(10, 7)
+  precisaoMetros      Decimal?      @db.Decimal(8, 2)
+  capturadaEm         DateTime
+  enviadaEm           DateTime?
+  marcaDagua          String?
+  metadata            Json?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  fiscalizacao     Fiscalizacao?     @relation(fields: [fiscalizacaoId], references: [id], onDelete: Cascade)
+  resposta         RespostaChecklist? @relation(fields: [respostaId], references: [id], onDelete: Cascade)
+  naoConformidade  NaoConformidade?  @relation(fields: [naoConformidadeId], references: [id], onDelete: SetNull)
+  ordemServico     OrdemServico?     @relation(fields: [ordemServicoId], references: [id], onDelete: SetNull)
+
+  @@index([fiscalizacaoId])
+  @@index([respostaId])
+  @@index([naoConformidadeId])
+  @@index([ordemServicoId])
+  @@index([checksum])
+}
+
+model NaoConformidade {
+  id                         String                  @id @default(uuid())
+  fiscalizacaoId              String
+  respostaId                  String                  @unique
+  itemId                      String
+  unidadeId                   String
+  registradaPorId             String
+  severidade                  Severidade              @default(MEDIA)
+  status                      NaoConformidadeStatus   @default(ABERTA)
+  descricao                   String
+  latitude                    Decimal?                @db.Decimal(10, 7)
+  longitude                   Decimal?                @db.Decimal(10, 7)
+  evidenciaObrigatoriaAtendida Boolean                @default(false)
+  registradaEm                DateTime                @default(now())
+  resolvidaEm                 DateTime?
+  createdAt                   DateTime                @default(now())
+  updatedAt                   DateTime                @updatedAt
+
+  fiscalizacao  Fiscalizacao      @relation(fields: [fiscalizacaoId], references: [id], onDelete: Cascade)
+  resposta      RespostaChecklist @relation(fields: [respostaId], references: [id], onDelete: Restrict)
+  item          ChecklistItem     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  unidade       UnidadePublica    @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
+  registradaPor Usuario           @relation("NaoConformidadeRegistradaPor", fields: [registradaPorId], references: [id], onDelete: Restrict)
+  evidencias    Evidencia[]
+  ordemServico  OrdemServico?
+
+  @@index([fiscalizacaoId])
+  @@index([itemId])
+  @@index([unidadeId])
+  @@index([registradaPorId])
+  @@index([status])
+  @@index([severidade])
+}
+
+model OrdemServico {
+  id                 String                 @id @default(uuid())
+  codigo             String                 @unique
+  secretariaId        String
+  unidadeId           String
+  naoConformidadeId   String?               @unique
+  solicitanteId       String?
+  responsavelId       String?
+  origem              OrdemServicoOrigem    @default(MANUAL)
+  titulo              String
+  descricao           String
+  prioridade          OrdemServicoPrioridade @default(MEDIA)
+  status              OrdemServicoStatus    @default(ABERTA)
+  prazoEm             DateTime?
+  abertaEm            DateTime              @default(now())
+  concluidaEm         DateTime?
+  impedimentoMotivo   String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  secretaria      Secretaria        @relation(fields: [secretariaId], references: [id], onDelete: Restrict)
+  unidade         UnidadePublica     @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
+  naoConformidade NaoConformidade?   @relation(fields: [naoConformidadeId], references: [id], onDelete: SetNull)
+  solicitante     Usuario?           @relation("OrdemSolicitante", fields: [solicitanteId], references: [id], onDelete: SetNull)
+  responsavel     Usuario?           @relation("OrdemResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  evidencias      Evidencia[]
+
+  @@index([secretariaId])
+  @@index([unidadeId])
+  @@index([status])
+  @@index([prioridade])
+  @@index([responsavelId])
+  @@index([abertaEm])
+}
+
+model HistoricoStatus {
+  id             String   @id @default(uuid())
+  entidadeTipo   String
+  entidadeId     String
+  statusAnterior String?
+  statusNovo     String
+  motivo         String?
+  metadata       Json?
+  alteradoPorId  String?
+  createdAt      DateTime @default(now())
+
+  alteradoPor Usuario? @relation("HistoricoAlteradoPor", fields: [alteradoPorId], references: [id], onDelete: SetNull)
+
+  @@index([entidadeTipo, entidadeId])
+  @@index([alteradoPorId])
+  @@index([createdAt])
+}
+
+model LogAuditoria {
+  id            String      @id @default(uuid())
+  usuarioId     String?
+  acao          AuditAction
+  entidadeTipo  String
+  entidadeId    String?
+  valorAntigo   Json?
+  valorNovo     Json?
+  ip            String?
+  userAgent     String?
+  correlationId String?
+  createdAt     DateTime    @default(now())
+
+  usuario Usuario? @relation("AuditoriaUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([usuarioId])
+  @@index([acao])
+  @@index([entidadeTipo, entidadeId])
+  @@index([createdAt])
+  @@index([correlationId])
+}
+
+model OfflineSyncEvent {
+  id              String              @id @default(uuid())
+  clientEventId   String              @unique
+  deviceId        String
+  usuarioId       String?
+  entidadeTipo    EntidadeSincronizavel
+  entidadeId      String?
+  operacao        OfflineOperacao
+  payload         Json
+  status          OfflineSyncStatus   @default(PENDENTE)
+  conflitoMotivo  String?
+  resolucao       Json?
+  ocorridoEm      DateTime
+  recebidoEm      DateTime            @default(now())
+  sincronizadoEm  DateTime?
+  resolvidoEm     DateTime?
+  tentativas      Int                 @default(0)
+  ultimoErro      String?
+
+  usuario Usuario? @relation("SyncUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([deviceId])
+  @@index([usuarioId])
+  @@index([entidadeTipo, entidadeId])
+  @@index([status])
+  @@index([recebidoEm])
+}
+
+model DashboardSnapshot {
+  id            String          @id @default(uuid())
+  escopo        DashboardEscopo
+  secretariaId  String?
+  unidadeId     String?
+  chave         String
+  periodoInicio DateTime?
+  periodoFim    DateTime?
+  metricas      Json
+  geradoEm      DateTime        @default(now())
+
+  secretaria Secretaria?    @relation(fields: [secretariaId], references: [id], onDelete: Cascade)
+  unidade    UnidadePublica? @relation(fields: [unidadeId], references: [id], onDelete: Cascade)
+
+  @@index([escopo])
+  @@index([secretariaId])
+  @@index([unidadeId])
+  @@index([chave])
+  @@index([geradoEm])
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 64" fill="none" role="img" aria-label="GestOP">
+  <defs>
+    <linearGradient id="gestop-gradient" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0066CC"/>
+      <stop offset="1" stop-color="#0199DC"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="url(#gestop-gradient)"/>
+  <path d="M32 14c-8.8 0-16 7.2-16 16 0 12 16 30 16 30s16-18 16-30c0-8.8-7.2-16-16-16zm0 22a6 6 0 1 1 0-12 6 6 0 0 1 0 12z" fill="#FFFFFF"/>
+  <text x="80" y="38" fill="#FFFFFF" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="28" font-weight="700" letter-spacing="-0.02em">Gest</text>
+  <text x="148" y="38" fill="#7EC8FF" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="28" font-weight="700" letter-spacing="-0.02em">OP</text>
+  <text x="80" y="54" fill="#B8D9F5" font-family="system-ui, -apple-system, Segoe UI, sans-serif" font-size="11" font-weight="600" letter-spacing="0.12em">FRANCA</text>
+</svg>

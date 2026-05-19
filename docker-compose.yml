@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: gestop-postgres
+    environment:
+      POSTGRES_DB: gestop
+      POSTGRES_USER: gestop
+      POSTGRES_PASSWORD: gestop
+    ports:
+      - "5432:5432"
+    volumes:
+      - gestop_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gestop -d gestop"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  gestop_postgres_data:
