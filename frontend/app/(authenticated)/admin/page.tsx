@@ -77,7 +77,7 @@ export default function AdminPage() {
   }
 
   return (
-    <RequirePermissions permissions={['secretarias.gerenciar']}>
+    <RequirePermissions permissions={['usuarios.gerenciar']}>
       <PageShell
         kicker="Administração Base"
         icon={Building2}

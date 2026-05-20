@@ -89,7 +89,7 @@ Todos os usuarios seed usam a senha `Gestop@123`.
 | Perfil | E-mail | Permissoes principais |
 | --- | --- | --- |
 | Administrador do Sistema | `admin.gestop@franca.sp.gov.br` | Todas |
-| Gestor CCO | `carla.mendes@franca.sp.gov.br` | CCO, cadastros, checklists, OS, auditoria |
+| Gestor CCO | `carla.mendes@franca.sp.gov.br` | CCO, checklists, OS, auditoria |
 | Agente de Campo | `joao.pereira@franca.sp.gov.br` | Execucao de fiscalizacoes |
 | Operador de Manutencao | `lucas.almeida@franca.sp.gov.br` | Gestao de chamados/OS |
 
