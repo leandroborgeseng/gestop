@@ -40,7 +40,7 @@ export class StorageService {
     const checksum = createHash('sha256').update(buffer).digest('hex');
     const extension = extensionFromMime(mimeType);
     const storageKey = `${prefix}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}${extension}`;
-    const driver = process.env.STORAGE_DRIVER?.trim() || (isProductionEnv() ? 's3' : 'local');
+    const driver = process.env.STORAGE_DRIVER?.trim() || 'local';
 
     if (driver === 's3') {
       const bucket = process.env.S3_BUCKET?.trim();

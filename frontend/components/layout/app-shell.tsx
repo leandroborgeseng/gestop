@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LogOut } from 'lucide-react';
+import { KeyRound, LogOut } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { logout } from '@/lib/api';
 import {
@@ -91,7 +91,14 @@ export function DesktopSidebar({
         ))}
       </nav>
 
-      <div className="border-t border-[var(--md-outline-variant)] p-4">
+      <div className="border-t border-[var(--md-outline-variant)] p-4 space-y-2">
+        <Link
+          href="/conta"
+          className="flex min-h-11 w-full items-center justify-start gap-2 rounded-[var(--md-shape-full)] bg-[var(--color-brand-primary-subtle)] px-4 md-label-lg font-medium text-[var(--color-brand-primary)] transition hover:bg-[color-mix(in_srgb,var(--color-brand-primary)_14%,var(--md-surface-container-low))]"
+        >
+          <KeyRound className="h-5 w-5" />
+          Minha conta
+        </Link>
         <Button
           variant="tonal"
           className="w-full justify-start"

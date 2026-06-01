@@ -28,7 +28,15 @@ describe('resolveJwtSecret', () => {
 });
 
 describe('assertProductionEnv', () => {
-  it('exige variaveis S3 em producao', () => {
+  it('exige STORAGE_PUBLIC_URL_BASE com driver local em producao', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.JWT_SECRET = 'x'.repeat(40);
+    process.env.STORAGE_DRIVER = 'local';
+    delete process.env.STORAGE_PUBLIC_URL_BASE;
+    expect(() => assertProductionEnv()).toThrow(/STORAGE_PUBLIC_URL_BASE/);
+  });
+
+  it('exige variaveis S3 apenas quando STORAGE_DRIVER=s3', () => {
     process.env.NODE_ENV = 'production';
     process.env.JWT_SECRET = 'x'.repeat(40);
     process.env.STORAGE_DRIVER = 's3';

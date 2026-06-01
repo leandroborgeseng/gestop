@@ -6,7 +6,7 @@ import { join } from 'node:path';
 export class StorageController {
   @Get('*path')
   serveLocalFile(@Param('path') path: string) {
-    const driver = process.env.STORAGE_DRIVER?.trim() || (process.env.NODE_ENV === 'production' ? 's3' : 'local');
+    const driver = process.env.STORAGE_DRIVER?.trim() || 'local';
     if (driver !== 'local') {
       throw new NotFoundException('Arquivo nao encontrado.');
     }

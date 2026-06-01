@@ -34,12 +34,19 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   try {
     console.log(`[GestOP:proxy] ${request.method} ${targetUrl}`);
     const response = await fetch(targetUrl, init);
-    const body = await response.text();
+    const contentType = response.headers.get('content-type') ?? 'application/json';
+    const isBinary =
+      contentType.startsWith('image/') ||
+      contentType.startsWith('video/') ||
+      contentType.startsWith('audio/') ||
+      contentType === 'application/octet-stream';
+
+    const body = isBinary ? await response.arrayBuffer() : await response.text();
 
     return new NextResponse(body, {
       status: response.status,
       headers: {
-        'content-type': response.headers.get('content-type') ?? 'application/json',
+        'content-type': contentType,
       },
     });
   } catch (error) {

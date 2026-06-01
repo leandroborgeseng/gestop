@@ -1,9 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveJwtSecret } from '../config/env';
+import { hashPassword, verifyPassword } from './password';
 import { signJwt } from './jwt';
-import { verifyPassword } from './password';
 
 @Injectable()
 export class AuthService {
@@ -93,6 +93,28 @@ export class AuthService {
       expiresInSeconds: 60 * 60 * 8,
       user,
     };
+  }
+
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: userId },
+      select: { id: true, senhaHash: true, ativo: true },
+    });
+
+    if (!usuario || !usuario.ativo || !verifyPassword(currentPassword, usuario.senhaHash)) {
+      throw new UnauthorizedException('Senha atual invalida');
+    }
+
+    if (newPassword.trim().length < 12) {
+      throw new BadRequestException('Nova senha deve ter pelo menos 12 caracteres.');
+    }
+
+    await this.prisma.usuario.update({
+      where: { id: userId },
+      data: { senhaHash: hashPassword(newPassword.trim()) },
+    });
+
+    return { ok: true };
   }
 
   private getJwtSecret() {

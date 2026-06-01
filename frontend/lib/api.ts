@@ -14,6 +14,7 @@ import {
   MobileQueuedInspection,
   OperacionalResumo,
   OrdemServicoResumo,
+  OrdemServicoDetalhe,
   SecretariaOption,
   UnidadeDetalhe,
   UnidadeFilters,
@@ -280,11 +281,23 @@ export function listOrdensServico() {
   return request<OrdemServicoResumo[]>('/ordens-servico');
 }
 
+export function getOrdemServico(id: string) {
+  return request<OrdemServicoDetalhe>(`/ordens-servico/${id}`);
+}
+
 export function updateOrdemServico(id: string, payload: Record<string, unknown>) {
   return request<OrdemServicoResumo>(`/ordens-servico/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+  });
+}
+
+export function changePassword(currentPassword: string, newPassword: string) {
+  return request<{ ok: boolean }>('/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ currentPassword, newPassword }),
   });
 }
 

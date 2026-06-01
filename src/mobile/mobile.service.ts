@@ -168,7 +168,7 @@ export class MobileService {
         });
 
         let naoConformidadeId: string | null = null;
-        if (resposta.conformidade === ConformidadeStatus.NAO_CONFORME) {
+        if (resposta.conformidade === ConformidadeStatus.NAO_CONFORME && item.geraNaoConformidade) {
           const naoConformidade = await tx.naoConformidade.create({
             data: {
               fiscalizacaoId: fiscalizacao.id,

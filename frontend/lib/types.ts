@@ -299,6 +299,25 @@ export type OrdemServicoResumo = {
   } | null;
 };
 
+export type OrdemServicoDetalhe = OrdemServicoResumo & {
+  impedimentoMotivo?: string | null;
+  concluidaEm?: string | null;
+  evidencias: Array<{
+    id: string;
+    url: string;
+    mimeType?: string | null;
+    capturadaEm: string;
+  }>;
+  historico: Array<{
+    id: string;
+    statusAnterior?: string | null;
+    statusNovo: string;
+    motivo?: string | null;
+    createdAt: string;
+    alteradoPor?: { id: string; nome: string } | null;
+  }>;
+};
+
 export type DashboardData = {
   indicadores: {
     totalUnidades: number;

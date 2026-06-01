@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { GitBranch, Wrench } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
@@ -66,7 +67,11 @@ export default function OrdensServicoPage() {
                         <Wrench className="h-3.5 w-3.5" />
                         {ordem.codigo} · {ordem.status}
                       </Badge>
-                      <h2 className="md-title-lg mt-3 text-[var(--md-on-surface)]">{ordem.titulo}</h2>
+                      <h2 className="md-title-lg mt-3 text-[var(--md-on-surface)]">
+                        <Link href={`/ordens-servico/${ordem.id}`} className="hover:text-[var(--color-brand-primary)]">
+                          {ordem.titulo}
+                        </Link>
+                      </h2>
                       <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
                         {ordem.unidade.nome} · {ordem.secretaria.sigla}
                       </p>
@@ -92,6 +97,12 @@ export default function OrdensServicoPage() {
                   ) : null}
 
                   <div className="mt-4 flex flex-wrap gap-2">
+                    <Link
+                      href={`/ordens-servico/${ordem.id}`}
+                      className="inline-flex h-9 items-center rounded-[var(--md-shape-full)] border border-[var(--md-outline)] px-3 md-label-lg text-[var(--color-brand-primary)] hover:bg-[var(--color-brand-primary-subtle)]"
+                    >
+                      Ver detalhe
+                    </Link>
                     {nextStatuses(ordem.status).map((status) => (
                       <Button key={status} variant="tonal" size="sm" onClick={() => transition(ordem.id, status)}>
                         Mover para {status}

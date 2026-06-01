@@ -174,17 +174,27 @@ O `startup.js` faz automaticamente: bootstrap → migrate → seed → sobe a AP
 | `JWT_SECRET` | Sim | Segredo forte para tokens (mín. 32 caracteres) |
 | `NODE_ENV` | Sim | `production` |
 | `INITIAL_ADMIN_PASSWORD` | Sim* | Senha do admin no **primeiro seed** (*só se banco vazio) |
-| `STORAGE_DRIVER` | Sim | `s3` em produção (ou `local` para testes) |
-| `S3_BUCKET` | Sim** | Bucket de evidências (**se `STORAGE_DRIVER=s3`) |
-| `S3_ACCESS_KEY_ID` | Sim** | Credencial S3/R2 |
-| `S3_SECRET_ACCESS_KEY` | Sim** | Credencial S3/R2 |
-| `S3_PUBLIC_URL_BASE` | Sim** | URL pública dos arquivos |
-| `S3_ENDPOINT` | Não | Endpoint R2/MinIO (se não for AWS) |
+| `STORAGE_DRIVER` | Sim | `local` (recomendado no Railway) |
+| `STORAGE_LOCAL_DIR` | Sim** | Pasta no Volume Railway, ex.: `/data/gestop-evidencias` |
+| `STORAGE_PUBLIC_URL_BASE` | Sim** | URL pública do frontend + `/api-gestop` |
 | `PORT` | Auto | Railway injeta automaticamente |
 | `FORCE_DB_RESET` | Não | `true` só para resetar banco (temporário) |
 | `FORCE_SEED_ON_START` | Não | `true` força seed mesmo com dados |
 
 **Importante:** o backend pode ficar **Unexposed** (sem URL pública). O frontend acessa pela rede interna.
+
+#### Volume Railway para fotos (evidências)
+
+1. No serviço **Backend** → **Volumes** → **Add Volume**
+2. Mount path: `/data`
+3. Variáveis:
+   ```env
+   STORAGE_DRIVER=local
+   STORAGE_LOCAL_DIR=/data/gestop-evidencias
+   STORAGE_PUBLIC_URL_BASE=https://SEU-FRONTEND.up.railway.app/api-gestop
+   ```
+
+As fotos ficam no disco persistente do Railway. O browser acessa via proxy do frontend (`/api-gestop/storage/...`). **Não é necessário AWS, S3 ou bucket externo.**
 
 ### 5.4 Serviço: Frontend (Next.js)
 
