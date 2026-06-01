@@ -1,0 +1,14 @@
+# Configuracao do servico Backend (gestop) no Railway.
+# Root Directory do servico deve ser a raiz do repositorio (nao frontend/).
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[env]
+NODE_ENV = "production"
+INITIAL_ADMIN_PASSWORD = "Mudar123"

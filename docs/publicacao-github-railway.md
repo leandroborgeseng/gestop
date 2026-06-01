@@ -180,7 +180,9 @@ O `startup.js` faz automaticamente: bootstrap → migrate → seed → sobe a AP
 | `PORT` | Auto | Railway injeta automaticamente |
 | `FORCE_DB_RESET` | Não | `true` só para resetar banco (temporário) |
 | `FORCE_SEED_ON_START` | Não | `true` força seed mesmo com dados |
-| `RESET_ADMIN_PASSWORD_ON_START` | Não | `true` + `INITIAL_ADMIN_PASSWORD` redefine a senha do admin no deploy (remover depois) |
+| `INITIAL_ADMIN_PASSWORD` | Sim* | Senha do admin (primeiro seed e sincronização no startup em produção via `railway.toml`) |
+
+**Backend:** use `railway.toml` na raiz do repo para variáveis do container (serviço gestop com Root Directory = `/`).
 
 **Importante:** o backend pode ficar **Unexposed** (sem URL pública). O frontend acessa pela rede interna.
 
@@ -264,15 +266,15 @@ Outros usuários seed estão em `README.md` e `prisma/seed.ts`.
 
 ### Redefinir senha do admin (banco já populado)
 
-1. No serviço **Backend** → **Variables**:
+Em produção, o startup sincroniza a senha de `admin.gestop@franca.sp.gov.br` com `INITIAL_ADMIN_PASSWORD` quando ela difere da atual (idempotente).
+
+1. Defina no `railway.toml` (serviço backend) ou nas Variables do Railway:
    ```env
    INITIAL_ADMIN_PASSWORD=Mudar123
-   RESET_ADMIN_PASSWORD_ON_START=true
    ```
-2. **Redeploy** (ou push na `main` se deploy automático).
-3. Nos logs, confirmar: `Senha do administrador atualizada com sucesso.`
-4. Login em `/login` com o e-mail admin e a nova senha.
-5. **Remover** `RESET_ADMIN_PASSWORD_ON_START` (ou `false`) e redeploy — evita resetar a senha a cada deploy.
+2. **Redeploy** do backend.
+3. Nos logs: `Senha do administrador atualizada com sucesso.` ou `ja esta sincronizada.`
+4. Após confirmar login, remova `INITIAL_ADMIN_PASSWORD` do `railway.toml` se não quiser re-sincronizar a cada deploy.
 
 ---
 

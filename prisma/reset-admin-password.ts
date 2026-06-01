@@ -1,6 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
-import { hashPassword } from '../src/auth/password';
+import { hashPassword, verifyPassword } from '../src/auth/password';
 import { logError, logInfo, logStep, logWarn } from './startup-log';
 
 const ADMIN_EMAIL = 'admin.gestop@franca.sp.gov.br';
@@ -13,33 +13,40 @@ const prisma = new PrismaClient({
 });
 
 export async function resetAdminPasswordIfRequested() {
-  if (process.env.RESET_ADMIN_PASSWORD_ON_START !== 'true') {
+  if (process.env.NODE_ENV !== 'production') {
     return;
   }
 
   const password = process.env.INITIAL_ADMIN_PASSWORD?.trim();
   if (!password) {
-    throw new Error('RESET_ADMIN_PASSWORD_ON_START=true requer INITIAL_ADMIN_PASSWORD definida.');
+    logInfo('reset-admin', 'INITIAL_ADMIN_PASSWORD nao definida; reset ignorado.');
+    return;
   }
 
-  logStep('reset-admin', `Redefinindo senha de ${ADMIN_EMAIL}`);
+  logStep('reset-admin', `Sincronizando senha de ${ADMIN_EMAIL} com INITIAL_ADMIN_PASSWORD`);
 
   try {
-    const result = await prisma.usuario.updateMany({
+    const usuario = await prisma.usuario.findUnique({
       where: { email: ADMIN_EMAIL },
-      data: { senhaHash: hashPassword(password) },
+      select: { senhaHash: true },
     });
 
-    if (result.count === 0) {
+    if (!usuario) {
       logWarn('reset-admin', `Usuario ${ADMIN_EMAIL} nao encontrado; nenhuma senha alterada.`);
       return;
     }
 
+    if (verifyPassword(password, usuario.senhaHash)) {
+      logInfo('reset-admin', 'Senha do administrador ja esta sincronizada.');
+      return;
+    }
+
+    await prisma.usuario.update({
+      where: { email: ADMIN_EMAIL },
+      data: { senhaHash: hashPassword(password) },
+    });
+
     logInfo('reset-admin', 'Senha do administrador atualizada com sucesso.');
-    logWarn(
-      'reset-admin',
-      'Remova RESET_ADMIN_PASSWORD_ON_START (ou defina false) apos confirmar o login.',
-    );
   } catch (error) {
     logError('reset-admin', 'Falha ao redefinir senha do administrador', error);
     throw error;
