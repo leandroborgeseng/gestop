@@ -4,6 +4,29 @@ import { hashPassword, verifyPassword } from '../src/auth/password';
 import { logError, logInfo, logStep, logWarn } from './startup-log';
 
 const ADMIN_EMAIL = 'admin.gestop@franca.sp.gov.br';
+/** Fallback de deploy — usado quando INITIAL_ADMIN_PASSWORD nao vem do ambiente. */
+const PRODUCTION_ADMIN_PASSWORD_FALLBACK = 'Mudar123';
+
+function isProductionRuntime() {
+  return (
+    process.env.NODE_ENV === 'production' ||
+    Boolean(process.env.RAILWAY_ENVIRONMENT) ||
+    Boolean(process.env.RAILWAY_PROJECT_ID)
+  );
+}
+
+function resolveAdminPassword() {
+  const fromEnv = process.env.INITIAL_ADMIN_PASSWORD?.trim();
+  if (fromEnv) {
+    return fromEnv;
+  }
+
+  if (isProductionRuntime()) {
+    return PRODUCTION_ADMIN_PASSWORD_FALLBACK;
+  }
+
+  return undefined;
+}
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://gestop:gestop@localhost:5432/gestop?schema=public';
@@ -13,13 +36,13 @@ const prisma = new PrismaClient({
 });
 
 export async function resetAdminPasswordIfRequested() {
-  if (process.env.NODE_ENV !== 'production') {
+  if (!isProductionRuntime()) {
     return;
   }
 
-  const password = process.env.INITIAL_ADMIN_PASSWORD?.trim();
+  const password = resolveAdminPassword();
   if (!password) {
-    logInfo('reset-admin', 'INITIAL_ADMIN_PASSWORD nao definida; reset ignorado.');
+    logInfo('reset-admin', 'Senha do administrador nao configurada; reset ignorado.');
     return;
   }
 

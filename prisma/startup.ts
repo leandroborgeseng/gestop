@@ -155,10 +155,8 @@ async function main() {
 
   await inspectDatabase('pos-seed');
 
-  if (process.env.NODE_ENV === 'production') {
-    logStep('reset-admin', 'Sincronizando senha do administrador');
-    runCommand('reset-admin', 'node dist/prisma/reset-admin-password.js');
-  }
+  logStep('reset-admin', 'Sincronizando senha do administrador');
+  runCommand('reset-admin', 'node dist/prisma/reset-admin-password.js');
 
   logStep('startup', 'Preparacao do banco concluida. Subindo API NestJS.');
 }
