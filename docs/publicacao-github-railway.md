@@ -171,8 +171,15 @@ O `startup.js` faz automaticamente: bootstrap → migrate → seed → sobe a AP
 | Variável | Obrigatória | Descrição |
 |----------|-------------|-----------|
 | `DATABASE_URL` | Sim | URL do Postgres Railway |
-| `JWT_SECRET` | Sim | Segredo forte para tokens |
+| `JWT_SECRET` | Sim | Segredo forte para tokens (mín. 32 caracteres) |
 | `NODE_ENV` | Sim | `production` |
+| `INITIAL_ADMIN_PASSWORD` | Sim* | Senha do admin no **primeiro seed** (*só se banco vazio) |
+| `STORAGE_DRIVER` | Sim | `s3` em produção (ou `local` para testes) |
+| `S3_BUCKET` | Sim** | Bucket de evidências (**se `STORAGE_DRIVER=s3`) |
+| `S3_ACCESS_KEY_ID` | Sim** | Credencial S3/R2 |
+| `S3_SECRET_ACCESS_KEY` | Sim** | Credencial S3/R2 |
+| `S3_PUBLIC_URL_BASE` | Sim** | URL pública dos arquivos |
+| `S3_ENDPOINT` | Não | Endpoint R2/MinIO (se não for AWS) |
 | `PORT` | Auto | Railway injeta automaticamente |
 | `FORCE_DB_RESET` | Não | `true` só para resetar banco (temporário) |
 | `FORCE_SEED_ON_START` | Não | `true` força seed mesmo com dados |
@@ -194,6 +201,8 @@ O `startup.js` faz automaticamente: bootstrap → migrate → seed → sobe a AP
 |----------|-------------|-----------|
 | `BACKEND_INTERNAL_URL` | Sim | URL interna do backend |
 | `NODE_ENV` | Sim | `production` |
+
+**Não definir** `NEXT_PUBLIC_SHOW_DEMO_LOGIN` em produção.
 
 **Exemplo de `BACKEND_INTERNAL_URL`:**
 

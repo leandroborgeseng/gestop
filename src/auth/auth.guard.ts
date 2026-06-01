@@ -1,5 +1,6 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { resolveJwtSecret } from '../config/env';
 import { AuthenticatedRequest } from './current-user';
 import { verifyJwt } from './jwt';
 
@@ -25,7 +26,7 @@ export class AuthGuard implements CanActivate {
   }
 
   private getJwtSecret() {
-    return this.configService.get<string>('JWT_SECRET') ?? 'gestop-dev-secret-change-me';
+    return resolveJwtSecret(this.configService.get<string>('JWT_SECRET'));
   }
 }
 

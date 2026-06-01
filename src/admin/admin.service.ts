@@ -167,7 +167,14 @@ export class AdminService {
   }
 
   async createUsuario(dto: UsuarioDto, user: JwtPayload) {
-    const senha = dto.senha ?? 'Gestop@123';
+    const isProduction = process.env.NODE_ENV === 'production';
+    const senha = dto.senha?.trim();
+
+    if (isProduction && !senha) {
+      throw new BadRequestException('Senha inicial obrigatoria em producao.');
+    }
+
+    const resolvedPassword = senha || 'Gestop@123';
     const usuario = await this.prisma.usuario.create({
       data: {
         secretariaId: dto.secretariaId || null,
@@ -176,7 +183,7 @@ export class AdminService {
         cpf: dto.cpf?.trim(),
         telefone: dto.telefone?.trim(),
         cargo: dto.cargo?.trim(),
-        senhaHash: hashPassword(senha),
+        senhaHash: hashPassword(resolvedPassword),
         ativo: dto.ativo ?? true,
         perfis: {
           create: dto.perfilIds.map((perfilId) => ({

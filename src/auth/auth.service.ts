@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolveJwtSecret } from '../config/env';
 import { signJwt } from './jwt';
 import { verifyPassword } from './password';
 
@@ -95,6 +96,6 @@ export class AuthService {
   }
 
   private getJwtSecret() {
-    return this.configService.get<string>('JWT_SECRET') ?? 'gestop-dev-secret-change-me';
+    return resolveJwtSecret(this.configService.get<string>('JWT_SECRET'));
   }
 }

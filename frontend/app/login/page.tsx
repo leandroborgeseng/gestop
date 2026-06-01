@@ -14,6 +14,8 @@ import { Input } from '@/components/ui/input';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { Surface } from '@/components/ui/surface';
 
+const showDemoLogin = process.env.NEXT_PUBLIC_SHOW_DEMO_LOGIN === 'true';
+
 export default function LoginPage() {
   return (
     <Suspense fallback={<LoginSkeleton />}>
@@ -35,8 +37,8 @@ function LoginSkeleton() {
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState('admin.gestop@franca.sp.gov.br');
-  const [password, setPassword] = useState('Gestop@123');
+  const [email, setEmail] = useState(showDemoLogin ? 'admin.gestop@franca.sp.gov.br' : '');
+  const [password, setPassword] = useState(showDemoLogin ? 'Gestop@123' : '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -87,14 +89,14 @@ function LoginContent() {
           <p className="md-body-lg mt-8 max-w-md text-white/85">
             Plataforma de gestão de ordens de serviço e fiscalização georreferenciada da Prefeitura de Franca.
           </p>
-          <Surface tone="high" elevation={0} className="mt-8 border-white/15 bg-white/10 p-5 text-white backdrop-blur-sm">
-            <strong className="md-title-md block">Acesso demo</strong>
-            <p className="md-body-md mt-2">
-              admin.gestop@franca.sp.gov.br
-              <br />
-              Senha: Gestop@123
-            </p>
-          </Surface>
+          {showDemoLogin ? (
+            <Surface tone="high" elevation={0} className="mt-8 border-white/15 bg-white/10 p-5 text-white backdrop-blur-sm">
+              <strong className="md-title-md block">Ambiente de demonstração</strong>
+              <p className="md-body-md mt-2">
+                Use as credenciais de desenvolvimento configuradas localmente.
+              </p>
+            </Surface>
+          ) : null}
         </Surface>
 
         <Card elevation={2} className="w-full">
@@ -125,6 +127,7 @@ function LoginContent() {
                   type="email"
                   autoComplete="email"
                   inputMode="email"
+                  placeholder="seu.email@franca.sp.gov.br"
                   required
                 />
               </Field>

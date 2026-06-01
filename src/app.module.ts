@@ -10,6 +10,7 @@ import { MonitoramentoModule } from './monitoramento/monitoramento.module';
 import { OperacionalModule } from './operacional/operacional.module';
 import { OrdensServicoModule } from './ordens-servico/ordens-servico.module';
 import { PrismaService } from './prisma/prisma.service';
+import { StorageModule } from './storage/storage.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { PrismaService } from './prisma/prisma.service';
     MonitoramentoModule,
     IntegracoesModule,
     OperacionalModule,
+    StorageModule,
   ],
   controllers: [RootController, HealthController],
   providers: [PrismaService],

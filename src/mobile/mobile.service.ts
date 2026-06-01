@@ -15,6 +15,7 @@ import {
 import { JwtPayload } from '../auth/jwt';
 import { OrdensServicoService } from '../ordens-servico/ordens-servico.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { MobileSyncFiscalizacaoDto } from './mobile.dto';
 import { validateMobileCheckin, validateMobileResponse } from './mobile.rules';
 
@@ -23,6 +24,7 @@ export class MobileService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordensServicoService: OrdensServicoService,
+    private readonly storageService: StorageService,
   ) {}
 
   async getFieldPackage() {
@@ -120,6 +122,18 @@ export class MobileService {
       }
     }
 
+    const respostasPreparadas = await Promise.all(
+      dto.respostas.map(async (resposta) => ({
+        ...resposta,
+        evidenciasArmazenadas: await Promise.all(
+          resposta.evidencias.map(async (evidencia) => ({
+            original: evidencia,
+            stored: await this.storageService.persistEvidenceUrl(evidencia.url, evidencia.mimeType),
+          })),
+        ),
+      })),
+    );
+
     const result = await this.prisma.$transaction(async (tx) => {
       const fiscalizacao = await tx.fiscalizacao.create({
         data: {
@@ -140,7 +154,7 @@ export class MobileService {
         },
       });
 
-      for (const resposta of dto.respostas) {
+      for (const resposta of respostasPreparadas) {
         const item = itemById.get(resposta.itemId)!;
         const respostaCriada = await tx.respostaChecklist.create({
           data: {
@@ -167,26 +181,28 @@ export class MobileService {
               descricao: resposta.comentario ?? item.titulo,
               latitude: dto.checkin.latitude,
               longitude: dto.checkin.longitude,
-              evidenciaObrigatoriaAtendida: resposta.evidencias.length > 0,
+              evidenciaObrigatoriaAtendida: resposta.evidenciasArmazenadas.length > 0,
             },
           });
           naoConformidadeId = naoConformidade.id;
         }
 
-        for (const evidencia of resposta.evidencias) {
+        for (const evidencia of resposta.evidenciasArmazenadas) {
           await tx.evidencia.create({
             data: {
               fiscalizacaoId: fiscalizacao.id,
               respostaId: respostaCriada.id,
               naoConformidadeId,
-              tipo: evidencia.tipo ?? EvidenciaTipo.FOTO,
-              url: evidencia.url,
-              mimeType: evidencia.mimeType,
-              tamanhoBytes: evidencia.tamanhoBytes,
-              latitude: evidencia.localizacao.latitude,
-              longitude: evidencia.localizacao.longitude,
-              precisaoMetros: evidencia.localizacao.precisaoMetros,
-              capturadaEm: new Date(evidencia.capturadaEm),
+              tipo: evidencia.original.tipo ?? EvidenciaTipo.FOTO,
+              url: evidencia.stored.url,
+              storageKey: evidencia.stored.storageKey,
+              mimeType: evidencia.stored.mimeType ?? evidencia.original.mimeType,
+              tamanhoBytes: evidencia.stored.tamanhoBytes || evidencia.original.tamanhoBytes,
+              checksum: evidencia.stored.checksum,
+              latitude: evidencia.original.localizacao.latitude,
+              longitude: evidencia.original.localizacao.longitude,
+              precisaoMetros: evidencia.original.localizacao.precisaoMetros,
+              capturadaEm: new Date(evidencia.original.capturadaEm),
               enviadaEm: new Date(),
             },
           });

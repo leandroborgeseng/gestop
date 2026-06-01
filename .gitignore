@@ -3,9 +3,12 @@ dist/
 .next/
 frontend/node_modules/
 frontend/.next/
+frontend/tsconfig.tsbuildinfo
 
 .env
 .env.local
 *.log
+
+storage/
 
 .DS_Store

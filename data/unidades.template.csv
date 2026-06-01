@@ -1,0 +1,11 @@
+secretaria_sigla,codigo_patrimonial,nome,tipo,endereco,bairro,cep,latitude,longitude,raio_validacao_metros,ativo
+SME,PMF-ESC-001,EMEB Prof. Florestan Fernandes,ESCOLA,"Rua Major Claudiano, 1840",Centro,14400-690,-20.53936,-47.40081,200,true
+SMS,PMF-UBS-001,UBS Jardim Aeroporto,UBS,"Avenida Brasil, 2500",Jardim Aeroporto,14404-063,-20.55142,-47.42406,200,true
+SSMA,PMF-PRC-001,Praca Nossa Senhora da Conceicao,PRACA,Praca Nossa Senhora da Conceicao,Centro,14400-730,-20.53873,-47.40039,200,true
+SME,PMF-ESC-002,EMEB Prof. Joao XXIII,ESCOLA,"Rua Visconde de Maua, 1200",Vila Aparecida,14402-002,-20.54510,-47.39250,200,true
+SME,PMF-ESC-003,EMEB Prof. Cecilia Meireles,ESCOLA,"Rua Bahia, 890",Jardim Paulista,14401-420,-20.52890,-47.41520,200,true
+SMS,PMF-UBS-002,UBS Centro,UBS,"Rua Dr. Ismael Alonso y Alonso, 1200",Centro,14400-710,-20.53780,-47.40110,200,true
+SMS,PMF-UBS-003,UBS Parque do Castelo,UBS,"Rua Jose Carlos de Campos, 450",Parque do Castelo,14403-110,-20.55820,-47.43150,200,true
+SSMA,PMF-PRC-002,Praca Dr. Arlindo Vergueiro,PRACA,Praca Dr. Arlindo Vergueiro,Centro,14400-720,-20.53990,-47.39980,200,true
+SSMA,PMF-PAD-001,Paço Municipal,PREDIO_ADMINISTRATIVO,"Praca Matheus Fernandes, 45",Centro,14400-710,-20.53850,-47.40010,200,true
+SSMA,PMF-ESP-001,Complexo Esportivo Municipal,ESPACO_ESPORTIVO,"Avenida Rio Amazonas, 2200",Estacao,14405-400,-20.56210,-47.41890,200,true

@@ -85,7 +85,19 @@ async function main() {
     await resetDevData();
   }
 
-  const defaultPasswordHash = hashPassword('Gestop@123', 'gestop-dev-seed-salt');
+  const initialPassword = isProduction
+    ? process.env.INITIAL_ADMIN_PASSWORD?.trim()
+    : process.env.INITIAL_ADMIN_PASSWORD?.trim() || 'Gestop@123';
+
+  if (isProduction && existingUsers === 0 && !initialPassword) {
+    throw new Error('INITIAL_ADMIN_PASSWORD obrigatoria no primeiro seed de producao.');
+  }
+
+  if (isProduction && initialPassword && initialPassword.length < 12) {
+    throw new Error('INITIAL_ADMIN_PASSWORD deve ter pelo menos 12 caracteres.');
+  }
+
+  const defaultPasswordHash = hashPassword(initialPassword ?? 'Gestop@123', isProduction ? undefined : 'gestop-dev-seed-salt');
 
   const [educacao, saude, servicos] = await Promise.all([
     prisma.secretaria.create({
@@ -507,7 +519,11 @@ async function main() {
   ]);
 
   logInfo('seed', `Seed concluido: ${secretarias} secretarias, ${unidadesCount} unidades, ${usuarios} usuarios.`);
-  logInfo('seed', 'Login inicial: admin.gestop@franca.sp.gov.br / Gestop@123');
+  if (!isProduction) {
+    logInfo('seed', 'Login inicial de desenvolvimento: admin.gestop@franca.sp.gov.br / Gestop@123');
+  } else {
+    logInfo('seed', 'Administrador inicial: admin.gestop@franca.sp.gov.br (senha definida via INITIAL_ADMIN_PASSWORD).');
+  }
 }
 
 main()

@@ -12,7 +12,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:seed": "tsx prisma/seed.ts",
+    "import:unidades": "tsx prisma/import-unidades.ts",
+    "import:unidades:dry-run": "tsx prisma/import-unidades.ts --dry-run"
   },
   "keywords": [],
   "author": "",
@@ -22,6 +24,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1057.0",
     "@emnapi/core": "^1.10.0",
     "@emnapi/runtime": "^1.10.0",
     "@nestjs/common": "^11.1.21",
