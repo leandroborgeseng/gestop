@@ -260,7 +260,7 @@ Após o primeiro deploy com seed:
 | Campo | Valor |
 |-------|-------|
 | E-mail | `admin.gestop@franca.sp.gov.br` |
-| Senha | Valor de `INITIAL_ADMIN_PASSWORD` (só no primeiro seed) |
+| Senha | `Gestop@123` (padrao em producao via `railway.toml` / seed) |
 
 Outros usuários seed estão em `README.md` e `prisma/seed.ts`.
 
