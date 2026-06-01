@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, Suspense, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LockKeyhole } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
@@ -53,6 +54,9 @@ function LoginContent() {
     }
     if (reason === 'denied') {
       return { variant: 'error' as const, text: 'Seu perfil não tem permissão para acessar essa área.' };
+    }
+    if (reason === 'password-reset') {
+      return { variant: 'success' as const, text: 'Senha redefinida com sucesso. Faça login com a nova senha.' };
     }
     return null;
   }, [searchParams]);
@@ -145,6 +149,12 @@ function LoginContent() {
               <Button type="submit" variant="filled" size="lg" className="w-full" disabled={loading}>
                 {loading ? 'Entrando...' : 'Entrar'}
               </Button>
+
+              <p className="md-body-md text-center">
+                <Link href="/recuperar-senha" className="text-[var(--color-brand-primary)] hover:underline">
+                  Esqueci minha senha
+                </Link>
+              </p>
             </form>
           </CardContent>
         </Card>

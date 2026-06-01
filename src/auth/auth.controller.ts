@@ -25,6 +25,21 @@ class ChangePasswordDto {
   newPassword!: string;
 }
 
+class ForgotPasswordDto {
+  @IsEmail()
+  email!: string;
+}
+
+class ResetPasswordDto {
+  @IsString()
+  @MinLength(20)
+  token!: string;
+
+  @IsString()
+  @MinLength(12)
+  newPassword!: string;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -51,6 +66,18 @@ export class AuthController {
   @Post('change-password')
   changePassword(@CurrentUser() user: JwtPayload, @Body() body: ChangePasswordDto) {
     return this.authService.changePassword(user.sub, body.currentPassword, body.newPassword);
+  }
+
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('forgot-password')
+  forgotPassword(@Body() body: ForgotPasswordDto) {
+    return this.authService.requestPasswordReset(body.email);
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('reset-password')
+  resetPassword(@Body() body: ResetPasswordDto) {
+    return this.authService.resetPasswordWithToken(body.token, body.newPassword);
   }
 
   @Post('logout')

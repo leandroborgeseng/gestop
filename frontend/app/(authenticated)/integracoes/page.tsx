@@ -8,7 +8,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorState, LoadingState } from '@/components/ui-states';
-import { listIntegracoesEventos, retrySyncFalhas, sendMockNotification } from '@/lib/api';
+import { listIntegracoesEventos, retrySyncFalhas, sendIntegrationNotification } from '@/lib/api';
 import { IntegracoesEventos } from '@/lib/types';
 
 export default function IntegracoesPage() {
@@ -37,8 +37,8 @@ export default function IntegracoesPage() {
   }
 
   async function notify() {
-    await sendMockNotification('teste-operacional', { origem: 'painel-integracoes' });
-    setSuccess('Notificação mock registrada.');
+    const result = await sendIntegrationNotification('teste-operacional', { origem: 'painel-integracoes' });
+    setSuccess(`Notificação enviada via ${result.adapter}${result.delivered ? '' : ' (falhou)'}.`);
     await load();
   }
 
@@ -85,7 +85,7 @@ export default function IntegracoesPage() {
 
             <Card elevation={1}>
               <CardHeader className="flex-row items-center justify-between space-y-0">
-                <CardTitle>Notificações mock</CardTitle>
+                <CardTitle>Notificações</CardTitle>
                 <Button variant="tonal" size="sm" onClick={() => void notify()}>
                   <Send className="h-4 w-4" />
                   Enviar teste

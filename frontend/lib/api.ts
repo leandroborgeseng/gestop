@@ -317,10 +317,37 @@ export function retrySyncFalhas() {
   return request<{ reenfileirados: number }>('/integracoes/sync/retry', { method: 'POST' });
 }
 
-export function sendMockNotification(evento: string, payload: unknown) {
-  return request<unknown>('/integracoes/notificar', {
+export function sendIntegrationNotification(evento: string, payload: unknown) {
+  return request<{ adapter: string; delivered: boolean; evento: string }>('/integracoes/notificar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ evento, payload }),
   });
+}
+
+/** @deprecated */
+export const sendMockNotification = sendIntegrationNotification;
+
+export function requestPasswordReset(email: string) {
+  return request<{ ok: boolean; message: string; devResetUrl?: string }>('/auth/forgot-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPasswordWithToken(token: string, newPassword: string) {
+  return request<{ ok: boolean }>('/auth/reset-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, newPassword }),
+  });
+}
+
+export function anonymizeUsuarioLgpd(usuarioId: string) {
+  return request<{ ok: boolean }>(`/lgpd/usuarios/${usuarioId}/anonymize`, { method: 'POST' });
+}
+
+export function purgeAuditoriaLgpd() {
+  return request<{ removidos: number; retentionDays: number }>('/lgpd/auditoria/purge', { method: 'POST' });
 }

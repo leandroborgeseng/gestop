@@ -18,8 +18,8 @@ export class IntegracoesController {
   }
 
   @Post('notificar')
-  notifyMock(@Body() body: { evento: string; payload: unknown }, @CurrentUser() user: JwtPayload) {
-    return this.integracoesService.notifyMock(body.evento, body.payload, user);
+  notify(@Body() body: { evento: string; payload: unknown }, @CurrentUser() user: JwtPayload) {
+    return this.integracoesService.notify(body.evento, body.payload, user);
   }
 
   @Post('sync/retry')

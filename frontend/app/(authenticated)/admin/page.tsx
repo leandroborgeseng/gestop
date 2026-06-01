@@ -22,6 +22,8 @@ import {
   saveAdminSecretaria,
   saveAdminUnidade,
   saveAdminUsuario,
+  anonymizeUsuarioLgpd,
+  purgeAuditoriaLgpd,
 } from '@/lib/api';
 import { AdminPerfil, AdminSecretaria, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
 
@@ -110,6 +112,22 @@ export default function AdminPage() {
         ) : null}
         {!loading && tab === 'usuarios' ? (
           <UsuariosPanel secretarias={secretarias} usuarios={usuarios} perfis={perfis} mutate={mutate} />
+        ) : null}
+
+        {!loading ? (
+          <FormSection title="LGPD" className="mt-8">
+            <p className="md-body-md mb-4 text-[var(--md-on-surface-variant)]">
+              Anonimize usuários inativos e aplique retenção de logs de auditoria conforme política municipal.
+            </p>
+            <Button
+              variant="tonal"
+              onClick={() =>
+                void mutate(async () => purgeAuditoriaLgpd(), 'Retenção de auditoria aplicada.')
+              }
+            >
+              Aplicar retenção de auditoria
+            </Button>
+          </FormSection>
         ) : null}
       </PageShell>
     </RequirePermissions>
@@ -390,9 +408,24 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
                       Inativar
                     </Button>
                   ) : (
-                    <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(usuario)}>
-                      Reativar
-                    </Button>
+                    <>
+                      <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(usuario)}>
+                        Reativar
+                      </Button>
+                      <Button
+                        variant="text"
+                        size="sm"
+                        className="text-red-700"
+                        onClick={() =>
+                          void mutate(
+                            () => anonymizeUsuarioLgpd(usuario.id),
+                            `Usuário ${usuario.nome} anonimizado.`,
+                          )
+                        }
+                      >
+                        Anonimizar
+                      </Button>
+                    </>
                   )}
                 </div>
               }

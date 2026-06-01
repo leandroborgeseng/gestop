@@ -11,6 +11,7 @@ import { MobileModule } from './mobile/mobile.module';
 import { MonitoramentoModule } from './monitoramento/monitoramento.module';
 import { OperacionalModule } from './operacional/operacional.module';
 import { OrdensServicoModule } from './ordens-servico/ordens-servico.module';
+import { LgpdModule } from './lgpd/lgpd.module';
 import { PrismaService } from './prisma/prisma.service';
 import { StorageModule } from './storage/storage.module';
 
@@ -29,6 +30,7 @@ import { StorageModule } from './storage/storage.module';
     IntegracoesModule,
     OperacionalModule,
     StorageModule,
+    LgpdModule,
   ],
   controllers: [RootController, HealthController],
   providers: [

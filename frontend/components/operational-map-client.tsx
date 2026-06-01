@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import 'leaflet.markercluster';
 import { MapPinOff } from 'lucide-react';
 import {
   FRANCA_BOUNDS,
@@ -101,7 +102,7 @@ function refreshMapSize(map: L.Map) {
 export function OperationalMapClient({ unidades }: { unidades: UnidadeOperacional[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const markersLayerRef = useRef<L.MarkerClusterGroup | null>(null);
   const referenceMarkerRef = useRef<L.Marker | null>(null);
   const [containerReady, setContainerReady] = useState(false);
 
@@ -176,7 +177,11 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
       maxZoom: 19,
     }).addTo(map);
 
-    markersLayerRef.current = L.layerGroup().addTo(map);
+    markersLayerRef.current = L.markerClusterGroup({
+      showCoverageOnHover: false,
+      maxClusterRadius: 56,
+      spiderfyOnMaxZoom: true,
+    }).addTo(map);
 
     referenceMarkerRef.current = L.marker(
       [FRANCA_REFERENCIA_FREDERICO_MOURA.lat, FRANCA_REFERENCIA_FREDERICO_MOURA.lng],
@@ -251,7 +256,7 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
       <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <div>
           <CardTitle>Mapa CCO</CardTitle>
-          <CardDescription>Mapa de Franca/SP com próprios públicos georreferenciados.</CardDescription>
+          <CardDescription>Mapa de Franca/SP com clusters por concentração de próprios.</CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="brand">Referência: Frederico Moura, 1426</Badge>

@@ -221,9 +221,24 @@ model Usuario {
   historicosStatus  HistoricoStatus[] @relation("HistoricoAlteradoPor")
   logsAuditoria     LogAuditoria[]    @relation("AuditoriaUsuario")
   syncEvents        OfflineSyncEvent[] @relation("SyncUsuario")
+  passwordResetTokens PasswordResetToken[]
 
   @@index([secretariaId])
   @@index([ativo])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  usuarioId String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@index([expiresAt])
 }
 
 model Perfil {
