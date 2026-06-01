@@ -12,9 +12,9 @@ const INSTITUTIONAL_LOGO = {
 } as const;
 
 const variantStyles: Record<LogoVariant, string> = {
-  full: 'h-10 w-auto max-w-[220px]',
-  compact: 'h-8 w-auto max-w-[180px]',
-  mark: 'h-10 w-10 object-cover object-left',
+  full: 'h-14 w-auto max-w-full sm:max-w-[280px]',
+  compact: 'h-11 w-auto max-w-full sm:max-w-[240px]',
+  mark: 'h-10 w-auto max-w-[148px] object-contain object-left',
 };
 
 export function Logo({
@@ -60,8 +60,8 @@ export function Logo({
 export function ProductLabel({ className }: { className?: string }) {
   return (
     <div className={cn('min-w-0', className)}>
-      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--color-brand-primary)]">GestOP</p>
-      <p className="text-[11px] text-[var(--color-text-secondary)]">Central Operacional</p>
+      <p className="md-title-md font-semibold uppercase tracking-[0.12em] text-[var(--color-brand-primary)]">GestOP</p>
+      <p className="md-body-md mt-0.5 text-[var(--color-text-secondary)]">Central Operacional</p>
     </div>
   );
 }

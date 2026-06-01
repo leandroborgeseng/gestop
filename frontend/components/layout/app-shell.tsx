@@ -72,10 +72,12 @@ export function DesktopSidebar({
 
   return (
     <aside className="hidden lg:flex lg:w-[17.5rem] lg:flex-col lg:border-r lg:border-[var(--md-outline-variant)] lg:bg-[var(--md-surface)]">
-      <div className="border-b border-[var(--md-outline-variant)] px-5 py-6">
-        <Logo href="/cco" priority />
-        <ProductLabel className="mt-4" />
-        <div className="mt-4 rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] px-3 py-2.5">
+      <div className="border-b border-[var(--md-outline-variant)] px-5 py-7">
+        <div className="space-y-4">
+          <Logo href="/cco" priority className="h-16 sm:max-w-[260px]" />
+          <ProductLabel />
+        </div>
+        <div className="mt-5 rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] px-3 py-2.5">
           <p className="md-title-md truncate text-[var(--md-on-surface)]">{userName}</p>
           <p className="md-body-md mt-0.5 truncate text-[var(--md-on-surface-variant)]">
             {userRoles.join(' · ')}
@@ -109,10 +111,10 @@ export function DesktopSidebar({
 export function MobileAppBar({ userName }: { userName: string }) {
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--md-outline-variant)] bg-[var(--md-surface)]/95 backdrop-blur-md lg:hidden">
-      <div className="flex min-h-16 items-center justify-between gap-3 px-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <Logo variant="mark" href="/cco" />
-          <div className="min-w-0">
+      <div className="flex min-h-[4.75rem] items-center justify-between gap-3 px-4 py-2">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <Logo variant="mark" href="/cco" className="h-11 max-w-[156px]" />
+          <div className="min-w-0 border-l border-[var(--md-outline-variant)] pl-3.5">
             <ProductLabel />
             <p className="md-body-md mt-0.5 truncate text-[var(--md-on-surface-variant)]">{userName}</p>
           </div>

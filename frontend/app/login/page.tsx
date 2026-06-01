@@ -76,13 +76,15 @@ function LoginContent() {
         <Surface
           elevation={3}
           tone="default"
-          className="gestop-brand-panel hidden border-0 p-8 text-white lg:block"
+          className="gestop-brand-panel hidden border-0 p-10 text-white lg:block"
         >
-          <Logo theme="light" variant="compact" priority />
-          <Chip variant="accent" className="mt-3 bg-white/15 text-white">
-            GestOP
-          </Chip>
-          <p className="md-body-lg mt-6 max-w-md text-white/85">
+          <div className="space-y-5">
+            <Logo theme="light" variant="full" priority className="h-20 max-w-[320px]" />
+            <Chip variant="accent" className="bg-white/15 text-white">
+              GestOP
+            </Chip>
+          </div>
+          <p className="md-body-lg mt-8 max-w-md text-white/85">
             Plataforma de gestão de ordens de serviço e fiscalização georreferenciada da Prefeitura de Franca.
           </p>
           <Surface tone="high" elevation={0} className="mt-8 border-white/15 bg-white/10 p-5 text-white backdrop-blur-sm">
@@ -97,9 +99,11 @@ function LoginContent() {
 
         <Card elevation={2} className="w-full">
           <CardHeader>
-            <div className="mb-4 lg:hidden">
-              <Logo variant="compact" priority />
-              <p className="md-label-md mt-2 text-[var(--color-brand-primary)]">GestOP</p>
+            <div className="mb-6 flex flex-col items-center gap-2 text-center lg:hidden">
+              <Logo variant="full" priority className="h-14 max-w-[260px]" />
+              <p className="md-title-md font-semibold uppercase tracking-[0.12em] text-[var(--color-brand-primary)]">
+                GestOP
+              </p>
             </div>
             <Chip variant="brand" className="mb-3 w-fit gap-1.5">
               <LockKeyhole className="h-3.5 w-3.5" />
