@@ -5,7 +5,7 @@ import { logError, logInfo, logStep, logWarn } from './startup-log';
 
 const ADMIN_EMAIL = 'admin.gestop@franca.sp.gov.br';
 /** Fallback de deploy — usado quando INITIAL_ADMIN_PASSWORD nao vem do ambiente. */
-const PRODUCTION_ADMIN_PASSWORD_FALLBACK = 'Mudar123';
+const PRODUCTION_ADMIN_PASSWORD_FALLBACK = 'Gestop@123';
 
 function isProductionRuntime() {
   return (

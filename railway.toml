@@ -11,4 +11,4 @@ restartPolicyMaxRetries = 10
 
 [env]
 NODE_ENV = "production"
-INITIAL_ADMIN_PASSWORD = "Mudar123"
+INITIAL_ADMIN_PASSWORD = "Gestop@123"

@@ -270,7 +270,7 @@ Em produção, o startup sincroniza a senha de `admin.gestop@franca.sp.gov.br` c
 
 1. Defina no `railway.toml` (serviço backend) ou nas Variables do Railway:
    ```env
-   INITIAL_ADMIN_PASSWORD=Mudar123
+   INITIAL_ADMIN_PASSWORD=Gestop@123
    ```
 2. **Redeploy** do backend.
 3. Nos logs: `Senha do administrador atualizada com sucesso.` ou `ja esta sincronizada.`
