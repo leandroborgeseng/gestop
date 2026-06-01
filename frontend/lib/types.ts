@@ -318,6 +318,51 @@ export type OrdemServicoDetalhe = OrdemServicoResumo & {
   }>;
 };
 
+export type ChamadoStatus =
+  | 'ABERTO'
+  | 'EM_TRIAGEM'
+  | 'ENCAMINHADO_OS'
+  | 'ENCERRADO'
+  | 'CANCELADO';
+
+export type ChamadoOrigem = 'MANUAL' | 'QR_CODE' | 'INTERNO';
+
+export type ChamadoResumo = {
+  id: string;
+  codigo: string;
+  descricao: string;
+  status: ChamadoStatus;
+  origem: ChamadoOrigem;
+  prioridade: string;
+  solicitanteNome?: string | null;
+  solicitanteEmail?: string | null;
+  solicitanteTelefone?: string | null;
+  createdAt: string;
+  encerradoEm?: string | null;
+  secretaria: SecretariaOption;
+  unidade: {
+    id: string;
+    nome: string;
+    codigoPatrimonial: string;
+    endereco?: string;
+    bairro?: string | null;
+  };
+  ordemServico?: { id: string; codigo: string; status: string } | null;
+  registradoPor?: { id: string; nome: string } | null;
+};
+
+export type PublicUnidadeChamado = {
+  id: string;
+  codigoPatrimonial: string;
+  nome: string;
+  tipo: UnidadeTipo;
+  endereco: string;
+  bairro?: string | null;
+  latitude: number;
+  longitude: number;
+  secretaria: SecretariaOption;
+};
+
 export type DashboardData = {
   indicadores: {
     totalUnidades: number;
@@ -336,6 +381,34 @@ export type DashboardData = {
     nome: string;
     ordensPendentes: number;
     fiscalizacoes: number;
+  }>;
+};
+
+export type AlertasOperacionais = {
+  resumo: {
+    osAtrasadas: number;
+    chamadosSemTriagem: number;
+    syncFalhas: number;
+    osUrgentes: number;
+  };
+  osAtrasadas: Array<{
+    id: string;
+    codigo: string;
+    titulo: string;
+    prioridade: string;
+    status: string;
+    prazoEm: string;
+    secretaria: { sigla: string };
+    unidade: { nome: string };
+  }>;
+  chamadosSemTriagem: Array<{
+    id: string;
+    codigo: string;
+    status: string;
+    origem: string;
+    createdAt: string;
+    secretaria: { sigla: string };
+    unidade: { nome: string };
   }>;
 };
 

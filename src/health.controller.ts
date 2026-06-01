@@ -1,5 +1,8 @@
 import { Controller, Get } from '@nestjs/common';
+import { getUptimeSeconds } from './config/runtime';
 import { PrismaService } from './prisma/prisma.service';
+
+const APP_VERSION = process.env.npm_package_version ?? '1.0.0';
 
 @Controller()
 export class RootController {
@@ -30,6 +33,15 @@ export class HealthController {
     return {
       status: 'ok',
       service: 'gestop-api',
+      version: APP_VERSION,
+      uptimeSeconds: getUptimeSeconds(),
+      observability: {
+        sentryConfigured: Boolean(process.env.SENTRY_DSN?.trim()),
+        webhookConfigured: Boolean(process.env.INTEGRACOES_WEBHOOK_URL?.trim()),
+        webPushConfigured: Boolean(
+          process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() && process.env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim(),
+        ),
+      },
       timestamp: new Date().toISOString(),
     };
   }
@@ -62,6 +74,8 @@ export class HealthController {
         counts: {
           usuarios: users,
           secretarias,
+          unidades: await this.prisma.unidadePublica.count({ where: { ativo: true } }),
+          chamados: await this.prisma.chamado.count(),
         },
         migrations: migrations.map((item) => ({
           name: item.migration_name,

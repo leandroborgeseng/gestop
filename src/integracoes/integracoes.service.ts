@@ -55,6 +55,22 @@ export class IntegracoesService {
     return this.notify(evento, payload, user);
   }
 
+  /** Notificacao sem usuario autenticado (ex.: chamado publico QR). */
+  async notifySystem(evento: string, payload: unknown) {
+    const result = await this.dispatchNotification(evento, payload);
+
+    await this.prisma.logAuditoria.create({
+      data: {
+        acao: AuditAction.CREATE,
+        entidadeTipo: 'Notificacao',
+        entidadeId: evento,
+        valorNovo: JSON.parse(JSON.stringify(result)),
+      },
+    });
+
+    return result;
+  }
+
   private async dispatchNotification(evento: string, payload: unknown): Promise<NotifyResult> {
     const webhookUrl = process.env.INTEGRACOES_WEBHOOK_URL?.trim();
 

@@ -8,5 +8,6 @@ import { IntegracoesService } from './integracoes.service';
   imports: [AuthModule],
   controllers: [IntegracoesController],
   providers: [IntegracoesService, PrismaService],
+  exports: [IntegracoesService],
 })
 export class IntegracoesModule {}

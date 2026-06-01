@@ -20,4 +20,10 @@ export class MonitoramentoController {
   listAuditoria() {
     return this.monitoramentoService.listAuditoria();
   }
+
+  @RequirePermissions('dashboard.visualizar')
+  @Get('alertas')
+  getAlertas() {
+    return this.monitoramentoService.getAlertasOperacionais();
+  }
 }

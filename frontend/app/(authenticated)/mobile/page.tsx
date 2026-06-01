@@ -21,6 +21,8 @@ import { ErrorState, LoadingState } from '@/components/ui-states';
 import { captureCurrentPosition } from '@/lib/geolocation';
 import { migrateLegacyQueueIfNeeded, readMobileQueue, writeMobileQueue } from '@/lib/mobile-queue';
 import { getMobileFieldPackage, syncMobileInspection } from '@/lib/api';
+import { registerServiceWorker, requestNotificationPermission, showLocalNotification } from '@/lib/pwa';
+import { PwaInstallBanner } from '@/components/mobile/pwa-install-banner';
 import { MobileFieldPackage, MobileQueuedInspection } from '@/lib/types';
 
 const DEVICE_KEY = 'gestop.mobile.device';
@@ -62,11 +64,17 @@ export default function MobilePage() {
 
     setQueue(remaining);
     await writeMobileQueue(remaining);
-    if (remaining.length === 0) setSuccess('Fila sincronizada com sucesso.');
+    if (remaining.length === 0) {
+      setSuccess('Fila sincronizada com sucesso.');
+      showLocalNotification('GestOP Campo', 'Fiscalizacoes sincronizadas com sucesso.');
+    }
     setSyncing(false);
   }, [syncing]);
 
   useEffect(() => {
+    registerServiceWorker();
+    requestNotificationPermission().catch(() => undefined);
+
     migrateLegacyQueueIfNeeded()
       .then(() => readMobileQueue())
       .then(setQueue)
@@ -194,6 +202,7 @@ export default function MobilePage() {
         backHref="/cco"
       >
         <div className="mx-auto max-w-2xl space-y-4 pb-32">
+          <PwaInstallBanner />
           {error ? <ErrorState message={error} /> : null}
           {success ? <Alert variant="success">{success}</Alert> : null}
           {gpsNotice ? <Alert variant="warning">{gpsNotice}</Alert> : null}

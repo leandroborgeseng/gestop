@@ -8,6 +8,7 @@ import {
   ChecklistVersao,
   AuditoriaEvento,
   DashboardData,
+  AlertasOperacionais,
   IntegracoesEventos,
   LoginResponse,
   MobileFieldPackage,
@@ -15,6 +16,8 @@ import {
   OperacionalResumo,
   OrdemServicoResumo,
   OrdemServicoDetalhe,
+  ChamadoResumo,
+  PublicUnidadeChamado,
   SecretariaOption,
   UnidadeDetalhe,
   UnidadeFilters,
@@ -350,4 +353,129 @@ export function anonymizeUsuarioLgpd(usuarioId: string) {
 
 export function purgeAuditoriaLgpd() {
   return request<{ removidos: number; retentionDays: number }>('/lgpd/auditoria/purge', { method: 'POST' });
+}
+
+async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  if (!response.ok) {
+    throw new Error(await readApiError(response, 'Falha na requisicao publica.'));
+  }
+  return response.json() as Promise<T>;
+}
+
+export function getPublicUnidade(codigoPatrimonial: string) {
+  return publicRequest<PublicUnidadeChamado>(`/public/unidades/${encodeURIComponent(codigoPatrimonial)}`);
+}
+
+export function createPublicChamado(
+  codigoPatrimonial: string,
+  payload: {
+    descricao: string;
+    solicitanteNome?: string;
+    solicitanteEmail?: string;
+    solicitanteTelefone?: string;
+  },
+) {
+  return publicRequest<ChamadoResumo>(`/public/unidades/${encodeURIComponent(codigoPatrimonial)}/chamados`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listChamados() {
+  return request<ChamadoResumo[]>('/chamados');
+}
+
+export function getChamado(id: string) {
+  return request<ChamadoResumo>(`/chamados/${id}`);
+}
+
+export function updateChamadoStatus(id: string, payload: { status: string; motivo?: string }) {
+  return request<ChamadoResumo>(`/chamados/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function convertChamadoToOs(id: string) {
+  return request<{ chamado: ChamadoResumo; ordemServico: OrdemServicoResumo }>(`/chamados/${id}/converter-os`, {
+    method: 'POST',
+  });
+}
+
+export function getAlertasOperacionais() {
+  return request<AlertasOperacionais>('/monitoramento/alertas');
+}
+
+async function downloadRelatorio(
+  formato: 'csv' | 'pdf',
+  tipo: 'unidades' | 'chamados' | 'ordens-servico' | 'fiscalizacoes',
+  params: Record<string, string> = {},
+) {
+  const token = getStoredAuth()?.accessToken;
+  const query = new URLSearchParams(params);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  const response = await fetch(`${API_BASE_URL}/relatorios/export/${tipo}.${formato}${suffix}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, 'Falha ao exportar relatorio.'));
+  }
+
+  const blob = await response.blob();
+  const filename =
+    response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] ??
+    `gestop-${tipo}.${formato}`;
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function downloadRelatorioCsv(
+  tipo: 'unidades' | 'chamados' | 'ordens-servico' | 'fiscalizacoes',
+  params: Record<string, string> = {},
+) {
+  return downloadRelatorio('csv', tipo, params);
+}
+
+export function downloadRelatorioPdf(
+  tipo: 'unidades' | 'chamados' | 'ordens-servico' | 'fiscalizacoes',
+  params: Record<string, string> = {},
+) {
+  return downloadRelatorio('pdf', tipo, params);
+}
+
+export function getVapidPublicKey() {
+  return request<{ publicKey: string | null; enabled: boolean }>('/notificacoes/push/vapid-public-key');
+}
+
+export function subscribeWebPush(subscription: PushSubscriptionJSON) {
+  return request<{ id: string }>('/notificacoes/push/subscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      endpoint: subscription.endpoint,
+      keys: subscription.keys,
+    }),
+  });
+}
+
+export function unsubscribeWebPush(endpoint: string) {
+  return request<{ ok: boolean }>('/notificacoes/push/unsubscribe', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoint }),
+  });
+}
+
+export function dispararAlertasOperacionais() {
+  return request<{ enviados: number; webhook: boolean; push: number }>('/notificacoes/alertas/disparar', {
+    method: 'POST',
+  });
 }

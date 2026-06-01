@@ -1,9 +1,23 @@
+import * as Sentry from '@sentry/node';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { assertProductionEnv } from './config/env';
 
+function initSentry() {
+  const dsn = process.env.SENTRY_DSN?.trim();
+  if (!dsn) return;
+
+  Sentry.init({
+    dsn,
+    environment: process.env.NODE_ENV ?? 'development',
+    tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.1),
+  });
+  console.log('[GestOP:api] Sentry inicializado');
+}
+
 async function bootstrap() {
+  initSentry();
   assertProductionEnv();
 
   console.log('[GestOP:api] Iniciando NestJS...');
@@ -29,4 +43,8 @@ async function bootstrap() {
   console.log(`[GestOP:api] Servidor ouvindo na porta ${port}`);
 }
 
-void bootstrap();
+void bootstrap().catch((error) => {
+  Sentry.captureException(error);
+  console.error('[GestOP:api] Falha ao iniciar', error);
+  process.exit(1);
+});

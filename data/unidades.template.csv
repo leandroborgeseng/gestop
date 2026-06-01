@@ -7,5 +7,13 @@ SME,PMF-ESC-003,EMEB Prof. Cecilia Meireles,ESCOLA,"Rua Bahia, 890",Jardim Pauli
 SMS,PMF-UBS-002,UBS Centro,UBS,"Rua Dr. Ismael Alonso y Alonso, 1200",Centro,14400-710,-20.53780,-47.40110,200,true
 SMS,PMF-UBS-003,UBS Parque do Castelo,UBS,"Rua Jose Carlos de Campos, 450",Parque do Castelo,14403-110,-20.55820,-47.43150,200,true
 SSMA,PMF-PRC-002,Praca Dr. Arlindo Vergueiro,PRACA,Praca Dr. Arlindo Vergueiro,Centro,14400-720,-20.53990,-47.39980,200,true
-SSMA,PMF-PAD-001,Paço Municipal,PREDIO_ADMINISTRATIVO,"Praca Matheus Fernandes, 45",Centro,14400-710,-20.53850,-47.40010,200,true
+SSMA,PMF-PAD-001,Paco Municipal,PREDIO_ADMINISTRATIVO,"Praca Matheus Fernandes, 45",Centro,14400-710,-20.53850,-47.40010,200,true
 SSMA,PMF-ESP-001,Complexo Esportivo Municipal,ESPACO_ESPORTIVO,"Avenida Rio Amazonas, 2200",Estacao,14405-400,-20.56210,-47.41890,200,true
+SMO,PMF-OBR-001,Deposito de Obras Publicas,PREDIO_ADMINISTRATIVO,"Rua Rio Pardo, 1800",Estacao,14405-380,-20.56120,-47.41750,200,true
+SMO,PMF-OBR-002,CEMOF Centro de Manutencao,PREDIO_ADMINISTRATIVO,"Avenida Rio Amazonas, 3100",Estacao,14405-410,-20.56340,-47.41980,200,true
+SMF,PMF-FIN-001,Secretaria Municipal de Financas,PREDIO_ADMINISTRATIVO,"Praca Matheus Fernandes, 45",Centro,14400-710,-20.53880,-47.40030,200,true
+SMT,PMF-TRN-001,Terminal Urbano Central,OUTRO,"Rua Barao do Rio Branco, 900",Centro,14400-680,-20.54020,-47.40150,200,true
+SMDHC,PMF-DHC-001,CRAS Centro,OUTRO,"Rua Voluntarios da Patria, 2100",Centro,14400-740,-20.54110,-47.39890,200,true
+SMCT,PMF-CUL-001,Museu Histórico Municipal,OUTRO,"Praca Dr. Ismael Alonso y Alonso, 100",Centro,14400-700,-20.53910,-47.39950,200,true
+SMEL,PMF-ESP-002,Estadio Municipal Dr. Lazarão,ESPACO_ESPORTIVO,"Avenida Rio Amazonas, 2500",Estacao,14405-390,-20.56280,-47.41920,200,true
+SMEL,PMF-ESP-003,Ginásio Municipal,ESPACO_ESPORTIVO,"Rua Rio Pardo, 2200",Estacao,14405-385,-20.56180,-47.41820,200,true

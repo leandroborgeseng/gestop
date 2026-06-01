@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { NaoConformidadeStatus, OfflineSyncStatus, OrdemServicoStatus } from '@prisma/client';
+import { ChamadoStatus, NaoConformidadeStatus, OfflineSyncStatus, OrdemServicoStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+
+const CHAMADO_ALERTA_HORAS = 48;
 
 @Injectable()
 export class MonitoramentoService {
@@ -71,5 +73,68 @@ export class MonitoramentoService {
         usuario: { select: { id: true, nome: true, email: true } },
       },
     });
+  }
+
+  async getAlertasOperacionais() {
+    const now = new Date();
+    const chamadoLimite = new Date(now.getTime() - CHAMADO_ALERTA_HORAS * 60 * 60 * 1000);
+
+    const [osAtrasadas, chamadosSemTriagem, syncFalhas, osUrgentes] = await Promise.all([
+      this.prisma.ordemServico.findMany({
+        where: {
+          prazoEm: { lt: now },
+          status: { notIn: [OrdemServicoStatus.CONCLUIDA, OrdemServicoStatus.CANCELADA] },
+        },
+        orderBy: { prazoEm: 'asc' },
+        take: 20,
+        select: {
+          id: true,
+          codigo: true,
+          titulo: true,
+          prioridade: true,
+          status: true,
+          prazoEm: true,
+          secretaria: { select: { sigla: true } },
+          unidade: { select: { nome: true } },
+        },
+      }),
+      this.prisma.chamado.findMany({
+        where: {
+          status: { in: [ChamadoStatus.ABERTO, ChamadoStatus.EM_TRIAGEM] },
+          createdAt: { lt: chamadoLimite },
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 20,
+        select: {
+          id: true,
+          codigo: true,
+          status: true,
+          origem: true,
+          createdAt: true,
+          secretaria: { select: { sigla: true } },
+          unidade: { select: { nome: true } },
+        },
+      }),
+      this.prisma.offlineSyncEvent.count({
+        where: { status: { in: [OfflineSyncStatus.FALHOU, OfflineSyncStatus.CONFLITO] } },
+      }),
+      this.prisma.ordemServico.count({
+        where: {
+          prioridade: 'URGENTE',
+          status: { notIn: [OrdemServicoStatus.CONCLUIDA, OrdemServicoStatus.CANCELADA] },
+        },
+      }),
+    ]);
+
+    return {
+      resumo: {
+        osAtrasadas: osAtrasadas.length,
+        chamadosSemTriagem: chamadosSemTriagem.length,
+        syncFalhas,
+        osUrgentes,
+      },
+      osAtrasadas,
+      chamadosSemTriagem,
+    };
   }
 }

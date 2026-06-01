@@ -14,7 +14,11 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
     "import:unidades": "tsx prisma/import-unidades.ts",
-    "import:unidades:dry-run": "tsx prisma/import-unidades.ts --dry-run"
+    "import:unidades:dry-run": "tsx prisma/import-unidades.ts --dry-run",
+    "import:secretarias": "tsx prisma/import-secretarias.ts",
+    "import:secretarias:dry-run": "tsx prisma/import-secretarias.ts --dry-run",
+    "go-live:check": "tsx scripts/go-live-check.ts",
+    "vapid:generate": "tsx scripts/generate-vapid-keys.ts"
   },
   "keywords": [],
   "author": "",
@@ -34,17 +38,22 @@
     "@nestjs/throttler": "^6.5.0",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
+    "@sentry/node": "^10.55.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "pdfkit": "^0.18.0",
     "pg": "^8.21.0",
     "prisma": "^7.8.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/node": "^25.9.0",
+    "@types/pdfkit": "^0.17.6",
     "@types/pg": "^8.20.0",
+    "@types/web-push": "^3.6.4",
     "ts-node": "^10.9.2",
     "tsx": "^4.22.2",
     "vitest": "^4.1.6"

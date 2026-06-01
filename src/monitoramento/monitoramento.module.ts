@@ -8,5 +8,6 @@ import { MonitoramentoService } from './monitoramento.service';
   imports: [AuthModule],
   controllers: [MonitoramentoController],
   providers: [MonitoramentoService, PrismaService],
+  exports: [MonitoramentoService],
 })
 export class MonitoramentoModule {}

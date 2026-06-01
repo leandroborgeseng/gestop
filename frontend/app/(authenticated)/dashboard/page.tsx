@@ -1,30 +1,42 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BarChart3, Building2, ClipboardCheck, DatabaseZap, ShieldAlert, Wrench } from 'lucide-react';
+import Link from 'next/link';
+import { AlertTriangle, BarChart3, Building2, ClipboardCheck, DatabaseZap, ShieldAlert, Wrench } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
 import { MetricCard } from '@/components/metric-card';
+import { Alert } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorState, LoadingState } from '@/components/ui-states';
-import { getDashboard, listAuditoria } from '@/lib/api';
-import { AuditoriaEvento, DashboardData } from '@/lib/types';
+import { PushNotificationsPanel } from '@/components/dashboard/push-notifications-panel';
+import { getAlertasOperacionais, getDashboard, listAuditoria } from '@/lib/api';
+import { AlertasOperacionais, AuditoriaEvento, DashboardData } from '@/lib/types';
 
 export default function DashboardPage() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [alertas, setAlertas] = useState<AlertasOperacionais | null>(null);
   const [auditoria, setAuditoria] = useState<AuditoriaEvento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([getDashboard(), listAuditoria()])
-      .then(([dash, audit]) => {
+    Promise.all([getDashboard(), listAuditoria(), getAlertasOperacionais()])
+      .then(([dash, audit, alerts]) => {
         setDashboard(dash);
         setAuditoria(audit);
+        setAlertas(alerts);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar dashboard.'))
       .finally(() => setLoading(false));
   }, []);
+
+  const hasAlertas =
+    alertas &&
+    (alertas.resumo.osAtrasadas > 0 ||
+      alertas.resumo.chamadosSemTriagem > 0 ||
+      alertas.resumo.syncFalhas > 0 ||
+      alertas.resumo.osUrgentes > 0);
 
   return (
     <RequirePermissions permissions={['dashboard.visualizar']}>
@@ -40,6 +52,35 @@ export default function DashboardPage() {
 
         {dashboard ? (
           <>
+            <PushNotificationsPanel />
+
+            {hasAlertas ? (
+              <Alert variant="warning" className="mb-6">
+                <p className="md-title-md flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Alertas operacionais
+                </p>
+                <p className="md-body-md mt-2">
+                  {alertas!.resumo.osAtrasadas} OS atrasadas · {alertas!.resumo.chamadosSemTriagem} chamados sem triagem
+                  · {alertas!.resumo.osUrgentes} OS urgentes · {alertas!.resumo.syncFalhas} falhas de sync
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link
+                    href="/ordens-servico"
+                    className="inline-flex h-9 items-center rounded-[var(--md-shape-full)] bg-[var(--color-brand-primary)] px-3 md-label-lg text-white"
+                  >
+                    Ver ordens de servico
+                  </Link>
+                  <Link
+                    href="/chamados"
+                    className="inline-flex h-9 items-center rounded-[var(--md-shape-full)] border border-[var(--md-outline)] px-3 md-label-lg text-[var(--color-brand-primary)]"
+                  >
+                    Ver chamados
+                  </Link>
+                </div>
+              </Alert>
+            ) : null}
+
             <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
               <MetricCard title="Próprios" value={dashboard.indicadores.totalUnidades} hint="cadastrados" icon={Building2} />
               <MetricCard title="Fiscalizações" value={dashboard.indicadores.fiscalizacoes} hint="registradas" icon={ClipboardCheck} />
