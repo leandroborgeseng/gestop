@@ -18,7 +18,15 @@ function initSentry() {
 
 async function bootstrap() {
   initSentry();
-  assertProductionEnv();
+
+  console.log('[GestOP:api] Validando variaveis de producao...');
+  try {
+    assertProductionEnv();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    console.error('[GestOP:api] Corrija as variaveis no Railway → gestop → Variables → Redeploy.');
+    process.exit(1);
+  }
 
   console.log('[GestOP:api] Iniciando NestJS...');
   console.log(`[GestOP:api] NODE_ENV=${process.env.NODE_ENV ?? '(nao definido)'}`);
