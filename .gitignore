@@ -9,6 +9,6 @@ frontend/tsconfig.tsbuildinfo
 .env.local
 *.log
 
-storage/
+/storage/
 
 .DS_Store
