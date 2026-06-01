@@ -180,6 +180,7 @@ O `startup.js` faz automaticamente: bootstrap → migrate → seed → sobe a AP
 | `PORT` | Auto | Railway injeta automaticamente |
 | `FORCE_DB_RESET` | Não | `true` só para resetar banco (temporário) |
 | `FORCE_SEED_ON_START` | Não | `true` força seed mesmo com dados |
+| `RESET_ADMIN_PASSWORD_ON_START` | Não | `true` + `INITIAL_ADMIN_PASSWORD` redefine a senha do admin no deploy (remover depois) |
 
 **Importante:** o backend pode ficar **Unexposed** (sem URL pública). O frontend acessa pela rede interna.
 
@@ -257,9 +258,21 @@ Após o primeiro deploy com seed:
 | Campo | Valor |
 |-------|-------|
 | E-mail | `admin.gestop@franca.sp.gov.br` |
-| Senha | `Gestop@123` |
+| Senha | Valor de `INITIAL_ADMIN_PASSWORD` (só no primeiro seed) |
 
 Outros usuários seed estão em `README.md` e `prisma/seed.ts`.
+
+### Redefinir senha do admin (banco já populado)
+
+1. No serviço **Backend** → **Variables**:
+   ```env
+   INITIAL_ADMIN_PASSWORD=Mudar123
+   RESET_ADMIN_PASSWORD_ON_START=true
+   ```
+2. **Redeploy** (ou push na `main` se deploy automático).
+3. Nos logs, confirmar: `Senha do administrador atualizada com sucesso.`
+4. Login em `/login` com o e-mail admin e a nova senha.
+5. **Remover** `RESET_ADMIN_PASSWORD_ON_START` (ou `false`) e redeploy — evita resetar a senha a cada deploy.
 
 ---
 

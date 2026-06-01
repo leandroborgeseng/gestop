@@ -13,6 +13,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx prisma/seed.ts",
+    "admin:reset-password": "tsx prisma/reset-admin-password.ts",
     "import:unidades": "tsx prisma/import-unidades.ts",
     "import:unidades:dry-run": "tsx prisma/import-unidades.ts --dry-run",
     "import:secretarias": "tsx prisma/import-secretarias.ts",

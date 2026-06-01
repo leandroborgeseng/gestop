@@ -51,6 +51,8 @@ export function logEnvSummary() {
   logInfo('env', `RESET_DATABASE_ON_START=${process.env.RESET_DATABASE_ON_START ?? 'false'}`);
   logInfo('env', `FORCE_DB_RESET=${process.env.FORCE_DB_RESET ?? 'false'}`);
   logInfo('env', `FORCE_SEED_ON_START=${process.env.FORCE_SEED_ON_START ?? 'false'}`);
+  logInfo('env', `RESET_ADMIN_PASSWORD_ON_START=${process.env.RESET_ADMIN_PASSWORD_ON_START ?? 'false'}`);
+  logInfo('env', `INITIAL_ADMIN_PASSWORD=${process.env.INITIAL_ADMIN_PASSWORD ? '[definida]' : '(nao definida)'}`);
   logInfo('env', `JWT_SECRET=${summarizeSecret(process.env.JWT_SECRET)}`);
   logInfo('env', `STORAGE_DRIVER=${process.env.STORAGE_DRIVER ?? 'local'}`);
   logInfo('env', `STORAGE_PUBLIC_URL_BASE=${process.env.STORAGE_PUBLIC_URL_BASE ?? '(nao definido)'}`);
