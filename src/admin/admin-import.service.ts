@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AuditAction, Prisma } from '@prisma/client';
+import { resolveAuditUsuarioId } from '../audit/audit.util';
 import { JwtPayload } from '../auth/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { fetchWebmapGithubStatus } from '../../prisma/webmap-github';
@@ -35,14 +36,19 @@ export class AdminImportService {
     const result = await runWebmapImport(this.prisma, { dryRun });
 
     if (!dryRun) {
+      const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
+
       await this.prisma.logAuditoria.create({
         data: {
-          usuarioId: user.sub,
+          usuarioId,
           acao: AuditAction.SYNC,
           entidadeTipo: WEBMAP_AUDIT_ENTITY,
           entidadeId: result.github.commitSha,
           valorAntigo: Prisma.JsonNull,
-          valorNovo: result as unknown as Prisma.InputJsonValue,
+          valorNovo: {
+            ...(result as unknown as Record<string, unknown>),
+            requestedBy: { sub: user.sub, email: user.email, nome: user.nome },
+          } as Prisma.InputJsonValue,
         },
       });
     }

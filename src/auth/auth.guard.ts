@@ -1,14 +1,18 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { resolveJwtSecret } from '../config/env';
+import { PrismaService } from '../prisma/prisma.service';
 import { AuthenticatedRequest } from './current-user';
 import { verifyJwt } from './jwt';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  canActivate(context: ExecutionContext) {
+  async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const authorization = getNodeHeader(request, 'authorization');
     const token = authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : null;
@@ -19,10 +23,20 @@ export class AuthGuard implements CanActivate {
 
     try {
       request.user = verifyJwt(token, this.getJwtSecret());
-      return true;
     } catch {
       throw new UnauthorizedException('Sessao invalida ou expirada');
     }
+
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: request.user.sub },
+      select: { id: true, ativo: true },
+    });
+
+    if (!usuario?.ativo) {
+      throw new UnauthorizedException('Sessao invalida ou expirada');
+    }
+
+    return true;
   }
 
   private getJwtSecret() {
