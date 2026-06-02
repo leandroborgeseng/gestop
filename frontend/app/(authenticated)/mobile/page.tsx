@@ -9,6 +9,7 @@ import {
   ResponseDraft,
   validateItemResponse,
 } from '@/components/mobile/checklist-item-card';
+import { getPublishedVersion } from '@/components/checklists/checklist-shared';
 import { PageShell } from '@/components/layout/page-shell';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -101,7 +102,10 @@ export default function MobilePage() {
     () => fieldPackage?.checklists.find((checklist) => checklist.id === checklistId) ?? null,
     [fieldPackage, checklistId],
   );
-  const selectedVersion = selectedChecklist?.versoes[0] ?? null;
+  const selectedVersion = useMemo(
+    () => (selectedChecklist ? getPublishedVersion(selectedChecklist.versoes) : null),
+    [selectedChecklist],
+  );
   const selectedUnit = useMemo(
     () => fieldPackage?.unidades.find((unidade) => unidade.id === unidadeId) ?? null,
     [fieldPackage, unidadeId],

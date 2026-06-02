@@ -18,6 +18,7 @@ export default function OrdemServicoDetalhePage() {
   const [ordem, setOrdem] = useState<OrdemServicoDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!params.id) return;
@@ -30,12 +31,15 @@ export default function OrdemServicoDetalhePage() {
   async function transition(status: string) {
     if (!ordem) return;
     setError(null);
+    setBusy(true);
     try {
       await updateOrdemServico(ordem.id, { status, motivo: `Transição via detalhe para ${status}` });
       const refreshed = await getOrdemServico(ordem.id);
       setOrdem(refreshed);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao atualizar OS.');
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -73,8 +77,8 @@ export default function OrdemServicoDetalhePage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {nextStatuses(ordem.status).map((status) => (
-                    <Button key={status} variant="tonal" size="sm" onClick={() => transition(status)}>
-                      Mover para {status}
+                    <Button key={status} variant="tonal" size="sm" disabled={busy} onClick={() => void transition(status)}>
+                      {busy ? 'Salvando...' : `Mover para ${status}`}
                     </Button>
                   ))}
                 </div>

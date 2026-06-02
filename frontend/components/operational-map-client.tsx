@@ -5,14 +5,19 @@ import L from 'leaflet';
 import 'leaflet.markercluster';
 import { MapPinOff } from 'lucide-react';
 import {
+  ESRI_SATELLITE_ATTRIBUTION,
+  ESRI_SATELLITE_TILE_URL,
   FRANCA_BOUNDS,
   FRANCA_CENTER,
   FRANCA_DEFAULT_ZOOM,
   FRANCA_REFERENCIA_FREDERICO_MOURA,
+  MapBasemap,
   OSM_ATTRIBUTION,
   OSM_TILE_URL,
 } from '@/lib/franca-geo';
+import { escapeHtml } from '@/lib/security';
 import { UnidadeOperacional, UnidadeSituacao } from '@/lib/types';
+import { MapViewControls } from '@/components/map/map-view-controls';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -67,11 +72,14 @@ function createReferenceIcon() {
 }
 
 function buildPopupHtml(unidade: UnidadeOperacional) {
+  const nome = escapeHtml(unidade.nome);
+  const secretaria = escapeHtml(unidade.secretaria.sigla);
+  const bairro = escapeHtml(unidade.bairro ?? 'bairro não informado');
   return `
     <div style="min-width:220px;font-family:system-ui,sans-serif;">
-      <strong style="display:block;font-size:14px;color:#0f172a;">${unidade.nome}</strong>
+      <strong style="display:block;font-size:14px;color:#0f172a;">${nome}</strong>
       <span style="display:block;margin-top:4px;font-size:12px;color:#475569;">
-        ${unidade.secretaria.sigla} · ${unidade.bairro ?? 'bairro não informado'}
+        ${secretaria} · ${bairro}
       </span>
       <a
         href="/cco/unidades/${unidade.id}"
@@ -100,11 +108,17 @@ function refreshMapSize(map: L.Map) {
 }
 
 export function OperationalMapClient({ unidades }: { unidades: UnidadeOperacional[] }) {
+  const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const streetLayerRef = useRef<L.TileLayer | null>(null);
+  const satelliteLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerRef = useRef<L.MarkerClusterGroup | null>(null);
   const referenceMarkerRef = useRef<L.Marker | null>(null);
   const [containerReady, setContainerReady] = useState(false);
+  const [basemap, setBasemap] = useState<MapBasemap>('street');
+  const [fullscreenMode, setFullscreenMode] = useState<'off' | 'native' | 'fallback'>('off');
+  const isFullscreen = fullscreenMode !== 'off';
 
   const located = unidades.filter(
     (unidade) => unidade.latitude !== null && unidade.longitude !== null,
@@ -160,6 +174,61 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
     };
   }, [markContainerReady]);
 
+  const toggleFullscreen = useCallback(async () => {
+    const shell = shellRef.current;
+    const map = mapRef.current;
+    if (!shell) return;
+
+    if (fullscreenMode === 'fallback') {
+      setFullscreenMode('off');
+      if (map) refreshMapSize(map);
+      return;
+    }
+
+    if (document.fullscreenElement === shell) {
+      await document.exitFullscreen();
+      if (map) refreshMapSize(map);
+      return;
+    }
+
+    try {
+      if (shell.requestFullscreen) {
+        await shell.requestFullscreen();
+        return;
+      }
+      setFullscreenMode('fallback');
+      if (map) refreshMapSize(map);
+    } catch {
+      setFullscreenMode('fallback');
+      if (map) refreshMapSize(map);
+    }
+  }, [fullscreenMode]);
+
+  useEffect(() => {
+    function onFullscreenChange() {
+      const shell = shellRef.current;
+      const map = mapRef.current;
+      const native = Boolean(shell && document.fullscreenElement === shell);
+      setFullscreenMode(native ? 'native' : 'off');
+      if (map) refreshMapSize(map);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && fullscreenMode === 'fallback') {
+        setFullscreenMode('off');
+        if (mapRef.current) refreshMapSize(mapRef.current);
+      }
+    }
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [fullscreenMode]);
+
   useEffect(() => {
     configureLeafletIcons();
 
@@ -172,10 +241,19 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
       scrollWheelZoom: true,
     }).setView([FRANCA_CENTER.lat, FRANCA_CENTER.lng], FRANCA_DEFAULT_ZOOM);
 
-    L.tileLayer(OSM_TILE_URL, {
+    map.zoomControl.setPosition('bottomright');
+
+    streetLayerRef.current = L.tileLayer(OSM_TILE_URL, {
       attribution: OSM_ATTRIBUTION,
       maxZoom: 19,
-    }).addTo(map);
+    });
+
+    satelliteLayerRef.current = L.tileLayer(ESRI_SATELLITE_TILE_URL, {
+      attribution: `${ESRI_SATELLITE_ATTRIBUTION} · ${OSM_ATTRIBUTION}`,
+      maxZoom: 19,
+    });
+
+    streetLayerRef.current.addTo(map);
 
     markersLayerRef.current = L.markerClusterGroup({
       showCoverageOnHover: false,
@@ -206,10 +284,30 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
     return () => {
       map.remove();
       mapRef.current = null;
+      streetLayerRef.current = null;
+      satelliteLayerRef.current = null;
       markersLayerRef.current = null;
       referenceMarkerRef.current = null;
     };
   }, [containerReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const streetLayer = streetLayerRef.current;
+    const satelliteLayer = satelliteLayerRef.current;
+
+    if (!map || !streetLayer || !satelliteLayer) {
+      return;
+    }
+
+    if (basemap === 'street') {
+      if (map.hasLayer(satelliteLayer)) map.removeLayer(satelliteLayer);
+      if (!map.hasLayer(streetLayer)) streetLayer.addTo(map);
+    } else {
+      if (map.hasLayer(streetLayer)) map.removeLayer(streetLayer);
+      if (!map.hasLayer(satelliteLayer)) satelliteLayer.addTo(map);
+    }
+  }, [basemap]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -256,7 +354,9 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
       <CardHeader className="flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <div>
           <CardTitle>Mapa CCO</CardTitle>
-          <CardDescription>Mapa de Franca/SP com clusters por concentração de próprios.</CardDescription>
+          <CardDescription>
+            Mapa de Franca/SP com clusters por concentração de próprios. Alterne mapa/satélite e maximize em tela cheia.
+          </CardDescription>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="brand">Referência: Frederico Moura, 1426</Badge>
@@ -265,8 +365,21 @@ export function OperationalMapClient({ unidades }: { unidades: UnidadeOperaciona
       </CardHeader>
 
       <CardContent className="pt-0">
-        <div className="gestop-map-shell relative rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)]">
+        <div
+          ref={shellRef}
+          className={[
+            'gestop-map-shell relative overflow-hidden rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)]',
+            fullscreenMode === 'fallback' ? 'gestop-map-fullscreen fixed inset-0 z-[9999]' : '',
+          ].join(' ')}
+        >
           <div ref={containerRef} className="gestop-map-canvas" />
+
+          <MapViewControls
+            basemap={basemap}
+            onBasemapChange={setBasemap}
+            isFullscreen={isFullscreen}
+            onToggleFullscreen={() => void toggleFullscreen()}
+          />
 
           {located.length === 0 ? (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--md-surface)]/75 p-6">

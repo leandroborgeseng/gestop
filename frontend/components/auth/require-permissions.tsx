@@ -32,7 +32,7 @@ export function RequirePermissions({
     const hasAll = permissions.every((permission) => stored.user.permissoes.includes(permission));
 
     if (!hasAll) {
-      router.replace('/login?reason=denied');
+      router.replace('/cco?reason=denied');
       setAllowed(false);
       return;
     }

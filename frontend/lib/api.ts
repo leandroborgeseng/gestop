@@ -26,6 +26,7 @@ import {
   WebmapSyncAllResult,
   WebmapImportStatus,
 } from './types';
+import { notifyAuthExpired } from './security';
 
 // Sempre usa proxy interno do Next.js no browser.
 // NEXT_PUBLIC_API_URL apontando para URL externa quebra login no Railway.
@@ -82,6 +83,11 @@ export function clearStoredAuth() {
   }
 }
 
+function handleUnauthorized() {
+  clearStoredAuth();
+  notifyAuthExpired();
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getStoredAuth()?.accessToken;
   let response: Response;
@@ -101,7 +107,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (response.status === 401) {
-    clearStoredAuth();
+    handleUnauthorized();
     throw new Error('Sessão expirada. Faça login novamente.');
   }
 
@@ -390,7 +396,14 @@ export function purgeAuditoriaLgpd() {
 }
 
 async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, init);
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, init);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'erro de rede';
+    throw new Error(`Falha de conexao com a API (${API_BASE_URL}). ${detail}`);
+  }
+
   if (!response.ok) {
     throw new Error(await readApiError(response, 'Falha na requisicao publica.'));
   }
@@ -451,9 +464,25 @@ async function downloadRelatorio(
   const token = getStoredAuth()?.accessToken;
   const query = new URLSearchParams(params);
   const suffix = query.toString() ? `?${query.toString()}` : '';
-  const response = await fetch(`${API_BASE_URL}/relatorios/export/${tipo}.${formato}${suffix}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}/relatorios/export/${tipo}.${formato}${suffix}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : 'erro de rede';
+    throw new Error(`Falha de conexao ao exportar relatorio. ${detail}`);
+  }
+
+  if (response.status === 401) {
+    handleUnauthorized();
+    throw new Error('Sessão expirada. Faça login novamente.');
+  }
+
+  if (response.status === 403) {
+    throw new Error('Acesso negado para exportar este relatorio.');
+  }
 
   if (!response.ok) {
     throw new Error(await readApiError(response, 'Falha ao exportar relatorio.'));

@@ -3,20 +3,22 @@
 import { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import { FRANCA_BOUNDS, FRANCA_CENTER, OSM_ATTRIBUTION, OSM_TILE_URL } from '@/lib/franca-geo';
+import { escapeHtml } from '@/lib/security';
 import { WebmapSkippedUnit } from '@/lib/types';
 
 export function WebmapSkippedMap({ units }: { units: WebmapSkippedUnit[] }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.LayerGroup | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || units.length === 0) return;
 
     if (!mapRef.current) {
-      mapRef.current = L.map(containerRef.current, {
-        scrollWheelZoom: false,
-      }).setView([FRANCA_CENTER.lat, FRANCA_CENTER.lng], 13);
-
+      mapRef.current = L.map(containerRef.current, { scrollWheelZoom: false }).setView(
+        [FRANCA_CENTER.lat, FRANCA_CENTER.lng],
+        13,
+      );
       L.tileLayer(OSM_TILE_URL, { attribution: OSM_ATTRIBUTION }).addTo(mapRef.current);
       mapRef.current.fitBounds([
         [FRANCA_BOUNDS.southWest.lat, FRANCA_BOUNDS.southWest.lng],
@@ -25,8 +27,11 @@ export function WebmapSkippedMap({ units }: { units: WebmapSkippedUnit[] }) {
     }
 
     const map = mapRef.current;
-    const group = L.layerGroup();
+    if (layerRef.current) {
+      map.removeLayer(layerRef.current);
+    }
 
+    const group = L.layerGroup();
     for (const unit of units) {
       const marker = L.circleMarker([unit.latitude, unit.longitude], {
         radius: 7,
@@ -36,17 +41,31 @@ export function WebmapSkippedMap({ units }: { units: WebmapSkippedUnit[] }) {
         weight: 2,
       });
       marker.bindPopup(
-        `<strong>${unit.nome}</strong><br/>${unit.secretariaSigla}<br/><small>${unit.codigoPatrimonial}</small>`,
+        `<strong>${escapeHtml(unit.nome)}</strong><br/>${escapeHtml(unit.secretariaSigla)}<br/><small>${escapeHtml(unit.codigoPatrimonial)}</small>`,
       );
       marker.addTo(group);
     }
 
     group.addTo(map);
+    layerRef.current = group;
 
     return () => {
-      group.clearLayers();
+      if (layerRef.current && mapRef.current) {
+        mapRef.current.removeLayer(layerRef.current);
+        layerRef.current = null;
+      }
     };
   }, [units]);
+
+  useEffect(() => {
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        layerRef.current = null;
+      }
+    };
+  }, []);
 
   if (units.length === 0) return null;
 

@@ -16,6 +16,7 @@ export default function IntegracoesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<'retry' | 'notify' | null>(null);
 
   async function load() {
     setLoading(true);
@@ -30,16 +31,33 @@ export default function IntegracoesPage() {
   }, []);
 
   async function retry() {
+    setActionLoading('retry');
+    setError(null);
     setSuccess(null);
-    const result = await retrySyncFalhas();
-    setSuccess(`${result.reenfileirados} evento(s) reenfileirado(s).`);
-    await load();
+    try {
+      const result = await retrySyncFalhas();
+      setSuccess(`${result.reenfileirados} evento(s) reenfileirado(s).`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao reenfileirar sync.');
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   async function notify() {
-    const result = await sendIntegrationNotification('teste-operacional', { origem: 'painel-integracoes' });
-    setSuccess(`Notificação enviada via ${result.adapter}${result.delivered ? '' : ' (falhou)'}.`);
-    await load();
+    setActionLoading('notify');
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await sendIntegrationNotification('teste-operacional', { origem: 'painel-integracoes' });
+      setSuccess(`Notificação enviada via ${result.adapter}${result.delivered ? '' : ' (falhou)'}.`);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao enviar notificação.');
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   return (
@@ -59,9 +77,9 @@ export default function IntegracoesPage() {
             <Card elevation={1}>
               <CardHeader className="flex-row items-center justify-between space-y-0">
                 <CardTitle>Falhas de sincronização</CardTitle>
-                <Button variant="filled" size="sm" onClick={() => void retry()}>
+                <Button variant="filled" size="sm" disabled={actionLoading !== null} onClick={() => void retry()}>
                   <RefreshCcw className="h-4 w-4" />
-                  Retentar
+                  {actionLoading === 'retry' ? 'Retentando...' : 'Retentar'}
                 </Button>
               </CardHeader>
               <CardContent className="space-y-2 pt-0">
@@ -86,12 +104,15 @@ export default function IntegracoesPage() {
             <Card elevation={1}>
               <CardHeader className="flex-row items-center justify-between space-y-0">
                 <CardTitle>Notificações</CardTitle>
-                <Button variant="tonal" size="sm" onClick={() => void notify()}>
+                <Button variant="tonal" size="sm" disabled={actionLoading !== null} onClick={() => void notify()}>
                   <Send className="h-4 w-4" />
-                  Enviar teste
+                  {actionLoading === 'notify' ? 'Enviando...' : 'Enviar teste'}
                 </Button>
               </CardHeader>
               <CardContent className="space-y-2 pt-0">
+                {eventos.auditoriaIntegracoes.length === 0 ? (
+                  <p className="md-body-md py-4 text-[var(--md-on-surface-variant)]">Nenhuma notificação registrada.</p>
+                ) : null}
                 {eventos.auditoriaIntegracoes.map((item) => (
                   <div
                     key={item.id}

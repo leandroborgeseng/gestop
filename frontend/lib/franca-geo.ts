@@ -24,3 +24,11 @@ export const OSM_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
 
 export const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+export const ESRI_SATELLITE_TILE_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+export const ESRI_SATELLITE_ATTRIBUTION =
+  'Tiles &copy; <a href="https://www.esri.com/">Esri</a>';
+
+export type MapBasemap = 'street' | 'satellite';

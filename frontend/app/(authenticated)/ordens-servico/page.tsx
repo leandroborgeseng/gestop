@@ -17,6 +17,7 @@ export default function OrdensServicoPage() {
   const [ordens, setOrdens] = useState<OrdemServicoResumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -32,11 +33,14 @@ export default function OrdensServicoPage() {
 
   async function transition(id: string, status: string) {
     setError(null);
+    setBusyId(id);
     try {
       await updateOrdemServico(id, { status, motivo: `Transição via painel para ${status}` });
       await listOrdensServico().then(setOrdens);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao atualizar OS.');
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -104,8 +108,14 @@ export default function OrdensServicoPage() {
                       Ver detalhe
                     </Link>
                     {nextStatuses(ordem.status).map((status) => (
-                      <Button key={status} variant="tonal" size="sm" onClick={() => transition(ordem.id, status)}>
-                        Mover para {status}
+                      <Button
+                        key={status}
+                        variant="tonal"
+                        size="sm"
+                        disabled={busyId === ordem.id}
+                        onClick={() => void transition(ordem.id, status)}
+                      >
+                        {busyId === ordem.id ? 'Salvando...' : `Mover para ${status}`}
                       </Button>
                     ))}
                   </div>

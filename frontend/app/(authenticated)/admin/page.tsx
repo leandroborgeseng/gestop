@@ -74,8 +74,10 @@ export default function AdminPage() {
       await action();
       setSuccess(message);
       await load();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Operação não concluída.');
+      return false;
     }
   }
 
@@ -139,11 +141,11 @@ export default function AdminPage() {
   );
 }
 
-function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretaria[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<void> }) {
+function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretaria[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    await mutate(
+    const ok = await mutate(
       () =>
         saveAdminSecretaria({
           nome: String(form.get('nome')),
@@ -154,7 +156,7 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
         }),
       'Secretaria cadastrada.',
     );
-    event.currentTarget.reset();
+    if (ok) event.currentTarget.reset();
   }
 
   return (
@@ -189,13 +191,15 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
   );
 }
 
-function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSecretaria[]; unidades: AdminUnidade[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<void> }) {
+function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSecretaria[]; unidades: AdminUnidade[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    await mutate(
-      () =>
-        saveAdminUnidade({
+    const ok = await mutate(
+      () => {
+        const latitude = parseCoordinate(form.get('latitude'));
+        const longitude = parseCoordinate(form.get('longitude'));
+        return saveAdminUnidade({
           secretariaId: String(form.get('secretariaId')),
           codigoPatrimonial: String(form.get('codigoPatrimonial')),
           nome: String(form.get('nome')),
@@ -203,14 +207,15 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
           endereco: String(form.get('endereco')),
           bairro: String(form.get('bairro') || ''),
           cep: String(form.get('cep') || ''),
-          latitude: Number(form.get('latitude')),
-          longitude: Number(form.get('longitude')),
+          latitude,
+          longitude,
           raioValidacaoMetros: Number(form.get('raioValidacaoMetros') || 200),
           ativo: true,
-        }),
+        });
+      },
       'Próprio público cadastrado.',
     );
-    event.currentTarget.reset();
+    if (ok) event.currentTarget.reset();
   }
 
   return (
@@ -281,7 +286,10 @@ function usuarioPayloadFromForm(form: FormData, defaultPerfil: string, ativo: bo
       payload.senha = senha;
     }
   } else {
-    payload.senha = senha || 'Gestop@123';
+    if (!senha || senha.length < 12) {
+      throw new Error('Informe uma senha inicial com pelo menos 12 caracteres.');
+    }
+    payload.senha = senha;
   }
 
   return payload;
@@ -300,7 +308,7 @@ function usuarioPayloadFromRecord(usuario: AdminUsuario, ativo: boolean) {
   };
 }
 
-function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias: AdminSecretaria[]; usuarios: AdminUsuario[]; perfis: AdminPerfil[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<void> }) {
+function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias: AdminSecretaria[]; usuarios: AdminUsuario[]; perfis: AdminPerfil[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
   const defaultPerfil = useMemo(() => perfis[0]?.id ?? '', [perfis]);
   const [editing, setEditing] = useState<AdminUsuario | null>(null);
 
@@ -308,16 +316,17 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const isEdit = Boolean(editing);
-    await mutate(
-      () =>
-        saveAdminUsuario(
-          usuarioPayloadFromForm(form, defaultPerfil, editing?.ativo ?? true, editing?.id),
-          editing?.id,
-        ),
+    const ok = await mutate(
+      () => {
+        const payload = usuarioPayloadFromForm(form, defaultPerfil, editing?.ativo ?? true, editing?.id);
+        return saveAdminUsuario(payload, editing?.id);
+      },
       isEdit ? 'Usuário atualizado.' : 'Usuário cadastrado.',
     );
-    setEditing(null);
-    event.currentTarget.reset();
+    if (ok) {
+      setEditing(null);
+      event.currentTarget.reset();
+    }
   }
 
   async function toggleAtivo(usuario: AdminUsuario) {
@@ -352,13 +361,14 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
           <Field label="Cargo">
             <Input name="cargo" defaultValue={editing?.cargo ?? ''} />
           </Field>
-          <Field label={editing ? 'Nova senha (opcional)' : 'Senha inicial'}>
+          <Field label={editing ? 'Nova senha (opcional)' : 'Senha inicial (mín. 12 caracteres)'}>
             <Input
               name="senha"
               type="password"
               autoComplete="new-password"
-              placeholder={editing ? 'Deixe em branco para manter a atual' : undefined}
-              defaultValue={editing ? '' : 'Gestop@123'}
+              minLength={editing ? undefined : 12}
+              required={!editing}
+              placeholder={editing ? 'Deixe em branco para manter a atual' : 'Defina uma senha forte'}
             />
           </Field>
           <Field label="Secretaria">
@@ -440,4 +450,16 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
       </FormSection>
     </FormGrid>
   );
+}
+
+function parseCoordinate(value: FormDataEntryValue | null): number {
+  const raw = String(value ?? '').trim().replace(',', '.');
+  if (!raw) {
+    throw new Error('Informe latitude e longitude válidas.');
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('Coordenada inválida. Use números decimais (ex.: -20.5386).');
+  }
+  return parsed;
 }
