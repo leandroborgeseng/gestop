@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { useParams } from 'next/navigation';
 import {
   Building2,
+  Camera,
   CheckCircle2,
   Droplets,
   Lightbulb,
@@ -12,6 +13,7 @@ import {
   Megaphone,
   Shield,
   Sparkles,
+  X,
 } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -45,6 +47,8 @@ export default function ChamadoPublicoPage() {
   const [solicitanteNome, setSolicitanteNome] = useState('');
   const [solicitanteEmail, setSolicitanteEmail] = useState('');
   const [solicitanteTelefone, setSolicitanteTelefone] = useState('');
+  const [fotoDataUrl, setFotoDataUrl] = useState<string | null>(null);
+  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -74,6 +78,7 @@ export default function ChamadoPublicoPage() {
         solicitanteNome: solicitanteNome || undefined,
         solicitanteEmail: solicitanteEmail || undefined,
         solicitanteTelefone: solicitanteTelefone || undefined,
+        fotoDataUrl: fotoDataUrl ?? undefined,
       });
       setChamado(created);
     } catch (err) {
@@ -81,6 +86,23 @@ export default function ChamadoPublicoPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handlePhotoSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setError('Selecione um arquivo de imagem (JPEG, PNG ou WebP).');
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setError('A foto deve ter no máximo 8 MB.');
+      return;
+    }
+    setError(null);
+    const dataUrl = await readFileAsDataUrl(file);
+    setFotoDataUrl(dataUrl);
+    setFotoPreview(dataUrl);
   }
 
   return (
@@ -171,6 +193,41 @@ export default function ChamadoPublicoPage() {
                 />
               </label>
 
+              <div className="mb-4">
+                <span className="mb-1.5 block text-[12.5px] font-semibold text-[var(--ink-2)]">
+                  Foto do problema <span className="font-medium text-[var(--ink-3)]">(opcional)</span>
+                </span>
+                {fotoPreview ? (
+                  <div className="relative overflow-hidden rounded-[11px] border border-[var(--line)]">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={fotoPreview} alt="Prévia da foto" className="max-h-48 w-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFotoDataUrl(null);
+                        setFotoPreview(null);
+                      }}
+                      className="absolute top-2 right-2 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--ink)]/70 text-white"
+                      aria-label="Remover foto"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex h-[60px] w-full cursor-pointer items-center justify-center gap-2 rounded-[11px] border-[1.5px] border-dashed border-[var(--line)] bg-[var(--surface-2)] text-[13px] font-semibold text-[var(--brand)] hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]">
+                    <Camera className="h-4 w-4" />
+                    Adicionar foto
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/heic"
+                      capture="environment"
+                      className="sr-only"
+                      onChange={(event) => void handlePhotoSelect(event)}
+                    />
+                  </label>
+                )}
+              </div>
+
               <label className="mb-4 block">
                 <span className="mb-1.5 block text-[12.5px] font-semibold text-[var(--ink-2)]">
                   Seu nome <span className="font-medium text-[var(--ink-3)]">(opcional)</span>
@@ -243,4 +300,13 @@ export default function ChamadoPublicoPage() {
       <p className="mt-5 text-center text-[12px] text-[var(--ink-3)]">Prefeitura Municipal de Franca · GestOP</p>
     </main>
   );
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }

@@ -9,6 +9,7 @@ import {
 import { JwtPayload } from '../auth/jwt';
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateChamadoDto, PublicCreateChamadoDto, UpdateChamadoStatusDto } from './chamados.dto';
 import { buildChamadoCode } from './chamados.rules';
 
@@ -17,6 +18,7 @@ export class ChamadosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly integracoesService: IntegracoesService,
+    private readonly storageService: StorageService,
   ) {}
 
   listChamados() {
@@ -91,6 +93,14 @@ export class ChamadosService {
     });
     if (!unidade) throw new NotFoundException('QR Code invalido ou proprio inativo.');
 
+    let fotoUrl: string | undefined;
+    let fotoMimeType: string | undefined;
+    if (dto.fotoDataUrl?.trim()) {
+      const stored = await this.storageService.persistEvidenceUrl(dto.fotoDataUrl.trim());
+      fotoUrl = stored.url;
+      fotoMimeType = stored.mimeType;
+    }
+
     const sequence = (await this.prisma.chamado.count()) + 1;
     const chamado = await this.prisma.chamado.create({
       data: {
@@ -104,6 +114,8 @@ export class ChamadosService {
         solicitanteTelefone: dto.solicitanteTelefone?.trim(),
         latitude: unidade.latitude,
         longitude: unidade.longitude,
+        fotoUrl,
+        fotoMimeType,
       },
       include: this.includeRelations(),
     });

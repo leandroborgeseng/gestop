@@ -456,6 +456,8 @@ export type ChamadoResumo = {
   solicitanteNome?: string | null;
   solicitanteEmail?: string | null;
   solicitanteTelefone?: string | null;
+  fotoUrl?: string | null;
+  fotoMimeType?: string | null;
   createdAt: string;
   encerradoEm?: string | null;
   secretaria: SecretariaOption;

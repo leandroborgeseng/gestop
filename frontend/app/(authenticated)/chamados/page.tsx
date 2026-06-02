@@ -373,6 +373,21 @@ function ChamadoDetailPanel({
             </div>
           ) : null}
 
+          {chamado.fotoUrl ? (
+            <div>
+              <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Foto anexada</p>
+              <a
+                href={chamado.fotoUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2 block overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={chamado.fotoUrl} alt="Foto do chamado" className="max-h-56 w-full object-cover" />
+              </a>
+            </div>
+          ) : null}
+
           {chamado.ordemServico ? (
             <div className="rounded-[var(--r-md)] border border-[var(--brand-soft)] bg-[var(--brand-soft)] p-4">
               <p className="flex items-center gap-2 text-[12px] font-bold text-[var(--brand-hover)]">

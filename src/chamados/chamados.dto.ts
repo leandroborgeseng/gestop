@@ -46,6 +46,11 @@ export class PublicCreateChamadoDto {
   @IsOptional()
   @IsString()
   solicitanteTelefone?: string;
+
+  /** Data URL (base64) de foto opcional enviada pelo cidadão via QR Code. */
+  @IsOptional()
+  @IsString()
+  fotoDataUrl?: string;
 }
 
 export class UpdateChamadoStatusDto {

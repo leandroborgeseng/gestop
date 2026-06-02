@@ -460,6 +460,7 @@ export function createPublicChamado(
     solicitanteNome?: string;
     solicitanteEmail?: string;
     solicitanteTelefone?: string;
+    fotoDataUrl?: string;
   },
 ) {
   return publicRequest<ChamadoResumo>(`/public/unidades/${encodeURIComponent(codigoPatrimonial)}/chamados`, {
