@@ -23,6 +23,35 @@ export type WebmapImportOptions = {
   logger?: Pick<Console, 'log' | 'warn' | 'error'>;
 };
 
+export type WebmapSkipReason = 'SECRETARIA_NAO_CADASTRADA';
+export type WebmapRejectReason = 'SEM_COORDENADAS' | 'SEM_NOME';
+
+export type WebmapSkippedUnit = {
+  reason: WebmapSkipReason;
+  codigoPatrimonial: string;
+  nome: string;
+  secretariaSigla: string;
+  layerFile: string;
+  layerGroup: WebmapLayerConfig['group'];
+  endereco: string;
+  bairro: string | null;
+  unidadeMunicipal: string | null;
+  latitude: number;
+  longitude: number;
+  sugestao: string;
+};
+
+export type WebmapRejectedFeature = {
+  reason: WebmapRejectReason;
+  layerFile: string;
+  layerGroup: WebmapLayerConfig['group'];
+  fid: string;
+  nomeParcial: string | null;
+  unidadeMunicipal: string | null;
+  cadastroImobiliario: string | null;
+  sugestao: string;
+};
+
 export type WebmapImportResult = {
   dryRun: boolean;
   featuresRead: number;
@@ -30,6 +59,9 @@ export type WebmapImportResult = {
   created: number;
   updated: number;
   skipped: number;
+  skippedUnits: WebmapSkippedUnit[];
+  rejectedFeatures: WebmapRejectedFeature[];
+  secretariasCadastradas: string[];
   layersProcessed: number;
   layersFailed: number;
   totalUnidadesInDb: number;
@@ -87,8 +119,10 @@ export async function runWebmapImport(
 
   const secretarias = await prisma.secretaria.findMany({ select: { id: true, sigla: true } });
   const secretariaBySigla = new Map(secretarias.map((item) => [item.sigla.toUpperCase(), item.id]));
+  const secretariasCadastradas = secretarias.map((item) => item.sigla).sort();
 
   const byCodigo = new Map<string, NormalizedUnidade>();
+  const rejectedFeatures: WebmapRejectedFeature[] = [];
   let featuresRead = 0;
   let layersFailed = 0;
   let layersProcessed = 0;
@@ -102,7 +136,10 @@ export async function runWebmapImport(
 
       for (const feature of collection.features) {
         const normalized = normalizeFeature(feature, layer, github.commitSha);
-        if (!normalized) continue;
+        if (!normalized) {
+          rejectedFeatures.push(buildRejectedFeature(feature, layer));
+          continue;
+        }
 
         const existing = byCodigo.get(normalized.codigoPatrimonial);
         if (existing) {
@@ -122,16 +159,21 @@ export async function runWebmapImport(
     }
   }
 
-  logInfo('webmap', `${featuresRead} features lidas -> ${byCodigo.size} unidades unicas.`);
+  logInfo(
+    'webmap',
+    `${featuresRead} features lidas -> ${byCodigo.size} unidades unicas, ${rejectedFeatures.length} rejeitadas na leitura.`,
+  );
 
   let created = 0;
   let updated = 0;
   let skipped = 0;
+  const skippedUnits: WebmapSkippedUnit[] = [];
 
   for (const unidade of byCodigo.values()) {
     const secretariaId = secretariaBySigla.get(unidade.secretariaSigla.toUpperCase());
     if (!secretariaId) {
       skipped += 1;
+      skippedUnits.push(buildSkippedUnit(unidade, secretariasCadastradas));
       logWarn(
         'webmap',
         `Secretaria ${unidade.secretariaSigla} nao encontrada para ${unidade.codigoPatrimonial}.`,
@@ -177,9 +219,12 @@ export async function runWebmapImport(
 
   logInfo(
     'webmap',
-    `Importacao concluida: ${created} criadas, ${updated} atualizadas, ${skipped} ignoradas, ${layersFailed} camadas com erro.`,
+    `Importacao concluida: ${created} criadas, ${updated} atualizadas, ${skipped} ignoradas, ${rejectedFeatures.length} rejeitadas na leitura, ${layersFailed} camadas com erro.`,
   );
   logInfo('webmap', `Total de unidades no banco: ${totalUnidadesInDb}`);
+
+  skippedUnits.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  rejectedFeatures.sort((a, b) => a.layerFile.localeCompare(b.layerFile, 'pt-BR'));
 
   return {
     dryRun,
@@ -188,6 +233,9 @@ export async function runWebmapImport(
     created,
     updated,
     skipped,
+    skippedUnits,
+    rejectedFeatures,
+    secretariasCadastradas,
     layersProcessed,
     layersFailed,
     totalUnidadesInDb,
@@ -227,6 +275,52 @@ export function parseFeatureCollection(content: string, label: string): GeoFeatu
   }
 
   throw new Error(`FeatureCollection incompleta em ${label}`);
+}
+
+function buildSkippedUnit(unidade: NormalizedUnidade, secretariasCadastradas: string[]): WebmapSkippedUnit {
+  const props = (unidade.metadata.webmapProperties ?? {}) as Record<string, unknown>;
+  const unidadeMunicipal =
+    pickString(props, ['unidade_municipal', 'unidade']) ?? unidade.secretariaSigla;
+
+  return {
+    reason: 'SECRETARIA_NAO_CADASTRADA',
+    codigoPatrimonial: unidade.codigoPatrimonial,
+    nome: unidade.nome,
+    secretariaSigla: unidade.secretariaSigla,
+    layerFile: String((unidade.metadata.webmapSource as Record<string, unknown>)?.layerFile ?? ''),
+    layerGroup: String((unidade.metadata.webmapSource as Record<string, unknown>)?.group ?? '') as WebmapLayerConfig['group'],
+    endereco: unidade.endereco,
+    bairro: unidade.bairro,
+    unidadeMunicipal,
+    latitude: unidade.latitude,
+    longitude: unidade.longitude,
+    sugestao: `Cadastrar a secretaria "${unidade.secretariaSigla}" no GestOP ou corrigir o campo unidade_municipal no QGIS. Secretarias disponiveis: ${secretariasCadastradas.join(', ')}.`,
+  };
+}
+
+function buildRejectedFeature(feature: GeoFeature, layer: WebmapLayerConfig): WebmapRejectedFeature {
+  const props = feature.properties ?? {};
+  const fid = String(props.fid ?? props.FID ?? '0');
+  const coords = extractCoordinates(feature);
+  const nome = extractNome(props, layer);
+  const cadastro = extractCadastro(props);
+
+  const reason: WebmapRejectReason = !coords ? 'SEM_COORDENADAS' : 'SEM_NOME';
+  const sugestao =
+    reason === 'SEM_COORDENADAS'
+      ? 'Incluir geometria Point valida ou campos lat/long no QGIS.'
+      : 'Preencher nome da unidade (unidade_escolar, proprio_municipal, nome ou endereco RUA+BAIRRO para imoveis).';
+
+  return {
+    reason,
+    layerFile: layer.file,
+    layerGroup: layer.group,
+    fid,
+    nomeParcial: nome,
+    unidadeMunicipal: pickString(props, ['unidade_municipal', 'unidade']),
+    cadastroImobiliario: cadastro,
+    sugestao,
+  };
 }
 
 function normalizeFeature(

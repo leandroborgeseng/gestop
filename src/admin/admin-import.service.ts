@@ -83,6 +83,8 @@ export class AdminImportService {
       updated: payload?.updated ?? null,
       uniqueUnits: payload?.uniqueUnits ?? null,
       skipped: payload?.skipped ?? null,
+      skippedUnits: payload?.skippedUnits ?? [],
+      rejectedFeatures: payload?.rejectedFeatures ?? [],
       layersFailed: payload?.layersFailed ?? null,
     };
   }

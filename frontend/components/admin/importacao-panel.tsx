@@ -4,10 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { Download, ExternalLink, RefreshCw } from 'lucide-react';
 import { getWebmapImportStatus, syncWebmapImport } from '@/lib/api';
 import { WebmapImportResult, WebmapImportStatus } from '@/lib/types';
+import { WebmapImportReport } from '@/components/admin/webmap-import-report';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { FormSection } from '@/components/ui/form-section';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 
 export function ImportacaoPanel({
@@ -17,6 +17,7 @@ export function ImportacaoPanel({
 }) {
   const [status, setStatus] = useState<WebmapImportStatus | null>(null);
   const [result, setResult] = useState<WebmapImportResult | null>(null);
+  const [lastReport, setLastReport] = useState<WebmapImportResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +26,25 @@ export function ImportacaoPanel({
     setLoading(true);
     setError(null);
     try {
-      setStatus(await getWebmapImportStatus());
+      const nextStatus = await getWebmapImportStatus();
+      setStatus(nextStatus);
+      if (nextStatus.lastSync?.skippedUnits?.length) {
+        setLastReport({
+          dryRun: false,
+          featuresRead: 0,
+          uniqueUnits: nextStatus.lastSync.uniqueUnits ?? 0,
+          created: nextStatus.lastSync.created ?? 0,
+          updated: nextStatus.lastSync.updated ?? 0,
+          skipped: nextStatus.lastSync.skipped ?? 0,
+          skippedUnits: nextStatus.lastSync.skippedUnits,
+          rejectedFeatures: nextStatus.lastSync.rejectedFeatures,
+          secretariasCadastradas: [],
+          layersProcessed: 38,
+          layersFailed: nextStatus.lastSync.layersFailed ?? 0,
+          totalUnidadesInDb: nextStatus.unidadesCount,
+          github: nextStatus.github,
+        });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar status do webmap.');
     } finally {
@@ -129,6 +148,13 @@ export function ImportacaoPanel({
             <Alert variant="success">Banco alinhado com o último commit importado do webmap.</Alert>
           ) : null}
 
+          {status.lastSync?.skipped && status.lastSync.skipped > 0 && !status.lastSync.skippedUnits.length ? (
+            <Alert variant="warning">
+              A última importação ignorou {status.lastSync.skipped} unidades. Execute uma simulação (dry-run) para
+              gerar o relatório detalhado com CSV para a equipe do QGIS.
+            </Alert>
+          ) : null}
+
           <div className="flex flex-wrap gap-3">
             <Button
               variant="filled"
@@ -159,18 +185,15 @@ export function ImportacaoPanel({
       </Card>
 
       {result ? (
-        <FormSection title={result.dryRun ? 'Resultado da simulação' : 'Resultado da importação'}>
-          <ul className="md-body-md space-y-1 text-[var(--md-on-surface-variant)]">
-            <li>Features lidas: {result.featuresRead}</li>
-            <li>Unidades únicas: {result.uniqueUnits}</li>
-            <li>Criadas: {result.created} · Atualizadas: {result.updated} · Ignoradas: {result.skipped}</li>
-            <li>Camadas: {result.layersProcessed} ok · {result.layersFailed} com erro</li>
-            <li>Total no banco: {result.totalUnidadesInDb}</li>
-            <li>
-              GitHub: {result.github.commitSha.slice(0, 7)} — {result.github.commitMessage}
-            </li>
-          </ul>
-        </FormSection>
+        <WebmapImportReport
+          result={result}
+          title={result.dryRun ? 'Resultado da simulação' : 'Resultado da importação'}
+        />
+      ) : lastReport && lastReport.skipped > 0 ? (
+        <WebmapImportReport
+          result={lastReport}
+          title="Relatório da última importação (unidades ignoradas)"
+        />
       ) : null}
     </div>
   );

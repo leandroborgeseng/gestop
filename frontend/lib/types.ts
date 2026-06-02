@@ -187,6 +187,35 @@ export type WebmapImportGithub = {
   htmlUrl: string;
 };
 
+export type WebmapSkipReason = 'SECRETARIA_NAO_CADASTRADA';
+export type WebmapRejectReason = 'SEM_COORDENADAS' | 'SEM_NOME';
+
+export type WebmapSkippedUnit = {
+  reason: WebmapSkipReason;
+  codigoPatrimonial: string;
+  nome: string;
+  secretariaSigla: string;
+  layerFile: string;
+  layerGroup: string;
+  endereco: string;
+  bairro: string | null;
+  unidadeMunicipal: string | null;
+  latitude: number;
+  longitude: number;
+  sugestao: string;
+};
+
+export type WebmapRejectedFeature = {
+  reason: WebmapRejectReason;
+  layerFile: string;
+  layerGroup: string;
+  fid: string;
+  nomeParcial: string | null;
+  unidadeMunicipal: string | null;
+  cadastroImobiliario: string | null;
+  sugestao: string;
+};
+
 export type WebmapImportLastSync = {
   syncedAt: string;
   githubCommitSha: string;
@@ -195,6 +224,8 @@ export type WebmapImportLastSync = {
   updated: number | null;
   uniqueUnits: number | null;
   skipped: number | null;
+  skippedUnits: WebmapSkippedUnit[];
+  rejectedFeatures: WebmapRejectedFeature[];
   layersFailed: number | null;
 };
 
@@ -214,6 +245,9 @@ export type WebmapImportResult = {
   created: number;
   updated: number;
   skipped: number;
+  skippedUnits: WebmapSkippedUnit[];
+  rejectedFeatures: WebmapRejectedFeature[];
+  secretariasCadastradas: string[];
   layersProcessed: number;
   layersFailed: number;
   totalUnidadesInDb: number;
