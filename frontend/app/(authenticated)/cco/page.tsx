@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Activity, AlertTriangle, Building2, ClipboardCheck, DatabaseZap, Search, SlidersHorizontal } from 'lucide-react';
 import { getOpcoesFiltroUnidades, getResumoOperacional, getUnidades } from '@/lib/api';
@@ -68,10 +68,14 @@ function CcoPageContent() {
     [unidades, selectedId],
   );
 
-  function selectUnidade(id: string) {
+  const selectUnidade = useCallback((id: string) => {
     setSelectedId(id);
     setDrawerOpen(true);
-  }
+  }, []);
+
+  const handleMapHover = useCallback((id: string | null) => {
+    setHoveredId(id);
+  }, []);
 
   useEffect(() => {
     const search = searchParams.get('search');
@@ -216,7 +220,7 @@ function CcoPageContent() {
         </div>
       ) : null}
 
-      <div className="grid min-h-0 flex-1 gap-3.5 xl:grid-cols-[minmax(348px,388px)_1fr]">
+      <div className="grid min-h-[min(420px,55dvh)] flex-1 gap-3.5 xl:min-h-[min(560px,calc(100dvh-320px))] xl:grid-cols-[minmax(348px,388px)_1fr]">
         <div className="cco-list-panel flex min-h-[420px] flex-col overflow-hidden xl:min-h-0">
           <div className="filters shrink-0 space-y-2 border-b border-[var(--line-2)] bg-[var(--surface)] p-3.5">
             <div className="flex items-center gap-2">
@@ -320,7 +324,7 @@ function CcoPageContent() {
           selectedId={selectedId}
           hoveredId={hoveredId}
           onSelect={selectUnidade}
-          onHover={setHoveredId}
+          onHover={handleMapHover}
         />
       </div>
 

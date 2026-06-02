@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet.markercluster';
 import { MapPinOff } from 'lucide-react';
@@ -89,6 +89,14 @@ function refreshMapSize(map: L.Map) {
   map.invalidateSize({ animate: false });
   requestAnimationFrame(() => map.invalidateSize({ animate: false }));
   window.setTimeout(() => map.invalidateSize({ animate: false }), 120);
+  window.setTimeout(() => map.invalidateSize({ animate: false }), 400);
+}
+
+function locatedFingerprint(unidades: UnidadeOperacional[]) {
+  return unidades
+    .filter((u) => u.latitude !== null && u.longitude !== null)
+    .map((u) => `${u.id}:${u.latitude}:${u.longitude}:${u.situacao}`)
+    .join('|');
 }
 
 export function OperationalMapClient({
@@ -114,12 +122,21 @@ export function OperationalMapClient({
   const markerByIdRef = useRef<Map<string, L.Marker>>(new Map());
   const unidadeByIdRef = useRef<Map<string, UnidadeOperacional>>(new Map());
   const referenceMarkerRef = useRef<L.Marker | null>(null);
+  const onSelectRef = useRef(onSelect);
+  const onHoverRef = useRef(onHover);
+  const lastFitFingerprintRef = useRef('');
   const [containerReady, setContainerReady] = useState(false);
   const [basemap, setBasemap] = useState<MapBasemap>('street');
   const [fullscreenMode, setFullscreenMode] = useState<'off' | 'native' | 'fallback'>('off');
   const isFullscreen = fullscreenMode !== 'off';
 
   const located = unidades.filter((u) => u.latitude !== null && u.longitude !== null);
+  const locatedKey = useMemo(() => locatedFingerprint(unidades), [unidades]);
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+    onHoverRef.current = onHover;
+  }, [onSelect, onHover]);
 
   const updateMarkerEmphasis = useCallback(
     (id: string, emphasis: 'normal' | 'hover' | 'selected') => {
@@ -133,19 +150,44 @@ export function OperationalMapClient({
 
   const markContainerReady = useCallback(() => {
     const node = containerRef.current;
-    if (node?.offsetWidth && node.offsetHeight) setContainerReady(true);
+    if (!node) return;
+    if (node.offsetWidth > 0 && node.offsetHeight > 0) {
+      setContainerReady(true);
+    }
   }, []);
 
   useEffect(() => {
     const node = containerRef.current;
     if (!node) return;
+
     markContainerReady();
-    const ro = new ResizeObserver(() => {
+
+    const resizeObserver = new ResizeObserver(() => {
       markContainerReady();
       if (mapRef.current) refreshMapSize(mapRef.current);
     });
-    ro.observe(node);
-    return () => ro.disconnect();
+    resizeObserver.observe(node);
+
+    const intersectionObserver = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting) && mapRef.current) {
+          refreshMapSize(mapRef.current);
+        }
+      },
+      { threshold: 0.01 },
+    );
+    intersectionObserver.observe(node);
+
+    const handleWindowResize = () => {
+      if (mapRef.current) refreshMapSize(mapRef.current);
+    };
+    window.addEventListener('resize', handleWindowResize);
+
+    return () => {
+      resizeObserver.disconnect();
+      intersectionObserver.disconnect();
+      window.removeEventListener('resize', handleWindowResize);
+    };
   }, [markContainerReady]);
 
   const toggleFullscreen = useCallback(async () => {
@@ -182,12 +224,25 @@ export function OperationalMapClient({
     function onFullscreenChange() {
       const shell = shellRef.current;
       const map = mapRef.current;
-      setFullscreenMode(shell && document.fullscreenElement === shell ? 'native' : 'off');
+      const native = Boolean(shell && document.fullscreenElement === shell);
+      setFullscreenMode(native ? 'native' : 'off');
       if (map) refreshMapSize(map);
     }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && fullscreenMode === 'fallback') {
+        setFullscreenMode('off');
+        if (mapRef.current) refreshMapSize(mapRef.current);
+      }
+    }
+
     document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
-  }, []);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [fullscreenMode]);
 
   useEffect(() => {
     configureLeafletIcons();
@@ -274,22 +329,23 @@ export function OperationalMapClient({
         icon: createUnitIcon(situacaoMarkerColor[unidade.situacao], 'normal'),
       }).bindPopup(buildPopupHtml(unidade));
 
-      marker.on('click', () => onSelect?.(unidade.id));
-      marker.on('mouseover', () => onHover?.(unidade.id));
-      marker.on('mouseout', () => onHover?.(null));
+      marker.on('click', () => onSelectRef.current?.(unidade.id));
+      marker.on('mouseover', () => onHoverRef.current?.(unidade.id));
+      marker.on('mouseout', () => onHoverRef.current?.(null));
 
       markersLayer.addLayer(marker);
       markerByIdRef.current.set(unidade.id, marker);
       unidadeByIdRef.current.set(unidade.id, unidade);
     });
 
-    if (located.length > 0) {
+    if (located.length > 0 && lastFitFingerprintRef.current !== locatedKey) {
       const bounds = L.latLngBounds(
         located.map((u) => [u.latitude as number, u.longitude as number] as L.LatLngTuple),
       );
       bounds.extend([FRANCA_REFERENCIA_FREDERICO_MOURA.lat, FRANCA_REFERENCIA_FREDERICO_MOURA.lng]);
       map.fitBounds(bounds, { padding: [48, 48], maxZoom: 15 });
-    } else {
+      lastFitFingerprintRef.current = locatedKey;
+    } else if (located.length === 0) {
       map.fitBounds(
         L.latLngBounds(
           [FRANCA_BOUNDS.southWest.lat, FRANCA_BOUNDS.southWest.lng],
@@ -297,10 +353,11 @@ export function OperationalMapClient({
         ),
         { padding: [24, 24] },
       );
+      lastFitFingerprintRef.current = '';
     }
 
     refreshMapSize(map);
-  }, [unidades, onHover, onSelect]);
+  }, [locatedKey, located]);
 
   useEffect(() => {
     markerByIdRef.current.forEach((_, id) => updateMarkerEmphasis(id, 'normal'));
@@ -324,15 +381,15 @@ export function OperationalMapClient({
   );
 
   return (
-    <div className="cco-map-panel flex h-full min-h-0 flex-col">
+    <div className="cco-map-panel flex min-h-[min(420px,55dvh)] flex-1 flex-col xl:min-h-0">
       <div
         ref={shellRef}
         className={[
-          'map-card relative min-h-[340px] flex-1 overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
-          fullscreenMode === 'fallback' ? 'gestop-map-fullscreen fixed inset-0 z-[9999]' : 'h-full',
+          'gestop-map-shell relative min-h-[min(420px,55dvh)] flex-1 overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
+          fullscreenMode === 'fallback' ? 'gestop-map-fullscreen fixed inset-0 z-[9999]' : '',
         ].join(' ')}
       >
-        <div ref={containerRef} className="gestop-map-canvas absolute inset-0 h-full min-h-[340px] w-full" />
+        <div ref={containerRef} className="gestop-map-canvas" />
 
         <MapViewControls
           basemap={basemap}
