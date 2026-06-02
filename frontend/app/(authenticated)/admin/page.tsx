@@ -1,8 +1,9 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, MapPin, UserRound } from 'lucide-react';
+import { Building2, Download, MapPin, UserRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
+import { ImportacaoPanel } from '@/components/admin/importacao-panel';
 import { PageShell } from '@/components/layout/page-shell';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -27,7 +28,7 @@ import {
 } from '@/lib/api';
 import { AdminPerfil, AdminSecretaria, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
 
-type Tab = 'secretarias' | 'unidades' | 'usuarios';
+type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'importacao';
 
 const tipos: UnidadeTipo[] = ['ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO', 'ESPACO_ESPORTIVO', 'OUTRO'];
 
@@ -98,6 +99,7 @@ export default function AdminPage() {
               { id: 'secretarias', label: 'Secretarias', icon: <Building2 className="h-4 w-4" /> },
               { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" /> },
               { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" /> },
+              { id: 'importacao', label: 'Importação', icon: <Download className="h-4 w-4" /> },
             ]}
           />
         </div>
@@ -113,8 +115,11 @@ export default function AdminPage() {
         {!loading && tab === 'usuarios' ? (
           <UsuariosPanel secretarias={secretarias} usuarios={usuarios} perfis={perfis} mutate={mutate} />
         ) : null}
+        {!loading && tab === 'importacao' ? (
+          <ImportacaoPanel onSynced={() => void load()} />
+        ) : null}
 
-        {!loading ? (
+        {!loading && tab !== 'importacao' ? (
           <FormSection title="LGPD" className="mt-8">
             <p className="md-body-md mb-4 text-[var(--md-on-surface-variant)]">
               Anonimize usuários inativos e aplique retenção de logs de auditoria conforme política municipal.

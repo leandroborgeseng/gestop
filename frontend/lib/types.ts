@@ -178,6 +178,48 @@ export type AdminUsuario = {
   }>;
 };
 
+export type WebmapImportGithub = {
+  repo: string;
+  branch: string;
+  commitSha: string;
+  commitMessage: string;
+  committedAt: string;
+  htmlUrl: string;
+};
+
+export type WebmapImportLastSync = {
+  syncedAt: string;
+  githubCommitSha: string;
+  usuario: { nome: string; email: string };
+  created: number | null;
+  updated: number | null;
+  uniqueUnits: number | null;
+  skipped: number | null;
+  layersFailed: number | null;
+};
+
+export type WebmapImportStatus = {
+  github: WebmapImportGithub;
+  lastSync: WebmapImportLastSync | null;
+  unidadesCount: number;
+  hasUpdates: boolean;
+  layersConfigured: number;
+  repoUrl: string;
+};
+
+export type WebmapImportResult = {
+  dryRun: boolean;
+  featuresRead: number;
+  uniqueUnits: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  layersProcessed: number;
+  layersFailed: number;
+  totalUnidadesInDb: number;
+  github: WebmapImportGithub;
+};
+
 export type ChecklistEscopo = 'GLOBAL' | 'SECRETARIA' | 'UNIDADE_TIPO' | 'UNIDADE';
 export type ChecklistVersaoStatus = 'RASCUNHO' | 'PUBLICADA' | 'ARQUIVADA';
 export type ChecklistItemTipo = 'TEXTO' | 'NUMERO' | 'BOOLEANO' | 'MULTIPLA_ESCOLHA' | 'FOTO' | 'ASSINATURA' | 'DATA';

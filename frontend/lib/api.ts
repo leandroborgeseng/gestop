@@ -22,6 +22,8 @@ import {
   UnidadeDetalhe,
   UnidadeFilters,
   UnidadeOperacional,
+  WebmapImportResult,
+  WebmapImportStatus,
 } from './types';
 
 // Sempre usa proxy interno do Next.js no browser.
@@ -234,6 +236,18 @@ export function deleteAdminUsuario(id: string) {
 
 export function listAdminPerfis() {
   return request<AdminPerfil[]>('/admin/perfis');
+}
+
+export function getWebmapImportStatus() {
+  return request<WebmapImportStatus>('/admin/importacao/webmap/status');
+}
+
+export function syncWebmapImport(dryRun = false) {
+  return request<WebmapImportResult>('/admin/importacao/webmap/sync', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dryRun }),
+  });
 }
 
 export function listChecklists() {

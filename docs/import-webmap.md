@@ -8,7 +8,26 @@ Importa **Próprio Público Municipal**, **Unidades Escolares** e **Imóvel Púb
 2. `DATABASE_URL` configurada
 3. Acesso à internet (download das camadas `.js` no GitHub) **ou** clone local do webmap
 
-## Comandos
+## Importação completa (CLI / Railway one-off)
+
+```bash
+# Secretarias + 38 camadas webmap (proprios, escolas, imoveis publicos)
+npm run import:all-test-data:dry-run
+npm run import:all-test-data
+```
+
+## Painel web (Admin → Importação)
+
+Após login como admin, abra **Administração → Importação** e use **Importar do GitHub agora**. O sistema:
+
+1. Consulta o último commit em [SMMAFRANCA/webmap](https://github.com/SMMAFRANCA/webmap)
+2. Baixa as 38 camadas configuradas
+3. Faz upsert no banco por `codigoPatrimonial`
+4. Registra a sync na auditoria (commit SHA)
+
+Se o commit no GitHub for diferente do último importado, aparece alerta **Há alterações no GitHub**.
+
+## Comandos granulares
 
 ```bash
 # Simular (lista unidades sem gravar)

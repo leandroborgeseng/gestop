@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseFeatureCollection } from './import-webmap';
+import { parseFeatureCollection } from './webmap-import-core';
 
 describe('parseFeatureCollection', () => {
   it('extrai FeatureCollection de arquivo qgis2web', () => {
