@@ -113,6 +113,19 @@ export type UnidadeFilters = {
   responsavelEmail?: string;
 };
 
+export type UnidadeFiltroOpcoes = {
+  secretarias: SecretariaOption[];
+  bairros: string[];
+  tipos: UnidadeTipo[];
+  responsaveis: Array<{
+    nome: string;
+    email: string | null;
+    secretariaId: string;
+    secretariaSigla: string;
+  }>;
+  emails: string[];
+};
+
 export type AuthUser = {
   id: string;
   nome: string;

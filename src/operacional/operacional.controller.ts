@@ -27,6 +27,11 @@ export class OperacionalController {
     return this.operacionalService.listBairros();
   }
 
+  @Get('opcoes-filtro')
+  getOpcoesFiltro() {
+    return this.operacionalService.getOpcoesFiltro();
+  }
+
   @Get('unidades')
   listUnidades(
     @Query('search') search?: string,

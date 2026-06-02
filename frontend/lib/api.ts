@@ -23,6 +23,7 @@ import {
   SecretariaOption,
   UnidadeDetalhe,
   UnidadeFilters,
+  UnidadeFiltroOpcoes,
   UnidadeOperacional,
   WebmapImportResult,
   WebmapSyncAllResult,
@@ -176,6 +177,10 @@ export function getSecretarias() {
 
 export function getBairros() {
   return request<string[]>('/operacional/bairros');
+}
+
+export function getOpcoesFiltroUnidades() {
+  return request<UnidadeFiltroOpcoes>('/operacional/opcoes-filtro');
 }
 
 export function getUnidades(filters: UnidadeFilters) {

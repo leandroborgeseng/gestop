@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, Building2, ClipboardCheck, DatabaseZap } from 'lucide-react';
-import { getBairros, getResumoOperacional, getSecretarias, getUnidades } from '@/lib/api';
+import { getOpcoesFiltroUnidades, getResumoOperacional, getUnidades } from '@/lib/api';
 import {
   OperacionalResumo,
-  SecretariaOption,
   UnidadeFilters,
+  UnidadeFiltroOpcoes,
   UnidadeOperacional,
 } from '@/lib/types';
 import { MetricCard } from '@/components/metric-card';
@@ -21,8 +21,7 @@ import { MetricSkeleton } from '@/components/ui/skeleton';
 export default function CcoPage() {
   const [filters, setFilters] = useState<UnidadeFilters>({});
   const [resumo, setResumo] = useState<OperacionalResumo | null>(null);
-  const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
-  const [bairros, setBairros] = useState<string[]>([]);
+  const [opcoesFiltro, setOpcoesFiltro] = useState<UnidadeFiltroOpcoes | null>(null);
   const [unidades, setUnidades] = useState<UnidadeOperacional[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,16 +32,11 @@ export default function CcoPage() {
 
     async function loadStaticData() {
       try {
-        const [nextResumo, nextSecretarias, nextBairros] = await Promise.all([
-          getResumoOperacional(),
-          getSecretarias(),
-          getBairros(),
-        ]);
+        const [nextResumo, nextOpcoes] = await Promise.all([getResumoOperacional(), getOpcoesFiltroUnidades()]);
 
         if (!active) return;
         setResumo(nextResumo);
-        setSecretarias(nextSecretarias);
-        setBairros(nextBairros);
+        setOpcoesFiltro(nextOpcoes);
       } catch (err) {
         if (!active) return;
         setError(err instanceof Error ? err.message : 'Erro inesperado ao carregar a CCO.');
@@ -126,12 +120,7 @@ export default function CcoPage() {
         </section>
 
         <div className="mb-6">
-          <UnidadeFiltersPanel
-            filters={filters}
-            secretarias={secretarias}
-            bairros={bairros}
-            onChange={setFilters}
-          />
+          <UnidadeFiltersPanel filters={filters} opcoes={opcoesFiltro} onChange={setFilters} />
         </div>
 
         {error ? <div className="mb-6"><ErrorState message={error} /></div> : null}

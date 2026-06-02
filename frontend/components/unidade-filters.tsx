@@ -1,22 +1,13 @@
 'use client';
 
 import { SlidersHorizontal } from 'lucide-react';
-import { SecretariaOption, UnidadeFilters } from '@/lib/types';
+import { UnidadeFilters, UnidadeFiltroOpcoes } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-
-const tipos = [
-  ['ESCOLA', 'Escola'],
-  ['UBS', 'UBS'],
-  ['PRACA', 'Praça'],
-  ['PREDIO_ADMINISTRATIVO', 'Prédio administrativo'],
-  ['ESPACO_ESPORTIVO', 'Espaço esportivo'],
-  ['OUTRO', 'Outro'],
-];
 
 const situacoes = [
   ['OPERACIONAL', 'Operacional'],
@@ -27,13 +18,11 @@ const situacoes = [
 
 export function UnidadeFiltersPanel({
   filters,
-  secretarias,
-  bairros,
+  opcoes,
   onChange,
 }: {
   filters: UnidadeFilters;
-  secretarias: SecretariaOption[];
-  bairros: string[];
+  opcoes: UnidadeFiltroOpcoes | null;
   onChange: (filters: UnidadeFilters) => void;
 }) {
   function update(key: keyof UnidadeFilters, value: string) {
@@ -58,7 +47,7 @@ export function UnidadeFiltersPanel({
             Consulta de próprios
           </CardTitle>
           <CardDescription className="mt-1">
-            Filtre a lista e o mapa de forma sincronizada.
+            Filtre a lista e o mapa de forma sincronizada. Listas carregadas dos dados importados.
             {activeCount > 0 ? ` ${activeCount} filtro(s) ativo(s).` : ''}
           </CardDescription>
         </div>
@@ -72,31 +61,50 @@ export function UnidadeFiltersPanel({
           <Input
             value={filters.search ?? ''}
             onChange={(event) => update('search', event.target.value)}
-            placeholder="Nome, código, endereço, responsável ou e-mail"
+            placeholder="Nome, código ou endereço"
+            list="gestop-unidade-busca-sugestoes"
           />
+          {opcoes ? (
+            <datalist id="gestop-unidade-busca-sugestoes">
+              {opcoes.bairros.map((bairro) => (
+                <option key={bairro} value={bairro} />
+              ))}
+              {opcoes.secretarias.map((secretaria) => (
+                <option key={secretaria.id} value={secretaria.sigla} />
+              ))}
+            </datalist>
+          ) : null}
         </Field>
 
         <Field label="Responsável (secretaria)">
-          <Input
-            value={filters.responsavel ?? ''}
-            onChange={(event) => update('responsavel', event.target.value)}
-            placeholder="Ex.: Mariana Costa"
-          />
+          <Select value={filters.responsavel ?? ''} onChange={(event) => update('responsavel', event.target.value)}>
+            <option value="">Todos</option>
+            {(opcoes?.responsaveis ?? []).map((item) => (
+              <option key={`${item.secretariaId}-${item.nome}`} value={item.nome}>
+                {item.nome} · {item.secretariaSigla}
+              </option>
+            ))}
+          </Select>
         </Field>
 
         <Field label="E-mail do responsável">
-          <Input
-            type="email"
+          <Select
             value={filters.responsavelEmail ?? ''}
             onChange={(event) => update('responsavelEmail', event.target.value)}
-            placeholder="Ex.: mariana.costa@franca.sp.gov.br"
-          />
+          >
+            <option value="">Todos</option>
+            {(opcoes?.emails ?? []).map((email) => (
+              <option key={email} value={email}>
+                {email}
+              </option>
+            ))}
+          </Select>
         </Field>
 
         <Field label="Secretaria">
           <Select value={filters.secretariaId ?? ''} onChange={(event) => update('secretariaId', event.target.value)}>
             <option value="">Todas</option>
-            {secretarias.map((secretaria) => (
+            {(opcoes?.secretarias ?? []).map((secretaria) => (
               <option key={secretaria.id} value={secretaria.id}>
                 {secretaria.sigla} — {secretaria.nome}
               </option>
@@ -107,9 +115,9 @@ export function UnidadeFiltersPanel({
         <Field label="Tipo">
           <Select value={filters.tipo ?? ''} onChange={(event) => update('tipo', event.target.value)}>
             <option value="">Todos</option>
-            {tipos.map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
+            {(opcoes?.tipos ?? []).map((tipo) => (
+              <option key={tipo} value={tipo}>
+                {formatUnidadeTipo(tipo)}
               </option>
             ))}
           </Select>
@@ -129,7 +137,7 @@ export function UnidadeFiltersPanel({
         <Field label="Bairro">
           <Select value={filters.bairro ?? ''} onChange={(event) => update('bairro', event.target.value)}>
             <option value="">Todos</option>
-            {bairros.map((bairro) => (
+            {(opcoes?.bairros ?? []).map((bairro) => (
               <option key={bairro} value={bairro}>
                 {bairro}
               </option>

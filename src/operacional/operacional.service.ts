@@ -82,6 +82,7 @@ export class OperacionalService {
   async listBairros() {
     const bairros = await this.prisma.unidadePublica.findMany({
       where: {
+        ativo: true,
         bairro: { not: null },
       },
       distinct: ['bairro'],
@@ -90,6 +91,61 @@ export class OperacionalService {
     });
 
     return bairros.map((item) => item.bairro).filter((bairro): bairro is string => Boolean(bairro));
+  }
+
+  async getOpcoesFiltro() {
+    const [secretarias, bairros, tiposRows, responsaveisRows] = await Promise.all([
+      this.prisma.secretaria.findMany({
+        where: {
+          ativo: true,
+          unidades: { some: { ativo: true } },
+        },
+        orderBy: { nome: 'asc' },
+        select: { id: true, nome: true, sigla: true },
+      }),
+      this.listBairros(),
+      this.prisma.unidadePublica.findMany({
+        where: { ativo: true },
+        distinct: ['tipo'],
+        orderBy: { tipo: 'asc' },
+        select: { tipo: true },
+      }),
+      this.prisma.secretaria.findMany({
+        where: {
+          ativo: true,
+          unidades: { some: { ativo: true } },
+          OR: [{ responsavelNome: { not: null } }, { responsavelEmail: { not: null } }],
+        },
+        orderBy: [{ responsavelNome: 'asc' }, { sigla: 'asc' }],
+        select: {
+          id: true,
+          sigla: true,
+          responsavelNome: true,
+          responsavelEmail: true,
+        },
+      }),
+    ]);
+
+    const responsaveis = responsaveisRows
+      .filter((item) => item.responsavelNome?.trim())
+      .map((item) => ({
+        nome: item.responsavelNome!.trim(),
+        email: item.responsavelEmail?.trim().toLowerCase() ?? null,
+        secretariaId: item.id,
+        secretariaSigla: item.sigla,
+      }));
+
+    const emails = [...new Set(responsaveis.map((item) => item.email).filter((email): email is string => Boolean(email)))].sort(
+      (a, b) => a.localeCompare(b),
+    );
+
+    return {
+      secretarias,
+      bairros,
+      tipos: tiposRows.map((item) => item.tipo),
+      responsaveis,
+      emails,
+    };
   }
 
   async listUnidades(query: UnidadeListQuery) {
@@ -283,10 +339,10 @@ export class OperacionalService {
   private buildUnidadeWhere(query: UnidadeListQuery): Prisma.UnidadePublicaWhereInput {
     const secretariaFilter: Prisma.SecretariaWhereInput = {
       ...(query.responsavel
-        ? { responsavelNome: { contains: query.responsavel, mode: 'insensitive' } }
+        ? { responsavelNome: { equals: query.responsavel, mode: 'insensitive' } }
         : {}),
       ...(query.responsavelEmail
-        ? { responsavelEmail: { contains: query.responsavelEmail, mode: 'insensitive' } }
+        ? { responsavelEmail: { equals: query.responsavelEmail, mode: 'insensitive' } }
         : {}),
     };
 
