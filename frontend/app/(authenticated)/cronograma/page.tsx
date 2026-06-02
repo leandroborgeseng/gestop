@@ -250,22 +250,22 @@ export default function CronogramaPage() {
                 </CardHeader>
                 <CardContent className="space-y-3 pt-0">
                   {cronogramas.length === 0 ? (
-                    <p className="md-body-md py-6 text-center text-[var(--md-on-surface-variant)]">
+                    <p className="py-6 text-center text-[13px] text-[var(--ink-3)]">
                       Nenhum cronograma cadastrado para os filtros atuais.
                     </p>
                   ) : null}
                   {cronogramas.map((item) => (
                     <div
                       key={item.id}
-                      className="flex flex-col gap-3 rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4 sm:flex-row sm:items-start sm:justify-between"
+                      className="flex flex-col gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4 sm:flex-row sm:items-start sm:justify-between"
                     >
                       <div>
-                        <h3 className="md-title-md text-[var(--md-on-surface)]">{item.unidade.nome}</h3>
-                        <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+                        <h3 className="text-[14px] font-semibold text-[var(--ink)]">{item.unidade.nome}</h3>
+                        <p className="mt-1 text-[13px] text-[var(--ink-3)]">
                           {item.checklist.nome} · {CRONOGRAMA_FREQUENCIA_LABELS[item.frequencia]} ·{' '}
                           {formatUnidadeTipo(item.unidade.tipo)}
                         </p>
-                        <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+                        <p className="mt-1 text-[13px] text-[var(--ink-3)]">
                           Próxima: {new Date(item.proximaChecagemEm).toLocaleDateString('pt-BR')}
                           {item.ultimaChecagemEm
                             ? ` · Última: ${new Date(item.ultimaChecagemEm).toLocaleDateString('pt-BR')}`
@@ -313,7 +313,7 @@ export default function CronogramaPage() {
               </CardHeader>
               <CardContent className="space-y-3 pt-0">
                 {!selectedDate ? (
-                  <p className="md-body-md text-[var(--md-on-surface-variant)]">
+                  <p className="text-[13px] text-[var(--ink-3)]">
                     O calendário combina checagens programadas (cronograma) e fiscalizações já concluídas em campo.
                   </p>
                 ) : null}

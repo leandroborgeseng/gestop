@@ -60,7 +60,7 @@ export default function ContaPage() {
 
       <Card elevation={1} className="mx-auto max-w-lg">
         <CardHeader>
-          <CardTitle>Alterar senha</CardTitle>
+          <CardTitle className="text-[var(--ink)]">Alterar senha</CardTitle>
         </CardHeader>
         <CardContent>
           {error ? <Alert variant="error" className="mb-4">{error}</Alert> : null}

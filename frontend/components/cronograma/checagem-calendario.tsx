@@ -7,9 +7,9 @@ import { cn } from '@/lib/cn';
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
 const tipoStyles: Record<CalendarioChecagemEvento['tipo'], string> = {
-  AGENDADA: 'bg-sky-100 text-sky-900 border-sky-200',
-  REALIZADA: 'bg-emerald-100 text-emerald-900 border-emerald-200',
-  ATRASADA: 'bg-amber-100 text-amber-950 border-amber-200',
+  AGENDADA: 'border-[var(--brand-soft)] bg-[var(--brand-soft)] text-[var(--brand-hover)]',
+  REALIZADA: 'border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok)]',
+  ATRASADA: 'border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn)]',
 };
 
 export function ChecagemCalendario({
@@ -31,20 +31,20 @@ export function ChecagemCalendario({
   const monthLabel = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   return (
-    <div className="rounded-[var(--md-shape-lg)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)] p-4 shadow-[var(--md-elevation-1)]">
+    <div className="rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--sh-sm)]">
       <div className="mb-4 flex items-center justify-between gap-3">
         <button
           type="button"
           onClick={onPrevMonth}
-          className="rounded-[var(--md-shape-sm)] px-3 py-2 md-label-lg text-[var(--color-brand-primary)] hover:bg-[var(--md-surface-container-low)]"
+          className="rounded-[var(--r-sm)] px-3 py-2 text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--surface-2)]"
         >
           ← Anterior
         </button>
-        <h2 className="md-title-lg capitalize text-[var(--md-on-surface)]">{monthLabel}</h2>
+        <h2 className="text-[15px] font-bold capitalize text-[var(--ink)]">{monthLabel}</h2>
         <button
           type="button"
           onClick={onNextMonth}
-          className="rounded-[var(--md-shape-sm)] px-3 py-2 md-label-lg text-[var(--color-brand-primary)] hover:bg-[var(--md-surface-container-low)]"
+          className="rounded-[var(--r-sm)] px-3 py-2 text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--surface-2)]"
         >
           Próximo →
         </button>
@@ -52,14 +52,14 @@ export function ChecagemCalendario({
 
       <div className="grid grid-cols-7 gap-2">
         {WEEKDAYS.map((day) => (
-          <div key={day} className="md-label-md py-2 text-center text-[var(--md-on-surface-variant)]">
+          <div key={day} className="py-2 text-center text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">
             {day}
           </div>
         ))}
 
         {cells.map((cell) => {
           if (!cell.date) {
-            return <div key={cell.key} className="min-h-24 rounded-[var(--md-shape-sm)] bg-transparent" />;
+            return <div key={cell.key} className="min-h-24 rounded-[var(--r-sm)] bg-transparent" />;
           }
 
           const dateKey = cell.date.toISOString().slice(0, 10);
@@ -73,16 +73,17 @@ export function ChecagemCalendario({
               type="button"
               onClick={() => onSelectDate(dateKey)}
               className={cn(
-                'min-h-24 rounded-[var(--md-shape-sm)] border p-2 text-left transition-colors',
+                'min-h-24 rounded-[var(--r-sm)] border p-2 text-left transition-colors',
                 isSelected
-                  ? 'border-[var(--color-brand-primary)] bg-[var(--color-brand-primary-subtle)]'
-                  : 'border-[var(--md-outline-variant)] bg-[var(--md-surface-container-lowest)] hover:bg-[var(--md-surface-container-low)]',
+                  ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
+                  : 'border-[var(--line)] bg-[var(--surface-2)] hover:bg-[var(--surface)]',
               )}
             >
               <span
                 className={cn(
-                  'inline-flex h-7 w-7 items-center justify-center rounded-full md-label-lg',
-                  isToday && 'bg-[var(--color-brand-primary)] text-white',
+                  'inline-flex h-7 w-7 items-center justify-center rounded-full text-[13px] font-semibold',
+                  isToday && 'bg-[var(--brand)] text-white',
+                  !isToday && 'text-[var(--ink)]',
                 )}
               >
                 {cell.date.getDate()}
@@ -92,7 +93,7 @@ export function ChecagemCalendario({
                   <span
                     key={evento.id}
                     className={cn(
-                      'block truncate rounded px-1.5 py-0.5 text-[10px] font-medium leading-tight border',
+                      'block truncate rounded border px-1.5 py-0.5 text-[10px] font-medium leading-tight',
                       tipoStyles[evento.tipo],
                     )}
                   >
@@ -100,7 +101,7 @@ export function ChecagemCalendario({
                   </span>
                 ))}
                 {eventos.length > 2 ? (
-                  <span className="md-label-md text-[var(--md-on-surface-variant)]">+{eventos.length - 2}</span>
+                  <span className="text-[11px] text-[var(--ink-3)]">+{eventos.length - 2}</span>
                 ) : null}
               </div>
             </button>
@@ -108,10 +109,10 @@ export function ChecagemCalendario({
         })}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-3 md-label-md text-[var(--md-on-surface-variant)]">
-        <Legend color="bg-sky-500" label="Agendada" />
-        <Legend color="bg-emerald-500" label="Realizada" />
-        <Legend color="bg-amber-500" label="Atrasada" />
+      <div className="mt-4 flex flex-wrap gap-3 text-[12px] text-[var(--ink-3)]">
+        <Legend color="bg-[var(--brand)]" label="Agendada" />
+        <Legend color="bg-[var(--ok)]" label="Realizada" />
+        <Legend color="bg-[var(--warn)]" label="Atrasada" />
       </div>
     </div>
   );
@@ -150,23 +151,23 @@ function buildCells(reference: Date) {
 
 export function EventoChecagemCard({ evento }: { evento: CalendarioChecagemEvento }) {
   return (
-    <div className="rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] p-4">
+    <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={cn('rounded-full px-2.5 py-1 md-label-md border', tipoStyles[evento.tipo])}>
+        <span className={cn('rounded-[var(--r-pill)] border px-2.5 py-1 text-[11px] font-semibold', tipoStyles[evento.tipo])}>
           {evento.tipo === 'REALIZADA' ? 'Realizada' : evento.tipo === 'ATRASADA' ? 'Atrasada' : 'Agendada'}
         </span>
-        <span className="md-label-md text-[var(--md-on-surface-variant)]">{evento.data}</span>
+        <span className="mono text-[11px] text-[var(--ink-3)]">{evento.data}</span>
       </div>
-      <h3 className="md-title-md mt-2 text-[var(--md-on-surface)]">{evento.unidade.nome}</h3>
-      <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+      <h3 className="mt-2 text-[14px] font-semibold text-[var(--ink)]">{evento.unidade.nome}</h3>
+      <p className="mt-1 text-[13px] text-[var(--ink-3)]">
         {evento.checklist.nome} · {evento.unidade.secretariaSigla}
       </p>
       {evento.agenteNome ? (
-        <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">Agente: {evento.agenteNome}</p>
+        <p className="mt-1 text-[13px] text-[var(--ink-3)]">Agente: {evento.agenteNome}</p>
       ) : null}
       <Link
         href={`/cco/unidades/${evento.unidade.id}`}
-        className="md-label-lg mt-3 inline-flex text-[var(--color-brand-primary)]"
+        className="mt-3 inline-flex text-[13px] font-semibold text-[var(--brand)] hover:underline"
       >
         Ver próprio →
       </Link>

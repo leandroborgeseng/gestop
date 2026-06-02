@@ -20,14 +20,14 @@ export function PushNotificationsPanel() {
       registerServiceWorker();
       const { publicKey, enabled } = await getVapidPublicKey();
       if (!enabled || !publicKey) {
-        throw new Error('Web Push nao configurado no servidor (VAPID).');
+        throw new Error('Web Push não configurado no servidor (VAPID).');
       }
       const subscription = await enableWebPush(publicKey);
       if (!subscription.endpoint || !subscription.keys) {
         throw new Error('Falha ao registrar subscription.');
       }
       await subscribeWebPush(subscription);
-      setMessage('Notificacoes push ativadas para este dispositivo.');
+      setMessage('Notificações push ativadas para este dispositivo.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao ativar push.');
     } finally {
@@ -56,21 +56,21 @@ export function PushNotificationsPanel() {
   }
 
   return (
-    <div className="mb-6 rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)] p-4">
-      <p className="md-title-md flex items-center gap-2 text-[var(--md-on-surface)]">
-        <Bell className="h-4 w-4 text-[var(--color-brand-primary)]" />
-        Notificacoes operacionais
+    <div className="mb-6 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--sh-sm)]">
+      <p className="flex items-center gap-2 text-[14px] font-semibold text-[var(--ink)]">
+        <Bell className="h-4 w-4 text-[var(--brand)]" />
+        Notificações operacionais
       </p>
-      <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+      <p className="mt-1 text-[13px] text-[var(--ink-3)]">
         Receba alertas de OS atrasadas e chamados parados no navegador. Gestores podem disparar manualmente.
       </p>
       {error ? <Alert variant="error" className="mt-3">{error}</Alert> : null}
       {message ? <Alert variant="success" className="mt-3">{message}</Alert> : null}
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button variant="filled" size="sm" disabled={loading === 'push'} onClick={ativarPush}>
+        <Button variant="filled" size="sm" disabled={loading === 'push'} onClick={() => void ativarPush()}>
           {loading === 'push' ? 'Ativando...' : 'Ativar push neste dispositivo'}
         </Button>
-        <Button variant="tonal" size="sm" disabled={loading === 'alertas'} onClick={dispararAlertas}>
+        <Button variant="tonal" size="sm" disabled={loading === 'alertas'} onClick={() => void dispararAlertas()}>
           {loading === 'alertas' ? 'Enviando...' : 'Disparar alertas agora'}
         </Button>
       </div>

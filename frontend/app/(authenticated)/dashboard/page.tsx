@@ -52,7 +52,11 @@ export default function DashboardPage() {
           KPIs refletem o estado atual do sistema. Alertas operacionais destacam OS atrasadas, chamados sem triagem e falhas de sync.
         </TipBanner>
 
-        {error ? <div className="mb-6"><ErrorState message={error} /></div> : null}
+        {error ? (
+          <div className="mb-6">
+            <ErrorState message={error} />
+          </div>
+        ) : null}
         {loading ? <LoadingState label="Carregando indicadores..." /> : null}
 
         {dashboard ? (
@@ -61,24 +65,24 @@ export default function DashboardPage() {
 
             {hasAlertas ? (
               <Alert variant="warning" className="mb-6">
-                <p className="md-title-md flex items-center gap-2">
+                <p className="flex items-center gap-2 text-[14px] font-semibold text-[var(--ink)]">
                   <AlertTriangle className="h-4 w-4" />
                   Alertas operacionais
                 </p>
-                <p className="md-body-md mt-2">
-                  {alertas!.resumo.osAtrasadas} OS atrasadas · {alertas!.resumo.chamadosSemTriagem} chamados sem triagem
-                  · {alertas!.resumo.osUrgentes} OS urgentes · {alertas!.resumo.syncFalhas} falhas de sync
+                <p className="mt-2 text-[13px] text-[var(--ink-2)]">
+                  {alertas!.resumo.osAtrasadas} OS atrasadas · {alertas!.resumo.chamadosSemTriagem} chamados sem triagem ·{' '}
+                  {alertas!.resumo.osUrgentes} OS urgentes · {alertas!.resumo.syncFalhas} falhas de sync
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link
                     href="/ordens-servico"
-                    className="inline-flex h-9 items-center rounded-[var(--md-shape-full)] bg-[var(--color-brand-primary)] px-3 md-label-lg text-white"
+                    className="inline-flex h-8 items-center rounded-[var(--r-md)] bg-[var(--brand)] px-3 text-[12.5px] font-semibold text-white shadow-[var(--sh-sm)] hover:bg-[var(--brand-hover)]"
                   >
-                    Ver ordens de servico
+                    Ver ordens de serviço
                   </Link>
                   <Link
                     href="/chamados"
-                    className="inline-flex h-9 items-center rounded-[var(--md-shape-full)] border border-[var(--md-outline)] px-3 md-label-lg text-[var(--color-brand-primary)]"
+                    className="inline-flex h-8 items-center rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[12.5px] font-semibold text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
                   >
                     Ver chamados
                   </Link>
@@ -86,29 +90,41 @@ export default function DashboardPage() {
               </Alert>
             ) : null}
 
-            <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+            <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
               <MetricCard title="Próprios" value={dashboard.indicadores.totalUnidades} hint="cadastrados" icon={Building2} />
               <MetricCard title="Fiscalizações" value={dashboard.indicadores.fiscalizacoes} hint="registradas" icon={ClipboardCheck} />
-              <MetricCard title="Não conformidades" value={dashboard.indicadores.naoConformidades} hint="em acompanhamento" icon={ShieldAlert} />
+              <MetricCard
+                title="Não conformidades"
+                value={dashboard.indicadores.naoConformidades}
+                hint="em acompanhamento"
+                icon={ShieldAlert}
+                deltaTone={dashboard.indicadores.naoConformidades > 0 ? 'warn' : undefined}
+              />
               <MetricCard title="OS abertas" value={dashboard.indicadores.ordensServico.abertas} hint="aguardando ação" icon={Wrench} />
               <MetricCard title="OS em execução" value={dashboard.indicadores.ordensServico.emExecucao} hint="em andamento" icon={Wrench} />
-              <MetricCard title="Sync pendente" value={dashboard.indicadores.syncPendentes} hint="eventos offline" icon={DatabaseZap} />
+              <MetricCard
+                title="Sync pendente"
+                value={dashboard.indicadores.syncPendentes}
+                hint="eventos offline"
+                icon={DatabaseZap}
+                deltaTone={dashboard.indicadores.syncPendentes > 0 ? 'warn' : undefined}
+              />
             </section>
 
             <section className="grid gap-6 lg:grid-cols-2">
               <Card elevation={1}>
                 <CardHeader>
-                  <CardTitle>Pendências por secretaria</CardTitle>
+                  <CardTitle className="text-[var(--ink)]">Pendências por secretaria</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 pt-0">
+                  {dashboard.pendenciasPorSecretaria.length === 0 ? (
+                    <p className="py-4 text-[13px] text-[var(--ink-3)]">Nenhuma pendência registrada.</p>
+                  ) : null}
                   {dashboard.pendenciasPorSecretaria.map((item) => (
-                    <div
-                      key={item.id}
-                      className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4"
-                    >
-                      <strong className="md-title-md text-[var(--md-on-surface)]">{item.sigla}</strong>
-                      <span className="md-body-md text-[var(--md-on-surface-variant)]"> — {item.nome}</span>
-                      <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+                    <div key={item.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
+                      <strong className="text-[14px] font-semibold text-[var(--ink)]">{item.sigla}</strong>
+                      <span className="text-[13px] text-[var(--ink-3)]"> — {item.nome}</span>
+                      <p className="mt-1 text-[13px] text-[var(--ink-3)]">
                         {item.ordensPendentes} OS pendentes · {item.fiscalizacoes} fiscalizações
                       </p>
                     </div>
@@ -118,17 +134,17 @@ export default function DashboardPage() {
 
               <Card elevation={1}>
                 <CardHeader>
-                  <CardTitle>Últimos eventos de auditoria</CardTitle>
+                  <CardTitle className="text-[var(--ink)]">Últimos eventos de auditoria</CardTitle>
                 </CardHeader>
                 <CardContent className="max-h-[520px] space-y-2 overflow-auto pt-0">
+                  {auditoria.length === 0 ? (
+                    <p className="py-4 text-[13px] text-[var(--ink-3)]">Nenhum evento recente.</p>
+                  ) : null}
                   {auditoria.map((evento) => (
-                    <div
-                      key={evento.id}
-                      className="rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)] p-3"
-                    >
-                      <strong className="md-title-md text-[var(--md-on-surface)]">{evento.acao}</strong>
-                      <span className="md-body-md text-[var(--md-on-surface-variant)]"> em {evento.entidadeTipo}</span>
-                      <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+                    <div key={evento.id} className="rounded-[var(--r-md)] border border-[var(--line)] p-3">
+                      <strong className="text-[13px] font-semibold text-[var(--ink)]">{evento.acao}</strong>
+                      <span className="text-[13px] text-[var(--ink-3)]"> em {evento.entidadeTipo}</span>
+                      <p className="mt-1 text-[12px] text-[var(--ink-3)]">
                         {evento.usuario?.nome ?? 'Sistema'} · {new Date(evento.createdAt).toLocaleString('pt-BR')}
                       </p>
                     </div>

@@ -514,7 +514,7 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
         </form>
       </FormSection>
       <FormSection title="Registros">
-        <p className="md-body-sm mb-4 text-[var(--md-on-surface-variant)]">
+        <p className="mb-4 text-[12px] text-[var(--ink-3)]">
           O sistema não remove usuários do banco: inativar impede o login; use Reativar para restaurar o acesso.
         </p>
         <RecordList empty="Nenhum usuário cadastrado.">
