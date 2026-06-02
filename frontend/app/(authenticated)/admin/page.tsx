@@ -1,17 +1,28 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, Download, MapPin, UserRound } from 'lucide-react';
+import { Building2, Download, MapPin, Shield, UserRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
 import { PageShell } from '@/components/layout/page-shell';
+import { TipBanner } from '@/components/help/tip-banner';
 import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { FormGrid, FormSection, RecordItem, RecordList } from '@/components/ui/form-section';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Tabs } from '@/components/ui/tabs';
+import {
+  DataTable,
+  DataTableBody,
+  DataTableCell,
+  DataTableHead,
+  DataTableHeaderCell,
+  DataTableRow,
+} from '@/components/ui/data-table';
+import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import {
   deleteAdminSecretaria,
@@ -34,6 +45,7 @@ type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'importacao';
 const tipos: UnidadeTipo[] = ['ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO', 'ESPACO_ESPORTIVO', 'OUTRO'];
 
 export default function AdminPage() {
+  const snackbar = useSnackbar();
   const [tab, setTab] = useState<Tab>('secretarias');
   const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
   const [unidades, setUnidades] = useState<AdminUnidade[]>([]);
@@ -74,10 +86,13 @@ export default function AdminPage() {
     try {
       await action();
       setSuccess(message);
+      snackbar.show(message, 'success');
       await load();
       return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Operação não concluída.');
+      const msg = err instanceof Error ? err.message : 'Operação não concluída.';
+      setError(msg);
+      snackbar.show(msg, 'error');
       return false;
     }
   }
@@ -85,23 +100,27 @@ export default function AdminPage() {
   return (
     <RequirePermissions permissions={['usuarios.gerenciar']}>
       <PageShell
-        kicker="Administração Base"
+        kicker="Administração"
         icon={Building2}
-        title="Cadastros estruturais do GestOP"
-        description="Mantenha secretarias, próprios públicos e usuários. As alterações são registradas na trilha de auditoria."
+        title="Cadastros e acesso"
+        description="Gestão de secretarias, próprios e usuários — com controles de LGPD."
         backHref="/cco"
       >
+        <TipBanner id="admin-cadastros">
+          Alterações em secretarias, próprios e usuários são registradas na trilha de auditoria. Use a aba Importação para sincronizar o webmap QGIS.
+        </TipBanner>
+
         {error ? <div className="mb-4"><ErrorState message={error} onRetry={() => void load()} /></div> : null}
         {success ? <Alert variant="success" className="mb-4">{success}</Alert> : null}
 
-        <div className="mb-6">
+        <div className="mb-6 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] px-4 shadow-[var(--sh-sm)]">
           <Tabs
             value={tab}
             onChange={(value) => setTab(value as Tab)}
             items={[
-              { id: 'secretarias', label: 'Secretarias', icon: <Building2 className="h-4 w-4" /> },
-              { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" /> },
-              { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" /> },
+              { id: 'secretarias', label: 'Secretarias', icon: <Building2 className="h-4 w-4" />, count: secretarias.length },
+              { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" />, count: unidades.length },
+              { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" />, count: usuarios.length },
               { id: 'importacao', label: 'Importação', icon: <Download className="h-4 w-4" /> },
             ]}
           />
@@ -123,19 +142,28 @@ export default function AdminPage() {
         ) : null}
 
         {!loading && tab !== 'importacao' ? (
-          <FormSection title="LGPD" className="mt-8">
-            <p className="md-body-md mb-4 text-[var(--md-on-surface-variant)]">
-              Anonimize usuários inativos e aplique retenção de logs de auditoria conforme política municipal.
-            </p>
-            <Button
-              variant="tonal"
-              onClick={() =>
-                void mutate(async () => purgeAuditoriaLgpd(), 'Retenção de auditoria aplicada.')
-              }
-            >
-              Aplicar retenção de auditoria
-            </Button>
-          </FormSection>
+          <section className="mt-8 rounded-[var(--r-card)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-5">
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface)] text-[var(--warn)] shadow-[var(--sh-sm)]">
+                <Shield className="h-4 w-4" />
+              </span>
+              <div className="flex-1">
+                <h3 className="text-[14px] font-bold text-[var(--ink)]">Proteção de dados (LGPD)</h3>
+                <p className="mt-1 text-[13px] text-[var(--ink-3)]">Ações sensíveis — registradas na auditoria.</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    variant="outlined"
+                    size="sm"
+                    onClick={() =>
+                      void mutate(async () => purgeAuditoriaLgpd(), 'Retenção de auditoria aplicada.')
+                    }
+                  >
+                    Expurgar auditoria antiga
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </section>
         ) : null}
       </PageShell>
     </RequirePermissions>
@@ -161,7 +189,29 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
   }
 
   return (
-    <FormGrid>
+    <div className="space-y-6">
+      <DataTable>
+        <DataTableHead>
+          <DataTableHeaderCell>Sigla</DataTableHeaderCell>
+          <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
+          <DataTableHeaderCell>Responsável</DataTableHeaderCell>
+          <DataTableHeaderCell>Status</DataTableHeaderCell>
+        </DataTableHead>
+        <DataTableBody>
+          {secretarias.map((secretaria) => (
+            <DataTableRow key={secretaria.id}>
+              <DataTableCell mono>{secretaria.sigla}</DataTableCell>
+              <DataTableCell>{secretaria.nome}</DataTableCell>
+              <DataTableCell>{secretaria.responsavelNome ?? '—'}</DataTableCell>
+              <DataTableCell>
+                <Badge variant={secretaria.ativo ? 'success' : 'muted'}>{secretaria.ativo ? 'Ativo' : 'Inativo'}</Badge>
+              </DataTableCell>
+            </DataTableRow>
+          ))}
+        </DataTableBody>
+      </DataTable>
+
+      <FormGrid>
       <FormSection title="Nova secretaria">
         <form onSubmit={submit} className="space-y-4">
           <Field label="Nome"><Input name="nome" required /></Field>
@@ -189,6 +239,7 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
         </RecordList>
       </FormSection>
     </FormGrid>
+    </div>
   );
 }
 
@@ -220,7 +271,34 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
   }
 
   return (
-    <FormGrid>
+    <div className="space-y-6">
+      <DataTable>
+        <DataTableHead>
+          <DataTableHeaderCell>Código</DataTableHeaderCell>
+          <DataTableHeaderCell>Unidade</DataTableHeaderCell>
+          <DataTableHeaderCell>Tipo</DataTableHeaderCell>
+          <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
+          <DataTableHeaderCell>Status</DataTableHeaderCell>
+        </DataTableHead>
+        <DataTableBody>
+          {unidades.slice(0, 50).map((unidade) => (
+            <DataTableRow key={unidade.id}>
+              <DataTableCell mono>{unidade.codigoPatrimonial}</DataTableCell>
+              <DataTableCell>{unidade.nome}</DataTableCell>
+              <DataTableCell>{formatUnidadeTipo(unidade.tipo)}</DataTableCell>
+              <DataTableCell mono>{unidade.secretaria.sigla}</DataTableCell>
+              <DataTableCell>
+                <Badge variant={unidade.ativo ? 'success' : 'muted'}>{unidade.ativo ? 'Ativo' : 'Inativo'}</Badge>
+              </DataTableCell>
+            </DataTableRow>
+          ))}
+        </DataTableBody>
+      </DataTable>
+      {unidades.length > 50 ? (
+        <p className="text-[12px] text-[var(--ink-3)]">Exibindo 50 de {unidades.length} registros na tabela. Use a lista abaixo para gerenciar todos.</p>
+      ) : null}
+
+      <FormGrid>
       <FormSection title="Novo próprio">
         <form onSubmit={submit} className="space-y-4">
           <Field label="Secretaria">
@@ -270,6 +348,7 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
         </RecordList>
       </FormSection>
     </FormGrid>
+    </div>
   );
 }
 
@@ -348,7 +427,34 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
   const editingPerfilId = editing?.perfis[0]?.perfil.id ?? defaultPerfil;
 
   return (
-    <FormGrid>
+    <div className="space-y-6">
+      <DataTable>
+        <DataTableHead>
+          <DataTableHeaderCell>Usuário</DataTableHeaderCell>
+          <DataTableHeaderCell>Perfil</DataTableHeaderCell>
+          <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
+          <DataTableHeaderCell>Status</DataTableHeaderCell>
+        </DataTableHead>
+        <DataTableBody>
+          {usuarios.map((usuario) => (
+            <DataTableRow key={usuario.id}>
+              <DataTableCell>
+                <div>
+                  <p className="font-semibold text-[var(--ink)]">{usuario.nome}</p>
+                  <p className="text-[12px] text-[var(--ink-3)]">{usuario.email}</p>
+                </div>
+              </DataTableCell>
+              <DataTableCell>{usuario.perfis.map((p) => p.perfil.nome).join(', ') || '—'}</DataTableCell>
+              <DataTableCell mono>{usuario.secretaria?.sigla ?? '—'}</DataTableCell>
+              <DataTableCell>
+                <Badge variant={usuario.ativo ? 'success' : 'muted'}>{usuario.ativo ? 'Ativo' : 'Inativo'}</Badge>
+              </DataTableCell>
+            </DataTableRow>
+          ))}
+        </DataTableBody>
+      </DataTable>
+
+      <FormGrid>
       <FormSection title={editing ? 'Editar usuário' : 'Novo usuário'}>
         <form key={editing?.id ?? 'new'} onSubmit={submit} className="space-y-4">
           <Field label="Nome">
@@ -454,6 +560,7 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
         </RecordList>
       </FormSection>
     </FormGrid>
+    </div>
   );
 }
 

@@ -3,14 +3,17 @@
 import { FormEvent, useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { PageShell } from '@/components/layout/page-shell';
+import { TipBanner } from '@/components/help/tip-banner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { useSnackbar } from '@/components/ui/snackbar';
 import { changePassword } from '@/lib/api';
 
 export default function ContaPage() {
+  const snackbar = useSnackbar();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -32,6 +35,7 @@ export default function ContaPage() {
     try {
       await changePassword(currentPassword, newPassword);
       setSuccess('Senha alterada com sucesso.');
+      snackbar.show('Senha alterada com sucesso.', 'success');
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
@@ -50,6 +54,10 @@ export default function ContaPage() {
       description="Altere sua senha de acesso ao GestOP."
       backHref="/cco"
     >
+      <TipBanner id="conta-senha">
+        Use uma senha com pelo menos 12 caracteres. Após alterar, faça login novamente em outros dispositivos se necessário.
+      </TipBanner>
+
       <Card elevation={1} className="mx-auto max-w-lg">
         <CardHeader>
           <CardTitle>Alterar senha</CardTitle>

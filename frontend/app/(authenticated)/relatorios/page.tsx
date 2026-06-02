@@ -1,12 +1,20 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Bell, FileSpreadsheet, FileText } from 'lucide-react';
+import {
+  Building2,
+  ClipboardCheck,
+  FileSpreadsheet,
+  FileText,
+  Inbox,
+  Wrench,
+} from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
+import { TipBanner } from '@/components/help/tip-banner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
@@ -14,6 +22,18 @@ import { downloadRelatorioCsv, downloadRelatorioPdf, getSecretarias } from '@/li
 import { SecretariaOption } from '@/lib/types';
 
 type RelatorioTipo = 'unidades' | 'chamados' | 'ordens-servico' | 'fiscalizacoes';
+
+const RELATORIOS: Array<{
+  tipo: RelatorioTipo;
+  title: string;
+  hint: string;
+  icon: typeof Building2;
+}> = [
+  { tipo: 'unidades', title: 'Próprios públicos', hint: 'Cadastro, situação e localização das unidades.', icon: Building2 },
+  { tipo: 'fiscalizacoes', title: 'Fiscalizações', hint: 'Checklists aplicados, conformidade e não conformidades.', icon: ClipboardCheck },
+  { tipo: 'ordens-servico', title: 'Ordens de serviço', hint: 'Abertas, em execução, concluídas e prazos (SLA).', icon: Wrench },
+  { tipo: 'chamados', title: 'Chamados', hint: 'Volume por canal, status e tempo de atendimento.', icon: Inbox },
+];
 
 export default function RelatoriosPage() {
   const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
@@ -43,7 +63,7 @@ export default function RelatoriosPage() {
       if (formato === 'csv') await downloadRelatorioCsv(tipo, params);
       else await downloadRelatorioPdf(tipo, params);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao exportar relatorio.');
+      setError(err instanceof Error ? err.message : 'Falha ao exportar relatório.');
     } finally {
       setLoading(null);
     }
@@ -52,19 +72,20 @@ export default function RelatoriosPage() {
   return (
     <RequirePermissions permissions={['dashboard.visualizar']}>
       <PageShell
-        kicker="Relatorios"
+        kicker="Inteligência operacional"
         icon={FileSpreadsheet}
-        title="Exportacao CSV e PDF"
-        description="Baixe dados operacionais para planilhas ou impressao. PDFs gerados em formato paisagem A4."
+        title="Relatórios"
+        description="Exportações por tipo e período — CSV para análise, PDF para registro oficial."
         backHref="/dashboard"
       >
+        <TipBanner id="relatorios-export">
+          PDFs são gerados em formato paisagem A4 com logo da PMF. Use os filtros opcionais para restringir secretaria e período.
+        </TipBanner>
+
         {error ? <Alert variant="error" className="mb-4">{error}</Alert> : null}
 
         <Card elevation={1} className="mb-6">
-          <CardHeader>
-            <CardTitle>Filtros opcionais</CardTitle>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-3">
+          <CardContent className="grid gap-4 p-5 sm:grid-cols-3">
             <Field label="Secretaria">
               <Select value={secretariaId} onChange={(e) => setSecretariaId(e.target.value)}>
                 <option value="">Todas</option>
@@ -78,48 +99,51 @@ export default function RelatoriosPage() {
             <Field label="De">
               <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
             </Field>
-            <Field label="Ate">
+            <Field label="Até">
               <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
             </Field>
           </CardContent>
         </Card>
 
         <section className="grid gap-4 md:grid-cols-2">
-          {[
-            { tipo: 'unidades' as const, title: 'Proprios publicos', hint: 'Cadastro patrimonial completo' },
-            { tipo: 'chamados' as const, title: 'Chamados', hint: 'Triagem e origem QR/interna' },
-            { tipo: 'ordens-servico' as const, title: 'Ordens de servico', hint: 'Status, prazos e responsaveis' },
-            { tipo: 'fiscalizacoes' as const, title: 'Fiscalizacoes', hint: 'Vistorias com GPS e agente' },
-          ].map((item) => (
-            <Card key={item.tipo} elevation={1}>
-              <CardContent className="p-5">
-                <h2 className="md-title-lg text-[var(--md-on-surface)]">{item.title}</h2>
-                <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">{item.hint}</p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Button
-                    variant="filled"
-                    size="sm"
-                    className="gap-2"
-                    disabled={loading === `${item.tipo}-csv`}
-                    onClick={() => exportar(item.tipo, 'csv')}
-                  >
-                    <FileSpreadsheet className="h-4 w-4" />
-                    {loading === `${item.tipo}-csv` ? 'Exportando...' : 'CSV'}
-                  </Button>
-                  <Button
-                    variant="tonal"
-                    size="sm"
-                    className="gap-2"
-                    disabled={loading === `${item.tipo}-pdf`}
-                    onClick={() => exportar(item.tipo, 'pdf')}
-                  >
-                    <FileText className="h-4 w-4" />
-                    {loading === `${item.tipo}-pdf` ? 'Gerando...' : 'PDF'}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          {RELATORIOS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <Card key={item.tipo} elevation={1} className="overflow-hidden">
+                <CardContent className="flex gap-4 p-5">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--r-md)] bg-[var(--brand-soft)] text-[var(--brand)]">
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-[15px] font-semibold text-[var(--ink)]">{item.title}</h2>
+                    <p className="mt-1 text-[13px] text-[var(--ink-3)]">{item.hint}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        variant="outlined"
+                        size="sm"
+                        className="gap-2"
+                        disabled={loading === `${item.tipo}-csv`}
+                        onClick={() => exportar(item.tipo, 'csv')}
+                      >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        {loading === `${item.tipo}-csv` ? 'Exportando...' : 'CSV'}
+                      </Button>
+                      <Button
+                        variant="filled"
+                        size="sm"
+                        className="gap-2"
+                        disabled={loading === `${item.tipo}-pdf`}
+                        onClick={() => exportar(item.tipo, 'pdf')}
+                      >
+                        <FileText className="h-4 w-4" />
+                        {loading === `${item.tipo}-pdf` ? 'Gerando...' : 'PDF'}
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
         </section>
       </PageShell>
     </RequirePermissions>

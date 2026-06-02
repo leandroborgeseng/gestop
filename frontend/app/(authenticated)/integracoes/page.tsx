@@ -4,14 +4,18 @@ import { useEffect, useState } from 'react';
 import { Plug, RefreshCcw, Send } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
+import { TipBanner } from '@/components/help/tip-banner';
 import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { listIntegracoesEventos, retrySyncFalhas, sendIntegrationNotification } from '@/lib/api';
 import { IntegracoesEventos } from '@/lib/types';
 
 export default function IntegracoesPage() {
+  const snackbar = useSnackbar();
   const [eventos, setEventos] = useState<IntegracoesEventos | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -36,7 +40,9 @@ export default function IntegracoesPage() {
     setSuccess(null);
     try {
       const result = await retrySyncFalhas();
-      setSuccess(`${result.reenfileirados} evento(s) reenfileirado(s).`);
+      const message = `${result.reenfileirados} evento(s) reenfileirado(s).`;
+      setSuccess(message);
+      snackbar.show(message, 'success');
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao reenfileirar sync.');
@@ -51,7 +57,9 @@ export default function IntegracoesPage() {
     setSuccess(null);
     try {
       const result = await sendIntegrationNotification('teste-operacional', { origem: 'painel-integracoes' });
-      setSuccess(`Notificação enviada via ${result.adapter}${result.delivered ? '' : ' (falhou)'}.`);
+      const message = `Notificação enviada via ${result.adapter}${result.delivered ? '' : ' (falhou)'}.`;
+      setSuccess(message);
+      snackbar.show(message, result.delivered ? 'success' : 'warning');
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao enviar notificação.');
@@ -63,16 +71,41 @@ export default function IntegracoesPage() {
   return (
     <RequirePermissions permissions={['auditoria.visualizar']}>
       <PageShell
-        kicker="Integrações e resiliência"
+        kicker="Técnico"
         icon={Plug}
-        title="Eventos técnicos, notificações e sync"
+        title="Integrações"
+        description="Webhooks, sincronização de campo e status dos serviços conectados."
         backHref="/cco"
       >
+        <TipBanner id="integracoes-sync">
+          Falhas de sync de campo aparecem aqui. Use Retentar para reenfileirar eventos pendentes ou envie uma notificação de teste.
+        </TipBanner>
+
         {error ? <div className="mb-6"><ErrorState message={error} onRetry={() => void load()} /></div> : null}
         {success ? <Alert variant="success" className="mb-4">{success}</Alert> : null}
         {loading ? <LoadingState label="Carregando eventos técnicos..." /> : null}
 
         {eventos ? (
+          <>
+            <div className="mb-6 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] p-4">
+                <div className="flex items-center justify-between">
+                  <Badge variant={eventos.syncFalhas.length === 0 ? 'success' : 'warning'}>
+                    {eventos.syncFalhas.length === 0 ? 'Sync operacional' : 'Sync com falhas'}
+                  </Badge>
+                  <span className="mono text-[12px] text-[var(--ink-3)]">{eventos.syncFalhas.length} falha(s)</span>
+                </div>
+                <p className="mt-2 text-[13px] text-[var(--ink-3)]">Fila de sincronização mobile</p>
+              </div>
+              <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] p-4">
+                <div className="flex items-center justify-between">
+                  <Badge variant="info">Notificações</Badge>
+                  <span className="mono text-[12px] text-[var(--ink-3)]">{eventos.auditoriaIntegracoes.length} evento(s)</span>
+                </div>
+                <p className="mt-2 text-[13px] text-[var(--ink-3)]">Webhook e alertas operacionais</p>
+              </div>
+            </div>
+
           <section className="grid gap-6 lg:grid-cols-2">
             <Card elevation={1}>
               <CardHeader className="flex-row items-center justify-between space-y-0">
@@ -128,6 +161,7 @@ export default function IntegracoesPage() {
               </CardContent>
             </Card>
           </section>
+          </>
         ) : null}
       </PageShell>
     </RequirePermissions>
