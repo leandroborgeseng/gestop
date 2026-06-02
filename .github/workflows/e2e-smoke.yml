@@ -1,0 +1,28 @@
+name: E2E Smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+      - name: E2E smoke (paginas publicas)
+        run: npm run test:e2e -- e2e/smoke.spec.ts e2e/core-flows.spec.ts --grep "Health checks|Chamado publico"
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+          CI: 'true'

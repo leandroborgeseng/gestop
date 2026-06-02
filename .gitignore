@@ -10,5 +10,6 @@ frontend/tsconfig.tsbuildinfo
 *.log
 
 /storage/
+backups/
 
 .DS_Store

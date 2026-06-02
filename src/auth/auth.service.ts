@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomBytes } from 'node:crypto';
+import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveJwtSecret } from '../config/env';
 import { hashPassword, verifyPassword } from './password';
@@ -11,6 +12,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly emailService: EmailService,
   ) {}
 
   async login(email: string, password: string) {
@@ -182,25 +184,30 @@ export class AuthService {
   }
 
   private async dispatchPasswordResetEmail(email: string, nome: string, resetUrl: string) {
-    const webhookUrl = process.env.PASSWORD_RESET_WEBHOOK_URL?.trim() ?? process.env.INTEGRACOES_WEBHOOK_URL?.trim();
-
-    if (!webhookUrl) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log(`[GestOP:auth] Reset URL para ${email}: ${resetUrl}`);
-      }
-      return;
-    }
-
-    await fetch(webhookUrl, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        source: 'gestop',
-        evento: 'password-reset',
-        payload: { email, nome, resetUrl },
-        emittedAt: new Date().toISOString(),
-      }),
+    const result = await this.emailService.send({
+      to: email,
+      subject: 'GestOP — Redefinir senha',
+      text: [
+        `Ola, ${nome}.`,
+        '',
+        'Recebemos uma solicitacao para redefinir sua senha no GestOP.',
+        `Acesse o link abaixo (valido por 1 hora):`,
+        resetUrl,
+        '',
+        'Se voce nao solicitou, ignore este e-mail.',
+      ].join('\n'),
+      html: [
+        `<p>Ola, <strong>${nome}</strong>.</p>`,
+        `<p>Recebemos uma solicitacao para redefinir sua senha no GestOP.</p>`,
+        `<p><a href="${resetUrl}">Redefinir senha</a> (valido por 1 hora)</p>`,
+        `<p>Se voce nao solicitou, ignore este e-mail.</p>`,
+      ].join(''),
+      tags: ['password-reset'],
     });
+
+    if (!result.delivered && process.env.NODE_ENV !== 'production') {
+      console.log(`[GestOP:auth] Reset URL para ${email}: ${resetUrl}`);
+    }
   }
 
   private getJwtSecret() {

@@ -12,6 +12,8 @@ Guia rápido para equipe CCO e TI da Prefeitura de Franca.
 
 Login: URL do frontend Railway. Credenciais iniciais via seed (`INITIAL_ADMIN_PASSWORD`).
 
+**Go-live Franca:** checklist completo e roteiro de piloto em [`docs/go-live-franca.md`](./go-live-franca.md).
+
 ## Rotina diária CCO
 
 1. Abrir **CCO** — mapa com clusters de unidades e pendências

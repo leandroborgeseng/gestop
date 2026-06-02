@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import webpush from 'web-push';
+import { EmailService } from '../email/email.service';
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { MonitoramentoService } from '../monitoramento/monitoramento.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,6 +16,7 @@ export class NotificacoesService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly monitoramentoService: MonitoramentoService,
     private readonly integracoesService: IntegracoesService,
+    private readonly emailService: EmailService,
   ) {}
 
   onModuleInit() {
@@ -92,11 +94,13 @@ export class NotificacoesService implements OnModuleInit {
     });
 
     const push = await this.sendPushToGestores(titulo, corpo, '/dashboard');
+    const emails = await this.sendEmailAlertasToGestores(titulo, corpo, alertas.resumo);
 
     return {
       enviados: total,
       webhook: webhook.delivered,
       push,
+      emails,
       origem,
       resumo: alertas.resumo,
     };
@@ -140,6 +144,45 @@ export class NotificacoesService implements OnModuleInit {
         }
         this.logger.warn(`Push falhou para ${subscription.endpoint}: ${error instanceof Error ? error.message : error}`);
       }
+    }
+
+    return sent;
+  }
+
+  private async sendEmailAlertasToGestores(
+    title: string,
+    body: string,
+    resumo: Record<string, number>,
+  ) {
+    if (process.env.EMAIL_ALERTS_ENABLED !== 'true' || !this.emailService.isConfigured()) {
+      return 0;
+    }
+
+    const gestores = await this.prisma.usuario.findMany({
+      where: {
+        ativo: true,
+        perfis: {
+          some: {
+            perfil: {
+              permissoes: {
+                some: { permissao: { chave: 'dashboard.visualizar' } },
+              },
+            },
+          },
+        },
+      },
+      select: { email: true, nome: true },
+    });
+
+    let sent = 0;
+    for (const gestor of gestores) {
+      const result = await this.emailService.send({
+        to: gestor.email,
+        subject: title,
+        text: `${body}\n\nResumo: ${JSON.stringify(resumo)}`,
+        tags: ['alertas-operacionais'],
+      });
+      if (result.delivered) sent += 1;
     }
 
     return sent;

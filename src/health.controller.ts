@@ -38,9 +38,15 @@ export class HealthController {
       observability: {
         sentryConfigured: Boolean(process.env.SENTRY_DSN?.trim()),
         webhookConfigured: Boolean(process.env.INTEGRACOES_WEBHOOK_URL?.trim()),
+        emailConfigured: Boolean(
+          process.env.SMTP_HOST?.trim() ||
+            process.env.EMAIL_WEBHOOK_URL?.trim() ||
+            (process.env.EMAIL_DRIVER === 'webhook' && process.env.INTEGRACOES_WEBHOOK_URL?.trim()),
+        ),
         webPushConfigured: Boolean(
           process.env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim() && process.env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim(),
         ),
+        webmapCronConfigured: Boolean(process.env.WEBMAP_CRON_SECRET?.trim()),
       },
       timestamp: new Date().toISOString(),
     };
