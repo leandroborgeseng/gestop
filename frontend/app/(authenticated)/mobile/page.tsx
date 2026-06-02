@@ -1,7 +1,7 @@
 'use client';
 
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CloudUpload, MapPin, RefreshCcw, Save, Smartphone, Satellite } from 'lucide-react';
+import { CloudUpload, MapPin, RefreshCcw, Save, Smartphone, Satellite, Wifi, WifiOff } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import {
   buildRespostaPayload,
@@ -11,6 +11,7 @@ import {
 } from '@/components/mobile/checklist-item-card';
 import { getPublishedVersion } from '@/components/checklists/checklist-shared';
 import { PageShell } from '@/components/layout/page-shell';
+import { TipBanner } from '@/components/help/tip-banner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Fab } from '@/components/ui/fab';
@@ -18,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
 import { Select } from '@/components/ui/select';
+import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { captureCurrentPosition } from '@/lib/geolocation';
 import { filterChecklistsForUnidade } from '@/lib/checklist-matching';
@@ -27,12 +29,15 @@ import { getMobileFieldPackage, syncMobileInspection } from '@/lib/api';
 import { registerServiceWorker, requestNotificationPermission, showLocalNotification } from '@/lib/pwa';
 import { PwaInstallBanner } from '@/components/mobile/pwa-install-banner';
 import { MobileFieldPackage, MobileQueuedInspection } from '@/lib/types';
+import { cn } from '@/lib/cn';
 
 const DEVICE_KEY = 'gestop.mobile.device';
 
 export default function MobilePage() {
+  const snackbar = useSnackbar();
   const [fieldPackage, setFieldPackage] = useState<MobileFieldPackage | null>(null);
   const [queue, setQueue] = useState<MobileQueuedInspection[]>([]);
+  const [online, setOnline] = useState(true);
   const [unidadeId, setUnidadeId] = useState('');
   const [checklistId, setChecklistId] = useState('');
   const [responses, setResponses] = useState<Record<string, ResponseDraft>>({});
@@ -40,7 +45,6 @@ export default function MobilePage() {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const [gpsNotice, setGpsNotice] = useState<string | null>(null);
   const queueRef = useRef<MobileQueuedInspection[]>([]);
 
@@ -51,9 +55,9 @@ export default function MobilePage() {
   const syncQueue = useCallback(async () => {
     if (queueRef.current.length === 0 || syncing) return;
 
+    const initialCount = queueRef.current.length;
     setSyncing(true);
     setError(null);
-    setSuccess(null);
     const remaining: MobileQueuedInspection[] = [];
 
     for (const item of queueRef.current) {
@@ -67,12 +71,12 @@ export default function MobilePage() {
 
     setQueue(remaining);
     await writeMobileQueue(remaining);
-    if (remaining.length === 0) {
-      setSuccess('Fila sincronizada com sucesso.');
+    if (remaining.length === 0 && initialCount > 0) {
+      snackbar.show('Fila sincronizada com sucesso.', 'success');
       showLocalNotification('GestOP Campo', 'Fiscalizacoes sincronizadas com sucesso.');
     }
     setSyncing(false);
-  }, [syncing]);
+  }, [syncing, snackbar]);
 
   useEffect(() => {
     registerServiceWorker();
@@ -90,14 +94,21 @@ export default function MobilePage() {
   }, []);
 
   useEffect(() => {
+    setOnline(navigator.onLine);
     function handleOnline() {
-      if (navigator.onLine && queueRef.current.length > 0) {
-        void syncQueue();
-      }
+      setOnline(true);
+      if (queueRef.current.length > 0) void syncQueue();
+    }
+    function handleOffline() {
+      setOnline(false);
     }
 
     window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, [syncQueue]);
 
   const selectedChecklist = useMemo(
@@ -148,7 +159,6 @@ export default function MobilePage() {
 
   async function saveOffline() {
     setError(null);
-    setSuccess(null);
     setGpsNotice(null);
 
     if (!selectedUnit || !selectedVersion) {
@@ -202,7 +212,7 @@ export default function MobilePage() {
       setQueue(nextQueue);
       await writeMobileQueue(nextQueue);
       setResponses({});
-      setSuccess('Fiscalização salva na fila offline.');
+      snackbar.show('Fiscalização salva na fila offline.', 'success');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao salvar fiscalização.');
     } finally {
@@ -219,15 +229,40 @@ export default function MobilePage() {
         description="Preencha em campo com GPS real, salve localmente e sincronize automaticamente ao voltar online."
         backHref="/cco"
       >
-        <div className="mx-auto max-w-2xl space-y-4 pb-32">
-          <PwaInstallBanner />
+        <div className="mx-auto max-w-2xl space-y-4 pb-36">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1">
+              <PwaInstallBanner />
+            </div>
+            <ConnectionPill online={online} />
+          </div>
+
+          <TipBanner id="mobile-offline-queue">
+            Salve fiscalizações offline quando estiver sem sinal. Elas entram na fila e sincronizam automaticamente ao reconectar.
+          </TipBanner>
+
           {error ? <ErrorState message={error} /> : null}
-          {success ? <Alert variant="success">{success}</Alert> : null}
           {gpsNotice ? <Alert variant="warning">{gpsNotice}</Alert> : null}
           {loading ? <LoadingState label="Baixando pacote de campo..." /> : null}
 
           {fieldPackage ? (
             <>
+              <section className="overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+                <div className="border-b border-[var(--line-2)] bg-[var(--brand-soft)] px-4 py-3">
+                  <div className="flex items-center justify-between text-[12px] text-[var(--ink-3)]">
+                    <span>Roteiro de campo</span>
+                    <span>{new Date().toLocaleDateString('pt-BR')}</span>
+                  </div>
+                  <p className="mt-1 text-[18px] font-semibold text-[var(--ink)]">
+                    {fieldPackage.unidades.length} próprios no pacote
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 divide-x divide-[var(--line-2)]">
+                  <HeroStat label="Checklists" value={fieldPackage.checklists.length} />
+                  <HeroStat label="Na fila" value={queue.length} highlight={queue.length > 0} />
+                  <HeroStat label="Conexão" value={online ? 'Online' : 'Offline'} />
+                </div>
+              </section>
               <Card elevation={1}>
                 <CardHeader>
                   <CardTitle>Configurar vistoria</CardTitle>
@@ -270,9 +305,9 @@ export default function MobilePage() {
                     </Select>
                   </Field>
                   {selectedUnit && availableChecklists.length === 0 ? (
-                    <p className="md-body-md text-[var(--md-on-surface-variant)]">
+                    <p className="text-[13px] text-[var(--ink-3)]">
                       Nenhum checklist publicado vinculado ao tipo{' '}
-                      <strong>{formatUnidadeTipo(selectedUnit.tipo)}</strong>. Cadastre um modelo em Checklists
+                      <strong className="text-[var(--ink)]">{formatUnidadeTipo(selectedUnit.tipo)}</strong>. Cadastre um modelo em Checklists
                       com escopo &quot;Por tipo de próprio&quot;.
                     </p>
                   ) : null}
@@ -282,11 +317,11 @@ export default function MobilePage() {
               {selectedUnit ? (
                 <Card elevation={1}>
                   <CardContent className="p-4">
-                    <p className="md-title-md flex items-center gap-2 text-[var(--md-on-surface)]">
-                      <MapPin className="h-4 w-4 text-[var(--color-brand-primary)]" />
+                    <p className="flex items-center gap-2 text-[15px] font-semibold text-[var(--ink)]">
+                      <MapPin className="h-4 w-4 text-[var(--brand)]" />
                       {selectedUnit.nome}
                     </p>
-                    <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+                    <p className="mt-1 text-[13px] text-[var(--ink-3)]">
                       {formatUnidadeTipo(selectedUnit.tipo)} · {selectedUnit.secretaria.sigla} ·{' '}
                       {selectedUnit.bairro ?? 'Sem bairro'} · raio {selectedUnit.raioValidacaoMetros} m
                     </p>
@@ -315,12 +350,12 @@ export default function MobilePage() {
               <Card elevation={1}>
                 <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="md-title-md text-[var(--md-on-surface)]">Fila de sincronização</h2>
-                    <p className="md-body-md text-[var(--md-on-surface-variant)]">
+                    <h2 className="text-[15px] font-semibold text-[var(--ink)]">Fila de sincronização</h2>
+                    <p className="text-[13px] text-[var(--ink-3)]">
                       {queue.length} fiscalização(ões) pendente(s) · sync automático ao voltar online
                     </p>
                   </div>
-                  <Button variant="filled" disabled={queue.length === 0 || syncing} onClick={() => void syncQueue()}>
+                  <Button variant="filled" disabled={queue.length === 0 || syncing || !online} onClick={() => void syncQueue()}>
                     {syncing ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
                     Sincronizar
                   </Button>
@@ -328,9 +363,27 @@ export default function MobilePage() {
               </Card>
 
               {selectedVersion ? (
-                <Fab extended onClick={() => void saveOffline()} aria-label="Salvar na fila offline" disabled={saving}>
+                <Fab extended onClick={() => void saveOffline()} aria-label="Salvar na fila offline" disabled={saving} className="bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)]">
                   <Save className="h-5 w-5" />
                   <span>{saving ? 'Salvando...' : 'Salvar offline'}</span>
+                </Fab>
+              ) : null}
+
+              {queue.length > 0 ? (
+                <Fab
+                  size="icon"
+                  onClick={() => void syncQueue()}
+                  aria-label={`Sincronizar ${queue.length} item(ns)`}
+                  disabled={syncing || !online}
+                  className={cn(
+                    'bg-[var(--ink)] text-white hover:bg-[var(--ink-2)]',
+                    selectedVersion && 'bottom-[calc(5.75rem+env(safe-area-inset-bottom)+5.5rem)] lg:bottom-[5.5rem]',
+                  )}
+                >
+                  {syncing ? <RefreshCcw className="h-5 w-5 animate-spin" /> : <CloudUpload className="h-5 w-5" />}
+                  <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-[var(--warn)] px-1 text-[10px] font-bold text-white">
+                    {queue.length}
+                  </span>
                 </Fab>
               ) : null}
             </>
@@ -348,6 +401,32 @@ function getDeviceId() {
     window.localStorage.setItem(DEVICE_KEY, deviceId);
   }
   return deviceId;
+}
+
+function ConnectionPill({ online }: { online: boolean }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1.5 rounded-[var(--r-pill)] border px-3 py-1.5 text-[12px] font-semibold',
+        online
+          ? 'border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok)]'
+          : 'border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn)]',
+      )}
+    >
+      <span className={cn('h-2 w-2 rounded-full', online ? 'bg-[var(--ok)]' : 'bg-[var(--warn)]')} />
+      {online ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+      {online ? 'Online' : 'Offline'}
+    </span>
+  );
+}
+
+function HeroStat({ label, value, highlight = false }: { label: string; value: string | number; highlight?: boolean }) {
+  return (
+    <div className="px-3 py-3 text-center">
+      <p className={cn('text-[18px] font-semibold', highlight ? 'text-[var(--warn)]' : 'text-[var(--ink)]')}>{value}</p>
+      <p className="text-[11px] font-semibold text-[var(--ink-3)]">{label}</p>
+    </div>
+  );
 }
 
 function fileToDataUrl(file: File) {

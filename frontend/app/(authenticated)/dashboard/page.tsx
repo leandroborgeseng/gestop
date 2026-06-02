@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AlertTriangle, BarChart3, Building2, ClipboardCheck, DatabaseZap, ShieldAlert, Wrench } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
+import { TipBanner } from '@/components/help/tip-banner';
 import { MetricCard } from '@/components/metric-card';
 import { Alert } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,10 +44,14 @@ export default function DashboardPage() {
       <PageShell
         kicker="Monitoramento"
         icon={BarChart3}
-        title="Dashboard operacional e auditoria"
-        description="Indicadores consolidados, pendências por secretaria e trilha recente de auditoria."
+        title="Dashboard operacional"
+        description="Indicadores consolidados, alertas operacionais e trilha recente de auditoria."
         backHref="/cco"
       >
+        <TipBanner id="dashboard-alertas">
+          KPIs refletem o estado atual do sistema. Alertas operacionais destacam OS atrasadas, chamados sem triagem e falhas de sync.
+        </TipBanner>
+
         {error ? <div className="mb-6"><ErrorState message={error} /></div> : null}
         {loading ? <LoadingState label="Carregando indicadores..." /> : null}
 
