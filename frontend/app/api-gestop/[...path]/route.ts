@@ -35,19 +35,23 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
     console.log(`[GestOP:proxy] ${request.method} ${targetUrl}`);
     const response = await fetch(targetUrl, init);
     const contentType = response.headers.get('content-type') ?? 'application/json';
-    const isBinary =
-      contentType.startsWith('image/') ||
-      contentType.startsWith('video/') ||
-      contentType.startsWith('audio/') ||
-      contentType === 'application/octet-stream';
+    const isText =
+      contentType.startsWith('text/') ||
+      contentType.includes('json') ||
+      contentType.includes('javascript') ||
+      contentType.includes('xml') ||
+      contentType.includes('svg');
+    const body = isText ? await response.text() : await response.arrayBuffer();
 
-    const body = isBinary ? await response.arrayBuffer() : await response.text();
+    const responseHeaders = new Headers({ 'content-type': contentType });
+    const contentDisposition = response.headers.get('content-disposition');
+    if (contentDisposition) {
+      responseHeaders.set('content-disposition', contentDisposition);
+    }
 
     return new NextResponse(body, {
       status: response.status,
-      headers: {
-        'content-type': contentType,
-      },
+      headers: responseHeaders,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro desconhecido';
