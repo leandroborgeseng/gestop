@@ -1,6 +1,7 @@
 import { execSync } from 'node:child_process';
 import { Client } from 'pg';
 import { runDatabaseBootstrap } from './bootstrap';
+import { runStartupWebmapImportIfNeeded } from './startup-import';
 import { logEnvSummary, logError, logInfo, logStep, logWarn, maskDatabaseUrl, ensureProductionRuntimeEnv } from './startup-log';
 
 function runCommand(phase: string, command: string) {
@@ -133,6 +134,28 @@ async function inspectDatabase(phase: string) {
         'SELECT COUNT(*)::text AS count FROM "Secretaria"',
       );
       logInfo(phase, `Secretarias cadastradas: ${secretarias.rows[0]?.count ?? '0'}`);
+
+      const hasUnidadeTable = tables.rows.some((item) => item.table_name === 'UnidadePublica');
+      if (hasUnidadeTable) {
+        const unidades = await client.query<{ total: string; ativas: string }>(`
+          SELECT
+            COUNT(*)::text AS total,
+            COUNT(*) FILTER (WHERE ativo = true)::text AS ativas
+          FROM "UnidadePublica"
+        `);
+        logInfo(
+          phase,
+          `Unidades publicas: ${unidades.rows[0]?.ativas ?? '0'} ativas / ${unidades.rows[0]?.total ?? '0'} total`,
+        );
+      }
+
+      const hasWebmapImportTable = tables.rows.some((item) => item.table_name === 'WebmapImport');
+      if (hasWebmapImportTable) {
+        const imports = await client.query<{ count: string }>(
+          'SELECT COUNT(*)::text AS count FROM "WebmapImport" WHERE "dryRun" = false',
+        );
+        logInfo(phase, `Importacoes webmap registradas: ${imports.rows[0]?.count ?? '0'}`);
+      }
     }
   } finally {
     await client.end();
@@ -158,6 +181,11 @@ async function main() {
 
   logStep('reset-admin', 'Sincronizando senha do administrador');
   runCommand('reset-admin', 'node dist/prisma/reset-admin-password.js');
+
+  logStep('startup-import', 'Verificando dados importados do webmap');
+  await runStartupWebmapImportIfNeeded();
+
+  await inspectDatabase('pos-import');
 
   logStep('startup', 'Preparacao do banco concluida. Subindo API NestJS.');
 }

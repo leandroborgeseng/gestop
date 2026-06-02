@@ -7,7 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { AuditAction, Prisma } from '@prisma/client';
+import { AuditAction } from '@prisma/client';
 import { resolveAuditUsuarioId } from '../audit/audit.util';
 import { JwtPayload } from '../auth/jwt';
 import { IntegracoesService } from '../integracoes/integracoes.service';
@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { importSecretariasFromCsvContent } from '../../prisma/import-secretarias-core';
 import { fetchWebmapGithubStatus, verifyGithubWebhookSignature } from '../../prisma/webmap-github';
 import { runWebmapImport, type WebmapImportResult } from '../../prisma/webmap-import-core';
+import { persistWebmapImportResult } from '../../prisma/webmap-import-persist';
 import { skippedUnitsToGeoJson } from '../../prisma/webmap-geo';
 import { WEBMAP_LAYER_FILES } from '../../prisma/webmap-layers';
 
@@ -78,7 +79,8 @@ export class AdminImportService {
     );
 
     if (!dryRun) {
-      await this.persistImportResult(result, user, triggeredBy);
+      const usuarioId = user ? await resolveAuditUsuarioId(this.prisma, user.sub) : undefined;
+      await persistWebmapImportResult(this.prisma, result, { triggeredBy, usuarioId });
       await this.notifyImportResult(result);
     }
 
@@ -139,51 +141,6 @@ export class AdminImportService {
     const record = await this.prisma.webmapImport.findUnique({ where: { id } });
     if (!record) throw new BadRequestException('Importacao nao encontrada.');
     return record;
-  }
-
-  private async persistImportResult(
-    result: WebmapImportResult,
-    user: JwtPayload | null,
-    triggeredBy: WebmapImportResult['triggeredBy'],
-  ) {
-    const usuarioId = user ? await resolveAuditUsuarioId(this.prisma, user.sub) : undefined;
-
-    await this.prisma.webmapImport.create({
-      data: {
-        githubCommitSha: result.github.commitSha,
-        commitMessage: result.github.commitMessage,
-        dryRun: false,
-        triggeredBy,
-        featuresRead: result.featuresRead,
-        uniqueUnits: result.uniqueUnits,
-        created: result.created,
-        updated: result.updated,
-        skipped: result.skipped,
-        deactivated: result.deactivated,
-        rejectedCount: result.rejectedFeatures.length,
-        layersProcessed: result.layersProcessed,
-        layersFailed: result.layersFailed,
-        layersDiscovered: result.layersDiscovered,
-        durationMs: result.durationMs,
-        result: result as unknown as Prisma.InputJsonValue,
-        usuarioId,
-      },
-    });
-
-    try {
-      await this.prisma.logAuditoria.create({
-        data: {
-          usuarioId,
-          acao: AuditAction.SYNC,
-          entidadeTipo: WEBMAP_AUDIT_ENTITY,
-          entidadeId: result.github.commitSha,
-          valorAntigo: Prisma.JsonNull,
-          valorNovo: result as unknown as Prisma.InputJsonValue,
-        },
-      });
-    } catch (error) {
-      this.logger.warn(`Auditoria webmap nao registrada: ${error instanceof Error ? error.message : error}`);
-    }
   }
 
   private async notifyImportResult(result: WebmapImportResult) {

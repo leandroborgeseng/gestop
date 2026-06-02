@@ -72,7 +72,23 @@ O script é **idempotente**: roda de novo após atualização do webmap no GitHu
 
 ## Produção (Railway)
 
-Executar one-off no serviço backend (com `DATABASE_URL`):
+Os dados importados ficam **persistidos no PostgreSQL** do Railway. Novos deploys **não apagam** as unidades já importadas.
+
+No boot do backend (`startup.js`), após migrate + seed:
+
+1. Se já existir importação registrada **e** houver pelo menos 10 unidades ativas → **nada é reimportado**
+2. Se o banco estiver vazio ou só com as 3 unidades do seed → importação automática do GitHub (secretarias + 38 camadas)
+
+Variáveis opcionais:
+
+```env
+WEBMAP_AUTO_IMPORT_ON_START=true   # false para desativar
+WEBMAP_AUTO_IMPORT_MIN_UNITS=10    # limiar mínimo de unidades ativas
+```
+
+Para atualizar quando o webmap mudar no GitHub, use **Admin → Importação** ou configure cron/webhook (ver painel).
+
+Importação manual one-off (se necessário):
 
 ```bash
 npm run import:webmap:dry-run

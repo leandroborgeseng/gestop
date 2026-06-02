@@ -55,6 +55,8 @@ export function logEnvSummary() {
   logInfo('env', `JWT_SECRET=${summarizeSecret(process.env.JWT_SECRET)}`);
   logInfo('env', `STORAGE_DRIVER=${process.env.STORAGE_DRIVER ?? 'local'}`);
   logInfo('env', `STORAGE_PUBLIC_URL_BASE=${process.env.STORAGE_PUBLIC_URL_BASE ?? '(nao definido)'}`);
+  logInfo('env', `WEBMAP_AUTO_IMPORT_ON_START=${process.env.WEBMAP_AUTO_IMPORT_ON_START ?? 'true (padrao producao)'}`);
+  logInfo('env', `WEBMAP_AUTO_IMPORT_MIN_UNITS=${process.env.WEBMAP_AUTO_IMPORT_MIN_UNITS ?? '10'}`);
   logInfo('env', `PWD=${process.cwd()}`);
 }
 
