@@ -99,32 +99,25 @@ async function main() {
 
   const defaultPasswordHash = hashPassword(initialPassword ?? 'Gestop@123', isProduction ? undefined : 'gestop-dev-seed-salt');
 
-  const [educacao, saude, servicos] = await Promise.all([
-    prisma.secretaria.create({
-      data: {
-        nome: 'Secretaria Municipal de Educacao',
-        sigla: 'SME',
-        responsavelNome: 'Mariana Costa',
-        responsavelEmail: 'mariana.costa@franca.sp.gov.br',
-      },
-    }),
-    prisma.secretaria.create({
-      data: {
-        nome: 'Secretaria Municipal de Saude',
-        sigla: 'SMS',
-        responsavelNome: 'Roberto Lima',
-        responsavelEmail: 'roberto.lima@franca.sp.gov.br',
-      },
-    }),
-    prisma.secretaria.create({
-      data: {
-        nome: 'Secretaria de Servicos e Meio Ambiente',
-        sigla: 'SSMA',
-        responsavelNome: 'Ana Paula Martins',
-        responsavelEmail: 'ana.martins@franca.sp.gov.br',
-      },
-    }),
-  ]);
+  const secretariasSeed = [
+    { nome: 'Secretaria Municipal de Educacao', sigla: 'SME', responsavelNome: 'Mariana Costa', responsavelEmail: 'mariana.costa@franca.sp.gov.br' },
+    { nome: 'Secretaria Municipal de Saude', sigla: 'SMS', responsavelNome: 'Roberto Lima', responsavelEmail: 'roberto.lima@franca.sp.gov.br' },
+    { nome: 'Secretaria de Servicos Urbanos e Meio Ambiente', sigla: 'SSMA', responsavelNome: 'Ana Paula Martins', responsavelEmail: 'ana.martins@franca.sp.gov.br' },
+    { nome: 'Secretaria Municipal de Obras', sigla: 'SMO', responsavelNome: 'Carlos Eduardo Silva', responsavelEmail: 'carlos.silva@franca.sp.gov.br' },
+    { nome: 'Secretaria Municipal de Financas', sigla: 'SMF', responsavelNome: 'Patricia Alves', responsavelEmail: 'patricia.alves@franca.sp.gov.br' },
+    { nome: 'Secretaria Municipal de Transportes e Transito', sigla: 'SMT', responsavelNome: 'Renato Gomes', responsavelEmail: 'renato.gomes@franca.sp.gov.br' },
+    { nome: 'Secretaria Municipal de Desenvolvimento Humano e Cidadania', sigla: 'SMDHC', responsavelNome: 'Juliana Freitas', responsavelEmail: 'juliana.freitas@franca.sp.gov.br' },
+    { nome: 'Secretaria Municipal de Cultura e Turismo', sigla: 'SMCT', responsavelNome: 'Fabio Nascimento', responsavelEmail: 'fabio.nascimento@franca.sp.gov.br' },
+    { nome: 'Secretaria Municipal de Esporte e Lazer', sigla: 'SMEL', responsavelNome: 'Helio Mendes', responsavelEmail: 'helio.mendes@franca.sp.gov.br' },
+  ];
+
+  const secretariasCriadas = await Promise.all(
+    secretariasSeed.map((secretaria) => prisma.secretaria.create({ data: secretaria })),
+  );
+
+  const educacao = secretariasCriadas.find((item) => item.sigla === 'SME')!;
+  const saude = secretariasCriadas.find((item) => item.sigla === 'SMS')!;
+  const servicos = secretariasCriadas.find((item) => item.sigla === 'SSMA')!;
 
   const unidades = await Promise.all([
     prisma.unidadePublica.create({
@@ -503,7 +496,7 @@ async function main() {
       acao: AuditAction.CREATE,
       entidadeTipo: 'Seed',
       valorNovo: {
-        secretarias: 3,
+        secretarias: 9,
         unidades: unidades.length,
         usuarios: 4,
         checklistVersao: checklistVersao.versao,

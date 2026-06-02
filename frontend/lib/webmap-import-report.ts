@@ -71,6 +71,31 @@ export function downloadWebmapRejectedCsv(features: WebmapRejectedFeature[]) {
   ]));
 }
 
+export function downloadWebmapSkippedGeoJson(units: WebmapSkippedUnit[]) {
+  const geojson = {
+    type: 'FeatureCollection',
+    features: units.map((unit) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [unit.longitude, unit.latitude] },
+      properties: {
+        codigoPatrimonial: unit.codigoPatrimonial,
+        nome: unit.nome,
+        secretariaSigla: unit.secretariaSigla,
+        layerFile: unit.layerFile,
+        reason: unit.reason,
+        sugestao: unit.sugestao,
+      },
+    })),
+  };
+  const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/geo+json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'gestop-webmap-unidades-ignoradas.geojson';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export function downloadWebmapImportReportCsv(result: WebmapImportResult) {
   downloadWebmapSkippedCsv(result.skippedUnits);
   if (result.rejectedFeatures.length > 0) {

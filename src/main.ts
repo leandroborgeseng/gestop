@@ -31,7 +31,7 @@ async function bootstrap() {
   console.log('[GestOP:api] Iniciando NestJS...');
   console.log(`[GestOP:api] NODE_ENV=${process.env.NODE_ENV ?? '(nao definido)'}`);
 
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { rawBody: true });
 
   const corsOrigins = process.env.CORS_ORIGINS?.split(',').map((item) => item.trim()).filter(Boolean);
   app.enableCors({

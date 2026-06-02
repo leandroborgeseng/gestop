@@ -187,8 +187,15 @@ export type WebmapImportGithub = {
   htmlUrl: string;
 };
 
-export type WebmapSkipReason = 'SECRETARIA_NAO_CADASTRADA';
-export type WebmapRejectReason = 'SEM_COORDENADAS' | 'SEM_NOME';
+export type WebmapSkipReason = 'SECRETARIA_NAO_CADASTRADA' | 'SECRETARIA_NAO_RESOLVIDA';
+export type WebmapRejectReason = 'SEM_COORDENADAS' | 'SEM_NOME' | 'FORA_MUNICIPIO' | 'CADASTRO_INVALIDO';
+
+export type WebmapImportDiff = {
+  previousCommitSha: string | null;
+  createdCodigos: string[];
+  updatedCodigos: string[];
+  deactivatedCodigos: string[];
+};
 
 export type WebmapSkippedUnit = {
   reason: WebmapSkipReason;
@@ -217,6 +224,7 @@ export type WebmapRejectedFeature = {
 };
 
 export type WebmapImportLastSync = {
+  id?: string | null;
   syncedAt: string;
   githubCommitSha: string;
   usuario: { nome: string; email: string };
@@ -224,9 +232,16 @@ export type WebmapImportLastSync = {
   updated: number | null;
   uniqueUnits: number | null;
   skipped: number | null;
+  deactivated?: number | null;
   skippedUnits: WebmapSkippedUnit[];
   rejectedFeatures: WebmapRejectedFeature[];
+  deactivatedUnits?: Array<{ codigoPatrimonial: string; nome: string }>;
+  diff?: WebmapImportDiff | null;
   layersFailed: number | null;
+  layersDiscovered?: number | null;
+  durationMs?: number | null;
+  triggeredBy?: string;
+  importResult?: WebmapImportResult | null;
 };
 
 export type WebmapImportStatus = {
@@ -236,22 +251,35 @@ export type WebmapImportStatus = {
   hasUpdates: boolean;
   layersConfigured: number;
   repoUrl: string;
+  automation?: { cronEnabled: boolean; webhookEnabled: boolean };
 };
 
 export type WebmapImportResult = {
   dryRun: boolean;
+  triggeredBy?: 'manual' | 'cron' | 'webhook';
+  durationMs?: number;
   featuresRead: number;
   uniqueUnits: number;
   created: number;
   updated: number;
   skipped: number;
+  deactivated?: number;
   skippedUnits: WebmapSkippedUnit[];
   rejectedFeatures: WebmapRejectedFeature[];
+  deactivatedUnits?: Array<{ codigoPatrimonial: string; nome: string }>;
   secretariasCadastradas: string[];
   layersProcessed: number;
   layersFailed: number;
+  layersDiscovered?: number;
+  autoDiscoveredLayers?: string[];
   totalUnidadesInDb: number;
+  diff?: WebmapImportDiff;
   github: WebmapImportGithub;
+};
+
+export type WebmapSyncAllResult = {
+  secretarias: { created: number; updated: number; total: number; dryRun: boolean };
+  webmap: WebmapImportResult;
 };
 
 export type ChecklistEscopo = 'GLOBAL' | 'SECRETARIA' | 'UNIDADE_TIPO' | 'UNIDADE';

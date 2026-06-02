@@ -1,4 +1,5 @@
 import { UnidadeTipo } from '@prisma/client';
+import { fetchGithubLayerFiles } from './webmap-github';
 
 export type WebmapLayerConfig = {
   file: string;
@@ -55,3 +56,89 @@ export const WEBMAP_LAYER_FILES: WebmapLayerConfig[] = [
 export const WEBMAP_RAW_BASE =
   process.env.WEBMAP_RAW_BASE?.trim() ??
   'https://raw.githubusercontent.com/SMMAFRANCA/webmap/main/layers';
+
+const LAYER_PREFIXES = ['PrprioPblicoMunicipal', 'UnidadesEscolares', 'ImvelPblico'] as const;
+
+const STATIC_BY_FILE = new Map(WEBMAP_LAYER_FILES.map((layer) => [layer.file, layer]));
+
+function inferLayerConfig(file: string): WebmapLayerConfig | null {
+  if (file.startsWith('PrprioPblicoMunicipal')) {
+    const lower = file.toLowerCase();
+    let defaultTipo: UnidadeTipo = UnidadeTipo.OUTRO;
+    let defaultSecretariaSigla = 'SSMA';
+    if (/arena|campo|estadio|ginsio|piscina|pista|quadra/i.test(file)) {
+      defaultTipo = UnidadeTipo.ESPACO_ESPORTIVO;
+      defaultSecretariaSigla = 'SMEL';
+    } else if (/ateno|saude|urgncia|vigilncia|diagnstico/i.test(file)) {
+      defaultTipo = UnidadeTipo.UBS;
+      defaultSecretariaSigla = 'SMS';
+    } else if (/biblioteca|museu|teatro|pinacoteca/i.test(file)) {
+      defaultSecretariaSigla = 'SMCT';
+    } else if (/cep|educa|escolar/i.test(file)) {
+      defaultTipo = UnidadeTipo.ESCOLA;
+      defaultSecretariaSigla = 'SME';
+    } else if (/gesto|secretaria|finan/i.test(file) || lower.includes('administr')) {
+      defaultTipo = UnidadeTipo.PREDIO_ADMINISTRATIVO;
+      defaultSecretariaSigla = 'SMF';
+    } else if (/parque|praa/i.test(file)) {
+      defaultTipo = UnidadeTipo.PRACA;
+    }
+    return { file, group: 'proprio_municipal', defaultSecretariaSigla, defaultTipo };
+  }
+
+  if (file.startsWith('UnidadesEscolares')) {
+    const defaultTipo = /almoxarifado|secretaria|merenda/i.test(file)
+      ? UnidadeTipo.PREDIO_ADMINISTRATIVO
+      : UnidadeTipo.ESCOLA;
+    return { file, group: 'unidade_escolar', defaultSecretariaSigla: 'SME', defaultTipo };
+  }
+
+  if (file.startsWith('ImvelPblico')) {
+    return { file, group: 'imovel_publico', defaultSecretariaSigla: 'SSMA', defaultTipo: UnidadeTipo.OUTRO };
+  }
+
+  return null;
+}
+
+function isSupportedLayerFile(file: string) {
+  return LAYER_PREFIXES.some((prefix) => file.startsWith(prefix));
+}
+
+export async function resolveWebmapLayers(options: {
+  discoveredFiles?: string[];
+  autoDiscover?: boolean;
+} = {}): Promise<{ layers: WebmapLayerConfig[]; discoveredFiles: string[]; autoDiscovered: string[] }> {
+  const autoDiscover = options.autoDiscover ?? process.env.WEBMAP_AUTO_DISCOVER !== 'false';
+  let discoveredFiles = options.discoveredFiles ?? [];
+
+  if (autoDiscover && discoveredFiles.length === 0) {
+    discoveredFiles = (await fetchGithubLayerFiles()).filter(isSupportedLayerFile);
+  }
+
+  const mergedFiles = new Set<string>([
+    ...WEBMAP_LAYER_FILES.map((layer) => layer.file),
+    ...discoveredFiles,
+  ]);
+
+  const autoDiscovered: string[] = [];
+  const layers: WebmapLayerConfig[] = [];
+
+  for (const file of mergedFiles) {
+    const staticLayer = STATIC_BY_FILE.get(file);
+    if (staticLayer) {
+      layers.push(staticLayer);
+      continue;
+    }
+    const inferred = inferLayerConfig(file);
+    if (inferred) {
+      layers.push(inferred);
+      autoDiscovered.push(file);
+    }
+  }
+
+  layers.sort((a, b) => a.file.localeCompare(b.file, 'pt-BR'));
+  return { layers, discoveredFiles, autoDiscovered };
+}
+
+export { inferLayerConfig as inferLayerConfigForTest };
+

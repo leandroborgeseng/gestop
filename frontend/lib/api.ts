@@ -23,6 +23,7 @@ import {
   UnidadeFilters,
   UnidadeOperacional,
   WebmapImportResult,
+  WebmapSyncAllResult,
   WebmapImportStatus,
 } from './types';
 
@@ -248,6 +249,25 @@ export function syncWebmapImport(dryRun = false) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ dryRun }),
   });
+}
+
+export function syncWebmapImportAll(dryRun = false) {
+  return request<WebmapSyncAllResult>('/admin/importacao/webmap/sync-all', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ dryRun }),
+  });
+}
+
+export function syncSecretariasImport(dryRun = false) {
+  return request<{ created: number; updated: number; total: number; dryRun: boolean }>(
+    '/admin/importacao/secretarias/sync',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dryRun }),
+    },
+  );
 }
 
 export function listChecklists() {

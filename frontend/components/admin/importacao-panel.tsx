@@ -1,8 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Download, ExternalLink, RefreshCw } from 'lucide-react';
-import { getWebmapImportStatus, syncWebmapImport } from '@/lib/api';
+import { Database, Download, ExternalLink, RefreshCw } from 'lucide-react';
+import { getWebmapImportStatus, syncWebmapImport, syncWebmapImportAll } from '@/lib/api';
 import { WebmapImportResult, WebmapImportStatus } from '@/lib/types';
 import { WebmapImportReport } from '@/components/admin/webmap-import-report';
 import { Alert } from '@/components/ui/alert';
@@ -10,11 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 
-export function ImportacaoPanel({
-  onSynced,
-}: {
-  onSynced?: () => void;
-}) {
+export function ImportacaoPanel({ onSynced }: { onSynced?: () => void }) {
   const [status, setStatus] = useState<WebmapImportStatus | null>(null);
   const [result, setResult] = useState<WebmapImportResult | null>(null);
   const [lastReport, setLastReport] = useState<WebmapImportResult | null>(null);
@@ -28,7 +24,10 @@ export function ImportacaoPanel({
     try {
       const nextStatus = await getWebmapImportStatus();
       setStatus(nextStatus);
-      if (nextStatus.lastSync?.skippedUnits?.length) {
+      const importResult = nextStatus.lastSync?.importResult;
+      if (importResult) {
+        setLastReport(importResult);
+      } else if (nextStatus.lastSync?.skippedUnits?.length) {
         setLastReport({
           dryRun: false,
           featuresRead: 0,
@@ -39,11 +38,13 @@ export function ImportacaoPanel({
           skippedUnits: nextStatus.lastSync.skippedUnits,
           rejectedFeatures: nextStatus.lastSync.rejectedFeatures,
           secretariasCadastradas: [],
-          layersProcessed: 38,
+          layersProcessed: nextStatus.layersConfigured,
           layersFailed: nextStatus.lastSync.layersFailed ?? 0,
           totalUnidadesInDb: nextStatus.unidadesCount,
           github: nextStatus.github,
         });
+      } else {
+        setLastReport(null);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar status do webmap.');
@@ -74,6 +75,24 @@ export function ImportacaoPanel({
     }
   }
 
+  async function handleSyncAll(dryRun: boolean) {
+    setSyncing(true);
+    setError(null);
+    setResult(null);
+    try {
+      const syncResult = await syncWebmapImportAll(dryRun);
+      setResult(syncResult.webmap);
+      if (!dryRun) {
+        await load();
+        onSynced?.();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha na importação completa.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   if (loading) {
     return <LoadingState label="Consultando repositório QGIS no GitHub..." />;
   }
@@ -92,77 +111,65 @@ export function ImportacaoPanel({
         <CardHeader>
           <CardTitle className="md-title-lg">Webmap QGIS (GitHub)</CardTitle>
           <CardDescription>
-            Sincroniza próprios públicos municipais, unidades escolares e imóveis públicos do repositório{' '}
-            <a
-              href={status.repoUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[var(--color-brand-primary)] hover:underline"
-            >
+            Sincroniza camadas do{' '}
+            <a href={status.repoUrl} target="_blank" rel="noreferrer" className="text-[var(--color-brand-primary)] hover:underline">
               SMMAFRANCA/webmap
             </a>
-            .
+            . Auto-descoberta de camadas, desativação de unidades removidas e relatório para correção no QGIS.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <dl className="grid gap-3 sm:grid-cols-2">
+          <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-3">
-              <dt className="md-label-md text-[var(--md-on-surface-variant)]">Commit no GitHub</dt>
+              <dt className="md-label-md text-[var(--md-on-surface-variant)]">Commit GitHub</dt>
               <dd className="md-body-md mt-1 font-mono">{status.github.commitSha.slice(0, 7)}</dd>
               <dd className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">{status.github.commitMessage}</dd>
-              <dd className="md-label-md mt-2 text-[var(--md-on-surface-variant)]">
-                {new Date(status.github.committedAt).toLocaleString('pt-BR')}
-              </dd>
             </div>
             <div className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-3">
-              <dt className="md-label-md text-[var(--md-on-surface-variant)]">Última sync GestOP</dt>
+              <dt className="md-label-md text-[var(--md-on-surface-variant)]">Última sync</dt>
               {status.lastSync ? (
                 <>
                   <dd className="md-body-md mt-1 font-mono">{status.lastSync.githubCommitSha.slice(0, 7)}</dd>
                   <dd className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
-                    {new Date(status.lastSync.syncedAt).toLocaleString('pt-BR')} — {status.lastSync.usuario.nome}
+                    {status.lastSync.usuario.nome} · {status.lastSync.triggeredBy ?? 'manual'}
                   </dd>
                   <dd className="md-label-md mt-2">
-                    +{status.lastSync.created ?? 0} criadas · {status.lastSync.updated ?? 0} atualizadas
+                    +{status.lastSync.created ?? 0} · ~{status.lastSync.updated ?? 0} · {status.lastSync.skipped ?? 0} ignoradas
                   </dd>
                 </>
               ) : (
-                <dd className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">Nunca sincronizado</dd>
+                <dd className="md-body-md mt-1">Nunca sincronizado</dd>
               )}
             </div>
             <div className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-3">
-              <dt className="md-label-md text-[var(--md-on-surface-variant)]">Unidades no banco</dt>
+              <dt className="md-label-md text-[var(--md-on-surface-variant)]">Unidades ativas</dt>
               <dd className="md-headline-md mt-1 text-[var(--color-brand-primary)]">{status.unidadesCount}</dd>
             </div>
             <div className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-3">
-              <dt className="md-label-md text-[var(--md-on-surface-variant)]">Camadas configuradas</dt>
+              <dt className="md-label-md text-[var(--md-on-surface-variant)]">Camadas</dt>
               <dd className="md-headline-md mt-1">{status.layersConfigured}</dd>
+              {status.automation ? (
+                <dd className="md-label-md mt-2 text-[var(--md-on-surface-variant)]">
+                  Cron {status.automation.cronEnabled ? 'on' : 'off'} · Webhook {status.automation.webhookEnabled ? 'on' : 'off'}
+                </dd>
+              ) : null}
             </div>
           </dl>
 
           {status.hasUpdates ? (
-            <Alert variant="warning">
-              Há alterações no GitHub desde a última sincronização. Execute a importação para atualizar o mapa CCO.
-            </Alert>
+            <Alert variant="warning">Há alterações no GitHub desde a última sync.</Alert>
           ) : status.lastSync ? (
-            <Alert variant="success">Banco alinhado com o último commit importado do webmap.</Alert>
-          ) : null}
-
-          {status.lastSync?.skipped && status.lastSync.skipped > 0 && !status.lastSync.skippedUnits.length ? (
-            <Alert variant="warning">
-              A última importação ignorou {status.lastSync.skipped} unidades. Execute uma simulação (dry-run) para
-              gerar o relatório detalhado com CSV para a equipe do QGIS.
-            </Alert>
+            <Alert variant="success">Banco alinhado com o último commit importado.</Alert>
           ) : null}
 
           <div className="flex flex-wrap gap-3">
-            <Button
-              variant="filled"
-              disabled={syncing}
-              onClick={() => void handleSync(false)}
-            >
+            <Button variant="filled" disabled={syncing} onClick={() => void handleSyncAll(false)}>
+              <Database className="h-4 w-4" />
+              {syncing ? 'Importando...' : 'Secretarias + Webmap'}
+            </Button>
+            <Button variant="tonal" disabled={syncing} onClick={() => void handleSync(false)}>
               <Download className="h-4 w-4" />
-              {syncing ? 'Importando...' : 'Importar do GitHub agora'}
+              Só Webmap
             </Button>
             <Button variant="tonal" disabled={syncing} onClick={() => void handleSync(true)}>
               <RefreshCw className="h-4 w-4" />
@@ -172,7 +179,7 @@ export function ImportacaoPanel({
               href={status.github.htmlUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--md-shape-full)] border border-[var(--md-outline)] px-5 md-label-lg font-medium text-[var(--color-brand-primary)] transition hover:bg-[var(--color-brand-primary-subtle)]"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-[var(--md-shape-full)] border border-[var(--md-outline)] px-5 md-label-lg font-medium text-[var(--color-brand-primary)]"
             >
               <ExternalLink className="h-4 w-4" />
               Ver commit
@@ -185,15 +192,9 @@ export function ImportacaoPanel({
       </Card>
 
       {result ? (
-        <WebmapImportReport
-          result={result}
-          title={result.dryRun ? 'Resultado da simulação' : 'Resultado da importação'}
-        />
-      ) : lastReport && lastReport.skipped > 0 ? (
-        <WebmapImportReport
-          result={lastReport}
-          title="Relatório da última importação (unidades ignoradas)"
-        />
+        <WebmapImportReport result={result} title={result.dryRun ? 'Resultado da simulação' : 'Resultado da importação'} />
+      ) : lastReport && (lastReport.skipped > 0 || lastReport.rejectedFeatures.length > 0) ? (
+        <WebmapImportReport result={lastReport} title="Relatório da última importação" />
       ) : null}
     </div>
   );
