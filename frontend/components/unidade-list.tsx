@@ -1,6 +1,7 @@
 'use client';
 
 import { Building2, ClipboardList, LocateFixed, Mail, UserRound } from 'lucide-react';
+import { hasPlottableCoordinates } from '@/lib/geo-coordinates';
 import { UnidadeOperacional } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { cn } from '@/lib/cn';
@@ -43,7 +44,7 @@ export function UnidadeList({
         {unidades.map((unidade) => {
           const selected = selectedId === unidade.id;
           const hovered = hoveredId === unidade.id;
-          const hasGps = unidade.latitude !== null && unidade.longitude !== null;
+          const hasGps = hasPlottableCoordinates(unidade);
 
           return (
             <button

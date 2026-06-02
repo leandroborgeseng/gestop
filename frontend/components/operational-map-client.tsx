@@ -17,6 +17,7 @@ import {
   FRANCA_REFERENCIA_FREDERICO_MOURA,
   MapBasemap,
 } from '@/lib/franca-geo';
+import { hasPlottableCoordinates, toLatLngTuple } from '@/lib/geo-coordinates';
 import { escapeHtml } from '@/lib/security';
 import { UnidadeOperacional, UnidadeSituacao } from '@/lib/types';
 import { MapViewControls } from '@/components/map/map-view-controls';
@@ -78,9 +79,9 @@ function buildPopupHtml(unidade: UnidadeOperacional) {
       <span style="display:block;margin-top:4px;font-size:12px;color:#647389;">
         ${secretaria} · ${bairro}
       </span>
-      <a href="/cco/unidades/${unidade.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;">
+      <button type="button" data-unidade-id="${unidade.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
         Ver detalhes →
-      </a>
+      </button>
     </div>
   `;
 }
@@ -94,7 +95,7 @@ function refreshMapSize(map: L.Map) {
 
 function locatedFingerprint(unidades: UnidadeOperacional[]) {
   return unidades
-    .filter((u) => u.latitude !== null && u.longitude !== null)
+    .filter((u) => hasPlottableCoordinates(u))
     .map((u) => `${u.id}:${u.latitude}:${u.longitude}:${u.situacao}`)
     .join('|');
 }
@@ -126,11 +127,20 @@ export function OperationalMapClient({
   const onHoverRef = useRef(onHover);
   const lastFitFingerprintRef = useRef('');
   const [containerReady, setContainerReady] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
   const [basemap, setBasemap] = useState<MapBasemap>('street');
   const [fullscreenMode, setFullscreenMode] = useState<'off' | 'native' | 'fallback'>('off');
   const isFullscreen = fullscreenMode !== 'off';
 
-  const located = unidades.filter((u) => u.latitude !== null && u.longitude !== null);
+  const located = useMemo(
+    () =>
+      unidades.flatMap((unidade) => {
+        const latLng = toLatLngTuple(unidade);
+        return latLng ? [{ unidade, latLng }] : [];
+      }),
+    [unidades],
+  );
+
   const locatedKey = useMemo(() => locatedFingerprint(unidades), [unidades]);
 
   useEffect(() => {
@@ -278,6 +288,7 @@ export function OperationalMapClient({
       showCoverageOnHover: false,
       maxClusterRadius: 56,
       spiderfyOnMaxZoom: true,
+      animateAddingMarkers: false,
     }).addTo(map);
 
     referenceMarkerRef.current = L.marker(
@@ -287,13 +298,32 @@ export function OperationalMapClient({
       .bindPopup(`<strong>${FRANCA_REFERENCIA_FREDERICO_MOURA.label}</strong>`)
       .addTo(map);
 
+    map.on('popupopen', (event) => {
+      const popup = event.popup.getElement();
+      const button = popup?.querySelector<HTMLButtonElement>('button[data-unidade-id]');
+      if (!button) return;
+      button.onclick = () => {
+        const id = button.dataset.unidadeId;
+        if (id) onSelectRef.current?.(id);
+      };
+    });
+
     mapRef.current = map;
+    setMapReady(true);
     refreshMapSize(map);
 
     return () => {
+      setMapReady(false);
       map.remove();
       mapRef.current = null;
+      streetLayerRef.current = null;
+      satelliteLayerRef.current = null;
+      labelsLayerRef.current = null;
+      markersLayerRef.current = null;
+      referenceMarkerRef.current = null;
       markerByIdRef.current.clear();
+      unidadeByIdRef.current.clear();
+      lastFitFingerprintRef.current = '';
     };
   }, [containerReady]);
 
@@ -313,19 +343,19 @@ export function OperationalMapClient({
       if (!map.hasLayer(satellite)) satellite.addTo(map);
       if (!map.hasLayer(labels)) labels.addTo(map);
     }
-  }, [basemap]);
+  }, [basemap, mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
     const markersLayer = markersLayerRef.current;
-    if (!map || !markersLayer) return;
+    if (!mapReady || !map || !markersLayer) return;
 
     markersLayer.clearLayers();
     markerByIdRef.current.clear();
     unidadeByIdRef.current.clear();
 
-    located.forEach((unidade) => {
-      const marker = L.marker([unidade.latitude as number, unidade.longitude as number], {
+    located.forEach(({ unidade, latLng }) => {
+      const marker = L.marker(latLng, {
         icon: createUnitIcon(situacaoMarkerColor[unidade.situacao], 'normal'),
       }).bindPopup(buildPopupHtml(unidade));
 
@@ -338,10 +368,10 @@ export function OperationalMapClient({
       unidadeByIdRef.current.set(unidade.id, unidade);
     });
 
+    markersLayer.refreshClusters();
+
     if (located.length > 0 && lastFitFingerprintRef.current !== locatedKey) {
-      const bounds = L.latLngBounds(
-        located.map((u) => [u.latitude as number, u.longitude as number] as L.LatLngTuple),
-      );
+      const bounds = L.latLngBounds(located.map((item) => item.latLng));
       bounds.extend([FRANCA_REFERENCIA_FREDERICO_MOURA.lat, FRANCA_REFERENCIA_FREDERICO_MOURA.lng]);
       map.fitBounds(bounds, { padding: [48, 48], maxZoom: 15 });
       lastFitFingerprintRef.current = locatedKey;
@@ -357,9 +387,11 @@ export function OperationalMapClient({
     }
 
     refreshMapSize(map);
-  }, [locatedKey, located]);
+  }, [mapReady, locatedKey, located]);
 
   useEffect(() => {
+    if (!mapReady) return;
+
     markerByIdRef.current.forEach((_, id) => updateMarkerEmphasis(id, 'normal'));
     if (hoveredId) updateMarkerEmphasis(hoveredId, 'hover');
     if (selectedId) {
@@ -367,14 +399,14 @@ export function OperationalMapClient({
       const marker = markerByIdRef.current.get(selectedId);
       const map = mapRef.current;
       if (marker && map) {
-        map.panTo(marker.getLatLng(), { animate: true, duration: 0.35 });
+        map.panTo(marker.getLatLng(), { animate: true });
       }
     }
-  }, [hoveredId, selectedId, updateMarkerEmphasis]);
+  }, [hoveredId, selectedId, updateMarkerEmphasis, mapReady]);
 
   const legendCounts = located.reduce(
-    (acc, u) => {
-      acc[u.situacao] += 1;
+    (acc, { unidade }) => {
+      acc[unidade.situacao] += 1;
       return acc;
     },
     { OPERACIONAL: 0, COM_PENDENCIAS: 0, SEM_LOCALIZACAO: 0, INATIVA: 0 } as Record<UnidadeSituacao, number>,
@@ -401,6 +433,9 @@ export function OperationalMapClient({
         <div className="pointer-events-none absolute top-3.5 left-3.5 z-[500]">
           <span className="inline-flex items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-3 py-1.5 text-xs font-semibold text-[var(--ink-2)] shadow-[var(--sh-sm)] backdrop-blur-md">
             <span className="mono text-[var(--brand)]">{located.length}</span> no mapa
+            {unidades.length !== located.length ? (
+              <span className="text-[var(--ink-3)]">· {unidades.length - located.length} sem GPS</span>
+            ) : null}
           </span>
         </div>
 
@@ -420,7 +455,11 @@ export function OperationalMapClient({
             <div className="max-w-sm rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-5 text-center shadow-[var(--sh-md)]">
               <MapPinOff className="mx-auto mb-3 h-8 w-8 text-[var(--ink-3)]" />
               <h3 className="text-sm font-semibold text-[var(--ink)]">Nenhuma unidade com localização</h3>
-              <p className="mt-1 text-xs text-[var(--ink-3)]">Ajuste os filtros ou cadastre coordenadas nos próprios.</p>
+              <p className="mt-1 text-xs text-[var(--ink-3)]">
+                {unidades.length > 0
+                  ? `${unidades.length} próprio(s) carregado(s), mas sem coordenadas válidas para o mapa.`
+                  : 'Ajuste os filtros ou cadastre coordenadas nos próprios.'}
+              </p>
             </div>
           </div>
         ) : null}

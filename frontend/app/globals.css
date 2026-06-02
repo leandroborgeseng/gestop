@@ -401,6 +401,20 @@ a {
   border: 0;
 }
 
+.leaflet-div-icon.gestop-map-marker,
+.leaflet-div-icon.gestop-map-reference {
+  width: auto !important;
+  height: auto !important;
+}
+
+.leaflet-marker-pane {
+  z-index: 600;
+}
+
+.marker-cluster {
+  z-index: 650;
+}
+
 /* Leaflet */
 .leaflet-container {
   width: 100%;
