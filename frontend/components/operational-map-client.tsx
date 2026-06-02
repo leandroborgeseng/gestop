@@ -93,6 +93,23 @@ function refreshMapSize(map: L.Map) {
   window.setTimeout(() => map.invalidateSize({ animate: false }), 400);
 }
 
+function fitMapToUnits(map: L.Map, located: Array<{ latLng: L.LatLngTuple }>) {
+  if (located.length > 0) {
+    const bounds = L.latLngBounds(located.map((item) => item.latLng));
+    bounds.extend([FRANCA_REFERENCIA_FREDERICO_MOURA.lat, FRANCA_REFERENCIA_FREDERICO_MOURA.lng]);
+    map.fitBounds(bounds, { padding: [28, 28], maxZoom: 13, animate: false });
+    return;
+  }
+
+  map.fitBounds(
+    L.latLngBounds(
+      [FRANCA_BOUNDS.southWest.lat, FRANCA_BOUNDS.southWest.lng],
+      [FRANCA_BOUNDS.northEast.lat, FRANCA_BOUNDS.northEast.lng],
+    ),
+    { padding: [24, 24], animate: false },
+  );
+}
+
 function locatedFingerprint(unidades: UnidadeOperacional[]) {
   return unidades
     .filter((u) => hasPlottableCoordinates(u))
@@ -125,7 +142,10 @@ export function OperationalMapClient({
   const referenceMarkerRef = useRef<L.Marker | null>(null);
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
-  const lastFitFingerprintRef = useRef('');
+  const lastFitKeyRef = useRef('');
+  const lastContainerSizeRef = useRef({ width: 0, height: 0 });
+  const refitTimerRef = useRef<number | null>(null);
+  const locatedRef = useRef<Array<{ unidade: UnidadeOperacional; latLng: L.LatLngTuple }>>([]);
   const [containerReady, setContainerReady] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [basemap, setBasemap] = useState<MapBasemap>('street');
@@ -146,7 +166,22 @@ export function OperationalMapClient({
   useEffect(() => {
     onSelectRef.current = onSelect;
     onHoverRef.current = onHover;
-  }, [onSelect, onHover]);
+    locatedRef.current = located;
+  }, [onSelect, onHover, located]);
+
+  const scheduleRefit = useCallback((map: L.Map, reason: 'data' | 'layout') => {
+    if (refitTimerRef.current) {
+      window.clearTimeout(refitTimerRef.current);
+    }
+
+    refitTimerRef.current = window.setTimeout(() => {
+      refreshMapSize(map);
+      fitMapToUnits(map, locatedRef.current);
+      if (reason === 'data') {
+        lastFitKeyRef.current = locatedKey;
+      }
+    }, reason === 'layout' ? 420 : 80);
+  }, [locatedKey]);
 
   const updateMarkerEmphasis = useCallback(
     (id: string, emphasis: 'normal' | 'hover' | 'selected') => {
@@ -174,7 +209,25 @@ export function OperationalMapClient({
 
     const resizeObserver = new ResizeObserver(() => {
       markContainerReady();
-      if (mapRef.current) refreshMapSize(mapRef.current);
+      const map = mapRef.current;
+      if (!map) return;
+
+      const node = containerRef.current;
+      if (!node) return;
+
+      const width = node.offsetWidth;
+      const height = node.offsetHeight;
+      const prev = lastContainerSizeRef.current;
+      const sizeChanged = Math.abs(width - prev.width) > 16 || Math.abs(height - prev.height) > 16;
+
+      if (sizeChanged) {
+        lastContainerSizeRef.current = { width, height };
+        if (locatedRef.current.length > 0) {
+          scheduleRefit(map, 'layout');
+        } else {
+          refreshMapSize(map);
+        }
+      }
     });
     resizeObserver.observe(node);
 
@@ -198,7 +251,7 @@ export function OperationalMapClient({
       intersectionObserver.disconnect();
       window.removeEventListener('resize', handleWindowResize);
     };
-  }, [markContainerReady]);
+  }, [markContainerReady, scheduleRefit]);
 
   const toggleFullscreen = useCallback(async () => {
     const shell = shellRef.current;
@@ -323,7 +376,11 @@ export function OperationalMapClient({
       referenceMarkerRef.current = null;
       markerByIdRef.current.clear();
       unidadeByIdRef.current.clear();
-      lastFitFingerprintRef.current = '';
+      lastFitKeyRef.current = '';
+      if (refitTimerRef.current) {
+        window.clearTimeout(refitTimerRef.current);
+        refitTimerRef.current = null;
+      }
     };
   }, [containerReady]);
 
@@ -370,24 +427,13 @@ export function OperationalMapClient({
 
     markersLayer.refreshClusters();
 
-    if (located.length > 0 && lastFitFingerprintRef.current !== locatedKey) {
-      const bounds = L.latLngBounds(located.map((item) => item.latLng));
-      bounds.extend([FRANCA_REFERENCIA_FREDERICO_MOURA.lat, FRANCA_REFERENCIA_FREDERICO_MOURA.lng]);
-      map.fitBounds(bounds, { padding: [48, 48], maxZoom: 15 });
-      lastFitFingerprintRef.current = locatedKey;
-    } else if (located.length === 0) {
-      map.fitBounds(
-        L.latLngBounds(
-          [FRANCA_BOUNDS.southWest.lat, FRANCA_BOUNDS.southWest.lng],
-          [FRANCA_BOUNDS.northEast.lat, FRANCA_BOUNDS.northEast.lng],
-        ),
-        { padding: [24, 24] },
-      );
-      lastFitFingerprintRef.current = '';
+    const shouldRefit = lastFitKeyRef.current !== locatedKey;
+    if (shouldRefit) {
+      scheduleRefit(map, 'data');
+    } else {
+      refreshMapSize(map);
     }
-
-    refreshMapSize(map);
-  }, [mapReady, locatedKey, located]);
+  }, [mapReady, locatedKey, located, scheduleRefit]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -413,11 +459,11 @@ export function OperationalMapClient({
   );
 
   return (
-    <div className="cco-map-panel flex min-h-[min(420px,55dvh)] flex-1 flex-col xl:min-h-0">
+    <div className="cco-map-panel w-full">
       <div
         ref={shellRef}
         className={[
-          'gestop-map-shell relative min-h-[min(420px,55dvh)] flex-1 overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
+          'gestop-map-shell relative w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
           fullscreenMode === 'fallback' ? 'gestop-map-fullscreen fixed inset-0 z-[9999]' : '',
         ].join(' ')}
       >

@@ -435,14 +435,17 @@ a {
 
 .gestop-map-shell {
   isolation: isolate;
-  min-height: min(420px, 55dvh);
+  width: 100%;
+  aspect-ratio: 5 / 4;
+  min-height: 300px;
+  max-height: min(520px, calc(100dvh - 260px));
 }
 
 .gestop-map-shell .gestop-map-canvas,
 .cco-map-panel .gestop-map-canvas {
-  min-height: min(420px, 55dvh);
-  height: 100%;
   width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 .gestop-map-shell:fullscreen,
@@ -508,17 +511,15 @@ a {
 }
 
 @media (min-width: 1280px) {
-  .gestop-main .cco-list-panel,
+  .gestop-main .cco-list-panel {
+    min-height: min(640px, calc(100dvh - 260px));
+  }
+
   .gestop-main .cco-map-panel {
     min-height: 0;
   }
 
   .gestop-main .cco-map-panel .gestop-map-shell {
-    min-height: 100%;
-    height: 100%;
-  }
-
-  .gestop-main .cco-map-panel .gestop-map-canvas {
-    min-height: 100%;
+    max-height: min(560px, calc(100dvh - 260px));
   }
 }

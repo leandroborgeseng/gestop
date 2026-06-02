@@ -9,9 +9,8 @@ const OperationalMapClient = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full min-h-[340px] flex-col gap-3 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-4 shadow-[var(--sh-sm)]">
-        <Skeleton className="h-5 w-40" />
-        <Skeleton className="min-h-[340px] flex-1 w-full rounded-[var(--r-md)]" />
+      <div className="gestop-map-shell w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+        <Skeleton className="h-full w-full rounded-none" />
       </div>
     ),
   },
