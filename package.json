@@ -23,6 +23,7 @@
     "import:secretarias": "tsx prisma/import-secretarias.ts",
     "import:secretarias:dry-run": "tsx prisma/import-secretarias.ts --dry-run",
     "go-live:check": "tsx scripts/go-live-check.ts",
+    "prod:smoke": "tsx scripts/prod-smoke.ts",
     "backup:db": "tsx scripts/backup-database.ts",
     "vapid:generate": "tsx scripts/generate-vapid-keys.ts"
   },

@@ -77,7 +77,10 @@ Guia operacional para colocar o GestOP em produção na Prefeitura de Franca/SP 
 ## Parte B — Verificação automatizada
 
 ```bash
-# No serviço backend (Railway one-off ou local com DATABASE_URL de prod)
+# Smoke HTTP contra produção (sem DATABASE_URL)
+npm run prod:smoke
+
+# Checklist completo com banco (Railway one-off ou local com DATABASE_URL de prod)
 npm run go-live:check
 
 # Backup manual do Postgres
@@ -96,7 +99,8 @@ PLAYWRIGHT_BASE_URL=https://gestop.up.railway.app npm run test:e2e
 
 ### Critérios de “pronto para piloto”
 
-- [ ] `go-live:check` sem falhas críticas
+- [ ] `prod:smoke` sem falhas críticas (login, health, QR piloto, migrations)
+- [ ] `go-live:check` sem falhas críticas (com DATABASE_URL)
 - [ ] ≥ 9 secretarias ativas
 - [ ] ≥ 300 unidades ativas (webmap importado)
 - [ ] Login admin OK

@@ -13,7 +13,8 @@ test('password recovery page renders', async ({ page }) => {
 
 test('public chamado page renders', async ({ page }) => {
   await page.goto('/chamado/PMF-ESC-001');
-  await expect(page.getByRole('heading', { name: 'Abrir chamado' })).toBeVisible();
+  await expect(page.getByText('Prefeitura de Franca')).toBeVisible();
+  await expect(page.getByText('Chamado via QR Code')).toBeVisible();
 });
 
 test('relatorios page requires login', async ({ page }) => {

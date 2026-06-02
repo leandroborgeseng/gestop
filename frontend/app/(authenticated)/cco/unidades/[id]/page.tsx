@@ -14,6 +14,7 @@ import {
 import { getUnidadeDetalhe } from '@/lib/api';
 import { UnidadeDetalhe } from '@/lib/types';
 import { PageShell } from '@/components/layout/page-shell';
+import { TipBanner } from '@/components/help/tip-banner';
 import { MetricCard } from '@/components/metric-card';
 import { StatusBadge } from '@/components/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,23 +53,28 @@ export default function UnidadeDetalhePage() {
   }, [params.id]);
 
   return (
-      <PageShell
-        title={unidade?.nome ?? 'Detalhe do próprio'}
-        description={unidade ? `${unidade.tipo} · ${unidade.secretaria.sigla}` : 'Carregando informações da unidade'}
-        icon={Building2}
-        backHref="/cco"
-      >
-        {error ? <ErrorState message={error} /> : null}
-        {loading ? <LoadingState label="Carregando detalhe do próprio..." /> : null}
-        {!loading && unidade ? <UnidadeDetalheView unidade={unidade} /> : null}
-      </PageShell>
+    <PageShell
+      kicker="Próprio público"
+      title={unidade?.nome ?? 'Detalhe do próprio'}
+      description={unidade ? `${unidade.tipo} · ${unidade.secretaria.sigla}` : 'Carregando informações da unidade'}
+      icon={Building2}
+      backHref="/cco"
+    >
+      <TipBanner id="unidade-detalhe">
+        Visão completa do patrimônio: fiscalizações, não conformidades e ordens de serviço vinculadas a este próprio.
+      </TipBanner>
+
+      {error ? <ErrorState message={error} /> : null}
+      {loading ? <LoadingState label="Carregando detalhe do próprio..." /> : null}
+      {!loading && unidade ? <UnidadeDetalheView unidade={unidade} /> : null}
+    </PageShell>
   );
 }
 
 function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
   return (
     <div className="space-y-6">
-      <Card elevation={2}>
+      <Card elevation={1}>
         <CardContent className="p-5 sm:p-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
@@ -76,14 +82,14 @@ function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
                 <Chip variant="brand">{unidade.codigoPatrimonial}</Chip>
                 <StatusBadge situacao={unidade.situacao} />
               </div>
-              <h1 className="md-headline-md mt-3 text-[var(--md-on-surface)]">{unidade.nome}</h1>
-              <p className="md-body-md mt-2 text-[var(--md-on-surface-variant)]">
+              <h1 className="mt-3 text-[20px] font-bold text-[var(--ink)]">{unidade.nome}</h1>
+              <p className="mt-2 text-[14px] text-[var(--ink-3)]">
                 {unidade.tipo} · {unidade.secretaria.sigla} — {unidade.secretaria.nome}
               </p>
             </div>
-            <div className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] px-4 py-3 md-body-md text-[var(--md-on-surface-variant)]">
-              Raio de validação
-              <strong className="md-headline-md mt-0.5 block text-[var(--md-on-surface)]">
+            <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3">
+              <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Raio de validação</p>
+              <strong className="mono mt-1 block text-[22px] font-semibold text-[var(--ink)]">
                 {unidade.raioValidacaoMetros} m
               </strong>
             </div>
@@ -91,11 +97,23 @@ function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
         </CardContent>
       </Card>
 
+      <section className="grid gap-4 sm:grid-cols-3">
+        <MetricCard icon={ClipboardList} title="Fiscalizações" value={unidade.totais.fiscalizacoes} hint="registradas" />
+        <MetricCard
+          icon={AlertTriangle}
+          title="Não conformidades"
+          value={unidade.pendencias.naoConformidadesAbertas}
+          hint="abertas"
+          deltaTone={unidade.pendencias.naoConformidadesAbertas > 0 ? 'warn' : undefined}
+        />
+        <MetricCard icon={Wrench} title="Ordens de serviço" value={unidade.pendencias.ordensServicoAbertas} hint="ativas" />
+      </section>
+
       <section className="grid gap-6 lg:grid-cols-2">
         <Card elevation={1}>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-[var(--color-brand-primary)]" />
+            <CardTitle className="flex items-center gap-2 text-[var(--ink)]">
+              <Building2 className="h-5 w-5 text-[var(--brand)]" />
               Dados cadastrais
             </CardTitle>
           </CardHeader>
@@ -113,24 +131,24 @@ function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
 
         <Card elevation={1}>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-[var(--color-brand-primary)]" />
+            <CardTitle className="flex items-center gap-2 text-[var(--ink)]">
+              <MapPin className="h-5 w-5 text-[var(--brand)]" />
               Localização
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             {unidade.latitude !== null && unidade.longitude !== null ? (
-              <div className="rounded-[var(--md-shape-md)] bg-[var(--color-brand-primary-subtle)] p-5">
-                <p className="md-label-lg text-[var(--color-brand-primary)]">Coordenadas cadastradas</p>
-                <p className="md-headline-md mt-2 text-[var(--md-on-surface)]">
+              <div className="rounded-[var(--r-md)] border border-[var(--brand-soft)] bg-[var(--brand-soft)] p-5">
+                <p className="text-[12px] font-semibold text-[var(--brand-hover)]">Coordenadas cadastradas</p>
+                <p className="mono mt-2 text-[16px] font-semibold text-[var(--ink)]">
                   {unidade.latitude.toFixed(6)}, {unidade.longitude.toFixed(6)}
                 </p>
-                <p className="md-body-md mt-3 text-[var(--md-on-surface-variant)]">
-                  Essas coordenadas serão usadas na validação do raio de check-in em campo.
+                <p className="mt-3 text-[13px] text-[var(--ink-3)]">
+                  Usadas na validação do raio de check-in em campo.
                 </p>
               </div>
             ) : (
-              <div className="rounded-[var(--md-shape-md)] bg-amber-50 p-5 md-body-md text-amber-800">
+              <div className="rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-5 text-[13px] text-[var(--warn)]">
                 Este próprio ainda não possui localização cadastrada.
               </div>
             )}
@@ -138,35 +156,29 @@ function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
         </Card>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-3">
-        <MetricCard icon={ClipboardList} title="Fiscalizações" value={unidade.totais.fiscalizacoes} hint="registradas para este próprio" />
-        <MetricCard icon={AlertTriangle} title="Não conformidades" value={unidade.pendencias.naoConformidadesAbertas} hint="abertas ou em triagem" />
-        <MetricCard icon={Wrench} title="Ordens de serviço" value={unidade.pendencias.ordensServicoAbertas} hint="ativas no momento" />
-      </section>
-
       <section className="grid gap-6 lg:grid-cols-2">
         <Panel title="Últimas fiscalizações">
           {unidade.ultimasFiscalizacoes.length === 0 ? (
-            <p className="md-body-md text-[var(--md-on-surface-variant)]">Nenhuma fiscalização registrada.</p>
+            <p className="text-[13px] text-[var(--ink-3)]">Nenhuma fiscalização registrada.</p>
           ) : (
             <div className="space-y-2">
               {unidade.ultimasFiscalizacoes.map((fiscalizacao) => (
                 <div
                   key={fiscalizacao.id}
-                  className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4"
+                  className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="md-title-md text-[var(--md-on-surface)]">
+                      <p className="text-[14px] font-semibold text-[var(--ink)]">
                         {fiscalizacao.checklistVersao.checklist.nome} v{fiscalizacao.checklistVersao.versao}
                       </p>
-                      <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+                      <p className="mt-1 text-[13px] text-[var(--ink-3)]">
                         {fiscalizacao.status} · {fiscalizacao.origem}
                       </p>
                     </div>
-                    <CalendarClock className="h-5 w-5 text-[var(--md-outline)]" />
+                    <CalendarClock className="h-5 w-5 shrink-0 text-[var(--ink-4)]" />
                   </div>
-                  <p className="md-body-md mt-3 flex items-center gap-2 text-[var(--md-on-surface-variant)]">
+                  <p className="mt-3 flex items-center gap-2 text-[13px] text-[var(--ink-3)]">
                     <UserRound className="h-4 w-4" />
                     {fiscalizacao.agente.nome}
                   </p>
@@ -180,28 +192,28 @@ function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
           <div className="space-y-3">
             {unidade.pendenciasDetalhadas.naoConformidades.length === 0 &&
             unidade.pendenciasDetalhadas.ordensServico.length === 0 ? (
-              <p className="md-body-md text-[var(--md-on-surface-variant)]">Nenhuma pendência ativa para este próprio.</p>
+              <p className="text-[13px] text-[var(--ink-3)]">Nenhuma pendência ativa para este próprio.</p>
             ) : null}
 
             {unidade.pendenciasDetalhadas.naoConformidades.map((item) => (
-              <div key={item.id} className="rounded-[var(--md-shape-md)] bg-amber-50 p-4">
+              <div key={item.id} className="rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4">
                 <Chip variant="warning" className="mb-2">
                   {item.severidade} · {item.status}
                 </Chip>
-                <p className="md-title-md text-[var(--md-on-surface)]">
+                <p className="text-[14px] font-semibold text-[var(--ink)]">
                   {item.item.codigo} — {item.item.titulo}
                 </p>
-                <p className="md-body-md mt-1 text-amber-900/80">{item.descricao}</p>
+                <p className="mt-1 text-[13px] text-[var(--ink-2)]">{item.descricao}</p>
               </div>
             ))}
 
             {unidade.pendenciasDetalhadas.ordensServico.map((ordem) => (
-              <div key={ordem.id} className="rounded-[var(--md-shape-md)] bg-[var(--color-brand-primary-subtle)] p-4">
+              <div key={ordem.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--brand-soft)] p-4">
                 <Chip variant="brand" className="mb-2">
                   {ordem.codigo} · {ordem.status} · {ordem.prioridade}
                 </Chip>
-                <p className="md-title-md text-[var(--md-on-surface)]">{ordem.titulo}</p>
-                <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+                <p className="text-[14px] font-semibold text-[var(--ink)]">{ordem.titulo}</p>
+                <p className="mt-1 text-[13px] text-[var(--ink-3)]">
                   Responsável: {ordem.responsavel?.nome ?? 'não atribuído'}
                 </p>
               </div>
@@ -216,8 +228,8 @@ function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="md-label-md text-[var(--md-on-surface-variant)]">{label}</dt>
-      <dd className="md-body-md mt-1 font-medium text-[var(--md-on-surface)]">{value}</dd>
+      <dt className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{label}</dt>
+      <dd className="mt-1 text-[14px] font-medium text-[var(--ink)]">{value}</dd>
     </div>
   );
 }
@@ -226,7 +238,7 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
   return (
     <Card elevation={1}>
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
+        <CardTitle className="text-[var(--ink)]">{title}</CardTitle>
       </CardHeader>
       <CardContent className="pt-0">{children}</CardContent>
     </Card>
