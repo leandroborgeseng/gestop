@@ -22,7 +22,7 @@ import {
   UnidadeTipo,
 } from '@prisma/client';
 import { hashPassword } from '../src/auth/password';
-import { logError, logInfo, logStep, logWarn, maskDatabaseUrl } from './startup-log';
+import { logError, logInfo, logStep, logWarn, maskDatabaseUrl, isProductionRuntime } from './startup-log';
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://gestop:gestop@localhost:5432/gestop?schema=public';
@@ -61,7 +61,7 @@ async function main() {
   logInfo('seed', `NODE_ENV=${process.env.NODE_ENV ?? '(nao definido)'}`);
   logInfo('seed', `DATABASE_URL=${maskDatabaseUrl(process.env.DATABASE_URL)}`);
 
-  const isProduction = process.env.NODE_ENV === 'production';
+  const isProduction = isProductionRuntime();
   const forceSeed = process.env.FORCE_SEED_ON_START === 'true';
 
   let existingUsers = 0;

@@ -62,3 +62,17 @@ function summarizeSecret(value?: string) {
   if (!value?.trim()) return '(ausente)';
   return `[definido, ${value.trim().length} caracteres]`;
 }
+
+export function isProductionRuntime() {
+  return (
+    process.env.NODE_ENV === 'production' ||
+    Boolean(process.env.RAILWAY_ENVIRONMENT) ||
+    Boolean(process.env.RAILWAY_PROJECT_ID)
+  );
+}
+
+export function ensureProductionRuntimeEnv() {
+  if (isProductionRuntime() && process.env.NODE_ENV !== 'production') {
+    process.env.NODE_ENV = 'production';
+  }
+}

@@ -1,19 +1,11 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { hashPassword, verifyPassword } from '../src/auth/password';
-import { logError, logInfo, logStep, logWarn } from './startup-log';
+import { logError, logInfo, logStep, logWarn, isProductionRuntime } from './startup-log';
 
 const ADMIN_EMAIL = 'admin.gestop@franca.sp.gov.br';
 /** Fallback de deploy — usado quando INITIAL_ADMIN_PASSWORD nao vem do ambiente. */
 const PRODUCTION_ADMIN_PASSWORD_FALLBACK = 'Gestop@123';
-
-function isProductionRuntime() {
-  return (
-    process.env.NODE_ENV === 'production' ||
-    Boolean(process.env.RAILWAY_ENVIRONMENT) ||
-    Boolean(process.env.RAILWAY_PROJECT_ID)
-  );
-}
 
 function resolveAdminPassword() {
   const fromEnv = process.env.INITIAL_ADMIN_PASSWORD?.trim();

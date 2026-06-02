@@ -1,7 +1,7 @@
 import { execSync } from 'node:child_process';
 import { Client } from 'pg';
 import { runDatabaseBootstrap } from './bootstrap';
-import { logEnvSummary, logError, logInfo, logStep, logWarn, maskDatabaseUrl } from './startup-log';
+import { logEnvSummary, logError, logInfo, logStep, logWarn, maskDatabaseUrl, ensureProductionRuntimeEnv } from './startup-log';
 
 function runCommand(phase: string, command: string) {
   logStep(phase, `Executando: ${command}`);
@@ -140,6 +140,7 @@ async function inspectDatabase(phase: string) {
 }
 
 async function main() {
+  ensureProductionRuntimeEnv();
   logStep('startup', 'Iniciando preparacao do banco de dados');
   logEnvSummary();
 
