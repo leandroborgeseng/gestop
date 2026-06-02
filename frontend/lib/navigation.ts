@@ -1,6 +1,7 @@
 import {
   Activity,
   BarChart3,
+  CalendarDays,
   ClipboardList,
   FileSpreadsheet,
   LayoutGrid,
@@ -66,6 +67,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: BarChart3,
     permission: 'dashboard.visualizar',
     mobilePrimary: true,
+  },
+  {
+    id: 'cronograma',
+    label: 'Cronograma',
+    shortLabel: 'Agenda',
+    href: '/cronograma',
+    icon: CalendarDays,
+    permission: 'dashboard.visualizar',
   },
   {
     id: 'relatorios',

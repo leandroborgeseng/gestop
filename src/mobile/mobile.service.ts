@@ -14,10 +14,12 @@ import {
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { OrdensServicoService } from '../ordens-servico/ordens-servico.service';
+import { CronogramaService } from '../cronograma/cronograma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { MobileSyncFiscalizacaoDto } from './mobile.dto';
 import { validateMobileCheckin, validateMobileResponse } from './mobile.rules';
+import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 
 @Injectable()
 export class MobileService {
@@ -25,6 +27,7 @@ export class MobileService {
     private readonly prisma: PrismaService,
     private readonly ordensServicoService: OrdensServicoService,
     private readonly storageService: StorageService,
+    private readonly cronogramaService: CronogramaService,
   ) {}
 
   async getFieldPackage() {
@@ -87,8 +90,34 @@ export class MobileService {
     });
     const checklistVersao = await this.prisma.checklistVersao.findUniqueOrThrow({
       where: { id: dto.checklistVersaoId },
-      include: { itens: true },
+      include: {
+        itens: true,
+        checklist: {
+          select: {
+            id: true,
+            escopo: true,
+            secretariaId: true,
+            unidadeId: true,
+            unidadeTipo: true,
+            ativo: true,
+          },
+        },
+      },
     });
+
+    if (checklistVersao.status !== 'PUBLICADA') {
+      throw new BadRequestException('Somente versoes publicadas podem ser usadas em campo.');
+    }
+
+    if (
+      !checklistAppliesToUnidade(checklistVersao.checklist, {
+        id: unidade.id,
+        tipo: unidade.tipo,
+        secretariaId: unidade.secretariaId,
+      })
+    ) {
+      throw new BadRequestException('Este checklist nao se aplica ao tipo ou secretaria do proprio selecionado.');
+    }
 
     const checkinValidation = validateMobileCheckin({
       unidade: {
@@ -239,6 +268,12 @@ export class MobileService {
       });
 
       return { fiscalizacao, syncEvent };
+    });
+
+    await this.cronogramaService.registrarChecagemRealizada({
+      unidadeId: unidade.id,
+      checklistId: checklistVersao.checklist.id,
+      concluidaEm: new Date(dto.concluidaEm),
     });
 
     return {

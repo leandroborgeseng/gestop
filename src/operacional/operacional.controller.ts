@@ -35,6 +35,8 @@ export class OperacionalController {
     @Query('situacao') situacao?: UnidadeSituacao,
     @Query('pendencias') pendencias?: string,
     @Query('bairro') bairro?: string,
+    @Query('responsavel') responsavel?: string,
+    @Query('responsavelEmail') responsavelEmail?: string,
   ) {
     const query: UnidadeListQuery = {
       search: normalizeText(search),
@@ -43,6 +45,8 @@ export class OperacionalController {
       situacao,
       bairro: normalizeText(bairro),
       pendencias: parseOptionalBoolean(pendencias),
+      responsavel: normalizeText(responsavel),
+      responsavelEmail: normalizeText(responsavelEmail)?.toLowerCase(),
     };
 
     return this.operacionalService.listUnidades(query);

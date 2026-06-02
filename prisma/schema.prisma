@@ -38,6 +38,16 @@ enum ChecklistItemTipo {
   DATA
 }
 
+enum CronogramaFrequencia {
+  SEMANAL
+  QUINZENAL
+  MENSAL
+  BIMESTRAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+}
+
 enum FiscalizacaoStatus {
   PLANEJADA
   EM_ANDAMENTO
@@ -207,6 +217,7 @@ model UnidadePublica {
   ordensServico    OrdemServico[]
   chamados         Chamado[]
   dashboardSnapshots DashboardSnapshot[]
+  cronogramas      CronogramaChecagem[]
 
   @@index([secretariaId])
   @@index([tipo])
@@ -242,6 +253,7 @@ model Usuario {
   passwordResetTokens PasswordResetToken[]
   chamadosRegistrados Chamado[] @relation("ChamadoRegistradoPor")
   pushSubscriptions   PushSubscription[]
+  cronogramasResponsavel CronogramaChecagem[] @relation("CronogramaResponsavel")
 
   @@index([secretariaId])
   @@index([ativo])
@@ -335,6 +347,7 @@ model Checklist {
 
   secretaria Secretaria?      @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
   versoes    ChecklistVersao[]
+  cronogramas CronogramaChecagem[]
 
   @@index([secretariaId])
   @@index([escopo])
@@ -424,6 +437,29 @@ model Fiscalizacao {
   @@index([agenteId])
   @@index([status])
   @@index([createdAt])
+}
+
+model CronogramaChecagem {
+  id                String               @id @default(uuid())
+  unidadeId         String
+  checklistId       String
+  frequencia        CronogramaFrequencia
+  proximaChecagemEm DateTime
+  ultimaChecagemEm  DateTime?
+  responsavelId     String?
+  ativo             Boolean              @default(true)
+  observacoes       String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  unidade     UnidadePublica @relation(fields: [unidadeId], references: [id], onDelete: Cascade)
+  checklist   Checklist      @relation(fields: [checklistId], references: [id], onDelete: Restrict)
+  responsavel Usuario?       @relation("CronogramaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  @@unique([unidadeId, checklistId])
+  @@index([proximaChecagemEm])
+  @@index([ativo])
+  @@index([checklistId])
 }
 
 model RespostaChecklist {

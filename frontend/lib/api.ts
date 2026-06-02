@@ -6,6 +6,8 @@ import {
   AdminUsuario,
   ChecklistModel,
   ChecklistVersao,
+  CronogramaChecagem,
+  CalendarioChecagemResponse,
   AuditoriaEvento,
   DashboardData,
   AlertasOperacionais,
@@ -290,6 +292,38 @@ export function saveChecklist(payload: Record<string, unknown>, id?: string) {
 
 export function deactivateChecklist(id: string) {
   return request<ChecklistModel>(`/checklists/${id}`, { method: 'DELETE' });
+}
+
+export function listCronogramas(filters?: { secretariaId?: string; unidadeId?: string }) {
+  const params = new URLSearchParams();
+  if (filters?.secretariaId) params.set('secretariaId', filters.secretariaId);
+  if (filters?.unidadeId) params.set('unidadeId', filters.unidadeId);
+  const query = params.toString();
+  return request<CronogramaChecagem[]>(`/cronograma${query ? `?${query}` : ''}`);
+}
+
+export function getCalendarioChecagens(filters: {
+  from: string;
+  to: string;
+  secretariaId?: string;
+  unidadeId?: string;
+}) {
+  const params = new URLSearchParams({ from: filters.from, to: filters.to });
+  if (filters.secretariaId) params.set('secretariaId', filters.secretariaId);
+  if (filters.unidadeId) params.set('unidadeId', filters.unidadeId);
+  return request<CalendarioChecagemResponse>(`/cronograma/calendario?${params.toString()}`);
+}
+
+export function saveCronograma(payload: Record<string, unknown>, id?: string) {
+  return request<CronogramaChecagem>(`/cronograma${id ? `/${id}` : ''}`, {
+    method: id ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deactivateCronograma(id: string) {
+  return request<CronogramaChecagem>(`/cronograma/${id}`, { method: 'DELETE' });
 }
 
 export function createChecklistVersion(id: string) {

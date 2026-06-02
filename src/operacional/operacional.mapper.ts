@@ -19,6 +19,8 @@ export type UnidadeBaseRecord = {
     id: string;
     nome: string;
     sigla: string;
+    responsavelNome?: string | null;
+    responsavelEmail?: string | null;
   };
 };
 

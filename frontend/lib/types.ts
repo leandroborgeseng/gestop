@@ -109,6 +109,8 @@ export type UnidadeFilters = {
   situacao?: string;
   pendencias?: string;
   bairro?: string;
+  responsavel?: string;
+  responsavelEmail?: string;
 };
 
 export type AuthUser = {
@@ -540,4 +542,74 @@ export type IntegracoesEventos = {
     recebidoEm: string;
   }>;
   auditoriaIntegracoes: AuditoriaEvento[];
+};
+
+export type CronogramaFrequencia =
+  | 'SEMANAL'
+  | 'QUINZENAL'
+  | 'MENSAL'
+  | 'BIMESTRAL'
+  | 'TRIMESTRAL'
+  | 'SEMESTRAL'
+  | 'ANUAL';
+
+export type CronogramaChecagem = {
+  id: string;
+  unidadeId: string;
+  checklistId: string;
+  frequencia: CronogramaFrequencia;
+  proximaChecagemEm: string;
+  ultimaChecagemEm?: string | null;
+  responsavelId?: string | null;
+  ativo: boolean;
+  observacoes?: string | null;
+  unidade: {
+    id: string;
+    nome: string;
+    tipo: UnidadeTipo;
+    secretaria: SecretariaOption;
+  };
+  checklist: {
+    id: string;
+    nome: string;
+    escopo: ChecklistEscopo;
+    unidadeTipo?: UnidadeTipo | null;
+  };
+  responsavel?: {
+    id: string;
+    nome: string;
+    email: string;
+  } | null;
+};
+
+export type CalendarioChecagemEvento = {
+  id: string;
+  tipo: 'AGENDADA' | 'REALIZADA' | 'ATRASADA';
+  data: string;
+  unidade: {
+    id: string;
+    nome: string;
+    secretariaSigla: string;
+  };
+  checklist: {
+    id: string;
+    nome: string;
+  };
+  cronogramaId?: string;
+  fiscalizacaoId?: string;
+  frequencia?: CronogramaFrequencia;
+  responsavelNome?: string | null;
+  agenteNome?: string;
+};
+
+export type CalendarioChecagemResponse = {
+  from: string;
+  to: string;
+  resumo: {
+    total: number;
+    agendadas: number;
+    realizadas: number;
+    atrasadas: number;
+  };
+  eventos: CalendarioChecagemEvento[];
 };

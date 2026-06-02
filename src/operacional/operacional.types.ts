@@ -9,6 +9,8 @@ export type UnidadeListQuery = {
   situacao?: UnidadeSituacao;
   pendencias?: boolean;
   bairro?: string;
+  responsavel?: string;
+  responsavelEmail?: string;
 };
 
 export type UnidadeResumoCounts = {
@@ -34,6 +36,8 @@ export type UnidadeOperacional = {
     id: string;
     nome: string;
     sigla: string;
+    responsavelNome?: string | null;
+    responsavelEmail?: string | null;
   };
   pendencias: {
     naoConformidadesAbertas: number;

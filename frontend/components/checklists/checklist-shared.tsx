@@ -10,7 +10,14 @@ import { FormSection } from '@/components/ui/form-section';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import {
+  CHECKLIST_ESCOPO_LABELS,
+  formatChecklistVinculo,
+  formatUnidadeTipo,
+  UNIDADE_TIPO_LABELS,
+} from '@/lib/unidade-tipo';
+import {
   AdminSecretaria,
+  ChecklistEscopo,
   ChecklistItem,
   ChecklistItemTipo,
   ChecklistModel,
@@ -67,19 +74,40 @@ export function CreateChecklistForm({
   onSubmit: (payload: Record<string, unknown>) => void;
   onCancel?: () => void;
 }) {
+  const [escopo, setEscopo] = useState<ChecklistEscopo>('UNIDADE_TIPO');
+  const [formError, setFormError] = useState<string | null>(null);
+
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setFormError(null);
     const form = new FormData(event.currentTarget);
+    const selectedEscopo = String(form.get('escopo')) as ChecklistEscopo;
+    const unidadeTipo = String(form.get('unidadeTipo') || '');
+
+    if (selectedEscopo === 'UNIDADE_TIPO' && !unidadeTipo) {
+      setFormError('Selecione o tipo de próprio para vincular o checklist.');
+      return;
+    }
+
+    if (selectedEscopo === 'SECRETARIA' && !String(form.get('secretariaId') || '')) {
+      setFormError('Selecione a secretaria para vincular o checklist.');
+      return;
+    }
+
     onSubmit({
       nome: String(form.get('nome')),
       descricao: String(form.get('descricao') || ''),
-      escopo: String(form.get('escopo')),
+      escopo: selectedEscopo,
       secretariaId: String(form.get('secretariaId') || ''),
-      unidadeTipo: String(form.get('unidadeTipo') || '') || undefined,
+      unidadeTipo: unidadeTipo || undefined,
       ativo: true,
     });
     event.currentTarget.reset();
+    setEscopo('UNIDADE_TIPO');
   }
+
+  const showSecretaria = escopo === 'SECRETARIA' || escopo === 'UNIDADE_TIPO';
+  const showUnidadeTipo = escopo === 'UNIDADE_TIPO';
 
   return (
     <form onSubmit={submit} className="space-y-4">
@@ -89,33 +117,49 @@ export function CreateChecklistForm({
       <Field label="Descrição">
         <Input name="descricao" />
       </Field>
-      <Field label="Escopo">
-        <Select name="escopo" required defaultValue="GLOBAL">
-          <option value="GLOBAL">Global</option>
-          <option value="SECRETARIA">Secretaria</option>
-          <option value="UNIDADE_TIPO">Tipo de unidade</option>
-        </Select>
-      </Field>
-      <Field label="Secretaria">
-        <Select name="secretariaId" defaultValue="">
-          <option value="">Sem secretaria</option>
-          {secretarias.map((secretaria) => (
-            <option key={secretaria.id} value={secretaria.id}>
-              {secretaria.sigla} — {secretaria.nome}
+      <Field label="Vinculação">
+        <Select
+          name="escopo"
+          required
+          value={escopo}
+          onChange={(event) => setEscopo(event.target.value as ChecklistEscopo)}
+        >
+          {(Object.keys(CHECKLIST_ESCOPO_LABELS) as ChecklistEscopo[]).map((value) => (
+            <option key={value} value={value}>
+              {CHECKLIST_ESCOPO_LABELS[value]}
             </option>
           ))}
         </Select>
       </Field>
-      <Field label="Tipo de unidade">
-        <Select name="unidadeTipo" defaultValue="">
-          <option value="">Não aplicado</option>
-          {tiposUnidade.map((tipo) => (
-            <option key={tipo} value={tipo}>
-              {tipo}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      {showSecretaria ? (
+        <Field label={escopo === 'UNIDADE_TIPO' ? 'Secretaria (opcional)' : 'Secretaria'}>
+          <Select name="secretariaId" defaultValue="" required={escopo === 'SECRETARIA'}>
+            <option value="">{escopo === 'UNIDADE_TIPO' ? 'Todas as secretarias deste tipo' : 'Selecione'}</option>
+            {secretarias.map((secretaria) => (
+              <option key={secretaria.id} value={secretaria.id}>
+                {secretaria.sigla} — {secretaria.nome}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
+      {showUnidadeTipo ? (
+        <Field label="Tipo de próprio">
+          <Select name="unidadeTipo" required defaultValue="">
+            <option value="">Selecione o tipo</option>
+            {tiposUnidade.map((tipo) => (
+              <option key={tipo} value={tipo}>
+                {UNIDADE_TIPO_LABELS[tipo]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
+      <p className="md-body-md rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] px-4 py-3 text-[var(--md-on-surface-variant)]">
+        Checklists com escopo <strong>por tipo de próprio</strong> aparecem automaticamente no app Campo para
+        unidades daquele tipo (ex.: Escola, UBS, Praça).
+      </p>
+      {formError ? <p className="md-body-md text-red-700">{formError}</p> : null}
       <div className="flex flex-wrap gap-2 pt-2">
         <Button type="submit" variant="filled" className="flex-1">
           <Plus className="h-4 w-4" />
@@ -155,8 +199,7 @@ export function ChecklistModelCard({ checklist, onClick }: { checklist: Checklis
         {checklist.descricao || 'Sem descrição'}
       </p>
       <p className="md-label-lg mt-4 text-[var(--md-on-surface-variant)]">
-        {checklist.escopo}
-        {checklist.secretaria ? ` · ${checklist.secretaria.sigla}` : ''}
+        {formatChecklistVinculo(checklist)}
         {archivedCount > 0 ? ` · ${archivedCount} versão(ões) arquivada(s)` : ''}
       </p>
     </button>
@@ -182,7 +225,7 @@ export function ChecklistHeader({
           </Chip>
           <h2 className="md-headline-md mt-3 text-[var(--md-on-surface)]">{checklist.nome}</h2>
           <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
-            {checklist.descricao || 'Sem descrição'} · {checklist.escopo}
+            {checklist.descricao || 'Sem descrição'} · {formatChecklistVinculo(checklist)}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

@@ -20,7 +20,9 @@ import { Field } from '@/components/ui/field';
 import { Select } from '@/components/ui/select';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { captureCurrentPosition } from '@/lib/geolocation';
+import { filterChecklistsForUnidade } from '@/lib/checklist-matching';
 import { migrateLegacyQueueIfNeeded, readMobileQueue, writeMobileQueue } from '@/lib/mobile-queue';
+import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { getMobileFieldPackage, syncMobileInspection } from '@/lib/api';
 import { registerServiceWorker, requestNotificationPermission, showLocalNotification } from '@/lib/pwa';
 import { PwaInstallBanner } from '@/components/mobile/pwa-install-banner';
@@ -110,6 +112,18 @@ export default function MobilePage() {
     () => fieldPackage?.unidades.find((unidade) => unidade.id === unidadeId) ?? null,
     [fieldPackage, unidadeId],
   );
+  const availableChecklists = useMemo(
+    () => (selectedUnit && fieldPackage ? filterChecklistsForUnidade(fieldPackage.checklists, selectedUnit) : []),
+    [fieldPackage, selectedUnit],
+  );
+
+  useEffect(() => {
+    if (!checklistId) return;
+    if (!availableChecklists.some((checklist) => checklist.id === checklistId)) {
+      setChecklistId('');
+      setResponses({});
+    }
+  }, [availableChecklists, checklistId]);
 
   function updateResponse(itemId: string, patch: Partial<ResponseDraft>) {
     setResponses((current) => ({
@@ -220,25 +234,48 @@ export default function MobilePage() {
                 </CardHeader>
                 <CardContent className="space-y-4 pt-0">
                   <Field label="Próprio público">
-                    <Select value={unidadeId} onChange={(e) => setUnidadeId(e.target.value)}>
+                    <Select
+                      value={unidadeId}
+                      onChange={(e) => {
+                        setUnidadeId(e.target.value);
+                        setChecklistId('');
+                        setResponses({});
+                      }}
+                    >
                       <option value="">Selecione</option>
                       {fieldPackage.unidades.map((unidade) => (
                         <option key={unidade.id} value={unidade.id}>
-                          {unidade.nome}
+                          {unidade.nome} · {formatUnidadeTipo(unidade.tipo)}
                         </option>
                       ))}
                     </Select>
                   </Field>
                   <Field label="Checklist">
-                    <Select value={checklistId} onChange={(e) => setChecklistId(e.target.value)}>
-                      <option value="">Selecione</option>
-                      {fieldPackage.checklists.map((checklist) => (
+                    <Select
+                      value={checklistId}
+                      onChange={(e) => {
+                        setChecklistId(e.target.value);
+                        setResponses({});
+                      }}
+                      disabled={!selectedUnit}
+                    >
+                      <option value="">
+                        {selectedUnit ? 'Selecione' : 'Selecione um próprio primeiro'}
+                      </option>
+                      {availableChecklists.map((checklist) => (
                         <option key={checklist.id} value={checklist.id}>
                           {checklist.nome}
                         </option>
                       ))}
                     </Select>
                   </Field>
+                  {selectedUnit && availableChecklists.length === 0 ? (
+                    <p className="md-body-md text-[var(--md-on-surface-variant)]">
+                      Nenhum checklist publicado vinculado ao tipo{' '}
+                      <strong>{formatUnidadeTipo(selectedUnit.tipo)}</strong>. Cadastre um modelo em Checklists
+                      com escopo &quot;Por tipo de próprio&quot;.
+                    </p>
+                  ) : null}
                 </CardContent>
               </Card>
 
@@ -250,6 +287,7 @@ export default function MobilePage() {
                       {selectedUnit.nome}
                     </p>
                     <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+                      {formatUnidadeTipo(selectedUnit.tipo)} · {selectedUnit.secretaria.sigla} ·{' '}
                       {selectedUnit.bairro ?? 'Sem bairro'} · raio {selectedUnit.raioValidacaoMetros} m
                     </p>
                     <Chip variant="brand" className="mt-3 gap-1.5">

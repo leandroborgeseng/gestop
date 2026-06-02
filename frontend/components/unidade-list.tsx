@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { ArrowRight, ClipboardList, MapPin } from 'lucide-react';
+import { ArrowRight, Building2, ClipboardList, LocateFixed, Mail, UserRound } from 'lucide-react';
 import { UnidadeOperacional } from '@/lib/types';
+import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from './status-badge';
 import { EmptyState } from './ui-states';
@@ -36,20 +37,38 @@ export function UnidadeList({ unidades }: { unidades: UnidadeOperacional[] }) {
                   <StatusBadge situacao={unidade.situacao} />
                 </div>
                 <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
-                  {unidade.codigoPatrimonial} · {unidade.secretaria.sigla} · {unidade.tipo}
+                  {unidade.codigoPatrimonial} · {unidade.secretaria.sigla} · {formatUnidadeTipo(unidade.tipo)}
                 </p>
               </div>
               <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-[var(--md-outline)] transition group-hover:text-[var(--color-brand-primary)]" />
             </div>
 
             <div className="grid gap-2 md-body-md text-[var(--md-on-surface-variant)] md:grid-cols-2">
-              <span className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
+              <span className="flex items-center gap-2 md:col-span-2">
+                <Building2 className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
                 <span className="truncate">
-                  {unidade.bairro ? `${unidade.bairro} · ` : ''}
+                  {unidade.endereco}
+                  {unidade.bairro ? ` · ${unidade.bairro}` : ''}
+                </span>
+              </span>
+              {unidade.secretaria.responsavelNome ? (
+                <span className="flex items-center gap-2">
+                  <UserRound className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
+                  <span className="truncate">{unidade.secretaria.responsavelNome}</span>
+                </span>
+              ) : null}
+              {unidade.secretaria.responsavelEmail ? (
+                <span className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
+                  <span className="truncate">{unidade.secretaria.responsavelEmail}</span>
+                </span>
+              ) : null}
+              <span className="flex items-center gap-2">
+                <LocateFixed className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
+                <span className="truncate">
                   {unidade.latitude !== null && unidade.longitude !== null
                     ? `${unidade.latitude.toFixed(5)}, ${unidade.longitude.toFixed(5)}`
-                    : 'Sem localização'}
+                    : 'Sem localização GPS'}
                 </span>
               </span>
               <span className="flex items-center gap-2">

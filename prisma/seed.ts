@@ -8,6 +8,7 @@ import {
   DashboardEscopo,
   EntidadeSincronizavel,
   EvidenciaTipo,
+  CronogramaFrequencia,
   FiscalizacaoOrigem,
   FiscalizacaoStatus,
   NaoConformidadeStatus,
@@ -41,6 +42,7 @@ async function resetDevData() {
     prisma.naoConformidade.deleteMany(),
     prisma.respostaChecklist.deleteMany(),
     prisma.fiscalizacao.deleteMany(),
+    prisma.cronogramaChecagem.deleteMany(),
     prisma.checklistItem.deleteMany(),
     prisma.checklistVersao.deleteMany(),
     prisma.checklist.deleteMany(),
@@ -326,6 +328,18 @@ async function main() {
   ]);
 
   const escola = unidades[0];
+
+  await prisma.cronogramaChecagem.create({
+    data: {
+      unidadeId: escola.id,
+      checklistId: checklist.id,
+      frequencia: CronogramaFrequencia.MENSAL,
+      proximaChecagemEm: new Date('2026-06-18T00:00:00.000Z'),
+      responsavelId: fiscal.id,
+      observacoes: 'Rotina mensal de vistoria predial escolar.',
+    },
+  });
+
   const fiscalizacao = await prisma.fiscalizacao.create({
     data: {
       secretariaId: educacao.id,

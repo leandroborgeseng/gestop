@@ -3,7 +3,7 @@ import { AuditAction, ChecklistVersaoStatus, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChecklistDto, ChecklistVersionDto } from './checklists.dto';
-import { assertDraftEditable, nextChecklistVersion, normalizeItemCode } from './checklist.rules';
+import { assertDraftEditable, nextChecklistVersion, normalizeChecklistBinding, normalizeItemCode, validateChecklistEscopo } from './checklist.rules';
 
 @Injectable()
 export class ChecklistsService {
@@ -42,15 +42,18 @@ export class ChecklistsService {
   }
 
   async createChecklist(dto: ChecklistDto, user: JwtPayload) {
+    this.assertChecklistEscopo(dto);
+    const binding = normalizeChecklistBinding(dto);
+
     const checklist = await this.prisma.checklist.create({
       data: {
-        nome: dto.nome.trim(),
-        descricao: dto.descricao?.trim(),
-        escopo: dto.escopo,
-        secretariaId: dto.secretariaId || null,
-        unidadeId: dto.unidadeId || null,
-        unidadeTipo: dto.unidadeTipo || null,
-        ativo: dto.ativo ?? true,
+        nome: binding.nome.trim(),
+        descricao: binding.descricao?.trim(),
+        escopo: binding.escopo,
+        secretariaId: binding.secretariaId || null,
+        unidadeId: binding.unidadeId || null,
+        unidadeTipo: binding.unidadeTipo || null,
+        ativo: binding.ativo ?? true,
         versoes: {
           create: {
             versao: 1,
@@ -67,17 +70,19 @@ export class ChecklistsService {
   }
 
   async updateChecklist(id: string, dto: ChecklistDto, user: JwtPayload) {
+    this.assertChecklistEscopo(dto);
+    const binding = normalizeChecklistBinding(dto);
     const before = await this.getChecklist(id);
     const checklist = await this.prisma.checklist.update({
       where: { id },
       data: {
-        nome: dto.nome.trim(),
-        descricao: dto.descricao?.trim() ?? null,
-        escopo: dto.escopo,
-        secretariaId: dto.secretariaId || null,
-        unidadeId: dto.unidadeId || null,
-        unidadeTipo: dto.unidadeTipo || null,
-        ativo: dto.ativo ?? true,
+        nome: binding.nome.trim(),
+        descricao: binding.descricao?.trim() ?? null,
+        escopo: binding.escopo,
+        secretariaId: binding.secretariaId || null,
+        unidadeId: binding.unidadeId || null,
+        unidadeTipo: binding.unidadeTipo || null,
+        ativo: binding.ativo ?? true,
       },
     });
 
@@ -224,6 +229,14 @@ export class ChecklistsService {
 
     await this.audit(user, AuditAction.UPDATE, 'ChecklistVersao', versionId, version, published);
     return published;
+  }
+
+  private assertChecklistEscopo(dto: ChecklistDto) {
+    try {
+      validateChecklistEscopo(dto);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Escopo de checklist invalido');
+    }
   }
 
   private audit(user: JwtPayload, acao: AuditAction, entidadeTipo: string, entidadeId: string, valorAntigo: unknown, valorNovo: unknown) {

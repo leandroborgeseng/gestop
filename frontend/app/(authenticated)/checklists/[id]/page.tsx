@@ -24,6 +24,7 @@ import {
   updateChecklistVersion,
 } from '@/lib/api';
 import { ChecklistModel } from '@/lib/types';
+import { formatChecklistVinculo } from '@/lib/unidade-tipo';
 
 export default function ChecklistDetalhePage() {
   const params = useParams<{ id: string }>();
@@ -92,7 +93,7 @@ export default function ChecklistDetalhePage() {
         title={checklist?.nome ?? 'Detalhe do checklist'}
         description={
           checklist
-            ? `${checklist.escopo}${checklist.secretaria ? ` · ${checklist.secretaria.sigla}` : ''}`
+            ? formatChecklistVinculo(checklist)
             : 'Carregando informações do modelo'
         }
         backHref="/checklists"

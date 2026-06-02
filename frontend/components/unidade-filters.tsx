@@ -2,6 +2,7 @@
 
 import { SlidersHorizontal } from 'lucide-react';
 import { SecretariaOption, UnidadeFilters } from '@/lib/types';
+import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
@@ -71,7 +72,24 @@ export function UnidadeFiltersPanel({
           <Input
             value={filters.search ?? ''}
             onChange={(event) => update('search', event.target.value)}
-            placeholder="Nome, código ou endereço"
+            placeholder="Nome, código, endereço, responsável ou e-mail"
+          />
+        </Field>
+
+        <Field label="Responsável (secretaria)">
+          <Input
+            value={filters.responsavel ?? ''}
+            onChange={(event) => update('responsavel', event.target.value)}
+            placeholder="Ex.: Mariana Costa"
+          />
+        </Field>
+
+        <Field label="E-mail do responsável">
+          <Input
+            type="email"
+            value={filters.responsavelEmail ?? ''}
+            onChange={(event) => update('responsavelEmail', event.target.value)}
+            placeholder="Ex.: mariana.costa@franca.sp.gov.br"
           />
         </Field>
 

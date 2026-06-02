@@ -114,6 +114,8 @@ export class OperacionalService {
             id: true,
             nome: true,
             sigla: true,
+            responsavelNome: true,
+            responsavelEmail: true,
           },
         },
         _count: {
@@ -279,10 +281,20 @@ export class OperacionalService {
   }
 
   private buildUnidadeWhere(query: UnidadeListQuery): Prisma.UnidadePublicaWhereInput {
+    const secretariaFilter: Prisma.SecretariaWhereInput = {
+      ...(query.responsavel
+        ? { responsavelNome: { contains: query.responsavel, mode: 'insensitive' } }
+        : {}),
+      ...(query.responsavelEmail
+        ? { responsavelEmail: { contains: query.responsavelEmail, mode: 'insensitive' } }
+        : {}),
+    };
+
     return {
       ...(query.secretariaId ? { secretariaId: query.secretariaId } : {}),
       ...(query.tipo ? { tipo: query.tipo as UnidadeTipo } : {}),
       ...(query.bairro ? { bairro: { equals: query.bairro, mode: 'insensitive' } } : {}),
+      ...(Object.keys(secretariaFilter).length > 0 ? { secretaria: secretariaFilter } : {}),
       ...(query.search
         ? {
             OR: [
@@ -292,6 +304,8 @@ export class OperacionalService {
               { bairro: { contains: query.search, mode: 'insensitive' } },
               { secretaria: { nome: { contains: query.search, mode: 'insensitive' } } },
               { secretaria: { sigla: { contains: query.search, mode: 'insensitive' } } },
+              { secretaria: { responsavelNome: { contains: query.search, mode: 'insensitive' } } },
+              { secretaria: { responsavelEmail: { contains: query.search, mode: 'insensitive' } } },
             ],
           }
         : {}),

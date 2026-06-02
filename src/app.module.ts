@@ -16,6 +16,7 @@ import { LgpdModule } from './lgpd/lgpd.module';
 import { ChamadosModule } from './chamados/chamados.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
+import { CronogramaModule } from './cronograma/cronograma.module';
 import { EmailModule } from './email/email.module';
 import { PrismaService } from './prisma/prisma.service';
 import { StorageModule } from './storage/storage.module';
@@ -30,6 +31,7 @@ import { StorageModule } from './storage/storage.module';
     AuthModule,
     AdminModule,
     ChecklistsModule,
+    CronogramaModule,
     MobileModule,
     OrdensServicoModule,
     MonitoramentoModule,

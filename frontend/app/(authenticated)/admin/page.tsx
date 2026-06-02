@@ -27,6 +27,7 @@ import {
   purgeAuditoriaLgpd,
 } from '@/lib/api';
 import { AdminPerfil, AdminSecretaria, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
+import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 
 type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'importacao';
 
@@ -233,7 +234,11 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
           <Field label="Nome"><Input name="nome" required /></Field>
           <Field label="Tipo">
             <Select name="tipo" required>
-              {tipos.map((tipo) => <option key={tipo} value={tipo}>{tipo}</option>)}
+              {tipos.map((tipo) => (
+                <option key={tipo} value={tipo}>
+                  {formatUnidadeTipo(tipo)}
+                </option>
+              ))}
             </Select>
           </Field>
           <Field label="Endereço"><Input name="endereco" required /></Field>
@@ -253,7 +258,7 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
             <RecordItem
               key={unidade.id}
               title={unidade.nome}
-              subtitle={`${unidade.codigoPatrimonial} · ${unidade.secretaria.sigla} · ${unidade.bairro ?? 'sem bairro'}`}
+              subtitle={`${unidade.codigoPatrimonial} · ${unidade.secretaria.sigla} · ${formatUnidadeTipo(unidade.tipo)} · ${unidade.bairro ?? 'sem bairro'}`}
               active={unidade.ativo}
               actions={
                 <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
