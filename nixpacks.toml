@@ -1,0 +1,13 @@
+# Railway/Nixpacks — backend GestOP requer Node 20+ (Prisma 7, NestJS 11)
+
+[phases.setup]
+nixPkgs = ["nodejs_22", "npm-9_x", "openssl"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm start"

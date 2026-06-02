@@ -29,6 +29,10 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=9.0.0"
+  },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
