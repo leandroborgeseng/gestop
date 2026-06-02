@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -14,7 +14,8 @@ import {
   Search,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { getResumoOperacional, logout } from '@/lib/api';
+import { getAlertasOperacionais, getResumoOperacional, logout } from '@/lib/api';
+import { buildNavBadges, resolveGlobalSearchRoute, type NavBadges } from '@/lib/nav-badges';
 import {
   getGroupedNavItems,
   getMobileNav,
@@ -32,12 +33,14 @@ function NavLink({
   active,
   compact = false,
   collapsed = false,
+  badge,
   onClick,
 }: {
   item: NavItem;
   active: boolean;
   compact?: boolean;
   collapsed?: boolean;
+  badge?: number;
   onClick?: () => void;
 }) {
   const Icon = item.icon;
@@ -64,7 +67,14 @@ function NavLink({
           aria-hidden
         />
       ) : null}
-      <Icon className={cn('shrink-0', compact ? 'h-6 w-6' : 'h-[19px] w-[19px]')} strokeWidth={active ? 2.2 : 1.9} />
+      <span className="relative shrink-0">
+        <Icon className={cn(compact ? 'h-6 w-6' : 'h-[19px] w-[19px]')} strokeWidth={active ? 2.2 : 1.9} />
+        {badge != null && badge > 0 ? (
+          <span className="mono absolute -top-1.5 -right-2 flex h-[15px] min-w-[15px] items-center justify-center rounded-[var(--r-pill)] bg-[var(--warn)] px-1 text-[9px] font-bold text-white">
+            {badge > 99 ? '99+' : badge}
+          </span>
+        ) : null}
+      </span>
       {!collapsed || compact ? (
         <span className={cn('truncate', compact && 'max-w-full')}>
           {compact ? item.shortLabel ?? item.label : item.label}
@@ -79,12 +89,14 @@ function DesktopSidebar({
   userRoles,
   permissions,
   collapsed,
+  badges,
   onToggleCollapsed,
 }: {
   userName: string;
   userRoles: string[];
   permissions: string[];
   collapsed: boolean;
+  badges: NavBadges;
   onToggleCollapsed: () => void;
 }) {
   const pathname = usePathname();
@@ -140,7 +152,13 @@ function DesktopSidebar({
               </div>
             )}
             {group.items.map((item) => (
-              <NavLink key={item.id} item={item} active={isNavActive(pathname, item.href)} collapsed={collapsed} />
+              <NavLink
+                key={item.id}
+                item={item}
+                active={isNavActive(pathname, item.href)}
+                collapsed={collapsed}
+                badge={item.badgeKey ? badges[item.badgeKey] : undefined}
+              />
             ))}
           </div>
         ))}
@@ -189,26 +207,55 @@ function DesktopSidebar({
 
 function DesktopTopbar({ syncPending }: { syncPending: number }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { openGuide } = useGuide();
   const [query, setQuery] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target?.tagName === 'INPUT' ||
+        target?.tagName === 'TEXTAREA' ||
+        target?.tagName === 'SELECT' ||
+        target?.isContentEditable;
+
+      if (event.key === '/' && !typing && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        inputRef.current?.focus();
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   function submitSearch() {
     const trimmed = query.trim();
     if (!trimmed) return;
-    router.push(`/cco?search=${encodeURIComponent(trimmed)}`);
+    router.push(resolveGlobalSearchRoute(trimmed));
   }
+
+  useEffect(() => {
+    if (pathname.startsWith('/cco') || pathname.startsWith('/chamados') || pathname.startsWith('/ordens-servico')) {
+      return;
+    }
+    setQuery('');
+  }, [pathname]);
 
   return (
     <header className="hidden h-[var(--topbar-h)] shrink-0 items-center gap-4 border-b border-[var(--line)] bg-[var(--surface)] px-[var(--content-px)] lg:flex">
       <div className="flex h-[38px] max-w-[440px] flex-1 items-center gap-2 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] px-3 focus-within:border-[var(--brand)] focus-within:bg-[var(--surface)] focus-within:shadow-[0_0_0_3px_var(--brand-soft)]">
         <Search className="h-[17px] w-[17px] shrink-0 text-[var(--ink-3)]" />
         <input
+          ref={inputRef}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') submitSearch();
           }}
-          placeholder="Buscar unidade, código, chamado…"
+          placeholder="Buscar unidade, OS-, CH-…"
           className="min-w-0 flex-1 border-none bg-transparent text-[13.5px] text-[var(--ink)] outline-none placeholder:text-[var(--ink-4)]"
         />
         <kbd className="mono hidden rounded border border-[var(--line)] bg-[var(--surface)] px-1.5 py-0.5 text-[11px] text-[var(--ink-3)] sm:inline">
@@ -285,10 +332,12 @@ export function MobileAppBar({ userName, syncPending }: { userName: string; sync
 
 export function MobileBottomNav({
   permissions,
+  badges,
   moreOpen,
   onMoreOpen,
 }: {
   permissions: string[];
+  badges: NavBadges;
   moreOpen: boolean;
   onMoreOpen: (open: boolean) => void;
 }) {
@@ -311,6 +360,7 @@ export function MobileBottomNav({
           {primary.map((item) => {
             const Icon = item.icon;
             const active = isNavActive(pathname, item.href);
+            const badge = item.badgeKey ? badges[item.badgeKey] : undefined;
 
             return (
               <Link
@@ -326,7 +376,14 @@ export function MobileBottomNav({
                 {active ? (
                   <span className="pointer-events-none absolute inset-x-3 top-1 h-8 rounded-full bg-[var(--brand-soft)]" aria-hidden />
                 ) : null}
-                <Icon className="relative z-[1] h-6 w-6" />
+                <span className="relative z-[1]">
+                  <Icon className="h-6 w-6" />
+                  {badge != null && badge > 0 ? (
+                    <span className="mono absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--warn)] px-1 text-[9px] font-bold text-white">
+                      {badge > 9 ? '9+' : badge}
+                    </span>
+                  ) : null}
+                </span>
                 <span className="relative z-[1] max-w-full truncate">{item.shortLabel ?? item.label}</span>
               </Link>
             );
@@ -356,6 +413,7 @@ export function MobileBottomNav({
               key={item.id}
               item={item}
               active={isNavActive(pathname, item.href)}
+              badge={item.badgeKey ? badges[item.badgeKey] : undefined}
               onClick={() => onMoreOpen(false)}
             />
           ))}
@@ -398,12 +456,17 @@ export function AppShell({
   const [moreOpen, setMoreOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [syncPending, setSyncPending] = useState(0);
+  const [navBadges, setNavBadges] = useState<NavBadges>({});
 
   useEffect(() => {
-    getResumoOperacional()
-      .then((resumo) => setSyncPending(resumo.eventosSyncPendentes ?? 0))
-      .catch(() => setSyncPending(0));
-  }, []);
+    Promise.all([
+      getResumoOperacional().catch(() => null),
+      getAlertasOperacionais().catch(() => null),
+    ]).then(([resumo, alertas]) => {
+      if (resumo) setSyncPending(resumo.eventosSyncPendentes ?? 0);
+      setNavBadges(buildNavBadges(resumo, alertas, permissions));
+    });
+  }, [permissions]);
 
   return (
     <div className="gestop-app flex min-h-dvh bg-[var(--canvas)]">
@@ -412,13 +475,14 @@ export function AppShell({
         userRoles={userRoles}
         permissions={permissions}
         collapsed={collapsed}
+        badges={navBadges}
         onToggleCollapsed={() => setCollapsed((v) => !v)}
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileAppBar userName={userName} syncPending={syncPending} />
         <DesktopTopbar syncPending={syncPending} />
         <main className="gestop-main relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
-        <MobileBottomNav permissions={permissions} moreOpen={moreOpen} onMoreOpen={setMoreOpen} />
+        <MobileBottomNav permissions={permissions} badges={navBadges} moreOpen={moreOpen} onMoreOpen={setMoreOpen} />
       </div>
     </div>
   );

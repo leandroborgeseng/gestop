@@ -1,6 +1,5 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
 import { Building2, ClipboardList, LocateFixed, Mail, UserRound } from 'lucide-react';
 import { UnidadeOperacional } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
@@ -21,7 +20,6 @@ export function UnidadeList({
   onSelect?: (id: string) => void;
   onHover?: (id: string | null) => void;
 }) {
-  const router = useRouter();
 
   if (unidades.length === 0) {
     return (
@@ -51,10 +49,7 @@ export function UnidadeList({
             <button
               key={unidade.id}
               type="button"
-              onClick={() => {
-                onSelect?.(unidade.id);
-                router.push(`/cco/unidades/${unidade.id}`);
-              }}
+              onClick={() => onSelect?.(unidade.id)}
               onMouseEnter={() => onHover?.(unidade.id)}
               onMouseLeave={() => onHover?.(null)}
               className={cn(

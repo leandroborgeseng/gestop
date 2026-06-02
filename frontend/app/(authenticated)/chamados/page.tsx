@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Bell,
@@ -68,12 +69,26 @@ function origemMeta(origem: ChamadoOrigem) {
 }
 
 export default function ChamadosPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Carregando chamados..." />}>
+      <ChamadosPageContent />
+    </Suspense>
+  );
+}
+
+function ChamadosPageContent() {
+  const searchParams = useSearchParams();
   const snackbar = useSnackbar();
   const [chamados, setChamados] = useState<ChamadoResumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('TODOS');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
+
+  useEffect(() => {
+    const value = searchParams.get('search');
+    if (value) setSearch(value);
+  }, [searchParams]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 

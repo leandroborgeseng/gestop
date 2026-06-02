@@ -17,6 +17,7 @@ import { MetricCard } from '@/components/metric-card';
 import { OperationalMap } from '@/components/operational-map';
 import { UnidadeFiltersPanel } from '@/components/unidade-filters';
 import { UnidadeList } from '@/components/unidade-list';
+import { UnidadeDrawer } from '@/components/cco/unidade-drawer';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Hint } from '@/components/help/hint';
 import { ErrorState, LoadingState } from '@/components/ui-states';
@@ -60,6 +61,17 @@ function CcoPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [bootLoading, setBootLoading] = useState(true);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const selectedUnidade = useMemo(
+    () => unidades.find((item) => item.id === selectedId) ?? null,
+    [unidades, selectedId],
+  );
+
+  function selectUnidade(id: string) {
+    setSelectedId(id);
+    setDrawerOpen(true);
+  }
 
   useEffect(() => {
     const search = searchParams.get('search');
@@ -297,7 +309,7 @@ function CcoPageContent() {
               unidades={unidades}
               selectedId={selectedId}
               hoveredId={hoveredId}
-              onSelect={setSelectedId}
+              onSelect={selectUnidade}
               onHover={setHoveredId}
             />
           )}
@@ -307,10 +319,16 @@ function CcoPageContent() {
           unidades={unidades}
           selectedId={selectedId}
           hoveredId={hoveredId}
-          onSelect={setSelectedId}
+          onSelect={selectUnidade}
           onHover={setHoveredId}
         />
       </div>
+
+      <UnidadeDrawer
+        open={drawerOpen}
+        unidade={selectedUnidade}
+        onClose={() => setDrawerOpen(false)}
+      />
     </PageShell>
   );
 }

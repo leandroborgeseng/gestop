@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Building2,
@@ -46,6 +47,15 @@ const STATUS_CHIPS: Array<{ value: StatusFilter; label: string }> = [
 ];
 
 export default function OrdensServicoPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Carregando ordens de serviço..." />}>
+      <OrdensServicoPageContent />
+    </Suspense>
+  );
+}
+
+function OrdensServicoPageContent() {
+  const searchParams = useSearchParams();
   const snackbar = useSnackbar();
   const [ordens, setOrdens] = useState<OrdemServicoResumo[]>([]);
   const [detail, setDetail] = useState<OrdemServicoDetalhe | null>(null);
@@ -54,7 +64,12 @@ export default function OrdensServicoPage() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('TODAS');
   const [prioridade, setPrioridade] = useState<PrioridadeFilter>('TODAS');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
+
+  useEffect(() => {
+    const value = searchParams.get('search');
+    if (value) setSearch(value);
+  }, [searchParams]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 

@@ -13,6 +13,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import type { NavBadgeKey } from '@/lib/nav-badges';
+
 export type NavItem = {
   id: string;
   label: string;
@@ -21,6 +23,7 @@ export type NavItem = {
   icon: LucideIcon;
   permission?: string;
   mobilePrimary?: boolean;
+  badgeKey?: NavBadgeKey;
 };
 
 export type NavGroup = {
@@ -54,6 +57,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Megaphone,
     permission: 'chamados.gerenciar',
     mobilePrimary: true,
+    badgeKey: 'chamados',
   },
   {
     id: 'ordens',
@@ -63,6 +67,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Wrench,
     permission: 'chamados.gerenciar',
     mobilePrimary: true,
+    badgeKey: 'ordens',
   },
   {
     id: 'dashboard',
@@ -109,6 +114,7 @@ export const NAV_ITEMS: NavItem[] = [
     href: '/integracoes',
     icon: Plug,
     permission: 'auditoria.visualizar',
+    badgeKey: 'integracoes',
   },
 ];
 

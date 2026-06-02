@@ -1,0 +1,43 @@
+import type { AlertasOperacionais, OperacionalResumo } from '@/lib/types';
+
+export type NavBadgeKey = 'chamados' | 'ordens' | 'integracoes';
+
+export type NavBadges = Partial<Record<NavBadgeKey, number>>;
+
+export function buildNavBadges(
+  resumo: OperacionalResumo | null,
+  alertas: AlertasOperacionais | null,
+  permissions: string[],
+): NavBadges {
+  const badges: NavBadges = {};
+
+  if (permissions.includes('chamados.gerenciar') || permissions.includes('dashboard.visualizar')) {
+    const chamados = alertas?.resumo.chamadosSemTriagem ?? 0;
+    if (chamados > 0) badges.chamados = chamados;
+
+    const ordens = (resumo?.ordensServicoAbertas ?? 0) + (alertas?.resumo.osUrgentes ?? 0);
+    if (ordens > 0) badges.ordens = ordens;
+  }
+
+  if (permissions.includes('auditoria.visualizar') || permissions.includes('dashboard.visualizar')) {
+    const falhas = (alertas?.resumo.syncFalhas ?? 0) + (resumo?.eventosSyncPendentes ?? 0);
+    if (falhas > 0) badges.integracoes = falhas;
+  }
+
+  return badges;
+}
+
+export function resolveGlobalSearchRoute(query: string): string {
+  const trimmed = query.trim();
+  if (!trimmed) return '/cco';
+
+  const upper = trimmed.toUpperCase();
+  if (upper.startsWith('OS-') || upper.startsWith('OS')) {
+    return `/ordens-servico?search=${encodeURIComponent(trimmed)}`;
+  }
+  if (upper.startsWith('CH-') || upper.startsWith('CH')) {
+    return `/chamados?search=${encodeURIComponent(trimmed)}`;
+  }
+
+  return `/cco?search=${encodeURIComponent(trimmed)}`;
+}
