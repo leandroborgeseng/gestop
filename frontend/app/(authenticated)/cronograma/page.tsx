@@ -1,10 +1,12 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Plus } from 'lucide-react';
+import { CalendarDays, CalendarClock, CheckCircle2, Clock, Plus } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ChecagemCalendario, EventoChecagemCard } from '@/components/cronograma/checagem-calendario';
 import { PageShell } from '@/components/layout/page-shell';
+import { TipBanner } from '@/components/help/tip-banner';
+import { MetricCard } from '@/components/metric-card';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -170,6 +172,10 @@ export default function CronogramaPage() {
         description="Defina a periodicidade de vistoria por próprio e acompanhe o calendário de checagens realizadas, agendadas e atrasadas."
         backHref="/cco"
       >
+        <TipBanner id="cronograma-checagens">
+          Cadastre a periodicidade por próprio + checklist. Após cada fiscalização em campo, a próxima data avança automaticamente.
+        </TipBanner>
+
         {error ? (
           <div className="mb-4">
             <ErrorState message={error} onRetry={() => void loadData()} />
@@ -215,11 +221,17 @@ export default function CronogramaPage() {
         {!loading && calendario ? (
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
             <div className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-4">
-                <MetricCard label="Total no mês" value={calendario.resumo.total} />
-                <MetricCard label="Agendadas" value={calendario.resumo.agendadas} />
-                <MetricCard label="Realizadas" value={calendario.resumo.realizadas} />
-                <MetricCard label="Atrasadas" value={calendario.resumo.atrasadas} />
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <MetricCard title="Total no mês" value={calendario.resumo.total} hint="eventos" icon={CalendarDays} />
+                <MetricCard title="Agendadas" value={calendario.resumo.agendadas} hint="pendentes" icon={CalendarClock} />
+                <MetricCard title="Realizadas" value={calendario.resumo.realizadas} hint="concluídas" icon={CheckCircle2} />
+                <MetricCard
+                  title="Atrasadas"
+                  value={calendario.resumo.atrasadas}
+                  hint="requer ação"
+                  icon={Clock}
+                  deltaTone={calendario.resumo.atrasadas > 0 ? 'warn' : undefined}
+                />
               </div>
 
               <ChecagemCalendario
@@ -390,14 +402,5 @@ export default function CronogramaPage() {
         ) : null}
       </PageShell>
     </RequirePermissions>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)] px-4 py-3">
-      <p className="md-label-md text-[var(--md-on-surface-variant)]">{label}</p>
-      <p className="md-headline-sm mt-1 text-[var(--md-on-surface)]">{value}</p>
-    </div>
   );
 }

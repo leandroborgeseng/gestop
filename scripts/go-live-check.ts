@@ -1,3 +1,5 @@
+import { access, constants } from 'node:fs/promises';
+import { join } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { resolveJwtSecret } from '../src/config/env';
@@ -88,12 +90,17 @@ async function main() {
     });
   }
 
-  const [secretarias, unidades, usuarios, chamados, webmapImports] = await Promise.all([
+  const [secretarias, unidades, usuarios, chamados, webmapImports, checklistsPublicados, osAbertas] =
+    await Promise.all([
     prisma.secretaria.count({ where: { ativo: true } }),
     prisma.unidadePublica.count({ where: { ativo: true } }),
     prisma.usuario.count({ where: { ativo: true } }),
     prisma.chamado.count(),
     prisma.webmapImport.count({ where: { dryRun: false } }),
+    prisma.checklistVersao.count({ where: { status: 'PUBLICADA' } }),
+    prisma.ordemServico.count({
+      where: { status: { notIn: ['CONCLUIDA', 'CANCELADA'] } },
+    }),
   ]);
 
   checks.push({
@@ -132,6 +139,47 @@ async function main() {
     detail: webmapImports >= 1 ? undefined : 'Execute importacao no Admin → Importacao',
     severity: 'warn',
   });
+
+  checks.push({
+    ok: checklistsPublicados >= 1,
+    label: `Versoes de checklist publicadas (${checklistsPublicados})`,
+    detail: checklistsPublicados >= 1 ? undefined : 'Publique ao menos 1 checklist em Checklists',
+    severity: 'warn',
+  });
+
+  checks.push({
+    ok: true,
+    label: `Ordens de servico abertas (${osAbertas})`,
+  });
+
+  try {
+    await prisma.chamado.findFirst({ select: { fotoUrl: true } });
+    checks.push({ ok: true, label: 'Chamado QR com suporte a foto (migration aplicada)' });
+  } catch (error) {
+    checks.push({
+      ok: false,
+      label: 'Migration foto em Chamado pendente',
+      detail: error instanceof Error ? error.message : 'schema desatualizado',
+      severity: 'critical',
+    });
+  }
+
+  const storageDir = process.env.STORAGE_LOCAL_DIR?.trim() || join(process.cwd(), 'storage');
+  if ((process.env.STORAGE_DRIVER ?? 'local') === 'local') {
+    try {
+      await access(storageDir, constants.W_OK);
+      checks.push({ ok: true, label: `Storage local gravavel (${storageDir})`, severity: prod ? 'critical' : undefined });
+    } catch {
+      checks.push({
+        ok: false,
+        label: 'Diretorio de storage nao gravavel',
+        detail: storageDir,
+        severity: prod ? 'critical' : 'warn',
+      });
+    }
+  } else {
+    checks.push({ ok: true, label: `Storage driver: ${process.env.STORAGE_DRIVER}` });
+  }
 
   const failedCritical = checks.filter((item) => !item.ok && item.severity === 'critical');
   const failed = checks.filter((item) => !item.ok);

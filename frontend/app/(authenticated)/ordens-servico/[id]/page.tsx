@@ -1,20 +1,33 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Clock3, GitBranch, ImageIcon, Wrench } from 'lucide-react';
+import { Building2, GitBranch, ImageIcon, Wrench } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
+import { OsTimeline } from '@/components/ordens/os-timeline';
 import { PageShell } from '@/components/layout/page-shell';
+import { TipBanner } from '@/components/help/tip-banner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { getOrdemServico, updateOrdemServico } from '@/lib/api';
+import { cn } from '@/lib/cn';
+import {
+  OS_STATUS_META,
+  buildOsTimeline,
+  nextOsStatusFlow,
+  nextOsStatuses,
+  osStatusLabel,
+  prazoInfo,
+  prioridadeVariant,
+} from '@/lib/os-status';
 import { OrdemServicoDetalhe } from '@/lib/types';
 
 export default function OrdemServicoDetalhePage() {
   const params = useParams<{ id: string }>();
+  const snackbar = useSnackbar();
   const [ordem, setOrdem] = useState<OrdemServicoDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +41,19 @@ export default function OrdemServicoDetalhePage() {
       .finally(() => setLoading(false));
   }, [params.id]);
 
+  const timeline = useMemo(() => {
+    if (!ordem) return [];
+    return buildOsTimeline(
+      ordem.status,
+      ordem.abertaEm,
+      ordem.prazoEm,
+      ordem.concluidaEm,
+      ordem.responsavel?.nome,
+      ordem.prioridade,
+      ordem.origem,
+    );
+  }, [ordem]);
+
   async function transition(status: string) {
     if (!ordem) return;
     setError(null);
@@ -36,112 +62,179 @@ export default function OrdemServicoDetalhePage() {
       await updateOrdemServico(ordem.id, { status, motivo: `Transição via detalhe para ${status}` });
       const refreshed = await getOrdemServico(ordem.id);
       setOrdem(refreshed);
+      snackbar.show(`${ordem.codigo} → ${osStatusLabel(status)}`, 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao atualizar OS.');
+      const message = err instanceof Error ? err.message : 'Falha ao atualizar OS.';
+      setError(message);
+      snackbar.show(message, 'error');
     } finally {
       setBusy(false);
     }
   }
 
+  async function advanceStatus() {
+    if (!ordem) return;
+    const next = nextOsStatusFlow(ordem.status);
+    if (next) await transition(next);
+  }
+
+  const st = ordem ? OS_STATUS_META[ordem.status] ?? { label: ordem.status, badge: 'neutral' as const } : null;
+  const prazo = ordem ? prazoInfo(ordem.prazoEm, ordem.status) : null;
+  const canAct = ordem && ordem.status !== 'CONCLUIDA' && ordem.status !== 'CANCELADA';
+
   return (
     <RequirePermissions permissions={['chamados.gerenciar']}>
       <PageShell
-        kicker="Ordens de Serviço"
+        kicker="Manutenção"
         icon={Wrench}
         title={ordem?.codigo ?? 'Detalhe da OS'}
-        description="Histórico, origem auditável e evidências vinculadas."
+        description="Linha do tempo, origem auditável e evidências vinculadas."
         backHref="/ordens-servico"
       >
-        <div className="mb-4">
-          <Link href="/ordens-servico" className="inline-flex items-center gap-2 md-label-lg text-[var(--color-brand-primary)]">
-            <ArrowLeft className="h-4 w-4" />
-            Voltar para lista
-          </Link>
-        </div>
+        <TipBanner id="os-detalhe-timeline">
+          Use a linha do tempo para acompanhar o fluxo. Transições de status ficam registradas no histórico auditável.
+        </TipBanner>
 
-        {error ? <div className="mb-6"><ErrorState message={error} /></div> : null}
+        {error ? (
+          <div className="mb-4">
+            <ErrorState message={error} />
+          </div>
+        ) : null}
         {loading ? <LoadingState label="Carregando ordem de serviço..." /> : null}
 
-        {ordem ? (
-          <div className="space-y-4">
+        {ordem && st && prazo ? (
+          <div className="space-y-5">
             <Card elevation={1}>
-              <CardContent className="space-y-4 p-5">
-                <Badge variant="warning">{ordem.status} · {ordem.prioridade}</Badge>
-                <h1 className="md-headline-md text-[var(--md-on-surface)]">{ordem.titulo}</h1>
-                <p className="md-body-lg text-[var(--md-on-surface-variant)]">{ordem.descricao}</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <Info label="Unidade" value={ordem.unidade.nome} />
-                  <Info label="Secretaria" value={ordem.secretaria.sigla} />
-                  <Info label="Responsável" value={ordem.responsavel?.nome ?? 'Não atribuído'} />
-                  <Info label="Prazo" value={ordem.prazoEm ? new Date(ordem.prazoEm).toLocaleDateString('pt-BR') : 'Sem prazo'} />
+              <CardContent className="p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <span className="mono text-[13px] font-semibold text-[var(--brand-hover)]">{ordem.codigo}</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Badge variant={prioridadeVariant(ordem.prioridade)}>{ordem.prioridade}</Badge>
+                    <Badge variant={st.badge}>{st.label}</Badge>
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {nextStatuses(ordem.status).map((status) => (
-                    <Button key={status} variant="tonal" size="sm" disabled={busy} onClick={() => void transition(status)}>
-                      {busy ? 'Salvando...' : `Mover para ${status}`}
-                    </Button>
-                  ))}
+                <h1 className="mt-3 text-[20px] font-bold leading-snug text-[var(--ink)]">{ordem.titulo}</h1>
+                <p className="mt-2 text-[14px] text-[var(--ink-3)]">{ordem.descricao}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--ink-3)]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <Building2 className="h-3.5 w-3.5" />
+                    {ordem.unidade.nome}
+                  </span>
+                  <span className="mono">{ordem.unidade.codigoPatrimonial}</span>
                 </div>
+
+                <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                  <SummaryCard
+                    label="Prazo"
+                    value={prazo.label}
+                    sub={ordem.prazoEm ? new Date(ordem.prazoEm).toLocaleDateString('pt-BR') : undefined}
+                    tone={prazo.tone}
+                  />
+                  <SummaryCard label="Responsável" value={ordem.responsavel?.nome ?? 'Não atribuído'} sub={ordem.secretaria.sigla} />
+                  <SummaryCard label="Origem" value={ordem.origem} />
+                </div>
+
+                {ordem.impedimentoMotivo ? (
+                  <div className="mt-4 rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[13px] text-[var(--warn)]">
+                    <strong>Impedimento:</strong> {ordem.impedimentoMotivo}
+                  </div>
+                ) : null}
+
+                {canAct ? (
+                  <div className="mt-5 flex flex-wrap gap-2 border-t border-[var(--line-2)] pt-4">
+                    {nextOsStatusFlow(ordem.status) ? (
+                      <Button variant="filled" size="sm" disabled={busy} onClick={() => void advanceStatus()}>
+                        Atualizar status
+                      </Button>
+                    ) : null}
+                    {nextOsStatuses(ordem.status).includes('CONCLUIDA') ? (
+                      <Button variant="outlined" size="sm" disabled={busy} onClick={() => void transition('CONCLUIDA')}>
+                        Concluir OS
+                      </Button>
+                    ) : null}
+                    {nextOsStatuses(ordem.status)
+                      .filter((status) => status !== 'CONCLUIDA')
+                      .map((status) => (
+                        <Button key={status} variant="tonal" size="sm" disabled={busy} onClick={() => void transition(status)}>
+                          {osStatusLabel(status)}
+                        </Button>
+                      ))}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
 
-            {ordem.naoConformidade ? (
+            <div className="grid gap-5 lg:grid-cols-2">
               <Card elevation={1}>
-                <CardContent className="space-y-3 p-5">
-                  <p className="md-label-lg flex items-center gap-2 text-[var(--color-brand-primary)]">
-                    <GitBranch className="h-4 w-4" />
-                    Origem auditável
-                  </p>
-                  <p className="md-body-md">{ordem.naoConformidade.item.codigo} — {ordem.naoConformidade.item.titulo}</p>
-                  <p className="md-body-md text-[var(--md-on-surface-variant)]">{ordem.naoConformidade.descricao}</p>
+                <CardContent className="p-5">
+                  <h2 className="mb-4 text-[13.5px] font-semibold text-[var(--ink)]">Linha do tempo</h2>
+                  <OsTimeline steps={timeline} />
                 </CardContent>
               </Card>
-            ) : null}
 
-            {ordem.evidencias.length > 0 ? (
-              <Card elevation={1}>
-                <CardContent className="space-y-4 p-5">
-                  <p className="md-title-md flex items-center gap-2">
-                    <ImageIcon className="h-5 w-5" />
-                    Evidências ({ordem.evidencias.length})
-                  </p>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {ordem.evidencias.map((evidencia) => (
-                      <a
-                        key={evidencia.id}
-                        href={evidencia.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="overflow-hidden rounded-[var(--md-shape-md)] border border-[var(--md-outline-variant)]"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={evidencia.url} alt="Evidência" className="h-40 w-full object-cover" />
-                      </a>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : null}
+              <div className="space-y-5">
+                {ordem.naoConformidade ? (
+                  <Card elevation={1}>
+                    <CardContent className="p-5">
+                      <p className="flex items-center gap-2 text-[12px] font-bold text-[var(--brand-hover)]">
+                        <GitBranch className="h-4 w-4" />
+                        Origem auditável (NC)
+                      </p>
+                      <p className="mt-2 text-[13px] font-semibold text-[var(--ink)]">
+                        {ordem.naoConformidade.item.codigo} — {ordem.naoConformidade.item.titulo}
+                      </p>
+                      <p className="mt-1 text-[13px] text-[var(--ink-3)]">{ordem.naoConformidade.descricao}</p>
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                {ordem.evidencias.length > 0 ? (
+                  <Card elevation={1}>
+                    <CardContent className="p-5">
+                      <p className="mb-3 flex items-center gap-2 text-[13.5px] font-semibold text-[var(--ink)]">
+                        <ImageIcon className="h-4 w-4" />
+                        Evidências ({ordem.evidencias.length})
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {ordem.evidencias.map((evidencia) => (
+                          <a
+                            key={evidencia.id}
+                            href={evidencia.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]"
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={evidencia.url} alt="Evidência" className="h-36 w-full object-cover" />
+                          </a>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : null}
+              </div>
+            </div>
 
             <Card elevation={1}>
-              <CardContent className="space-y-4 p-5">
-                <p className="md-title-md flex items-center gap-2">
-                  <Clock3 className="h-5 w-5" />
-                  Histórico de status
-                </p>
-                <div className="space-y-3">
-                  {ordem.historico.map((evento) => (
-                    <div key={evento.id} className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4">
-                      <p className="md-label-lg text-[var(--md-on-surface)]">
-                        {evento.statusAnterior ? `${evento.statusAnterior} → ${evento.statusNovo}` : evento.statusNovo}
-                      </p>
-                      <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">{evento.motivo}</p>
-                      <p className="md-body-md mt-2 text-[var(--md-on-surface-variant)]">
-                        {new Date(evento.createdAt).toLocaleString('pt-BR')}
-                        {evento.alteradoPor ? ` · ${evento.alteradoPor.nome}` : ''}
-                      </p>
-                    </div>
-                  ))}
+              <CardContent className="p-5">
+                <h2 className="mb-3 text-[13.5px] font-semibold text-[var(--ink)]">Histórico de transições</h2>
+                <div className="space-y-2">
+                  {ordem.historico.length === 0 ? (
+                    <p className="text-[13px] text-[var(--ink-3)]">Nenhuma transição registrada.</p>
+                  ) : (
+                    ordem.historico.map((evento) => (
+                      <div key={evento.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
+                        <p className="text-[13px] font-semibold text-[var(--ink)]">
+                          {evento.statusAnterior ? `${evento.statusAnterior} → ${evento.statusNovo}` : evento.statusNovo}
+                        </p>
+                        {evento.motivo ? <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{evento.motivo}</p> : null}
+                        <p className="mt-1 text-[11px] text-[var(--ink-3)]">
+                          {new Date(evento.createdAt).toLocaleString('pt-BR')}
+                          {evento.alteradoPor ? ` · ${evento.alteradoPor.nome}` : ''}
+                        </p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -152,24 +245,31 @@ export default function OrdemServicoDetalhePage() {
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function SummaryCard({
+  label,
+  value,
+  sub,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: 'neutral' | 'success' | 'warning' | 'danger';
+}) {
+  const toneClass =
+    tone === 'danger'
+      ? 'border-[var(--danger-bd)] bg-[var(--danger-bg)]'
+      : tone === 'warning'
+        ? 'border-[var(--warn-bd)] bg-[var(--warn-bg)]'
+        : tone === 'success'
+          ? 'border-[var(--ok-bd)] bg-[var(--ok-bg)]'
+          : 'border-[var(--line)] bg-[var(--surface-2)]';
+
   return (
-    <div className="rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] px-4 py-3">
-      <p className="md-label-md text-[var(--md-on-surface-variant)]">{label}</p>
-      <p className="md-title-md mt-0.5 text-[var(--md-on-surface)]">{value}</p>
+    <div className={cn('rounded-[var(--r-md)] border p-3', toneClass)}>
+      <p className="text-[10px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{label}</p>
+      <p className="mt-1 text-[14px] font-semibold text-[var(--ink)]">{value}</p>
+      {sub ? <p className="mono mt-0.5 text-[11px] text-[var(--ink-3)]">{sub}</p> : null}
     </div>
   );
-}
-
-function nextStatuses(status: string) {
-  const transitions: Record<string, string[]> = {
-    ABERTA: ['EM_TRIAGEM', 'ATRIBUIDA', 'CANCELADA'],
-    EM_TRIAGEM: ['ATRIBUIDA', 'CANCELADA'],
-    ATRIBUIDA: ['EM_EXECUCAO', 'IMPEDIDA', 'CANCELADA'],
-    EM_EXECUCAO: ['CONCLUIDA', 'IMPEDIDA'],
-    IMPEDIDA: ['ATRIBUIDA', 'EM_EXECUCAO', 'CANCELADA'],
-    CONCLUIDA: [],
-    CANCELADA: [],
-  };
-  return transitions[status] ?? [];
 }
