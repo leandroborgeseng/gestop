@@ -20,10 +20,12 @@ export function UnidadeFiltersPanel({
   filters,
   opcoes,
   onChange,
+  embedded = false,
 }: {
   filters: UnidadeFilters;
   opcoes: UnidadeFiltroOpcoes | null;
   onChange: (filters: UnidadeFilters) => void;
+  embedded?: boolean;
 }) {
   function update(key: keyof UnidadeFilters, value: string) {
     onChange({
@@ -37,6 +39,39 @@ export function UnidadeFiltersPanel({
   }
 
   const activeCount = Object.values(filters).filter(Boolean).length;
+
+  if (embedded) {
+    return (
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Responsável">
+          <Select value={filters.responsavel ?? ''} onChange={(event) => update('responsavel', event.target.value)}>
+            <option value="">Todos</option>
+            {(opcoes?.responsaveis ?? []).map((item) => (
+              <option key={`${item.secretariaId}-${item.nome}`} value={item.nome}>
+                {item.nome} · {item.secretariaSigla}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="E-mail">
+          <Select value={filters.responsavelEmail ?? ''} onChange={(event) => update('responsavelEmail', event.target.value)}>
+            <option value="">Todos</option>
+            {(opcoes?.emails ?? []).map((email) => (
+              <option key={email} value={email}>{email}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Tipo">
+          <Select value={filters.tipo ?? ''} onChange={(event) => update('tipo', event.target.value)}>
+            <option value="">Todos</option>
+            {(opcoes?.tipos ?? []).map((tipo) => (
+              <option key={tipo} value={tipo}>{formatUnidadeTipo(tipo)}</option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+    );
+  }
 
   return (
     <Card elevation={1}>

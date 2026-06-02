@@ -13,7 +13,6 @@ import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { PageSkeleton } from '@/components/ui/skeleton';
-import { Surface } from '@/components/ui/surface';
 
 const showDemoLogin = process.env.NEXT_PUBLIC_SHOW_DEMO_LOGIN === 'true';
 
@@ -79,43 +78,35 @@ function LoginContent() {
   return (
     <main className="gestop-shell flex min-h-dvh flex-col justify-center px-4 py-8 sm:px-6">
       <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-center">
-        <Surface
-          elevation={3}
-          tone="default"
-          className="gestop-brand-panel hidden border-0 p-10 text-white lg:block"
-        >
+        <section className="gestop-brand-panel hidden rounded-[var(--r-card)] p-10 text-white lg:block">
           <div className="space-y-5">
             <Logo theme="light" variant="full" priority className="h-20 max-w-[320px]" />
             <Chip variant="accent" className="bg-white/15 text-white">
-              GestOP
+              GestOP · Central Operacional
             </Chip>
           </div>
-          <p className="md-body-lg mt-8 max-w-md text-white/85">
+          <p className="mt-8 max-w-md text-[15px] leading-relaxed text-white/85">
             Plataforma de gestão de ordens de serviço e fiscalização georreferenciada da Prefeitura de Franca.
           </p>
           {showDemoLogin ? (
-            <Surface tone="high" elevation={0} className="mt-8 border-white/15 bg-white/10 p-5 text-white backdrop-blur-sm">
-              <strong className="md-title-md block">Ambiente de demonstração</strong>
-              <p className="md-body-md mt-2">
-                Use as credenciais de desenvolvimento configuradas localmente.
-              </p>
-            </Surface>
+            <div className="mt-8 rounded-[var(--r-md)] border border-white/15 bg-white/10 p-5 backdrop-blur-sm">
+              <strong className="block text-sm font-semibold">Ambiente de demonstração</strong>
+              <p className="mt-2 text-sm text-white/85">Use as credenciais de desenvolvimento configuradas localmente.</p>
+            </div>
           ) : null}
-        </Surface>
+        </section>
 
         <Card elevation={2} className="w-full">
           <CardHeader>
             <div className="mb-6 flex flex-col items-center gap-2 text-center lg:hidden">
               <Logo variant="full" priority className="h-14 max-w-[260px]" />
-              <p className="md-title-md font-semibold uppercase tracking-[0.12em] text-[var(--color-brand-primary)]">
-                GestOP
-              </p>
+              <p className="page-kicker">GestOP</p>
             </div>
             <Chip variant="brand" className="mb-3 w-fit gap-1.5">
               <LockKeyhole className="h-3.5 w-3.5" />
               Acesso restrito
             </Chip>
-            <CardTitle className="md-headline-md">Entrar no sistema</CardTitle>
+            <CardTitle className="page-title text-[var(--ink)]">Entrar no sistema</CardTitle>
             <CardDescription>Use seu usuário institucional para acessar a CCO.</CardDescription>
           </CardHeader>
 
@@ -150,8 +141,8 @@ function LoginContent() {
                 {loading ? 'Entrando...' : 'Entrar'}
               </Button>
 
-              <p className="md-body-md text-center">
-                <Link href="/recuperar-senha" className="text-[var(--color-brand-primary)] hover:underline">
+              <p className="text-center text-sm">
+                <Link href="/recuperar-senha" className="font-semibold text-[var(--brand)] hover:underline">
                   Esqueci minha senha
                 </Link>
               </p>

@@ -6,7 +6,7 @@ export function Label({
   ...props
 }: React.LabelHTMLAttributes<HTMLLabelElement>) {
   return (
-    <label className={cn('md-label-lg text-[var(--md-on-surface)]', className)} {...props}>
+    <label className={cn('text-[12px] font-semibold text-[var(--ink-2)]', className)} {...props}>
       {children}
     </label>
   );
@@ -24,10 +24,10 @@ export function Field({
   hint?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-2', className)}>
+    <div className={cn('flex flex-col gap-[5px]', className)}>
       <Label>{label}</Label>
       {children}
-      {hint ? <p className="md-body-md text-[var(--md-on-surface-variant)]">{hint}</p> : null}
+      {hint ? <p className="text-[11.5px] text-[var(--ink-3)]">{hint}</p> : null}
     </div>
   );
 }

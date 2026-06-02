@@ -1,17 +1,24 @@
 import Link from 'next/link';
 import { ArrowLeft, type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { Chip } from '@/components/ui/chip';
 
 export function PageContainer({
   children,
   className,
+  flush,
 }: {
   children: React.ReactNode;
   className?: string;
+  flush?: boolean;
 }) {
   return (
-    <div className={cn('mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 sm:py-6 lg:py-8', className)}>
+    <div
+      className={cn(
+        'flex min-h-0 flex-1 flex-col gap-4 overflow-hidden',
+        flush ? 'p-0' : 'px-[var(--content-px)] py-[18px] pb-5',
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -33,31 +40,29 @@ export function PageHeader({
   backHref?: string;
 }) {
   return (
-    <header className="mb-6 sm:mb-8">
+    <header className="shrink-0">
       {backHref ? (
         <Link
           href={backHref}
-          className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-[var(--md-shape-full)] px-2 md-label-lg text-[var(--color-brand-primary)] transition-colors hover:bg-[var(--color-brand-primary-subtle)]"
+          className="mb-4 inline-flex min-h-11 items-center gap-2 rounded-[var(--r-md)] px-1 text-[13px] font-semibold text-[var(--brand)] hover:underline"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="h-4 w-4" />
           Voltar
         </Link>
       ) : null}
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div className="max-w-3xl">
+        <div className="max-w-3xl min-w-0">
           {kicker ? (
-            <div className="mb-3 flex items-center gap-2">
-              {Icon ? <Icon className="h-4 w-4 text-[var(--color-brand-primary)]" aria-hidden /> : null}
-              <Chip variant="brand">{kicker}</Chip>
+            <div className="page-kicker mb-1 flex items-center gap-2">
+              {Icon ? <Icon className="h-3.5 w-3.5" aria-hidden /> : null}
+              {kicker}
             </div>
           ) : null}
-          <h1 className="md-headline-md text-[var(--md-on-surface)] sm:md-headline-lg">{title}</h1>
-          {description ? (
-            <p className="md-body-lg mt-2 text-[var(--md-on-surface-variant)]">{description}</p>
-          ) : null}
+          <h1 className="page-title">{title}</h1>
+          {description ? <p className="mt-1 text-[13.5px] text-[var(--ink-3)]">{description}</p> : null}
         </div>
-        {action ? <div className="shrink-0">{action}</div> : null}
+        {action ? <div className="flex shrink-0 flex-wrap gap-2">{action}</div> : null}
       </div>
     </header>
   );
@@ -65,6 +70,8 @@ export function PageHeader({
 
 export function PageShell({
   children,
+  flush,
+  className,
   ...headerProps
 }: {
   children: React.ReactNode;
@@ -74,9 +81,11 @@ export function PageShell({
   icon?: LucideIcon;
   action?: React.ReactNode;
   backHref?: string;
+  flush?: boolean;
+  className?: string;
 }) {
   return (
-    <PageContainer>
+    <PageContainer flush={flush} className={className}>
       <PageHeader {...headerProps} />
       {children}
     </PageContainer>

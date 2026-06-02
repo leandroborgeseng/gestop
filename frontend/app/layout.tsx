@@ -1,11 +1,19 @@
 import './globals.css';
-import { Inter } from 'next/font/google';
+import { IBM_Plex_Mono, IBM_Plex_Sans } from 'next/font/google';
 import type { Metadata, Viewport } from 'next';
 import { SnackbarProvider } from '@/components/ui/snackbar';
 
-const inter = Inter({
+const ibmPlexSans = IBM_Plex_Sans({
   subsets: ['latin'],
-  variable: '--font-inter',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-ibm-plex-sans',
+  display: 'swap',
+});
+
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ['latin'],
+  weight: ['500', '600'],
+  variable: '--font-ibm-plex-mono',
   display: 'swap',
 });
 
@@ -33,7 +41,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.variable} antialiased`}>
+      <body className={`${ibmPlexSans.variable} ${ibmPlexMono.variable} antialiased`}>
         <SnackbarProvider>{children}</SnackbarProvider>
       </body>
     </html>

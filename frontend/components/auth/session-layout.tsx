@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getMe, getStoredAuth, StoredAuth } from '@/lib/api';
 import { AUTH_EXPIRED_EVENT } from '@/lib/security';
 import { AppShell } from '@/components/layout/app-shell';
+import { GuideProvider } from '@/components/help/guide-provider';
 import { PageContainer } from '@/components/layout/page-shell';
 import { PageSkeleton } from '@/components/ui/skeleton';
 
@@ -59,8 +60,10 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AppShell userName={auth.user.nome} userRoles={auth.user.perfis} permissions={auth.user.permissoes}>
-      {children}
-    </AppShell>
+    <GuideProvider>
+      <AppShell userName={auth.user.nome} userRoles={auth.user.perfis} permissions={auth.user.permissoes}>
+        {children}
+      </AppShell>
+    </GuideProvider>
   );
 }

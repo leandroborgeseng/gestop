@@ -28,10 +28,10 @@ const icons = {
 } as const;
 
 const variantStyles = {
-  info: 'bg-[var(--md-on-surface)] text-white',
-  success: 'bg-emerald-700 text-white',
-  warning: 'bg-amber-700 text-white',
-  error: 'bg-red-700 text-white',
+  info: 'bg-[var(--ink)] text-white',
+  success: 'bg-[var(--ink)] text-white',
+  warning: 'bg-[var(--ink)] text-white',
+  error: 'bg-[var(--ink)] text-white',
 } as const;
 
 export function SnackbarProvider({ children }: { children: React.ReactNode }) {
@@ -67,7 +67,7 @@ function SnackbarItem({ item, onDismiss }: { item: SnackbarMessage; onDismiss: (
   const Icon = icons[item.variant];
 
   useEffect(() => {
-    const timer = window.setTimeout(onDismiss, item.duration ?? 4000);
+    const timer = window.setTimeout(onDismiss, item.duration ?? 2600);
     return () => window.clearTimeout(timer);
   }, [item.duration, onDismiss]);
 
@@ -75,7 +75,7 @@ function SnackbarItem({ item, onDismiss }: { item: SnackbarMessage; onDismiss: (
     <div
       role="status"
       className={cn(
-        'md-snackbar-enter pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-[var(--md-shape-md)] px-4 py-3 shadow-[var(--md-elevation-3)]',
+        'md-snackbar-enter pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-[var(--r-pill)] px-4 py-3 shadow-[var(--sh-lg)]',
         variantStyles[item.variant],
       )}
     >

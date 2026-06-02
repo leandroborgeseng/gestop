@@ -9,11 +9,11 @@ export function Card({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-[var(--md-shape-lg)] border border-[var(--md-outline-variant)] bg-[var(--md-surface)]',
+        'overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)]',
         elevation === 0 && 'shadow-none',
-        elevation === 1 && 'md-elevation-1',
-        elevation === 2 && 'md-elevation-2',
-        elevation === 3 && 'md-elevation-3',
+        elevation === 1 && 'shadow-[var(--sh-sm)]',
+        elevation === 2 && 'shadow-[var(--sh-md)]',
+        elevation === 3 && 'shadow-[var(--sh-lg)]',
         className,
       )}
       {...props}
@@ -29,7 +29,10 @@ export function CardHeader({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('flex flex-col gap-1 p-4 pb-0 sm:p-5 sm:pb-0', className)} {...props}>
+    <div
+      className={cn('flex flex-col gap-1 border-b border-[var(--line-2)] px-4 py-[13px] sm:px-4', className)}
+      {...props}
+    >
       {children}
     </div>
   );
@@ -41,7 +44,7 @@ export function CardTitle({
   ...props
 }: React.HTMLAttributes<HTMLHeadingElement>) {
   return (
-    <h2 className={cn('md-title-lg text-[var(--md-on-surface)]', className)} {...props}>
+    <h2 className={cn('text-[13.5px] font-semibold text-[var(--ink)]', className)} {...props}>
       {children}
     </h2>
   );
@@ -53,7 +56,7 @@ export function CardDescription({
   ...props
 }: React.HTMLAttributes<HTMLParagraphElement>) {
   return (
-    <p className={cn('md-body-md text-[var(--md-on-surface-variant)]', className)} {...props}>
+    <p className={cn('text-[12px] text-[var(--ink-3)]', className)} {...props}>
       {children}
     </p>
   );
@@ -65,7 +68,7 @@ export function CardContent({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('p-4 sm:p-5', className)} {...props}>
+    <div className={cn('p-4 sm:p-4', className)} {...props}>
       {children}
     </div>
   );
@@ -77,7 +80,10 @@ export function CardFooter({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('flex items-center gap-2 border-t border-[var(--md-outline-variant)] p-4 sm:p-5', className)} {...props}>
+    <div
+      className={cn('flex items-center gap-2 border-t border-[var(--line-2)] p-4 sm:p-4', className)}
+      {...props}
+    >
       {children}
     </div>
   );

@@ -1,17 +1,11 @@
 import { forwardRef, type InputHTMLAttributes } from 'react';
 import { cn } from '@/lib/cn';
 
+const fieldClass =
+  'flex h-[38px] w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-[11px] text-[13px] text-[var(--ink)] transition-all duration-[var(--md-duration-short)] placeholder:text-[var(--ink-4)] hover:border-[#cdd8e6] focus:border-[var(--brand)] focus:bg-[var(--surface)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)] disabled:cursor-not-allowed disabled:opacity-50';
+
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
-  ({ className, ...props }, ref) => (
-    <input
-      ref={ref}
-      className={cn(
-        'flex h-14 w-full rounded-[var(--md-shape-sm)] border border-[var(--md-outline)] bg-[var(--md-surface-container-lowest)] px-4 text-base text-[var(--md-on-surface)] shadow-none transition-all duration-[var(--md-duration-short)] placeholder:text-[var(--md-on-surface-variant)] focus:border-[var(--color-brand-primary)] focus:bg-[var(--md-surface)] focus:outline-none focus:ring-4 focus:ring-[color-mix(in_srgb,var(--color-brand-primary)_12%,transparent)] disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
-        className,
-      )}
-      {...props}
-    />
-  ),
+  ({ className, ...props }, ref) => <input ref={ref} className={cn(fieldClass, className)} {...props} />,
 );
 
 Input.displayName = 'Input';

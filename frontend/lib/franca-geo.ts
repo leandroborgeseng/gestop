@@ -20,10 +20,20 @@ export const FRANCA_BOUNDS = {
 
 export const FRANCA_DEFAULT_ZOOM = 13;
 
-export const OSM_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>';
+export const CARTO_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
-export const OSM_TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+export const CARTO_VOYAGER_NO_LABELS =
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png';
+
+export const CARTO_VOYAGER_LABELS =
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png';
+
+export const CARTO_SUBDOMAINS = 'abcd';
+
+/** @deprecated use CARTO_VOYAGER_NO_LABELS */
+export const OSM_TILE_URL = CARTO_VOYAGER_NO_LABELS;
+export const OSM_ATTRIBUTION = CARTO_ATTRIBUTION;
 
 export const ESRI_SATELLITE_TILE_URL =
   'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';

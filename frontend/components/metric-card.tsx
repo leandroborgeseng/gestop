@@ -1,40 +1,79 @@
+'use client';
+
 import { LucideIcon } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/cn';
+
+const iconTones = {
+  brand: 'bg-[var(--brand-soft)] text-[var(--brand)]',
+  info: 'bg-[var(--brand-soft)] text-[var(--brand-bright)]',
+  ok: 'bg-[var(--ok-bg)] text-[var(--ok)]',
+  warn: 'bg-[var(--warn-bg)] text-[var(--warn)]',
+} as const;
 
 export function MetricCard({
   title,
   value,
   hint,
+  delta,
+  deltaTone = 'neutral',
   icon: Icon,
+  active = false,
+  onClick,
   className,
 }: {
   title: string;
-  value: number;
-  hint: string;
+  value: number | string;
+  hint?: string;
+  delta?: string;
+  deltaTone?: 'ok' | 'warn' | 'neutral';
   icon: LucideIcon;
+  active?: boolean;
+  onClick?: () => void;
   className?: string;
 }) {
+  const tone = active ? 'brand' : 'brand';
+  const Tag = onClick ? 'button' : 'div';
+
   return (
-    <Card
-      elevation={1}
+    <Tag
+      type={onClick ? 'button' : undefined}
+      onClick={onClick}
       className={cn(
-        'transition-all duration-[var(--md-duration-short)] hover:-translate-y-0.5 hover:shadow-[var(--md-elevation-2)]',
+        'flex w-full gap-3.5 rounded-[var(--r-card)] border bg-[var(--surface)] p-4 text-left shadow-[var(--sh-sm)] transition-all duration-[var(--md-duration-short)]',
+        active
+          ? 'border-[var(--brand)] shadow-[0_0_0_1px_var(--brand),var(--sh-sm)]'
+          : 'border-[var(--line)] hover:-translate-y-px hover:shadow-[var(--sh-md)]',
+        onClick && 'cursor-pointer',
         className,
       )}
     >
-      <CardContent className="p-4 sm:p-5">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="md-label-lg text-[var(--md-on-surface-variant)]">{title}</p>
-            <strong className="md-headline-md mt-2 block text-[var(--md-on-surface)]">{value}</strong>
-            <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">{hint}</p>
-          </div>
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[var(--md-shape-md)] bg-[var(--color-brand-primary-subtle)] text-[var(--color-brand-primary)]">
-            <Icon className="h-5 w-5" aria-hidden />
-          </span>
-        </div>
-      </CardContent>
-    </Card>
+      <span
+        className={cn(
+          'flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px]',
+          iconTones[tone],
+        )}
+      >
+        <Icon className="h-[18px] w-[18px]" aria-hidden />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-xs font-medium text-[var(--ink-3)]">{title}</span>
+        <span className="mt-0.5 flex flex-wrap items-baseline gap-2">
+          <strong className="kpi-value">{value}</strong>
+          {delta ? (
+            <span
+              className={cn(
+                'mono text-xs font-semibold',
+                deltaTone === 'ok' && 'text-[var(--ok)]',
+                deltaTone === 'warn' && 'text-[var(--warn)]',
+                deltaTone === 'neutral' && 'text-[var(--ink-3)]',
+              )}
+            >
+              {delta}
+            </span>
+          ) : null}
+        </span>
+        {hint ? <span className="mt-0.5 block text-[11.5px] text-[var(--ink-4)]">{hint}</span> : null}
+      </span>
+    </Tag>
   );
 }

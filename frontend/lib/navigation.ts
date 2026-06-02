@@ -23,6 +23,11 @@ export type NavItem = {
   mobilePrimary?: boolean;
 };
 
+export type NavGroup = {
+  title: string;
+  itemIds: string[];
+};
+
 export const NAV_ITEMS: NavItem[] = [
   {
     id: 'cco',
@@ -79,7 +84,7 @@ export const NAV_ITEMS: NavItem[] = [
   {
     id: 'relatorios',
     label: 'Relatórios',
-    shortLabel: 'CSV',
+    shortLabel: 'Relatórios',
     href: '/relatorios',
     icon: FileSpreadsheet,
     permission: 'dashboard.visualizar',
@@ -107,10 +112,26 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+export const NAV_GROUPS: NavGroup[] = [
+  { title: 'Operação', itemIds: ['cco', 'mobile', 'chamados', 'ordens'] },
+  { title: 'Gestão', itemIds: ['dashboard', 'cronograma', 'relatorios'] },
+  { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
+];
+
 const MAX_BOTTOM_SLOTS = 4;
 
 export function getVisibleNavItems(permissions: string[]) {
   return NAV_ITEMS.filter((item) => !item.permission || permissions.includes(item.permission));
+}
+
+export function getGroupedNavItems(permissions: string[]) {
+  const visible = getVisibleNavItems(permissions);
+  const byId = new Map(visible.map((item) => [item.id, item]));
+
+  return NAV_GROUPS.map((group) => ({
+    title: group.title,
+    items: group.itemIds.map((id) => byId.get(id)).filter(Boolean) as NavItem[],
+  })).filter((group) => group.items.length > 0);
 }
 
 export function getMobileNav(permissions: string[]) {
@@ -126,16 +147,6 @@ export function getMobileNav(permissions: string[]) {
   const secondary = visible.filter((item) => !primaryIds.has(item.id));
 
   return { primary, secondary, hasMore: secondary.length > 0 };
-}
-
-/** @deprecated Use getMobileNav().primary */
-export function getPrimaryNavItems(permissions: string[]) {
-  return getMobileNav(permissions).primary;
-}
-
-/** @deprecated Use getMobileNav().secondary */
-export function getSecondaryNavItems(permissions: string[]) {
-  return getMobileNav(permissions).secondary;
 }
 
 export function isNavActive(pathname: string, href: string) {

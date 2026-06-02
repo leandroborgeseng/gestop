@@ -1,86 +1,140 @@
-import Link from 'next/link';
-import { ArrowRight, Building2, ClipboardList, LocateFixed, Mail, UserRound } from 'lucide-react';
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { Building2, ClipboardList, LocateFixed, Mail, UserRound } from 'lucide-react';
 import { UnidadeOperacional } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { StatusBadge } from './status-badge';
+import { cn } from '@/lib/cn';
+import { StatusBadge, situacaoRailColor } from './status-badge';
 import { EmptyState } from './ui-states';
 
-export function UnidadeList({ unidades }: { unidades: UnidadeOperacional[] }) {
+export function UnidadeList({
+  unidades,
+  selectedId = null,
+  hoveredId = null,
+  onSelect,
+  onHover,
+}: {
+  unidades: UnidadeOperacional[];
+  selectedId?: string | null;
+  hoveredId?: string | null;
+  onSelect?: (id: string) => void;
+  onHover?: (id: string | null) => void;
+}) {
+  const router = useRouter();
+
   if (unidades.length === 0) {
     return (
       <EmptyState
         title="Nenhum próprio encontrado"
-        description="Ajuste os filtros ou cadastre novos próprios públicos na administração."
+        description="Ajuste os filtros ou cadastre novos próprios na administração."
       />
     );
   }
 
   return (
-    <Card elevation={1}>
-      <CardHeader>
-        <CardTitle>Próprios públicos</CardTitle>
-        <CardDescription>{unidades.length} registro(s) na consulta atual.</CardDescription>
-      </CardHeader>
+    <div className="unit-list flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--line-2)] px-4 py-3">
+        <h2 className="text-[13.5px] font-semibold text-[var(--ink)]">Próprios públicos</h2>
+        <span className="mono ml-auto rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-0.5 text-xs font-semibold text-[var(--ink-3)]">
+          {unidades.length}
+        </span>
+      </div>
 
-      <CardContent className="space-y-2 pt-0">
-        {unidades.map((unidade) => (
-          <Link
-            key={unidade.id}
-            href={`/cco/unidades/${unidade.id}`}
-            className="group flex flex-col gap-3 rounded-[var(--md-shape-md)] border border-transparent bg-[var(--md-surface-container-low)] p-4 transition-all duration-[var(--md-duration-short)] hover:border-[color-mix(in_srgb,var(--color-brand-primary)_20%,transparent)] hover:bg-[var(--md-surface)] hover:shadow-[var(--md-elevation-1)] active:scale-[0.99]"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h3 className="md-title-md text-[var(--md-on-surface)]">{unidade.nome}</h3>
-                  <StatusBadge situacao={unidade.situacao} />
-                </div>
-                <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
-                  {unidade.codigoPatrimonial} · {unidade.secretaria.sigla} · {formatUnidadeTipo(unidade.tipo)}
-                </p>
-              </div>
-              <ArrowRight className="mt-1 h-5 w-5 shrink-0 text-[var(--md-outline)] transition group-hover:text-[var(--color-brand-primary)]" />
-            </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+        {unidades.map((unidade) => {
+          const selected = selectedId === unidade.id;
+          const hovered = hoveredId === unidade.id;
+          const hasGps = unidade.latitude !== null && unidade.longitude !== null;
 
-            <div className="grid gap-2 md-body-md text-[var(--md-on-surface-variant)] md:grid-cols-2">
-              <span className="flex items-center gap-2 md:col-span-2">
-                <Building2 className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
-                <span className="truncate">
-                  {unidade.endereco}
-                  {unidade.bairro ? ` · ${unidade.bairro}` : ''}
+          return (
+            <button
+              key={unidade.id}
+              type="button"
+              onClick={() => {
+                onSelect?.(unidade.id);
+                router.push(`/cco/unidades/${unidade.id}`);
+              }}
+              onMouseEnter={() => onHover?.(unidade.id)}
+              onMouseLeave={() => onHover?.(null)}
+              className={cn(
+                'unit-row mb-0.5 flex w-full gap-2.5 overflow-hidden rounded-[var(--r-md)] border border-transparent py-[var(--row-py)] pr-2.5 pl-0 text-left transition-colors',
+                selected || hovered
+                  ? 'border-[color-mix(in_srgb,var(--brand)_30%,transparent)] bg-[var(--brand-soft)]'
+                  : 'hover:bg-[var(--surface-2)]',
+              )}
+            >
+              <span
+                className="w-[3px] shrink-0 self-stretch rounded-r"
+                style={{ background: situacaoRailColor(unidade.situacao) }}
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-1.5">
+                  <span className="mono text-[11px] font-semibold text-[var(--brand-hover)]">
+                    {unidade.codigoPatrimonial}
+                  </span>
+                  {!hasGps ? (
+                    <span className="inline-flex items-center gap-0.5 rounded-[var(--r-pill)] bg-[var(--muted-bg)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--muted)]">
+                      <LocateFixed className="h-3 w-3" /> Sem GPS
+                    </span>
+                  ) : null}
+                  <StatusBadge situacao={unidade.situacao} size="sm" />
                 </span>
+                <span className="mt-0.5 block truncate text-[13.5px] font-semibold text-[var(--ink)]">{unidade.nome}</span>
+                <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-[var(--ink-3)]">
+                  <span className="font-semibold text-[var(--ink-2)]">{unidade.secretaria.sigla}</span>
+                  <span className="text-[var(--ink-4)]">·</span>
+                  <span>{formatUnidadeTipo(unidade.tipo)}</span>
+                  {unidade.bairro ? (
+                    <>
+                      <span className="text-[var(--ink-4)]">·</span>
+                      <span>{unidade.bairro}</span>
+                    </>
+                  ) : null}
+                </span>
+                {(unidade.secretaria.responsavelNome || unidade.endereco) && (
+                  <span className="mt-1 flex flex-wrap gap-3 text-[11px] text-[var(--ink-3)]">
+                    {unidade.endereco ? (
+                      <span className="inline-flex max-w-full items-center gap-1 truncate">
+                        <Building2 className="h-3 w-3 shrink-0 text-[var(--brand)]" />
+                        {unidade.endereco}
+                      </span>
+                    ) : null}
+                    {unidade.secretaria.responsavelNome ? (
+                      <span className="inline-flex items-center gap-1">
+                        <UserRound className="h-3 w-3 shrink-0" />
+                        {unidade.secretaria.responsavelNome}
+                      </span>
+                    ) : null}
+                    {unidade.secretaria.responsavelEmail ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Mail className="h-3 w-3 shrink-0" />
+                        {unidade.secretaria.responsavelEmail}
+                      </span>
+                    ) : null}
+                  </span>
+                )}
               </span>
-              {unidade.secretaria.responsavelNome ? (
-                <span className="flex items-center gap-2">
-                  <UserRound className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
-                  <span className="truncate">{unidade.secretaria.responsavelNome}</span>
+              <span className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                <span className="flex gap-1">
+                  {unidade.pendencias.naoConformidadesAbertas > 0 ? (
+                    <span className="mono inline-flex items-center rounded-md bg-[var(--warn-bg)] px-1 py-0.5 text-[11px] font-bold text-[var(--warn)]">
+                      {unidade.pendencias.naoConformidadesAbertas} NC
+                    </span>
+                  ) : null}
+                  {unidade.pendencias.ordensServicoAbertas > 0 ? (
+                    <span className="mono inline-flex items-center rounded-md bg-[var(--brand-soft)] px-1 py-0.5 text-[11px] font-bold text-[var(--brand-bright)]">
+                      {unidade.pendencias.ordensServicoAbertas} OS
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
-              {unidade.secretaria.responsavelEmail ? (
-                <span className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
-                  <span className="truncate">{unidade.secretaria.responsavelEmail}</span>
-                </span>
-              ) : null}
-              <span className="flex items-center gap-2">
-                <LocateFixed className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
-                <span className="truncate">
-                  {unidade.latitude !== null && unidade.longitude !== null
-                    ? `${unidade.latitude.toFixed(5)}, ${unidade.longitude.toFixed(5)}`
-                    : 'Sem localização GPS'}
-                </span>
+                <span className="mono text-[11px] text-[var(--ok)]">{unidade.totais.fiscalizacoes} vist.</span>
               </span>
-              <span className="flex items-center gap-2">
-                <ClipboardList className="h-4 w-4 shrink-0 text-[var(--color-brand-primary)]" />
-                {unidade.totais.fiscalizacoes} fiscalização(ões) ·{' '}
-                {unidade.pendencias.naoConformidadesAbertas + unidade.pendencias.ordensServicoAbertas}{' '}
-                pendência(s)
-              </span>
-            </div>
-          </Link>
-        ))}
-      </CardContent>
-    </Card>
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
