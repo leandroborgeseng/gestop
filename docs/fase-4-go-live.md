@@ -52,7 +52,8 @@ Substitua `PMF-ESC-001` pelo `codigo_patrimonial` de cada unidade.
 1. Deploy backend + frontend no Railway (ver `docs/publicacao-github-railway.md`)
 2. Rodar migrations e seed admin
 3. Importar secretarias: `npm run import:secretarias data/secretarias.template.csv`
-4. Importar unidades oficiais (~165): `npm run import:unidades data/unidades-franca.csv`
+4. Importar unidades oficiais (~165): `npm run import:unidades data/unidades-franca.csv`  
+   **Ou** importar do webmap QGIS: `npm run import:webmap` (ver `docs/import-webmap.md`)
 5. Rodar `npm run go-live:check`
 6. Homologar piloto: QR → chamado → triagem → OS → conclusão
 7. Treinar operadores CCO e equipes de campo

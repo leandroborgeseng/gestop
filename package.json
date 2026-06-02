@@ -16,6 +16,8 @@
     "admin:reset-password": "tsx prisma/reset-admin-password.ts",
     "import:unidades": "tsx prisma/import-unidades.ts",
     "import:unidades:dry-run": "tsx prisma/import-unidades.ts --dry-run",
+    "import:webmap": "tsx prisma/import-webmap.ts",
+    "import:webmap:dry-run": "tsx prisma/import-webmap.ts --dry-run",
     "import:secretarias": "tsx prisma/import-secretarias.ts",
     "import:secretarias:dry-run": "tsx prisma/import-secretarias.ts --dry-run",
     "go-live:check": "tsx scripts/go-live-check.ts",
