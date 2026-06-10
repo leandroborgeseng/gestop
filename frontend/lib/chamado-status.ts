@@ -14,16 +14,13 @@ export function chamadoStatusLabel(status: string) {
   return CHAMADO_STATUS_META[status]?.label ?? status;
 }
 
+export function selectableChamadoStatuses(status: string) {
+  return Object.keys(CHAMADO_STATUS_META).filter((item) => item !== status);
+}
+
+/** @deprecated Prefer selectableChamadoStatuses */
 export function nextChamadoStatuses(status: string) {
-  const transitions: Record<string, string[]> = {
-    ABERTO: ['EM_TRIAGEM', 'EM_ATENDIMENTO', 'CANCELADO'],
-    EM_TRIAGEM: ['EM_ATENDIMENTO', 'CANCELADO'],
-    EM_ATENDIMENTO: ['IMPEDIDO', 'CONCLUIDO', 'CANCELADO'],
-    IMPEDIDO: ['EM_ATENDIMENTO', 'CANCELADO'],
-    CONCLUIDO: [],
-    CANCELADO: [],
-  };
-  return transitions[status] ?? [];
+  return selectableChamadoStatuses(status);
 }
 
 export function nextChamadoStatusFlow(status: string) {
@@ -74,6 +71,52 @@ export type ChamadoTimelineStep = {
   done: boolean;
   active: boolean;
 };
+
+export type ChamadoHistoricoEntry = {
+  statusAnterior?: string | null;
+  statusNovo: string;
+  motivo?: string | null;
+  createdAt: string;
+  alteradoPor?: { nome: string } | null;
+};
+
+function formatTimelineDate(value?: string | null) {
+  return value ? new Date(value).toLocaleString('pt-BR') : '—';
+}
+
+export function buildChamadoTimelineFromHistorico(
+  historico: ChamadoHistoricoEntry[],
+  currentStatus: string,
+  createdAt: string,
+): ChamadoTimelineStep[] {
+  if (historico.length === 0) {
+    return [
+      {
+        title: chamadoStatusLabel('ABERTO'),
+        date: formatTimelineDate(createdAt),
+        sub: 'Registro inicial',
+        done: true,
+        active: currentStatus === 'ABERTO',
+      },
+    ];
+  }
+
+  return historico.map((entry, index) => {
+    const isLast = index === historico.length - 1;
+    const title = entry.statusAnterior
+      ? `${chamadoStatusLabel(entry.statusAnterior)} → ${chamadoStatusLabel(entry.statusNovo)}`
+      : chamadoStatusLabel(entry.statusNovo);
+    const sub = [entry.alteradoPor?.nome, entry.motivo].filter(Boolean).join(' · ');
+
+    return {
+      title,
+      date: formatTimelineDate(entry.createdAt),
+      sub: sub || undefined,
+      done: !isLast || entry.statusNovo === currentStatus,
+      active: isLast && entry.statusNovo === currentStatus,
+    };
+  });
+}
 
 export function buildChamadoTimeline(
   status: string,

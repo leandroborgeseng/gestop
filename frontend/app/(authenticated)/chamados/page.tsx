@@ -11,7 +11,6 @@ import {
   GitBranch,
   Inbox,
   Megaphone,
-  RefreshCw,
   Search,
   Smartphone,
   UserRound,
@@ -32,10 +31,8 @@ import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-ac
 import { cn } from '@/lib/cn';
 import {
   CHAMADO_STATUS_META,
-  buildChamadoTimeline,
+  buildChamadoTimelineFromHistorico,
   chamadoStatusLabel,
-  nextChamadoStatusFlow,
-  nextChamadoStatuses,
   prazoInfo,
   prioridadeVariant,
 } from '@/lib/chamado-status';
@@ -185,11 +182,21 @@ function ChamadosPageContent() {
     return filtered[0] ?? null;
   }, [filtered, selectedId, chamados]);
 
-  async function transition(id: string, status: ChamadoStatus, codigo: string) {
+  async function transition(
+    id: string,
+    status: ChamadoStatus,
+    codigo: string,
+    motivo?: string,
+    impedimentoMotivo?: string,
+  ) {
     setBusyId(id);
     setError(null);
     try {
-      await updateChamadoStatus(id, { status, motivo: `Transição via painel para ${status}` });
+      await updateChamadoStatus(id, {
+        status,
+        motivo: motivo?.trim() || `Status alterado para ${chamadoStatusLabel(status)}`,
+        impedimentoMotivo,
+      });
       const items = await listChamados();
       setChamados(items);
       if (selectedId === id) {
@@ -206,12 +213,6 @@ function ChamadosPageContent() {
     }
   }
 
-  async function advanceStatus(chamado: ChamadoResumo) {
-    const next = nextChamadoStatusFlow(chamado.status);
-    if (!next) return;
-    await transition(chamado.id, next as ChamadoStatus, chamado.codigo);
-  }
-
   return (
     <RequirePermissions permissions={['chamados.gerenciar']}>
       <PageShell
@@ -223,8 +224,8 @@ function ChamadosPageContent() {
         action={<UnidadeAvulsoActions size="md" />}
       >
         <TipBanner id="chamados-triagem">
-          Selecione um chamado na lista para ver prazo, responsável e linha do tempo. Use <b>Atualizar status</b> para
-          avançar no fluxo operacional.
+          Selecione um chamado na lista para ver prazo, responsável e linha do tempo. Use a lista de status para
+          alterar ou voltar etapas — cada mudança fica registrada no histórico.
         </TipBanner>
 
         {error ? (
@@ -348,7 +349,6 @@ function ChamadosPageContent() {
                 loading={detailLoading && !!selected}
                 busy={busyId === selected?.id}
                 onTransition={transition}
-                onAdvance={advanceStatus}
               />
             </section>
           </div>
@@ -364,15 +364,30 @@ function ChamadoDetailPanel({
   loading,
   busy,
   onTransition,
-  onAdvance,
 }: {
   resumo: ChamadoResumo | null;
   detail: ChamadoDetalhe | null;
   loading: boolean;
   busy: boolean;
-  onTransition: (id: string, status: ChamadoStatus, codigo: string) => void;
-  onAdvance: (chamado: ChamadoResumo) => void;
+  onTransition: (
+    id: string,
+    status: ChamadoStatus,
+    codigo: string,
+    motivo?: string,
+    impedimentoMotivo?: string,
+  ) => void;
 }) {
+  const [pendingStatus, setPendingStatus] = useState<ChamadoStatus>('ABERTO');
+  const [motivo, setMotivo] = useState('');
+  const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
+
+  useEffect(() => {
+    if (!resumo) return;
+    setPendingStatus(resumo.status);
+    setMotivo('');
+    setImpedimentoMotivo(resumo.impedimentoMotivo ?? '');
+  }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo]);
+
   if (!resumo) {
     return (
       <Card elevation={1} className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
@@ -391,16 +406,11 @@ function ChamadoDetailPanel({
   const canal = origemMeta(resumo.origem);
   const CanalIcon = canal.icon;
   const prazo = prazoInfo(resumo.prazoEm, resumo.status);
-  const canAct = resumo.status !== 'CONCLUIDO' && resumo.status !== 'CANCELADO';
-  const timeline = buildChamadoTimeline(
-    resumo.status,
-    resumo.createdAt,
-    resumo.prazoEm,
-    detail?.concluidoEm ?? resumo.concluidoEm,
-    resumo.responsavel?.nome,
-    resumo.prioridade,
-    resumo.origem,
-  );
+  const statusOptions = Object.keys(CHAMADO_STATUS_META) as ChamadoStatus[];
+  const statusChanged = pendingStatus !== resumo.status;
+  const timeline = detail?.historico?.length
+    ? buildChamadoTimelineFromHistorico(detail.historico, resumo.status, resumo.createdAt)
+    : buildChamadoTimelineFromHistorico([], resumo.status, resumo.createdAt);
 
   return (
     <Card elevation={1} className="h-full overflow-hidden">
@@ -499,39 +509,75 @@ function ChamadoDetailPanel({
             {loading ? <LoadingState label="Carregando timeline..." /> : <ChamadoTimeline steps={timeline} />}
           </div>
 
-          {canAct ? (
-            <div className="flex flex-wrap gap-2 border-t border-[var(--line-2)] pt-4">
-              {nextChamadoStatusFlow(resumo.status) ? (
-                <Button variant="filled" size="sm" disabled={busy} onClick={() => onAdvance(resumo)}>
-                  <RefreshCw className="h-4 w-4" />
-                  Atualizar status
-                </Button>
-              ) : null}
-              {nextChamadoStatuses(resumo.status).includes('CONCLUIDO') ? (
-                <Button
-                  variant="outlined"
-                  size="sm"
+          <div className="space-y-3 border-t border-[var(--line-2)] pt-4">
+            <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Alterar status</p>
+            <div className="grid gap-3 sm:grid-cols-[minmax(180px,220px)_1fr]">
+              <div>
+                <label htmlFor="chamado-status" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Status
+                </label>
+                <Select
+                  id="chamado-status"
+                  value={pendingStatus}
+                  onChange={(event) => setPendingStatus(event.target.value as ChamadoStatus)}
+                  className="h-9 w-full text-xs"
                   disabled={busy}
-                  onClick={() => onTransition(resumo.id, 'CONCLUIDO', resumo.codigo)}
                 >
-                  Concluir chamado
-                </Button>
-              ) : null}
-              {nextChamadoStatuses(resumo.status)
-                .filter((status) => status !== 'CONCLUIDO')
-                .map((status) => (
-                  <Button
-                    key={status}
-                    variant="tonal"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => onTransition(resumo.id, status as ChamadoStatus, resumo.codigo)}
-                  >
-                    {chamadoStatusLabel(status)}
-                  </Button>
-                ))}
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {status === resumo.status ? `${chamadoStatusLabel(status)} (atual)` : chamadoStatusLabel(status)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label htmlFor="chamado-motivo" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Motivo da alteração
+                </label>
+                <input
+                  id="chamado-motivo"
+                  value={motivo}
+                  onChange={(event) => setMotivo(event.target.value)}
+                  placeholder="Ex.: retorno para triagem, aguardando peça…"
+                  disabled={busy}
+                  className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+                />
+              </div>
             </div>
-          ) : null}
+
+            {pendingStatus === 'IMPEDIDO' ? (
+              <div>
+                <label htmlFor="chamado-impedimento" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Motivo do impedimento
+                </label>
+                <input
+                  id="chamado-impedimento"
+                  value={impedimentoMotivo}
+                  onChange={(event) => setImpedimentoMotivo(event.target.value)}
+                  placeholder="Descreva o que está bloqueando o atendimento"
+                  disabled={busy}
+                  className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+                />
+              </div>
+            ) : null}
+
+            <Button
+              variant="filled"
+              size="sm"
+              disabled={busy || !statusChanged}
+              onClick={() =>
+                onTransition(
+                  resumo.id,
+                  pendingStatus,
+                  resumo.codigo,
+                  motivo,
+                  pendingStatus === 'IMPEDIDO' ? impedimentoMotivo : undefined,
+                )
+              }
+            >
+              Salvar status
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

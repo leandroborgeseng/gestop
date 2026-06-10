@@ -26,17 +26,27 @@ export function buildDefaultDeadlineFromSeverity(severidade: string) {
   return date;
 }
 
-const allowedTransitions: Record<ChamadoStatus, ChamadoStatus[]> = {
-  ABERTO: ['EM_TRIAGEM', 'EM_ATENDIMENTO', 'CANCELADO'],
-  EM_TRIAGEM: ['EM_ATENDIMENTO', 'CANCELADO'],
-  EM_ATENDIMENTO: ['IMPEDIDO', 'CONCLUIDO', 'CANCELADO'],
-  IMPEDIDO: ['EM_ATENDIMENTO', 'CANCELADO'],
-  CONCLUIDO: [],
-  CANCELADO: [],
-};
+const ALL_CHAMADO_STATUSES: ChamadoStatus[] = [
+  'ABERTO',
+  'EM_TRIAGEM',
+  'EM_ATENDIMENTO',
+  'IMPEDIDO',
+  'CONCLUIDO',
+  'CANCELADO',
+];
+
+export function selectableChamadoStatuses(from: ChamadoStatus): ChamadoStatus[] {
+  return ALL_CHAMADO_STATUSES.filter((status) => status !== from);
+}
+
+/** @deprecated Prefer selectableChamadoStatuses — mantido para compatibilidade de imports antigos */
+export function nextChamadoStatuses(status: ChamadoStatus) {
+  return selectableChamadoStatuses(status);
+}
 
 export function canTransitionChamadoStatus(from: ChamadoStatus, to: ChamadoStatus) {
-  return allowedTransitions[from].includes(to);
+  if (from === to) return false;
+  return ALL_CHAMADO_STATUSES.includes(to);
 }
 
 export function assertValidChamadoTransition(from: ChamadoStatus, to: ChamadoStatus) {

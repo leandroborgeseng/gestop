@@ -477,7 +477,10 @@ export function getChamado(id: string) {
   return request<ChamadoDetalhe>(`/chamados/${id}`);
 }
 
-export function updateChamadoStatus(id: string, payload: { status: string; motivo?: string }) {
+export function updateChamadoStatus(
+  id: string,
+  payload: { status: string; motivo?: string; impedimentoMotivo?: string },
+) {
   return request<ChamadoResumo>(`/chamados/${id}/status`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },

@@ -97,6 +97,17 @@ export class ChamadosService {
     });
 
     await this.audit(user.sub, AuditAction.CREATE, chamado.id, null, chamado);
+
+    await this.prisma.historicoStatus.create({
+      data: {
+        entidadeTipo: 'Chamado',
+        entidadeId: chamado.id,
+        statusNovo: ChamadoStatus.ABERTO,
+        motivo: 'Chamado registrado.',
+        alteradoPorId: user.sub,
+      },
+    });
+
     await this.integracoesService.notify('chamado.criado', { chamadoId: chamado.id, codigo: chamado.codigo }, user);
 
     return chamado;
@@ -144,6 +155,15 @@ export class ChamadosService {
       },
     });
 
+    await this.prisma.historicoStatus.create({
+      data: {
+        entidadeTipo: 'Chamado',
+        entidadeId: chamado.id,
+        statusNovo: ChamadoStatus.ABERTO,
+        motivo: 'Chamado aberto via QR Code.',
+      },
+    });
+
     await this.integracoesService.notifySystem('chamado.qr.criado', {
       chamadoId: chamado.id,
       codigo: chamado.codigo,
@@ -163,17 +183,29 @@ export class ChamadosService {
       throw new BadRequestException(error instanceof Error ? error.message : 'Transição inválida');
     }
 
+    const isTerminal = (status: ChamadoStatus) =>
+      status === ChamadoStatus.CONCLUIDO || status === ChamadoStatus.CANCELADO;
+
     const chamado = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.chamado.update({
         where: { id },
         data: {
           status: dto.status,
           responsavelId: dto.responsavelId ?? before.responsavelId,
-          impedimentoMotivo: dto.impedimentoMotivo ?? before.impedimentoMotivo,
-          concluidoEm: dto.status === ChamadoStatus.CONCLUIDO ? new Date() : before.concluidoEm,
-          encerradoEm:
-            dto.status === ChamadoStatus.CONCLUIDO || dto.status === ChamadoStatus.CANCELADO
-              ? new Date()
+          impedimentoMotivo:
+            dto.status === ChamadoStatus.IMPEDIDO
+              ? (dto.impedimentoMotivo ?? before.impedimentoMotivo)
+              : null,
+          concluidoEm:
+            dto.status === ChamadoStatus.CONCLUIDO
+              ? (before.concluidoEm ?? new Date())
+              : isTerminal(before.status) && !isTerminal(dto.status)
+                ? null
+                : before.concluidoEm,
+          encerradoEm: isTerminal(dto.status)
+            ? (before.encerradoEm ?? new Date())
+            : isTerminal(before.status) && !isTerminal(dto.status)
+              ? null
               : before.encerradoEm,
         },
         include: this.includeRelations(),
