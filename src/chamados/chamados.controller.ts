@@ -4,7 +4,14 @@ import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
 import { RequirePermissions } from '../auth/permissions';
 import { PermissionsGuard } from '../auth/permissions.guard';
-import { CreateChamadoDto, UpdateChamadoStatusDto, UpdateChamadoAtribuicaoDto } from './chamados.dto';
+import {
+  ChamadoExecucaoCheckinDto,
+  ChamadoExecucaoConcluirDto,
+  ChamadoExecucaoEvidenciaDto,
+  CreateChamadoDto,
+  UpdateChamadoStatusDto,
+  UpdateChamadoAtribuicaoDto,
+} from './chamados.dto';
 import { ChamadosService } from './chamados.service';
 
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -26,6 +33,30 @@ export class ChamadosController {
   @Get()
   list() {
     return this.chamadosService.listChamados();
+  }
+
+  @Get(':id/execucao')
+  getExecucao(@Param('id') id: string) {
+    return this.chamadosService.getChamadoParaExecucao(id);
+  }
+
+  @Post(':id/execucao/checkin')
+  checkinExecucao(@Param('id') id: string, @Body() body: ChamadoExecucaoCheckinDto, @CurrentUser() user: JwtPayload) {
+    return this.chamadosService.registrarCheckinExecucao(id, body, user);
+  }
+
+  @Post(':id/execucao/evidencias')
+  addEvidenciaExecucao(
+    @Param('id') id: string,
+    @Body() body: ChamadoExecucaoEvidenciaDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.chamadosService.adicionarEvidenciaExecucao(id, body, user);
+  }
+
+  @Post(':id/execucao/concluir')
+  concluirExecucao(@Param('id') id: string, @Body() body: ChamadoExecucaoConcluirDto, @CurrentUser() user: JwtPayload) {
+    return this.chamadosService.concluirExecucao(id, body, user);
   }
 
   @Get(':id')

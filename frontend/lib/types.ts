@@ -459,6 +459,8 @@ export type ChamadoResumo = {
   solicitanteTelefone?: string | null;
   fotoUrl?: string | null;
   fotoMimeType?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   createdAt: string;
   encerradoEm?: string | null;
   secretaria: SecretariaOption;
@@ -468,6 +470,9 @@ export type ChamadoResumo = {
     codigoPatrimonial: string;
     endereco?: string;
     bairro?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    raioValidacaoMetros?: number;
   };
   responsavel?: { id: string; nome: string } | null;
   equipe?: { id: string; nome: string } | null;
@@ -484,6 +489,51 @@ export type ChamadoDetalhe = ChamadoResumo & {
     createdAt: string;
     alteradoPor?: { id: string; nome: string } | null;
   }>;
+};
+
+export type ChamadoEvidencia = {
+  id: string;
+  tipo: string;
+  url: string;
+  mimeType?: string | null;
+  tamanhoBytes?: number | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  precisaoMetros?: number | null;
+  capturadaEm: string;
+  descricao?: string | null;
+};
+
+export type ChamadoExecucaoCheckin = {
+  latitude: number;
+  longitude: number;
+  precisaoMetros?: number | null;
+  distanciaMetros?: number | null;
+  raioMetros?: number | null;
+  createdAt: string;
+};
+
+export type ChamadoExecucaoDetalhe = ChamadoDetalhe & {
+  evidencias: ChamadoEvidencia[];
+  execucaoCheckin: ChamadoExecucaoCheckin | null;
+  unidadeExecucao: {
+    latitude: number;
+    longitude: number;
+    raioValidacaoMetros: number;
+    endereco: string;
+    bairro?: string | null;
+  } | null;
+};
+
+export type ChamadoMapPoint = {
+  id: string;
+  codigo: string;
+  titulo: string;
+  latitude: number;
+  longitude: number;
+  unidadeNome: string;
+  prioridade: string;
+  equipeNome?: string | null;
 };
 
 export type PublicUnidadeChamado = {

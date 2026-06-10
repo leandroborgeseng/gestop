@@ -3,6 +3,7 @@ import {
   AuditAction,
   ChamadoOrigem,
   ChamadoStatus,
+  EvidenciaTipo,
   NaoConformidadeStatus,
   Prisma,
 } from '@prisma/client';
@@ -10,7 +11,7 @@ import { JwtPayload } from '../auth/jwt';
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { CreateChamadoDto, PublicCreateChamadoDto, UpdateChamadoStatusDto, UpdateChamadoAtribuicaoDto } from './chamados.dto';
+import { CreateChamadoDto, PublicCreateChamadoDto, UpdateChamadoStatusDto, UpdateChamadoAtribuicaoDto, ChamadoExecucaoCheckinDto, ChamadoExecucaoConcluirDto, ChamadoExecucaoEvidenciaDto } from './chamados.dto';
 import {
   assertValidChamadoTransition,
   buildChamadoCode,
@@ -19,6 +20,7 @@ import {
   priorityFromSeverity,
   shouldGenerateChamadoFromNc,
 } from './chamados.rules';
+import { validateMobileCheckin } from '../mobile/mobile.rules';
 
 type Tx = Prisma.TransactionClient;
 
@@ -31,10 +33,12 @@ export class ChamadosService {
   ) {}
 
   listChamados() {
-    return this.prisma.chamado.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: this.includeRelations(),
-    });
+    return this.prisma.chamado
+      .findMany({
+        orderBy: { createdAt: 'desc' },
+        include: this.includeRelations(),
+      })
+      .then((items) => items.map((item) => this.serializeChamado(item)));
   }
 
   async listEmExecucaoPorEquipe() {
@@ -77,7 +81,10 @@ export class ChamadosService {
 
     return {
       total: chamados.length,
-      grupos,
+      grupos: grupos.map((grupo) => ({
+        ...grupo,
+        chamados: grupo.chamados.map((item) => this.serializeChamado(item)),
+      })),
     };
   }
 
@@ -105,7 +112,235 @@ export class ChamadosService {
       orderBy: { createdAt: 'asc' },
       include: { alteradoPor: { select: { id: true, nome: true } } },
     });
-    return { ...chamado, historico };
+    return { ...this.serializeChamado(chamado), historico };
+  }
+
+  async getChamadoParaExecucao(id: string) {
+    const chamado = await this.getChamadoOrThrow(id);
+    if (chamado.status !== ChamadoStatus.EM_EXECUCAO) {
+      throw new BadRequestException('Somente chamados em execução podem ser atendidos neste fluxo.');
+    }
+
+    const [historico, evidencias] = await Promise.all([
+      this.prisma.historicoStatus.findMany({
+        where: { entidadeTipo: 'Chamado', entidadeId: id },
+        orderBy: { createdAt: 'asc' },
+        include: { alteradoPor: { select: { id: true, nome: true } } },
+      }),
+      this.prisma.evidencia.findMany({
+        where: { chamadoId: id },
+        orderBy: { capturadaEm: 'asc' },
+      }),
+    ]);
+
+    const execucaoCheckin = [...historico]
+      .reverse()
+      .find((item) => {
+        const metadata = item.metadata as { tipo?: string } | null;
+        return metadata?.tipo === 'execucao_checkin';
+      });
+
+    const unidade = await this.prisma.unidadePublica.findUnique({
+      where: { id: chamado.unidadeId },
+      select: {
+        latitude: true,
+        longitude: true,
+        raioValidacaoMetros: true,
+        endereco: true,
+        bairro: true,
+      },
+    });
+
+    return {
+      ...this.serializeChamado(chamado),
+      historico,
+      evidencias: evidencias.map((item) => this.serializeEvidencia(item)),
+      execucaoCheckin: execucaoCheckin
+        ? this.parseExecucaoCheckinMetadata(execucaoCheckin.metadata, execucaoCheckin.createdAt)
+        : null,
+      unidadeExecucao: unidade
+        ? {
+            latitude: Number(unidade.latitude),
+            longitude: Number(unidade.longitude),
+            raioValidacaoMetros: unidade.raioValidacaoMetros,
+            endereco: unidade.endereco,
+            bairro: unidade.bairro,
+          }
+        : null,
+    };
+  }
+
+  async registrarCheckinExecucao(id: string, dto: ChamadoExecucaoCheckinDto, user: JwtPayload) {
+    const chamado = await this.getChamadoOrThrow(id);
+    this.assertChamadoEmExecucao(chamado.status);
+
+    const unidade = await this.prisma.unidadePublica.findUnique({
+      where: { id: chamado.unidadeId },
+      select: { latitude: true, longitude: true, raioValidacaoMetros: true },
+    });
+    if (!unidade) throw new NotFoundException('Unidade do chamado não encontrada.');
+
+    const validation = validateMobileCheckin({
+      unidade: {
+        latitude: Number(unidade.latitude),
+        longitude: Number(unidade.longitude),
+        raioValidacaoMetros: unidade.raioValidacaoMetros,
+      },
+      checkin: dto.checkin,
+    });
+
+    if (!validation.valid) {
+      throw new BadRequestException(validation.reasons.join('; '));
+    }
+
+    await this.prisma.historicoStatus.create({
+      data: {
+        entidadeTipo: 'Chamado',
+        entidadeId: id,
+        statusAnterior: chamado.status,
+        statusNovo: chamado.status,
+        motivo: 'Check-in de execução em campo.',
+        alteradoPorId: user.sub,
+        metadata: {
+          tipo: 'execucao_checkin',
+          latitude: dto.checkin.latitude,
+          longitude: dto.checkin.longitude,
+          precisaoMetros: dto.checkin.precisaoMetros,
+          distanciaMetros: validation.result.distanceMeters,
+          raioMetros: validation.result.radiusMeters,
+        },
+      },
+    });
+
+    return this.getChamadoParaExecucao(id);
+  }
+
+  async adicionarEvidenciaExecucao(id: string, dto: ChamadoExecucaoEvidenciaDto, user: JwtPayload) {
+    const chamado = await this.getChamadoOrThrow(id);
+    this.assertChamadoEmExecucao(chamado.status);
+
+    const stored = await this.storageService.persistEvidenceUrl(dto.url.trim(), dto.mimeType);
+    const evidencia = await this.prisma.evidencia.create({
+      data: {
+        chamadoId: id,
+        tipo: dto.tipo ?? EvidenciaTipo.FOTO,
+        url: stored.url,
+        storageKey: stored.storageKey,
+        mimeType: stored.mimeType,
+        tamanhoBytes: stored.tamanhoBytes,
+        checksum: stored.checksum,
+        latitude: dto.localizacao.latitude,
+        longitude: dto.localizacao.longitude,
+        precisaoMetros: dto.localizacao.precisaoMetros,
+        capturadaEm: new Date(dto.capturadaEm),
+        enviadaEm: new Date(),
+        metadata: dto.descricao?.trim() ? { descricao: dto.descricao.trim() } : undefined,
+      },
+    });
+
+    await this.prisma.logAuditoria.create({
+      data: {
+        usuarioId: user.sub,
+        acao: AuditAction.UPDATE,
+        entidadeTipo: 'Chamado',
+        entidadeId: id,
+        valorNovo: { evidenciaId: evidencia.id, tipo: 'execucao_evidencia' },
+      },
+    });
+
+    return this.serializeEvidencia(evidencia);
+  }
+
+  async concluirExecucao(id: string, dto: ChamadoExecucaoConcluirDto, user: JwtPayload) {
+    const before = await this.getChamadoOrThrow(id);
+    this.assertChamadoEmExecucao(before.status);
+
+    const unidade = await this.prisma.unidadePublica.findUnique({
+      where: { id: before.unidadeId },
+      select: { latitude: true, longitude: true, raioValidacaoMetros: true },
+    });
+    if (!unidade) throw new NotFoundException('Unidade do chamado não encontrada.');
+
+    const checkinValidation = validateMobileCheckin({
+      unidade: {
+        latitude: Number(unidade.latitude),
+        longitude: Number(unidade.longitude),
+        raioValidacaoMetros: unidade.raioValidacaoMetros,
+      },
+      checkin: dto.checkin,
+    });
+
+    if (!checkinValidation.valid) {
+      throw new BadRequestException(checkinValidation.reasons.join('; '));
+    }
+
+    const evidenciasCount = await this.prisma.evidencia.count({ where: { chamadoId: id } });
+    if (evidenciasCount < 1) {
+      throw new BadRequestException('Registre ao menos uma evidência fotográfica antes de encerrar a execução.');
+    }
+
+    const nextStatus = dto.impedimento ? ChamadoStatus.IMPEDIDO : ChamadoStatus.CONCLUIDO;
+    if (dto.impedimento && !dto.impedimentoMotivo?.trim()) {
+      throw new BadRequestException('Informe o motivo do impedimento.');
+    }
+
+    try {
+      assertValidChamadoTransition(before.status, nextStatus);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Transição inválida');
+    }
+
+    const chamado = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.chamado.update({
+        where: { id },
+        data: {
+          status: nextStatus,
+          impedimentoMotivo: dto.impedimento ? dto.impedimentoMotivo?.trim() : null,
+          concluidoEm: nextStatus === ChamadoStatus.CONCLUIDO ? new Date() : before.concluidoEm,
+          encerradoEm: nextStatus === ChamadoStatus.CONCLUIDO || nextStatus === ChamadoStatus.IMPEDIDO ? new Date() : before.encerradoEm,
+        },
+        include: this.includeRelations(),
+      });
+
+      await tx.historicoStatus.create({
+        data: {
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          statusAnterior: before.status,
+          statusNovo: nextStatus,
+          motivo: dto.impedimento
+            ? `Execução impedida: ${dto.impedimentoMotivo?.trim()}`
+            : 'Execução concluída em campo.',
+          alteradoPorId: user.sub,
+          metadata: {
+            tipo: 'execucao_conclusao',
+            relatorio: dto.relatorio.trim(),
+            checkin: {
+              latitude: dto.checkin.latitude,
+              longitude: dto.checkin.longitude,
+              precisaoMetros: dto.checkin.precisaoMetros,
+            },
+            distanciaMetros: checkinValidation.result.distanceMeters,
+            evidenciasCount,
+          },
+        },
+      });
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.STATUS_CHANGE,
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          valorAntigo: JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue,
+          valorNovo: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
+        },
+      });
+
+      return updated;
+    });
+
+    return this.serializeChamado(chamado);
   }
 
   async getUnidadePublicaByCodigo(codigoPatrimonial: string) {
@@ -471,7 +706,18 @@ export class ChamadosService {
   private includeRelations() {
     return {
       secretaria: { select: { id: true, nome: true, sigla: true } },
-      unidade: { select: { id: true, nome: true, codigoPatrimonial: true, endereco: true, bairro: true } },
+      unidade: {
+        select: {
+          id: true,
+          nome: true,
+          codigoPatrimonial: true,
+          endereco: true,
+          bairro: true,
+          latitude: true,
+          longitude: true,
+          raioValidacaoMetros: true,
+        },
+      },
       responsavel: { select: { id: true, nome: true } },
       equipe: { select: { id: true, nome: true } },
       registradoPor: { select: { id: true, nome: true } },
@@ -484,6 +730,86 @@ export class ChamadosService {
           item: { select: { codigo: true, titulo: true } },
         },
       },
+    };
+  }
+
+  private assertChamadoEmExecucao(status: ChamadoStatus) {
+    if (status !== ChamadoStatus.EM_EXECUCAO) {
+      throw new BadRequestException('Somente chamados em execução podem ser atendidos neste fluxo.');
+    }
+  }
+
+  private serializeChamado<T extends {
+    latitude?: unknown;
+    longitude?: unknown;
+    unidade?: {
+      latitude?: unknown;
+      longitude?: unknown;
+      raioValidacaoMetros?: number;
+    } | null;
+  }>(chamado: T) {
+    return {
+      ...chamado,
+      latitude: chamado.latitude != null ? Number(chamado.latitude) : null,
+      longitude: chamado.longitude != null ? Number(chamado.longitude) : null,
+      unidade: chamado.unidade
+        ? {
+            ...chamado.unidade,
+            latitude: chamado.unidade.latitude != null ? Number(chamado.unidade.latitude) : null,
+            longitude: chamado.unidade.longitude != null ? Number(chamado.unidade.longitude) : null,
+          }
+        : chamado.unidade,
+    };
+  }
+
+  private serializeEvidencia(evidencia: {
+    id: string;
+    tipo: EvidenciaTipo;
+    url: string;
+    mimeType: string | null;
+    tamanhoBytes: number | null;
+    latitude: unknown;
+    longitude: unknown;
+    precisaoMetros: unknown;
+    capturadaEm: Date;
+    metadata: unknown;
+  }) {
+    return {
+      id: evidencia.id,
+      tipo: evidencia.tipo,
+      url: evidencia.url,
+      mimeType: evidencia.mimeType,
+      tamanhoBytes: evidencia.tamanhoBytes,
+      latitude: evidencia.latitude != null ? Number(evidencia.latitude) : null,
+      longitude: evidencia.longitude != null ? Number(evidencia.longitude) : null,
+      precisaoMetros: evidencia.precisaoMetros != null ? Number(evidencia.precisaoMetros) : null,
+      capturadaEm: evidencia.capturadaEm.toISOString(),
+      descricao:
+        evidencia.metadata && typeof evidencia.metadata === 'object' && evidencia.metadata !== null && 'descricao' in evidencia.metadata
+          ? String((evidencia.metadata as { descricao?: string }).descricao ?? '')
+          : null,
+    };
+  }
+
+  private parseExecucaoCheckinMetadata(metadata: unknown, createdAt: Date) {
+    if (!metadata || typeof metadata !== 'object') return null;
+    const data = metadata as {
+      latitude?: number;
+      longitude?: number;
+      precisaoMetros?: number;
+      distanciaMetros?: number;
+      raioMetros?: number;
+    };
+
+    if (data.latitude == null || data.longitude == null) return null;
+
+    return {
+      latitude: data.latitude,
+      longitude: data.longitude,
+      precisaoMetros: data.precisaoMetros ?? null,
+      distanciaMetros: data.distanciaMetros ?? null,
+      raioMetros: data.raioMetros ?? null,
+      createdAt: createdAt.toISOString(),
     };
   }
 

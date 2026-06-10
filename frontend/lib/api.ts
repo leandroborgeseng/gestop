@@ -20,6 +20,8 @@ import {
   OperacionalResumo,
   ChamadoResumo,
   ChamadoDetalhe,
+  ChamadoEvidencia,
+  ChamadoExecucaoDetalhe,
   ChamadosEmExecucaoResponse,
   PublicUnidadeChamado,
   SecretariaOption,
@@ -521,6 +523,54 @@ export function updateChamadoAtribuicao(
 ) {
   return request<ChamadoResumo>(`/chamados/${id}/atribuicao`, {
     method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getChamadoExecucao(id: string) {
+  return request<ChamadoExecucaoDetalhe>(`/chamados/${id}/execucao`);
+}
+
+export function checkinChamadoExecucao(
+  id: string,
+  payload: { checkin: { latitude: number; longitude: number; precisaoMetros: number } },
+) {
+  return request<ChamadoExecucaoDetalhe>(`/chamados/${id}/execucao/checkin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function addChamadoExecucaoEvidencia(
+  id: string,
+  payload: {
+    url: string;
+    mimeType?: string;
+    descricao?: string;
+    capturadaEm: string;
+    localizacao: { latitude: number; longitude: number; precisaoMetros: number };
+  },
+) {
+  return request<ChamadoEvidencia>(`/chamados/${id}/execucao/evidencias`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function concluirChamadoExecucao(
+  id: string,
+  payload: {
+    relatorio: string;
+    checkin: { latitude: number; longitude: number; precisaoMetros: number };
+    impedimento?: boolean;
+    impedimentoMotivo?: string;
+  },
+) {
+  return request<ChamadoResumo>(`/chamados/${id}/execucao/concluir`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
