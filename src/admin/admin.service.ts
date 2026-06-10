@@ -3,7 +3,7 @@ import { AuditAction, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { hashPassword } from '../auth/password';
 import { PrismaService } from '../prisma/prisma.service';
-import { SecretariaDto, UnidadeDto, UsuarioDto } from './admin.dto';
+import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto } from './admin.dto';
 import { ensureGeoCoordinates, normalizeEmail, normalizeSigla } from './admin.rules';
 
 @Injectable()
@@ -148,8 +148,89 @@ export class AdminService {
             perfil: { select: { id: true, nome: true } },
           },
         },
+        equipes: {
+          select: {
+            equipe: { select: { id: true, nome: true, ativo: true } },
+          },
+        },
       },
     });
+  }
+
+  listEquipes() {
+    return this.prisma.equipe.findMany({
+      orderBy: { nome: 'asc' },
+      include: {
+        secretaria: { select: { id: true, nome: true, sigla: true } },
+        membros: {
+          select: {
+            usuario: { select: { id: true, nome: true, email: true, ativo: true } },
+          },
+        },
+        _count: { select: { chamados: true } },
+      },
+    });
+  }
+
+  async createEquipe(dto: EquipeDto, user: JwtPayload) {
+    await this.ensureUsuariosExist(dto.usuarioIds);
+
+    const equipe = await this.prisma.equipe.create({
+      data: {
+        secretariaId: dto.secretariaId || null,
+        nome: dto.nome.trim(),
+        descricao: dto.descricao?.trim(),
+        ativo: dto.ativo ?? true,
+        membros: {
+          create: dto.usuarioIds.map((usuarioId) => ({
+            usuario: { connect: { id: usuarioId } },
+          })),
+        },
+      },
+      include: this.equipeInclude(),
+    });
+
+    await this.audit(user, AuditAction.CREATE, 'Equipe', equipe.id, null, equipe);
+    return equipe;
+  }
+
+  async updateEquipe(id: string, dto: EquipeDto, user: JwtPayload) {
+    const before = await this.getEquipeOrThrow(id);
+    await this.ensureUsuariosExist(dto.usuarioIds);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.equipeUsuario.deleteMany({ where: { equipeId: id } });
+      await tx.equipe.update({
+        where: { id },
+        data: {
+          secretariaId: dto.secretariaId || null,
+          nome: dto.nome.trim(),
+          descricao: dto.descricao?.trim() ?? null,
+          ativo: dto.ativo ?? true,
+          membros: {
+            create: dto.usuarioIds.map((usuarioId) => ({
+              usuario: { connect: { id: usuarioId } },
+            })),
+          },
+        },
+      });
+    });
+
+    const equipe = await this.getEquipeOrThrow(id);
+    await this.audit(user, AuditAction.UPDATE, 'Equipe', id, before, equipe);
+    return equipe;
+  }
+
+  async deleteEquipe(id: string, user: JwtPayload) {
+    const before = await this.getEquipeOrThrow(id);
+    const equipe = await this.prisma.equipe.update({
+      where: { id },
+      data: { ativo: false },
+      include: this.equipeInclude(),
+    });
+
+    await this.audit(user, AuditAction.DELETE, 'Equipe', id, before, equipe);
+    return equipe;
   }
 
   listPerfis() {
@@ -175,6 +256,7 @@ export class AdminService {
     }
 
     const resolvedPassword = senha || 'Gestop@123';
+    const equipeIds = dto.equipeIds ?? [];
     const usuario = await this.prisma.usuario.create({
       data: {
         secretariaId: dto.secretariaId || null,
@@ -190,6 +272,11 @@ export class AdminService {
             perfil: { connect: { id: perfilId } },
           })),
         },
+        equipes: {
+          create: equipeIds.map((equipeId) => ({
+            equipe: { connect: { id: equipeId } },
+          })),
+        },
       },
       select: this.usuarioSelect(),
     });
@@ -203,6 +290,7 @@ export class AdminService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.usuarioPerfil.deleteMany({ where: { usuarioId: id } });
+      await tx.equipeUsuario.deleteMany({ where: { usuarioId: id } });
       await tx.usuario.update({
         where: { id },
         data: {
@@ -217,6 +305,11 @@ export class AdminService {
           perfis: {
             create: dto.perfilIds.map((perfilId) => ({
               perfil: { connect: { id: perfilId } },
+            })),
+          },
+          equipes: {
+            create: (dto.equipeIds ?? []).map((equipeId) => ({
+              equipe: { connect: { id: equipeId } },
             })),
           },
         },
@@ -252,6 +345,12 @@ export class AdminService {
     });
   }
 
+  private getEquipeOrThrow(id: string) {
+    return this.prisma.equipe.findUniqueOrThrow({ where: { id }, include: this.equipeInclude() }).catch(() => {
+      throw new NotFoundException('Equipe nao encontrada');
+    });
+  }
+
   private getUsuarioOrThrow(id: string) {
     return this.prisma.usuario.findUniqueOrThrow({ where: { id }, select: this.usuarioSelect() }).catch(() => {
       throw new NotFoundException('Usuario nao encontrado');
@@ -274,7 +373,32 @@ export class AdminService {
           perfil: { select: { id: true, nome: true } },
         },
       },
+      equipes: {
+        select: {
+          equipe: { select: { id: true, nome: true, ativo: true } },
+        },
+      },
     } satisfies Prisma.UsuarioSelect;
+  }
+
+  private equipeInclude() {
+    return {
+      secretaria: { select: { id: true, nome: true, sigla: true } },
+      membros: {
+        select: {
+          usuario: { select: { id: true, nome: true, email: true, ativo: true } },
+        },
+      },
+      _count: { select: { chamados: true } },
+    } satisfies Prisma.EquipeInclude;
+  }
+
+  private async ensureUsuariosExist(usuarioIds: string[]) {
+    if (usuarioIds.length === 0) return;
+    const count = await this.prisma.usuario.count({ where: { id: { in: usuarioIds } } });
+    if (count !== usuarioIds.length) {
+      throw new BadRequestException('Um ou mais usuarios informados nao existem.');
+    }
   }
 
   private maskUsuario<T extends { email: string }>(usuario: T) {

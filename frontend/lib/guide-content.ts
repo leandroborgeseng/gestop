@@ -32,7 +32,7 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
         t: 'Ver tudo sobre uma unidade',
         s: [
           'Clique numa linha da lista ou num marcador do mapa.',
-          'Abre o painel com fiscalizações, não conformidades e chamados.',
+          'Abre o painel com vistorias, não conformidades e chamados.',
           'Use as abas para navegar entre cada tipo de registro.',
         ],
       },
@@ -46,22 +46,22 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
     ],
     glossario: [
       { k: 'Situação', v: 'Estado operacional: Operacional, Com pendências, Sem localização ou Inativa.' },
-      { k: 'NC — Não conformidade', v: 'Item reprovado durante uma fiscalização.' },
-      { k: 'Chamado', v: 'Demanda operacional do cidadão, fiscalização ou registro interno.' },
+      { k: 'NC — Não conformidade', v: 'Item reprovado durante uma vistoria.' },
+      { k: 'Chamado', v: 'Demanda operacional do cidadão, vistoria ou registro interno.' },
       { k: 'Sem GPS', v: 'Próprio sem georreferência — aparece na lista, mas não no mapa.' },
     ],
   },
   dashboard: {
     nome: 'Dashboard',
     resumo:
-      'Panorama do dia: indicadores, alertas, push para o campo e auditoria recente.',
+      'Panorama do dia: indicadores, alertas, push para vistoria e auditoria recente.',
     comoFazer: [
       {
         t: 'Priorizar o que está em risco',
         s: ['Confira os alertas operacionais.', 'Use os links rápidos para ir direto à ação.'],
       },
       {
-        t: 'Avisar a equipe de campo',
+        t: 'Avisar a equipe de vistoria',
         s: ['No painel de push, escreva o aviso.', 'Escolha o público e envie.'],
       },
     ],
@@ -71,12 +71,12 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
     ],
   },
   mobile: {
-    nome: 'Campo — PWA',
+    nome: 'Vistoria — PWA',
     resumo:
       'Roteiro por proximidade, check-in GPS, checklist offline-first e fila de sincronização.',
     comoFazer: [
       {
-        t: 'Executar uma fiscalização',
+        t: 'Executar uma vistoria',
         s: [
           'Selecione a unidade mais próxima.',
           'Faça check-in com GPS.',
@@ -93,12 +93,12 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
     ],
     glossario: [
       { k: 'Check-in GPS', v: 'Confirma que você está no local da unidade.' },
-      { k: 'Fila de sync', v: 'Fiscalizações aguardando envio ao servidor.' },
+      { k: 'Fila de sync', v: 'Vistorias aguardando envio ao servidor.' },
     ],
   },
   chamados: {
     nome: 'Chamados',
-    resumo: 'Fila unificada de demandas — cidadão, fiscalização ou registro interno. Triagem, atendimento e conclusão.',
+    resumo: 'Fila unificada de demandas — cidadão, vistoria ou registro interno. Triagem, atendimento e conclusão.',
     comoFazer: [
       {
         t: 'Triar e atender um chamado',
@@ -110,20 +110,20 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
       },
     ],
     glossario: [
-      { k: 'Canal', v: 'Como o chamado chegou: QR Code, fiscalização, app ou manual.' },
+      { k: 'Canal', v: 'Como o chamado chegou: QR Code, vistoria, app ou manual.' },
       { k: 'Prazo / SLA', v: 'Data limite para conclusão do atendimento.' },
     ],
   },
   cronograma: {
     nome: 'Cronograma de checagens',
-    resumo: 'Calendário e cadastro de rotinas de fiscalização por unidade.',
+    resumo: 'Calendário e cadastro de rotinas de vistoria por unidade.',
     comoFazer: [
       {
         t: 'Consultar o calendário',
         s: ['Navegue pelos meses.', 'Clique num dia para ver checagens previstas.'],
       },
     ],
-    glossario: [{ k: 'Checagem', v: 'Fiscalização programada recorrentemente.' }],
+    glossario: [{ k: 'Checagem', v: 'Vistoria programada recorrentemente.' }],
   },
   admin: {
     nome: 'Administração',
@@ -141,7 +141,7 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
   },
   checklists: {
     nome: 'Checklists',
-    resumo: 'Modelos versionados para fiscalizações em campo.',
+    resumo: 'Modelos versionados para vistorias.',
     comoFazer: [
       {
         t: 'Editar um modelo',
@@ -194,7 +194,7 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
     comoFazer: [
       {
         t: 'Navegar pelos registros',
-        s: ['Use as abas de fiscalizações, NCs e chamados.', 'Cada item mostra data e status.'],
+        s: ['Use as abas de vistorias, NCs e chamados.', 'Cada item mostra data e status.'],
       },
     ],
     glossario: [

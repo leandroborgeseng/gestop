@@ -29,7 +29,7 @@ const RELATORIOS: Array<{
   icon: typeof Building2;
 }> = [
   { tipo: 'unidades', title: 'Próprios públicos', hint: 'Cadastro, situação e localização das unidades.', icon: Building2 },
-  { tipo: 'fiscalizacoes', title: 'Fiscalizações', hint: 'Checklists aplicados, conformidade e não conformidades.', icon: ClipboardCheck },
+  { tipo: 'fiscalizacoes', title: 'Vistorias', hint: 'Checklists aplicados, conformidade e não conformidades.', icon: ClipboardCheck },
   { tipo: 'chamados', title: 'Chamados', hint: 'Triagem, atendimento, prazos (SLA) e tempo de resolução.', icon: Inbox },
 ];
 

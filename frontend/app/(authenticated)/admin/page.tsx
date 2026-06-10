@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, Download, MapPin, Shield, UserRound } from 'lucide-react';
+import { Building2, Download, MapPin, Shield, UserRound, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
 import { PageShell } from '@/components/layout/page-shell';
@@ -27,20 +27,22 @@ import { ErrorState, LoadingState } from '@/components/ui-states';
 import {
   deleteAdminSecretaria,
   deleteAdminUnidade,
+  listAdminEquipes,
   listAdminPerfis,
   listAdminSecretarias,
   listAdminUnidades,
   listAdminUsuarios,
+  saveAdminEquipe,
   saveAdminSecretaria,
   saveAdminUnidade,
   saveAdminUsuario,
   anonymizeUsuarioLgpd,
   purgeAuditoriaLgpd,
 } from '@/lib/api';
-import { AdminPerfil, AdminSecretaria, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
+import { AdminEquipe, AdminPerfil, AdminSecretaria, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 
-type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'importacao';
+type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'importacao';
 
 const tipos: UnidadeTipo[] = ['ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO', 'ESPACO_ESPORTIVO', 'OUTRO'];
 
@@ -50,6 +52,7 @@ export default function AdminPage() {
   const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
   const [unidades, setUnidades] = useState<AdminUnidade[]>([]);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
+  const [equipes, setEquipes] = useState<AdminEquipe[]>([]);
   const [perfis, setPerfis] = useState<AdminPerfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -59,15 +62,17 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextSecretarias, nextUnidades, nextUsuarios, nextPerfis] = await Promise.all([
+      const [nextSecretarias, nextUnidades, nextUsuarios, nextEquipes, nextPerfis] = await Promise.all([
         listAdminSecretarias(),
         listAdminUnidades(),
         listAdminUsuarios(),
+        listAdminEquipes(),
         listAdminPerfis(),
       ]);
       setSecretarias(nextSecretarias);
       setUnidades(nextUnidades);
       setUsuarios(nextUsuarios);
+      setEquipes(nextEquipes);
       setPerfis(nextPerfis);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar administração.');
@@ -121,6 +126,7 @@ export default function AdminPage() {
               { id: 'secretarias', label: 'Secretarias', icon: <Building2 className="h-4 w-4" />, count: secretarias.length },
               { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" />, count: unidades.length },
               { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" />, count: usuarios.length },
+              { id: 'equipes', label: 'Equipes', icon: <UsersRound className="h-4 w-4" />, count: equipes.length },
               { id: 'importacao', label: 'Importação', icon: <Download className="h-4 w-4" /> },
             ]}
           />
@@ -135,7 +141,10 @@ export default function AdminPage() {
           <UnidadesPanel secretarias={secretarias} unidades={unidades} mutate={mutate} />
         ) : null}
         {!loading && tab === 'usuarios' ? (
-          <UsuariosPanel secretarias={secretarias} usuarios={usuarios} perfis={perfis} mutate={mutate} />
+          <UsuariosPanel secretarias={secretarias} usuarios={usuarios} equipes={equipes} perfis={perfis} mutate={mutate} />
+        ) : null}
+        {!loading && tab === 'equipes' ? (
+          <EquipesPanel secretarias={secretarias} usuarios={usuarios} equipes={equipes} mutate={mutate} />
         ) : null}
         {!loading && tab === 'importacao' ? (
           <ImportacaoPanel onSynced={() => void load()} />
@@ -352,7 +361,13 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
   );
 }
 
-function usuarioPayloadFromForm(form: FormData, defaultPerfil: string, ativo: boolean, editingId?: string) {
+function usuarioPayloadFromForm(
+  form: FormData,
+  defaultPerfil: string,
+  ativo: boolean,
+  equipeIds: string[],
+  editingId?: string,
+) {
   const senha = String(form.get('senha') || '').trim();
   const payload: Record<string, unknown> = {
     secretariaId: String(form.get('secretariaId') || ''),
@@ -362,6 +377,7 @@ function usuarioPayloadFromForm(form: FormData, defaultPerfil: string, ativo: bo
     telefone: String(form.get('telefone') || ''),
     cargo: String(form.get('cargo') || ''),
     perfilIds: [String(form.get('perfilId') || defaultPerfil)].filter(Boolean),
+    equipeIds,
     ativo,
   };
 
@@ -388,13 +404,51 @@ function usuarioPayloadFromRecord(usuario: AdminUsuario, ativo: boolean) {
     telefone: usuario.telefone ?? '',
     cargo: usuario.cargo ?? '',
     perfilIds: usuario.perfis.map((item) => item.perfil.id),
+    equipeIds: usuario.equipes?.map((item) => item.equipe.id) ?? [],
     ativo,
   };
 }
 
-function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias: AdminSecretaria[]; usuarios: AdminUsuario[]; perfis: AdminPerfil[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
+function equipePayloadFromForm(form: FormData, usuarioIds: string[], ativo: boolean) {
+  return {
+    secretariaId: String(form.get('secretariaId') || ''),
+    nome: String(form.get('nome')),
+    descricao: String(form.get('descricao') || ''),
+    usuarioIds,
+    ativo,
+  };
+}
+
+function equipePayloadFromRecord(equipe: AdminEquipe, ativo: boolean) {
+  return {
+    secretariaId: equipe.secretariaId ?? '',
+    nome: equipe.nome,
+    descricao: equipe.descricao ?? '',
+    usuarioIds: equipe.membros.map((item) => item.usuario.id),
+    ativo,
+  };
+}
+
+function UsuariosPanel({
+  secretarias,
+  usuarios,
+  equipes,
+  perfis,
+  mutate,
+}: {
+  secretarias: AdminSecretaria[];
+  usuarios: AdminUsuario[];
+  equipes: AdminEquipe[];
+  perfis: AdminPerfil[];
+  mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
+}) {
   const defaultPerfil = useMemo(() => perfis[0]?.id ?? '', [perfis]);
   const [editing, setEditing] = useState<AdminUsuario | null>(null);
+  const [selectedEquipeIds, setSelectedEquipeIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedEquipeIds(editing?.equipes?.map((item) => item.equipe.id) ?? []);
+  }, [editing?.id, editing?.equipes]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -402,13 +456,14 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
     const isEdit = Boolean(editing);
     const ok = await mutate(
       () => {
-        const payload = usuarioPayloadFromForm(form, defaultPerfil, editing?.ativo ?? true, editing?.id);
+        const payload = usuarioPayloadFromForm(form, defaultPerfil, editing?.ativo ?? true, selectedEquipeIds, editing?.id);
         return saveAdminUsuario(payload, editing?.id);
       },
       isEdit ? 'Usuário atualizado.' : 'Usuário cadastrado.',
     );
     if (ok) {
       setEditing(null);
+      setSelectedEquipeIds([]);
       event.currentTarget.reset();
     }
   }
@@ -432,6 +487,7 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
         <DataTableHead>
           <DataTableHeaderCell>Usuário</DataTableHeaderCell>
           <DataTableHeaderCell>Perfil</DataTableHeaderCell>
+          <DataTableHeaderCell>Equipes</DataTableHeaderCell>
           <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
           <DataTableHeaderCell>Status</DataTableHeaderCell>
         </DataTableHead>
@@ -445,6 +501,7 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
                 </div>
               </DataTableCell>
               <DataTableCell>{usuario.perfis.map((p) => p.perfil.nome).join(', ') || '—'}</DataTableCell>
+              <DataTableCell>{usuario.equipes?.map((e) => e.equipe.nome).join(', ') || '—'}</DataTableCell>
               <DataTableCell mono>{usuario.secretaria?.sigla ?? '—'}</DataTableCell>
               <DataTableCell>
                 <Badge variant={usuario.ativo ? 'success' : 'muted'}>{usuario.ativo ? 'Ativo' : 'Inativo'}</Badge>
@@ -501,6 +558,35 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
               ))}
             </Select>
           </Field>
+          <Field label="Equipes">
+            <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
+              {equipes.filter((equipe) => equipe.ativo).length === 0 ? (
+                <p className="text-[12px] text-[var(--ink-3)]">Nenhuma equipe cadastrada.</p>
+              ) : (
+                equipes
+                  .filter((equipe) => equipe.ativo)
+                  .map((equipe) => (
+                    <label key={equipe.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+                      <input
+                        type="checkbox"
+                        checked={selectedEquipeIds.includes(equipe.id)}
+                        onChange={(event) => {
+                          setSelectedEquipeIds((current) =>
+                            event.target.checked
+                              ? [...current, equipe.id]
+                              : current.filter((id) => id !== equipe.id),
+                          );
+                        }}
+                      />
+                      <span>
+                        {equipe.nome}
+                        {equipe.secretaria?.sigla ? ` · ${equipe.secretaria.sigla}` : ''}
+                      </span>
+                    </label>
+                  ))
+              )}
+            </div>
+          </Field>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button type="submit" variant="filled" className="w-full sm:flex-1">
               {editing ? 'Salvar alterações' : 'Cadastrar usuário'}
@@ -522,7 +608,7 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
             <RecordItem
               key={usuario.id}
               title={usuario.nome}
-              subtitle={`${usuario.email} · ${usuario.perfis.map((p) => p.perfil.nome).join(', ') || 'sem perfil'}`}
+              subtitle={`${usuario.email} · ${usuario.perfis.map((p) => p.perfil.nome).join(', ') || 'sem perfil'}${usuario.equipes?.length ? ` · ${usuario.equipes.map((e) => e.equipe.nome).join(', ')}` : ''}`}
               active={usuario.ativo}
               actions={
                 <div className="flex flex-wrap items-center gap-1">
@@ -560,6 +646,175 @@ function UsuariosPanel({ secretarias, usuarios, perfis, mutate }: { secretarias:
         </RecordList>
       </FormSection>
     </FormGrid>
+    </div>
+  );
+}
+
+function EquipesPanel({
+  secretarias,
+  usuarios,
+  equipes,
+  mutate,
+}: {
+  secretarias: AdminSecretaria[];
+  usuarios: AdminUsuario[];
+  equipes: AdminEquipe[];
+  mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState<AdminEquipe | null>(null);
+  const [selectedUsuarioIds, setSelectedUsuarioIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    setSelectedUsuarioIds(editing?.membros.map((item) => item.usuario.id) ?? []);
+  }, [editing?.id, editing?.membros]);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const isEdit = Boolean(editing);
+    const ok = await mutate(
+      () => {
+        const payload = equipePayloadFromForm(form, selectedUsuarioIds, editing?.ativo ?? true);
+        return saveAdminEquipe(payload, editing?.id);
+      },
+      isEdit ? 'Equipe atualizada.' : 'Equipe cadastrada.',
+    );
+    if (ok) {
+      setEditing(null);
+      setSelectedUsuarioIds([]);
+      event.currentTarget.reset();
+    }
+  }
+
+  async function toggleAtivo(equipe: AdminEquipe) {
+    const nextAtivo = !equipe.ativo;
+    await mutate(
+      () => saveAdminEquipe(equipePayloadFromRecord(equipe, nextAtivo), equipe.id),
+      nextAtivo ? 'Equipe reativada.' : 'Equipe inativada.',
+    );
+    if (editing?.id === equipe.id) {
+      setEditing({ ...equipe, ativo: nextAtivo });
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <DataTable>
+        <DataTableHead>
+          <DataTableHeaderCell>Equipe</DataTableHeaderCell>
+          <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
+          <DataTableHeaderCell>Membros</DataTableHeaderCell>
+          <DataTableHeaderCell>Chamados</DataTableHeaderCell>
+          <DataTableHeaderCell>Status</DataTableHeaderCell>
+        </DataTableHead>
+        <DataTableBody>
+          {equipes.map((equipe) => (
+            <DataTableRow key={equipe.id}>
+              <DataTableCell>
+                <div>
+                  <p className="font-semibold text-[var(--ink)]">{equipe.nome}</p>
+                  {equipe.descricao ? <p className="text-[12px] text-[var(--ink-3)]">{equipe.descricao}</p> : null}
+                </div>
+              </DataTableCell>
+              <DataTableCell mono>{equipe.secretaria?.sigla ?? '—'}</DataTableCell>
+              <DataTableCell>{equipe.membros.length}</DataTableCell>
+              <DataTableCell>{equipe._count?.chamados ?? 0}</DataTableCell>
+              <DataTableCell>
+                <Badge variant={equipe.ativo ? 'success' : 'muted'}>{equipe.ativo ? 'Ativa' : 'Inativa'}</Badge>
+              </DataTableCell>
+            </DataTableRow>
+          ))}
+        </DataTableBody>
+      </DataTable>
+
+      <FormGrid>
+        <FormSection title={editing ? 'Editar equipe' : 'Nova equipe'}>
+          <form key={editing?.id ?? 'new-equipe'} onSubmit={submit} className="space-y-4">
+            <Field label="Nome">
+              <Input name="nome" required defaultValue={editing?.nome} placeholder="Ex.: Zeladoria Bloco A" />
+            </Field>
+            <Field label="Descrição">
+              <Input name="descricao" defaultValue={editing?.descricao ?? ''} placeholder="Opcional" />
+            </Field>
+            <Field label="Secretaria">
+              <Select name="secretariaId" defaultValue={editing?.secretariaId ?? ''}>
+                <option value="">Sem secretaria</option>
+                {secretarias.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.sigla} — {s.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Membros">
+              <div className="max-h-48 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
+                {usuarios.filter((usuario) => usuario.ativo).length === 0 ? (
+                  <p className="text-[12px] text-[var(--ink-3)]">Nenhum usuário ativo cadastrado.</p>
+                ) : (
+                  usuarios
+                    .filter((usuario) => usuario.ativo)
+                    .map((usuario) => (
+                      <label key={usuario.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+                        <input
+                          type="checkbox"
+                          checked={selectedUsuarioIds.includes(usuario.id)}
+                          onChange={(event) => {
+                            setSelectedUsuarioIds((current) =>
+                              event.target.checked
+                                ? [...current, usuario.id]
+                                : current.filter((id) => id !== usuario.id),
+                            );
+                          }}
+                        />
+                        <span>
+                          {usuario.nome} · {usuario.email}
+                        </span>
+                      </label>
+                    ))
+                )}
+              </div>
+            </Field>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button type="submit" variant="filled" className="w-full sm:flex-1">
+                {editing ? 'Salvar alterações' : 'Cadastrar equipe'}
+              </Button>
+              {editing ? (
+                <Button type="button" variant="outlined" className="w-full sm:flex-1" onClick={() => setEditing(null)}>
+                  Cancelar edição
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </FormSection>
+        <FormSection title="Registros">
+          <RecordList empty="Nenhuma equipe cadastrada.">
+            {equipes.map((equipe) => (
+              <RecordItem
+                key={equipe.id}
+                title={equipe.nome}
+                subtitle={`${equipe.membros.length} membro(s) · ${equipe.secretaria?.sigla ?? 'sem secretaria'}`}
+                active={equipe.ativo}
+                actions={
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Button variant="text" size="sm" onClick={() => setEditing(equipe)}>
+                      Editar
+                    </Button>
+                    {equipe.ativo ? (
+                      <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(equipe)}>
+                        Inativar
+                      </Button>
+                    ) : (
+                      <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(equipe)}>
+                        Reativar
+                      </Button>
+                    )}
+                  </div>
+                }
+              />
+            ))}
+          </RecordList>
+        </FormSection>
+      </FormGrid>
     </div>
   );
 }

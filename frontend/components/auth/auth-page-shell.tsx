@@ -28,7 +28,7 @@ export function AuthPageShell({
             </Chip>
           </div>
           <p className="mt-8 max-w-md text-[15px] leading-relaxed text-white/85">
-            Plataforma de gestão de ordens de serviço e fiscalização georreferenciada da Prefeitura de Franca.
+            Plataforma de gestão operacional e vistoria georreferenciada da Prefeitura de Franca.
           </p>
         </section>
 

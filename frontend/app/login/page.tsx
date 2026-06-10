@@ -86,7 +86,7 @@ function LoginContent() {
             </Chip>
           </div>
           <p className="mt-8 max-w-md text-[15px] leading-relaxed text-white/85">
-            Plataforma de gestão de ordens de serviço e fiscalização georreferenciada da Prefeitura de Franca.
+            Plataforma de gestão operacional e vistoria georreferenciada da Prefeitura de Franca.
           </p>
           {showDemoLogin ? (
             <div className="mt-8 rounded-[var(--r-md)] border border-white/15 bg-white/10 p-5 backdrop-blur-sm">

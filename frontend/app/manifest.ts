@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'GestOP Campo',
-    short_name: 'GestOP',
-    description: 'PWA de fiscalizacao em campo do GestOP — Prefeitura de Franca',
+    name: 'GestOP Vistoria',
+    short_name: 'Vistoria',
+    description: 'PWA de vistoria do GestOP — Prefeitura de Franca',
     start_url: '/mobile',
     scope: '/',
     display: 'standalone',

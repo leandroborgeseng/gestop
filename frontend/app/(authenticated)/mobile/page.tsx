@@ -73,7 +73,7 @@ export default function MobilePage() {
     await writeMobileQueue(remaining);
     if (remaining.length === 0 && initialCount > 0) {
       snackbar.show('Fila sincronizada com sucesso.', 'success');
-      showLocalNotification('GestOP Campo', 'Fiscalizacoes sincronizadas com sucesso.');
+      showLocalNotification('GestOP Vistoria', 'Vistorias sincronizadas com sucesso.');
     }
     setSyncing(false);
   }, [syncing, snackbar]);
@@ -89,7 +89,7 @@ export default function MobilePage() {
 
     getMobileFieldPackage()
       .then(setFieldPackage)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao baixar pacote de campo.'))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao baixar pacote de vistoria.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -187,7 +187,7 @@ export default function MobilePage() {
 
       const checkin = await captureCurrentPosition(fallback);
       if (checkin.source === 'fallback') {
-        setGpsNotice('GPS indisponível — check-in usou coordenadas do próprio. Ative a localização para validação em campo.');
+        setGpsNotice('GPS indisponível — check-in usou coordenadas do próprio. Ative a localização para validação na vistoria.');
       }
 
       const now = new Date().toISOString();
@@ -212,9 +212,9 @@ export default function MobilePage() {
       setQueue(nextQueue);
       await writeMobileQueue(nextQueue);
       setResponses({});
-      snackbar.show('Fiscalização salva na fila offline.', 'success');
+      snackbar.show('Vistoria salva na fila offline.', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao salvar fiscalização.');
+      setError(err instanceof Error ? err.message : 'Falha ao salvar vistoria.');
     } finally {
       setSaving(false);
     }
@@ -223,10 +223,10 @@ export default function MobilePage() {
   return (
     <RequirePermissions permissions={['fiscalizacoes.executar']}>
       <PageShell
-        kicker="PWA Campo"
+        kicker="PWA Vistoria"
         icon={Smartphone}
-        title="Fiscalização offline"
-        description="Preencha em campo com GPS real, salve localmente e sincronize automaticamente ao voltar online."
+        title="Vistoria offline"
+        description="Preencha a vistoria com GPS real, salve localmente e sincronize automaticamente ao voltar online."
         backHref="/cco"
       >
         <div className="mx-auto max-w-2xl space-y-4 pb-36">
@@ -238,19 +238,19 @@ export default function MobilePage() {
           </div>
 
           <TipBanner id="mobile-offline-queue">
-            Salve fiscalizações offline quando estiver sem sinal. Elas entram na fila e sincronizam automaticamente ao reconectar.
+            Salve vistorias offline quando estiver sem sinal. Elas entram na fila e sincronizam automaticamente ao reconectar.
           </TipBanner>
 
           {error ? <ErrorState message={error} /> : null}
           {gpsNotice ? <Alert variant="warning">{gpsNotice}</Alert> : null}
-          {loading ? <LoadingState label="Baixando pacote de campo..." /> : null}
+          {loading ? <LoadingState label="Baixando pacote de vistoria..." /> : null}
 
           {fieldPackage ? (
             <>
               <section className="overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
                 <div className="border-b border-[var(--line-2)] bg-[var(--brand-soft)] px-4 py-3">
                   <div className="flex items-center justify-between text-[12px] text-[var(--ink-3)]">
-                    <span>Roteiro de campo</span>
+                    <span>Roteiro de vistoria</span>
                     <span>{new Date().toLocaleDateString('pt-BR')}</span>
                   </div>
                   <p className="mt-1 text-[18px] font-semibold text-[var(--ink)]">
@@ -352,7 +352,7 @@ export default function MobilePage() {
                   <div>
                     <h2 className="text-[15px] font-semibold text-[var(--ink)]">Fila de sincronização</h2>
                     <p className="text-[13px] text-[var(--ink-3)]">
-                      {queue.length} fiscalização(ões) pendente(s) · sync automático ao voltar online
+                      {queue.length} vistoria(s) pendente(s) · sync automático ao voltar online
                     </p>
                   </div>
                   <Button variant="filled" disabled={queue.length === 0 || syncing || !online} onClick={() => void syncQueue()}>

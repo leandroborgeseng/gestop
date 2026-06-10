@@ -62,7 +62,7 @@ export default function UnidadeDetalhePage() {
       backHref="/cco"
     >
       <TipBanner id="unidade-detalhe">
-        Visão completa do patrimônio: fiscalizações, não conformidades e chamados vinculados a este próprio.
+        Visão completa do patrimônio: vistorias, não conformidades e chamados vinculados a este próprio.
       </TipBanner>
 
       {error ? <ErrorState message={error} /> : null}
@@ -113,7 +113,7 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
       </Card>
 
       <section className="grid gap-4 sm:grid-cols-3">
-        <MetricCard icon={ClipboardList} title="Fiscalizações" value={unidade.totais.fiscalizacoes} hint="registradas" />
+        <MetricCard icon={ClipboardList} title="Vistorias" value={unidade.totais.fiscalizacoes} hint="registradas" />
         <MetricCard
           icon={AlertTriangle}
           title="Não conformidades"
@@ -159,7 +159,7 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
                   {unidade.latitude.toFixed(6)}, {unidade.longitude.toFixed(6)}
                 </p>
                 <p className="mt-3 text-[13px] text-[var(--ink-3)]">
-                  Usadas na validação do raio de check-in em campo.
+                  Usadas na validação do raio de check-in na vistoria.
                 </p>
               </div>
             ) : (
@@ -172,9 +172,9 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <Panel title="Últimas fiscalizações">
+        <Panel title="Últimas vistorias">
           {unidade.ultimasFiscalizacoes.length === 0 ? (
-            <p className="text-[13px] text-[var(--ink-3)]">Nenhuma fiscalização registrada.</p>
+            <p className="text-[13px] text-[var(--ink-3)]">Nenhuma vistoria registrada.</p>
           ) : (
             <div className="space-y-2">
               {unidade.ultimasFiscalizacoes.map((fiscalizacao) => (

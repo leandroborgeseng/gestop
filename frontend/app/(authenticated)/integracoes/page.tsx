@@ -74,11 +74,11 @@ export default function IntegracoesPage() {
         kicker="Técnico"
         icon={Plug}
         title="Integrações"
-        description="Webhooks, sincronização de campo e status dos serviços conectados."
+        description="Webhooks, sincronização de vistoria e status dos serviços conectados."
         backHref="/cco"
       >
         <TipBanner id="integracoes-sync">
-          Falhas de sync de campo aparecem aqui. Use Retentar para reenfileirar eventos pendentes ou envie uma notificação de teste.
+          Falhas de sync de vistoria aparecem aqui. Use Retentar para reenfileirar eventos pendentes ou envie uma notificação de teste.
         </TipBanner>
 
         {error ? (

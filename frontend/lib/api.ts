@@ -4,6 +4,8 @@ import {
   AdminSecretaria,
   AdminUnidade,
   AdminUsuario,
+  AdminEquipe,
+  EquipeOpcao,
   ChecklistModel,
   ChecklistVersao,
   CronogramaChecagem,
@@ -251,6 +253,22 @@ export function listAdminPerfis() {
   return request<AdminPerfil[]>('/admin/perfis');
 }
 
+export function listAdminEquipes() {
+  return request<AdminEquipe[]>('/admin/equipes');
+}
+
+export function saveAdminEquipe(payload: Record<string, unknown>, id?: string) {
+  return request<AdminEquipe>(`/admin/equipes${id ? `/${id}` : ''}`, {
+    method: id ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminEquipe(id: string) {
+  return request<AdminEquipe>(`/admin/equipes/${id}`, { method: 'DELETE' });
+}
+
 export function getWebmapImportStatus() {
   return request<WebmapImportStatus>('/admin/importacao/webmap/status');
 }
@@ -479,9 +497,24 @@ export function getChamado(id: string) {
 
 export function updateChamadoStatus(
   id: string,
-  payload: { status: string; motivo?: string; impedimentoMotivo?: string },
+  payload: { status: string; motivo?: string; impedimentoMotivo?: string; equipeId?: string },
 ) {
   return request<ChamadoResumo>(`/chamados/${id}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listChamadoEquipes() {
+  return request<EquipeOpcao[]>('/chamados/equipes/opcoes');
+}
+
+export function updateChamadoAtribuicao(
+  id: string,
+  payload: { equipeId?: string; responsavelId?: string; motivo?: string },
+) {
+  return request<ChamadoResumo>(`/chamados/${id}/atribuicao`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

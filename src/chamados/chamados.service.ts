@@ -10,7 +10,7 @@ import { JwtPayload } from '../auth/jwt';
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { CreateChamadoDto, PublicCreateChamadoDto, UpdateChamadoStatusDto } from './chamados.dto';
+import { CreateChamadoDto, PublicCreateChamadoDto, UpdateChamadoStatusDto, UpdateChamadoAtribuicaoDto } from './chamados.dto';
 import {
   assertValidChamadoTransition,
   buildChamadoCode,
@@ -34,6 +34,23 @@ export class ChamadosService {
     return this.prisma.chamado.findMany({
       orderBy: { createdAt: 'desc' },
       include: this.includeRelations(),
+    });
+  }
+
+  listEquipesAtivas() {
+    return this.prisma.equipe.findMany({
+      where: { ativo: true },
+      orderBy: { nome: 'asc' },
+      select: {
+        id: true,
+        nome: true,
+        secretaria: { select: { id: true, sigla: true } },
+        membros: {
+          select: {
+            usuario: { select: { id: true, nome: true, ativo: true } },
+          },
+        },
+      },
     });
   }
 
@@ -183,6 +200,10 @@ export class ChamadosService {
       throw new BadRequestException(error instanceof Error ? error.message : 'Transição inválida');
     }
 
+    if (dto.equipeId) {
+      await this.ensureEquipeAtiva(dto.equipeId);
+    }
+
     const isTerminal = (status: ChamadoStatus) =>
       status === ChamadoStatus.CONCLUIDO || status === ChamadoStatus.CANCELADO;
 
@@ -192,6 +213,7 @@ export class ChamadosService {
         data: {
           status: dto.status,
           responsavelId: dto.responsavelId ?? before.responsavelId,
+          equipeId: dto.equipeId !== undefined ? dto.equipeId || null : before.equipeId,
           impedimentoMotivo:
             dto.status === ChamadoStatus.IMPEDIDO
               ? (dto.impedimentoMotivo ?? before.impedimentoMotivo)
@@ -230,6 +252,64 @@ export class ChamadosService {
         data: {
           usuarioId: user.sub,
           acao: AuditAction.STATUS_CHANGE,
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          valorAntigo: JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue,
+          valorNovo: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
+        },
+      });
+
+      return updated;
+    });
+
+    return chamado;
+  }
+
+  async updateAtribuicao(id: string, dto: UpdateChamadoAtribuicaoDto, user: JwtPayload) {
+    const before = await this.getChamadoOrThrow(id);
+    const equipeId = dto.equipeId === undefined ? before.equipeId : dto.equipeId || null;
+    const responsavelId = dto.responsavelId === undefined ? before.responsavelId : dto.responsavelId || null;
+
+    if (equipeId) {
+      await this.ensureEquipeAtiva(equipeId);
+    }
+
+    if (responsavelId && equipeId) {
+      await this.ensureUsuarioNaEquipe(responsavelId, equipeId);
+    }
+
+    if (equipeId === before.equipeId && responsavelId === before.responsavelId) {
+      return before;
+    }
+
+    const chamado = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.chamado.update({
+        where: { id },
+        data: { equipeId, responsavelId },
+        include: this.includeRelations(),
+      });
+
+      await tx.historicoStatus.create({
+        data: {
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          statusAnterior: before.status,
+          statusNovo: before.status,
+          motivo: dto.motivo ?? 'Atribuição de equipe/responsável atualizada.',
+          alteradoPorId: user.sub,
+          metadata: {
+            equipeId,
+            responsavelId,
+            equipeAnteriorId: before.equipeId,
+            responsavelAnteriorId: before.responsavelId,
+          },
+        },
+      });
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.UPDATE,
           entidadeTipo: 'Chamado',
           entidadeId: id,
           valorAntigo: JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue,
@@ -344,6 +424,7 @@ export class ChamadosService {
       secretaria: { select: { id: true, nome: true, sigla: true } },
       unidade: { select: { id: true, nome: true, codigoPatrimonial: true, endereco: true, bairro: true } },
       responsavel: { select: { id: true, nome: true } },
+      equipe: { select: { id: true, nome: true } },
       registradoPor: { select: { id: true, nome: true } },
       naoConformidade: {
         select: {
@@ -355,6 +436,20 @@ export class ChamadosService {
         },
       },
     };
+  }
+
+  private async ensureEquipeAtiva(equipeId: string) {
+    const equipe = await this.prisma.equipe.findFirst({ where: { id: equipeId, ativo: true } });
+    if (!equipe) throw new BadRequestException('Equipe nao encontrada ou inativa.');
+  }
+
+  private async ensureUsuarioNaEquipe(usuarioId: string, equipeId: string) {
+    const membership = await this.prisma.equipeUsuario.findUnique({
+      where: { equipeId_usuarioId: { equipeId, usuarioId } },
+    });
+    if (!membership) {
+      throw new BadRequestException('Responsavel informado nao pertence a equipe selecionada.');
+    }
   }
 
   private audit(usuarioId: string, acao: AuditAction, entidadeId: string, antes: unknown, depois: unknown) {

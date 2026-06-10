@@ -69,6 +69,28 @@ export class UnidadeDto {
   ativo?: boolean;
 }
 
+export class EquipeDto {
+  @IsOptional()
+  @IsString()
+  secretariaId?: string;
+
+  @IsString()
+  @MinLength(2)
+  nome!: string;
+
+  @IsOptional()
+  @IsString()
+  descricao?: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  usuarioIds!: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  ativo?: boolean;
+}
+
 export class UsuarioDto {
   @IsOptional()
   @IsString()
@@ -101,6 +123,11 @@ export class UsuarioDto {
   @IsArray()
   @IsString({ each: true })
   perfilIds!: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  equipeIds?: string[];
 
   @IsOptional()
   @IsBoolean()

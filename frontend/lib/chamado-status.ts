@@ -103,9 +103,12 @@ export function buildChamadoTimelineFromHistorico(
 
   return historico.map((entry, index) => {
     const isLast = index === historico.length - 1;
-    const title = entry.statusAnterior
-      ? `${chamadoStatusLabel(entry.statusAnterior)} → ${chamadoStatusLabel(entry.statusNovo)}`
-      : chamadoStatusLabel(entry.statusNovo);
+    const assignmentOnly = entry.statusAnterior && entry.statusAnterior === entry.statusNovo;
+    const title = assignmentOnly
+      ? 'Atribuição atualizada'
+      : entry.statusAnterior
+        ? `${chamadoStatusLabel(entry.statusAnterior)} → ${chamadoStatusLabel(entry.statusNovo)}`
+        : chamadoStatusLabel(entry.statusNovo);
     const sub = [entry.alteradoPor?.nome, entry.motivo].filter(Boolean).join(' · ');
 
     return {

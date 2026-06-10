@@ -41,8 +41,8 @@ export const NAV_ITEMS: NavItem[] = [
   },
   {
     id: 'mobile',
-    label: 'Campo',
-    shortLabel: 'Campo',
+    label: 'Vistoria',
+    shortLabel: 'Vistoria',
     href: '/mobile',
     icon: MapPin,
     permission: 'fiscalizacoes.executar',

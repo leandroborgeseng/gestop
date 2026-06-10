@@ -166,14 +166,14 @@ export default function CronogramaPage() {
   return (
     <RequirePermissions permissions={['dashboard.visualizar']}>
       <PageShell
-        kicker="Fiscalização programada"
+        kicker="Vistoria programada"
         icon={CalendarDays}
         title="Cronograma de checagens"
         description="Defina a periodicidade de vistoria por próprio e acompanhe o calendário de checagens realizadas, agendadas e atrasadas."
         backHref="/cco"
       >
         <TipBanner id="cronograma-checagens">
-          Cadastre a periodicidade por próprio + checklist. Após cada fiscalização em campo, a próxima data avança automaticamente.
+          Cadastre a periodicidade por próprio + checklist. Após cada vistoria, a próxima data avança automaticamente.
         </TipBanner>
 
         {error ? (
@@ -246,7 +246,7 @@ export default function CronogramaPage() {
               <Card elevation={1}>
                 <CardHeader>
                   <CardTitle>Cronogramas cadastrados</CardTitle>
-                  <CardDescription>Uma regra por próprio + checklist. A próxima data avança automaticamente após a vistoria em campo.</CardDescription>
+                  <CardDescription>Uma regra por próprio + checklist. A próxima data avança automaticamente após a vistoria.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 pt-0">
                   {cronogramas.length === 0 ? (
@@ -314,7 +314,7 @@ export default function CronogramaPage() {
               <CardContent className="space-y-3 pt-0">
                 {!selectedDate ? (
                   <p className="text-[13px] text-[var(--ink-3)]">
-                    O calendário combina checagens programadas (cronograma) e fiscalizações já concluídas em campo.
+                    O calendário combina checagens programadas (cronograma) e vistorias já concluídas.
                   </p>
                 ) : null}
                 {eventosSelecionados.map((evento) => (

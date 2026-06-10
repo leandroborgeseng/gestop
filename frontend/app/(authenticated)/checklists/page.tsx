@@ -89,10 +89,10 @@ export default function ChecklistsPage() {
   return (
     <RequirePermissions permissions={['checklists.gerenciar']}>
       <PageShell
-        kicker="Modelos de fiscalização"
+        kicker="Modelos de vistoria"
         icon={ClipboardList}
         title="Checklists"
-        description="Modelos versionados aplicados pelos agentes em campo. Publique versões sem quebrar histórico."
+        description="Modelos versionados aplicados pelos agentes em vistoria. Publique versões sem quebrar histórico."
         backHref="/cco"
       >
         <TipBanner id="checklists-versionamento">

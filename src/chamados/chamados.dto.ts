@@ -67,4 +67,22 @@ export class UpdateChamadoStatusDto {
   @IsOptional()
   @IsString()
   impedimentoMotivo?: string;
+
+  @IsOptional()
+  @IsString()
+  equipeId?: string;
+}
+
+export class UpdateChamadoAtribuicaoDto {
+  @IsOptional()
+  @IsString()
+  equipeId?: string;
+
+  @IsOptional()
+  @IsString()
+  responsavelId?: string;
+
+  @IsOptional()
+  @IsString()
+  motivo?: string;
 }

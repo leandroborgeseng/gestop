@@ -86,7 +86,7 @@ export default function DashboardPage() {
 
             <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
               <MetricCard title="Próprios" value={dashboard.indicadores.totalUnidades} hint="cadastrados" icon={Building2} />
-              <MetricCard title="Fiscalizações" value={dashboard.indicadores.fiscalizacoes} hint="registradas" icon={ClipboardCheck} />
+              <MetricCard title="Vistorias" value={dashboard.indicadores.fiscalizacoes} hint="registradas" icon={ClipboardCheck} />
               <MetricCard
                 title="Não conformidades"
                 value={dashboard.indicadores.naoConformidades}
@@ -119,7 +119,7 @@ export default function DashboardPage() {
                       <strong className="text-[14px] font-semibold text-[var(--ink)]">{item.sigla}</strong>
                       <span className="text-[13px] text-[var(--ink-3)]"> — {item.nome}</span>
                       <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                        {item.chamadosPendentes} chamados pendentes · {item.fiscalizacoes} fiscalizações
+                        {item.chamadosPendentes} chamados pendentes · {item.fiscalizacoes} vistorias
                       </p>
                     </div>
                   ))}

@@ -192,6 +192,31 @@ export type AdminUsuario = {
   perfis: Array<{
     perfil: AdminPerfil;
   }>;
+  equipes?: Array<{
+    equipe: { id: string; nome: string; ativo: boolean };
+  }>;
+};
+
+export type AdminEquipe = {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  ativo: boolean;
+  secretariaId?: string | null;
+  secretaria?: SecretariaOption | null;
+  membros: Array<{
+    usuario: { id: string; nome: string; email: string; ativo: boolean };
+  }>;
+  _count?: { chamados: number };
+};
+
+export type EquipeOpcao = {
+  id: string;
+  nome: string;
+  secretaria?: SecretariaOption | null;
+  membros: Array<{
+    usuario: { id: string; nome: string; ativo: boolean };
+  }>;
 };
 
 export type WebmapImportGithub = {
@@ -434,6 +459,7 @@ export type ChamadoResumo = {
     bairro?: string | null;
   };
   responsavel?: { id: string; nome: string } | null;
+  equipe?: { id: string; nome: string } | null;
   naoConformidade?: ChamadoNaoConformidade | null;
   registradoPor?: { id: string; nome: string } | null;
 };

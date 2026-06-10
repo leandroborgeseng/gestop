@@ -173,6 +173,7 @@ model Secretaria {
   fiscalizacoes     Fiscalizacao[]
   chamados          Chamado[]
   dashboardSnapshots DashboardSnapshot[]
+  equipes           Equipe[]
 
   @@index([ativo])
 }
@@ -235,6 +236,7 @@ model Usuario {
   chamadosRegistrados Chamado[] @relation("ChamadoRegistradoPor")
   pushSubscriptions   PushSubscription[]
   cronogramasResponsavel CronogramaChecagem[] @relation("CronogramaResponsavel")
+  equipes             EquipeUsuario[]
 
   @@index([secretariaId])
   @@index([ativo])
@@ -312,6 +314,35 @@ model PerfilPermissao {
   permissao Permissao @relation(fields: [permissaoId], references: [id], onDelete: Cascade)
 
   @@id([perfilId, permissaoId])
+}
+
+model Equipe {
+  id           String   @id @default(uuid())
+  secretariaId String?
+  nome         String
+  descricao    String?
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  secretaria Secretaria?     @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
+  membros    EquipeUsuario[]
+  chamados   Chamado[]
+
+  @@unique([secretariaId, nome])
+  @@index([ativo])
+}
+
+model EquipeUsuario {
+  equipeId  String
+  usuarioId String
+  createdAt DateTime @default(now())
+
+  equipe  Equipe  @relation(fields: [equipeId], references: [id], onDelete: Cascade)
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([equipeId, usuarioId])
+  @@index([usuarioId])
 }
 
 model Checklist {
@@ -552,6 +583,7 @@ model Chamado {
   latitude            Decimal?          @db.Decimal(10, 7)
   longitude           Decimal?          @db.Decimal(10, 7)
   responsavelId       String?
+  equipeId            String?
   registradoPorId     String?
   prazoEm             DateTime?
   concluidoEm         DateTime?
@@ -566,6 +598,7 @@ model Chamado {
   unidade         UnidadePublica   @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
   naoConformidade NaoConformidade? @relation(fields: [naoConformidadeId], references: [id], onDelete: SetNull)
   responsavel     Usuario?         @relation("ChamadoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  equipe          Equipe?          @relation(fields: [equipeId], references: [id], onDelete: SetNull)
   registradoPor   Usuario?         @relation("ChamadoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
   evidencias      Evidencia[]
 
@@ -575,6 +608,7 @@ model Chamado {
   @@index([origem])
   @@index([prioridade])
   @@index([responsavelId])
+  @@index([equipeId])
   @@index([createdAt])
 }
 

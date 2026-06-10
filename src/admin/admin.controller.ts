@@ -5,7 +5,7 @@ import { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequirePermissions } from '../auth/permissions';
 import { AdminService } from './admin.service';
-import { SecretariaDto, UnidadeDto, UsuarioDto } from './admin.dto';
+import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto } from './admin.dto';
 
 @UseGuards(AuthGuard, PermissionsGuard)
 @Controller('admin')
@@ -88,5 +88,29 @@ export class AdminController {
   @Get('perfis')
   listPerfis() {
     return this.adminService.listPerfis();
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Get('equipes')
+  listEquipes() {
+    return this.adminService.listEquipes();
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Post('equipes')
+  createEquipe(@Body() body: EquipeDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.createEquipe(body, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Put('equipes/:id')
+  updateEquipe(@Param('id') id: string, @Body() body: EquipeDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.updateEquipe(id, body, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Delete('equipes/:id')
+  deleteEquipe(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.adminService.deleteEquipe(id, user);
   }
 }

@@ -147,7 +147,7 @@ function CcoPageContent() {
       },
       {
         id: 'fiscalizacoes' as const,
-        title: 'Fiscalizações',
+        title: 'Vistorias',
         value: resumo?.fiscalizacoesConcluidas ?? 0,
         hint: 'concluídas',
         icon: ClipboardCheck,
@@ -164,7 +164,7 @@ function CcoPageContent() {
         id: 'sync' as const,
         title: 'Sync pendente',
         value: resumo?.eventosSyncPendentes ?? 0,
-        hint: 'eventos de campo',
+        hint: 'eventos de vistoria',
         icon: DatabaseZap,
       },
     ],

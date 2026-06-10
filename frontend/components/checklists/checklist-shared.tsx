@@ -156,7 +156,7 @@ export function CreateChecklistForm({
         </Field>
       ) : null}
       <p className="md-body-md rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] px-4 py-3 text-[var(--md-on-surface-variant)]">
-        Checklists com escopo <strong>por tipo de próprio</strong> aparecem automaticamente no app Campo para
+        Checklists com escopo <strong>por tipo de próprio</strong> aparecem automaticamente no app Vistoria para
         unidades daquele tipo (ex.: Escola, UBS, Praça).
       </p>
       {formError ? <p className="md-body-md text-red-700">{formError}</p> : null}

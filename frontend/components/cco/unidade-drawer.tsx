@@ -121,7 +121,7 @@ export function UnidadeDrawer({
             onChange={(value) => setTab(value as DrawerTab)}
             items={[
               { id: 'geral', label: 'Visão geral' },
-              { id: 'fisc', label: 'Fiscalizações', count: fiscCount },
+              { id: 'fisc', label: 'Vistorias', count: fiscCount },
               { id: 'nc', label: 'Não conf.', count: ncCount },
               { id: 'chamados', label: 'Chamados', count: chamadosCount },
             ]}
@@ -166,7 +166,7 @@ function GeralTab({
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-3 gap-2">
-        <StatCard label="Fiscalizações" value={unidade.totais.fiscalizacoes} />
+        <StatCard label="Vistorias" value={unidade.totais.fiscalizacoes} />
         <StatCard label="Não conf." value={unidade.pendencias.naoConformidadesAbertas} tone="warn" />
         <StatCard label="Chamados" value={unidade.pendencias.chamadosAbertos} tone="brand" />
       </div>
@@ -193,7 +193,7 @@ function GeralTab({
         <Link href="/mobile" onClick={onClose}>
           <Button variant="filled" size="sm" className="gap-1.5">
             <ClipboardList className="h-4 w-4" />
-            Nova fiscalização
+            Nova vistoria
           </Button>
         </Link>
         <Link href="/chamados" onClick={onClose}>
@@ -218,7 +218,7 @@ function GeralTab({
 
 function FiscTab({ unidade }: { unidade: UnidadeDetalhe }) {
   if (unidade.ultimasFiscalizacoes.length === 0) {
-    return <EmptyTab icon={ClipboardList} message="Nenhuma fiscalização registrada" />;
+    return <EmptyTab icon={ClipboardList} message="Nenhuma vistoria registrada" />;
   }
 
   return (

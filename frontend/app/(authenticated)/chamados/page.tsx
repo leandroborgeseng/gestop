@@ -26,7 +26,7 @@ import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
-import { getChamado, listChamados, updateChamadoStatus } from '@/lib/api';
+import { getChamado, listChamadoEquipes, listChamados, updateChamadoAtribuicao, updateChamadoStatus } from '@/lib/api';
 import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 import { cn } from '@/lib/cn';
 import {
@@ -36,7 +36,7 @@ import {
   prazoInfo,
   prioridadeVariant,
 } from '@/lib/chamado-status';
-import { ChamadoDetalhe, ChamadoOrigem, ChamadoResumo, ChamadoStatus } from '@/lib/types';
+import { ChamadoDetalhe, ChamadoOrigem, ChamadoResumo, ChamadoStatus, EquipeOpcao } from '@/lib/types';
 
 type StatusFilter = 'TODOS' | ChamadoStatus;
 type PrioridadeFilter = 'TODAS' | string;
@@ -57,7 +57,7 @@ function origemMeta(origem: ChamadoOrigem) {
     case 'INTERNO':
       return { label: 'App interno', icon: Smartphone };
     case 'FISCALIZACAO':
-      return { label: 'Fiscalização', icon: ClipboardList };
+      return { label: 'Vistoria', icon: ClipboardList };
     default:
       return { label: 'Manual', icon: Bell };
   }
@@ -75,6 +75,7 @@ function ChamadosPageContent() {
   const searchParams = useSearchParams();
   const snackbar = useSnackbar();
   const [chamados, setChamados] = useState<ChamadoResumo[]>([]);
+  const [equipes, setEquipes] = useState<EquipeOpcao[]>([]);
   const [detail, setDetail] = useState<ChamadoDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -126,9 +127,10 @@ function ChamadosPageContent() {
 
   function load() {
     setLoading(true);
-    listChamados()
-      .then((items) => {
+    Promise.all([listChamados(), listChamadoEquipes()])
+      .then(([items, nextEquipes]) => {
         setChamados(items);
+        setEquipes(nextEquipes);
         setSelectedId((current) => current ?? items[0]?.id ?? null);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
@@ -164,6 +166,7 @@ function ChamadosPageContent() {
         item.unidade.codigoPatrimonial,
         item.solicitanteNome,
         item.responsavel?.nome,
+        item.equipe?.nome,
       ]
         .filter(Boolean)
         .join(' ')
@@ -181,6 +184,37 @@ function ChamadosPageContent() {
     }
     return filtered[0] ?? null;
   }, [filtered, selectedId, chamados]);
+
+  async function assignTeam(
+    id: string,
+    codigo: string,
+    equipeId: string,
+    responsavelId: string,
+    motivo?: string,
+  ) {
+    setBusyId(id);
+    setError(null);
+    try {
+      await updateChamadoAtribuicao(id, {
+        equipeId: equipeId || undefined,
+        responsavelId: responsavelId || undefined,
+        motivo: motivo?.trim() || 'Atribuição de equipe atualizada.',
+      });
+      const items = await listChamados();
+      setChamados(items);
+      if (selectedId === id) {
+        const refreshed = await getChamado(id);
+        setDetail(refreshed);
+      }
+      snackbar.show(`${codigo}: equipe atualizada`, 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Falha ao atribuir equipe.';
+      setError(message);
+      snackbar.show(message, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function transition(
     id: string,
@@ -219,7 +253,7 @@ function ChamadosPageContent() {
         kicker="Atendimento operacional"
         icon={Megaphone}
         title="Chamados"
-        description="Triagem, atendimento e acompanhamento — abertos via QR Code, fiscalização, app de campo e registro interno."
+        description="Triagem, atendimento e acompanhamento — abertos via QR Code, vistoria, app de vistoria e registro interno."
         backHref="/cco"
         action={<UnidadeAvulsoActions size="md" />}
       >
@@ -328,6 +362,12 @@ function ChamadosPageContent() {
                             <CanalIcon className="h-3 w-3" />
                             {canal.label}
                           </span>
+                          {chamado.equipe ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-[var(--ink-3)]">
+                              <UserRound className="h-3 w-3" />
+                              {chamado.equipe.nome}
+                            </span>
+                          ) : null}
                           {chamado.responsavel ? (
                             <span className="inline-flex items-center gap-1 text-[11px] text-[var(--ink-3)]">
                               <UserRound className="h-3 w-3" />
@@ -346,9 +386,11 @@ function ChamadosPageContent() {
               <ChamadoDetailPanel
                 resumo={selected}
                 detail={detail?.id === selected?.id ? detail : null}
+                equipes={equipes}
                 loading={detailLoading && !!selected}
                 busy={busyId === selected?.id}
                 onTransition={transition}
+                onAssignTeam={assignTeam}
               />
             </section>
           </div>
@@ -361,12 +403,15 @@ function ChamadosPageContent() {
 function ChamadoDetailPanel({
   resumo,
   detail,
+  equipes,
   loading,
   busy,
   onTransition,
+  onAssignTeam,
 }: {
   resumo: ChamadoResumo | null;
   detail: ChamadoDetalhe | null;
+  equipes: EquipeOpcao[];
   loading: boolean;
   busy: boolean;
   onTransition: (
@@ -376,17 +421,24 @@ function ChamadoDetailPanel({
     motivo?: string,
     impedimentoMotivo?: string,
   ) => void;
+  onAssignTeam: (id: string, codigo: string, equipeId: string, responsavelId: string, motivo?: string) => void;
 }) {
   const [pendingStatus, setPendingStatus] = useState<ChamadoStatus>('ABERTO');
   const [motivo, setMotivo] = useState('');
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
+  const [pendingEquipeId, setPendingEquipeId] = useState('');
+  const [pendingResponsavelId, setPendingResponsavelId] = useState('');
+  const [atribuicaoMotivo, setAtribuicaoMotivo] = useState('');
 
   useEffect(() => {
     if (!resumo) return;
     setPendingStatus(resumo.status);
     setMotivo('');
     setImpedimentoMotivo(resumo.impedimentoMotivo ?? '');
-  }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo]);
+    setPendingEquipeId(resumo.equipe?.id ?? '');
+    setPendingResponsavelId(resumo.responsavel?.id ?? '');
+    setAtribuicaoMotivo('');
+  }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo, resumo?.equipe?.id, resumo?.responsavel?.id]);
 
   if (!resumo) {
     return (
@@ -408,6 +460,10 @@ function ChamadoDetailPanel({
   const prazo = prazoInfo(resumo.prazoEm, resumo.status);
   const statusOptions = Object.keys(CHAMADO_STATUS_META) as ChamadoStatus[];
   const statusChanged = pendingStatus !== resumo.status;
+  const atribuicaoChanged =
+    pendingEquipeId !== (resumo.equipe?.id ?? '') || pendingResponsavelId !== (resumo.responsavel?.id ?? '');
+  const selectedEquipe = equipes.find((equipe) => equipe.id === pendingEquipeId);
+  const membrosEquipe = selectedEquipe?.membros.map((item) => item.usuario).filter((usuario) => usuario.ativo) ?? [];
   const timeline = detail?.historico?.length
     ? buildChamadoTimelineFromHistorico(detail.historico, resumo.status, resumo.createdAt)
     : buildChamadoTimelineFromHistorico([], resumo.status, resumo.createdAt);
@@ -437,19 +493,85 @@ function ChamadoDetailPanel({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
               label="Prazo"
               value={prazo.label}
               sub={resumo.prazoEm ? new Date(resumo.prazoEm).toLocaleDateString('pt-BR') : undefined}
               tone={prazo.tone}
             />
+            <SummaryCard label="Equipe" value={resumo.equipe?.nome ?? 'Não atribuída'} sub={resumo.secretaria.sigla} />
             <SummaryCard
               label="Responsável"
               value={resumo.responsavel?.nome ?? 'Não atribuído'}
-              sub={resumo.secretaria.sigla}
+              sub={membrosEquipe.length ? `${membrosEquipe.length} membro(s) na equipe` : undefined}
             />
             <SummaryCard label="Canal" value={canal.label} />
+          </div>
+
+          <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
+            <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Atribuir equipe</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="chamado-equipe" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Equipe
+                </label>
+                <Select
+                  id="chamado-equipe"
+                  value={pendingEquipeId}
+                  onChange={(event) => {
+                    setPendingEquipeId(event.target.value);
+                    setPendingResponsavelId('');
+                  }}
+                  className="h-9 w-full text-xs"
+                  disabled={busy}
+                >
+                  <option value="">Sem equipe</option>
+                  {equipes.map((equipe) => (
+                    <option key={equipe.id} value={equipe.id}>
+                      {equipe.nome}
+                      {equipe.secretaria?.sigla ? ` · ${equipe.secretaria.sigla}` : ''}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label htmlFor="chamado-responsavel" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Responsável
+                </label>
+                <Select
+                  id="chamado-responsavel"
+                  value={pendingResponsavelId}
+                  onChange={(event) => setPendingResponsavelId(event.target.value)}
+                  className="h-9 w-full text-xs"
+                  disabled={busy || !pendingEquipeId}
+                >
+                  <option value="">{pendingEquipeId ? 'Selecione um membro' : 'Escolha uma equipe primeiro'}</option>
+                  {membrosEquipe.map((usuario) => (
+                    <option key={usuario.id} value={usuario.id}>
+                      {usuario.nome}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+            <input
+              value={atribuicaoMotivo}
+              onChange={(event) => setAtribuicaoMotivo(event.target.value)}
+              placeholder="Motivo da atribuição (opcional)"
+              disabled={busy}
+              className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+            />
+            <Button
+              variant="outlined"
+              size="sm"
+              disabled={busy || !atribuicaoChanged}
+              onClick={() =>
+                onAssignTeam(resumo.id, resumo.codigo, pendingEquipeId, pendingResponsavelId, atribuicaoMotivo)
+              }
+            >
+              Salvar equipe
+            </Button>
           </div>
 
           <dl className="grid gap-3 sm:grid-cols-2">
