@@ -16,7 +16,7 @@ export type UnidadeListQuery = {
 export type UnidadeResumoCounts = {
   fiscalizacoes: number;
   naoConformidadesAbertas: number;
-  ordensServicoAbertas: number;
+  chamadosAbertos: number;
 };
 
 export type UnidadeOperacional = {
@@ -41,7 +41,7 @@ export type UnidadeOperacional = {
   };
   pendencias: {
     naoConformidadesAbertas: number;
-    ordensServicoAbertas: number;
+    chamadosAbertos: number;
   };
   totais: UnidadeResumoCounts;
 };

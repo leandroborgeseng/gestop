@@ -9,7 +9,7 @@ import {
   ClipboardList,
   LocateFixed,
   UserRound,
-  Wrench,
+  Megaphone,
   X,
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
@@ -24,7 +24,7 @@ import { Tabs } from '@/components/ui/tabs';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 
-type DrawerTab = 'geral' | 'fisc' | 'nc' | 'os';
+type DrawerTab = 'geral' | 'fisc' | 'nc' | 'chamados';
 
 export function UnidadeDrawer({
   unidade,
@@ -82,7 +82,7 @@ export function UnidadeDrawer({
   if (!open || !unidade) return null;
 
   const ncCount = detalhe?.pendenciasDetalhadas.naoConformidades.length ?? unidade.pendencias.naoConformidadesAbertas;
-  const osCount = detalhe?.pendenciasDetalhadas.ordensServico.length ?? unidade.pendencias.ordensServicoAbertas;
+  const chamadosCount = detalhe?.pendenciasDetalhadas.chamados.length ?? unidade.pendencias.chamadosAbertos;
   const fiscCount = detalhe?.ultimasFiscalizacoes.length ?? unidade.totais.fiscalizacoes;
 
   return (
@@ -123,7 +123,7 @@ export function UnidadeDrawer({
               { id: 'geral', label: 'Visão geral' },
               { id: 'fisc', label: 'Fiscalizações', count: fiscCount },
               { id: 'nc', label: 'Não conf.', count: ncCount },
-              { id: 'os', label: 'Ordens', count: osCount },
+              { id: 'chamados', label: 'Chamados', count: chamadosCount },
             ]}
           />
         </div>
@@ -143,7 +143,7 @@ export function UnidadeDrawer({
               ) : null}
               {tab === 'fisc' ? <FiscTab unidade={detalhe} /> : null}
               {tab === 'nc' ? <NcTab unidade={detalhe} /> : null}
-              {tab === 'os' ? <OsTab unidade={detalhe} /> : null}
+              {tab === 'chamados' ? <ChamadosTab unidade={detalhe} onClose={onClose} /> : null}
             </>
           ) : null}
         </div>
@@ -168,7 +168,7 @@ function GeralTab({
       <div className="grid grid-cols-3 gap-2">
         <StatCard label="Fiscalizações" value={unidade.totais.fiscalizacoes} />
         <StatCard label="Não conf." value={unidade.pendencias.naoConformidadesAbertas} tone="warn" />
-        <StatCard label="Ordens" value={unidade.pendencias.ordensServicoAbertas} tone="brand" />
+        <StatCard label="Chamados" value={unidade.pendencias.chamadosAbertos} tone="brand" />
       </div>
 
       <dl className="grid gap-3 text-[13px]">
@@ -196,10 +196,10 @@ function GeralTab({
             Nova fiscalização
           </Button>
         </Link>
-        <Link href="/ordens-servico" onClick={onClose}>
+        <Link href="/chamados" onClick={onClose}>
           <Button variant="outlined" size="sm" className="gap-1.5">
-            <Wrench className="h-4 w-4" />
-            Ver ordens
+            <Megaphone className="h-4 w-4" />
+            Ver chamados
           </Button>
         </Link>
       </div>
@@ -281,32 +281,33 @@ function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
   );
 }
 
-function OsTab({ unidade }: { unidade: UnidadeDetalhe }) {
-  const items = unidade.pendenciasDetalhadas.ordensServico;
+function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => void }) {
+  const items = unidade.pendenciasDetalhadas.chamados;
   if (items.length === 0) {
-    return <EmptyTab icon={Wrench} message="Nenhuma ordem aberta" ok />;
+    return <EmptyTab icon={Megaphone} message="Nenhum chamado aberto" ok />;
   }
 
   return (
     <div className="space-y-2">
-      {items.map((ordem) => (
+      {items.map((chamado) => (
         <Link
-          key={ordem.id}
-          href={`/ordens-servico/${ordem.id}`}
+          key={chamado.id}
+          href={`/chamados?id=${chamado.id}`}
+          onClick={onClose}
           className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]"
         >
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
-            <Wrench className="h-4 w-4" />
+            <Megaphone className="h-4 w-4" />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{ordem.codigo}</p>
-            <p className="text-[13px] font-semibold text-[var(--ink)]">{ordem.titulo}</p>
+            <p className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{chamado.codigo}</p>
+            <p className="text-[13px] font-semibold text-[var(--ink)]">{chamado.titulo ?? chamado.descricao}</p>
             <p className="mt-0.5 text-[11px] text-[var(--ink-3)]">
-              {ordem.status} · {ordem.responsavel?.nome ?? 'Sem responsável'}
+              {chamado.status} · {chamado.responsavel?.nome ?? 'Sem responsável'}
             </p>
           </div>
-          <Badge variant={ordem.prioridade.toUpperCase().includes('URG') || ordem.prioridade.toUpperCase().includes('ALTA') ? 'danger' : 'warning'}>
-            {ordem.prioridade}
+          <Badge variant={chamado.prioridade.toUpperCase().includes('URG') || chamado.prioridade.toUpperCase().includes('ALTA') ? 'danger' : 'warning'}>
+            {chamado.prioridade}
           </Badge>
         </Link>
       ))}

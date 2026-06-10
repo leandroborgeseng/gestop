@@ -13,7 +13,7 @@ import {
   Severidade,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
-import { OrdensServicoService } from '../ordens-servico/ordens-servico.service';
+import { ChamadosService } from '../chamados/chamados.service';
 import { CronogramaService } from '../cronograma/cronograma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -25,7 +25,7 @@ import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 export class MobileService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly ordensServicoService: OrdensServicoService,
+    private readonly chamadosService: ChamadosService,
     private readonly storageService: StorageService,
     private readonly cronogramaService: CronogramaService,
   ) {}
@@ -238,7 +238,7 @@ export class MobileService {
         }
 
         if (naoConformidadeId) {
-          await this.ordensServicoService.generateForNaoConformidadeTx(tx, naoConformidadeId, user.sub);
+          await this.chamadosService.generateForNaoConformidadeTx(tx, naoConformidadeId, user.sub);
         }
       }
 

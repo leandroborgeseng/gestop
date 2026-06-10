@@ -2,8 +2,8 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Bell, Search, Wrench } from 'lucide-react';
-import { createChamado, createOrdemServico, getStoredAuth, getUnidades } from '@/lib/api';
+import { Bell, Search } from 'lucide-react';
+import { createChamado, getStoredAuth, getUnidades } from '@/lib/api';
 import { UnidadeOperacional } from '@/lib/types';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
@@ -12,8 +12,6 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
-
-type SolicitacaoTipo = 'chamado' | 'os';
 
 const PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
 
@@ -26,19 +24,15 @@ export function UnidadeAvulsoActions({
   onSuccess,
   size = 'sm',
   className,
-  showChamado = true,
-  showOs = true,
 }: {
   unidadeId?: string;
   unidadeNome?: string;
   onSuccess?: () => void;
   size?: 'sm' | 'md';
   className?: string;
-  showChamado?: boolean;
-  showOs?: boolean;
 }) {
   const canManage = getStoredAuth()?.user.permissoes.includes('chamados.gerenciar') ?? false;
-  const [sheet, setSheet] = useState<SolicitacaoTipo | null>(null);
+  const [open, setOpen] = useState(false);
   const [pickedUnidade, setPickedUnidade] = useState<{ id: string; nome: string } | null>(
     unidadeId && unidadeNome ? { id: unidadeId, nome: unidadeNome } : null,
   );
@@ -53,61 +47,34 @@ export function UnidadeAvulsoActions({
 
   const resolvedUnidade = pickedUnidade ?? (unidadeId && unidadeNome ? { id: unidadeId, nome: unidadeNome } : null);
 
-  function openTipo(tipo: SolicitacaoTipo) {
-    if (resolvedUnidade) {
-      setSheet(tipo);
-      return;
-    }
-    setSheet(tipo);
-  }
-
   return (
     <>
       <div className={cn('flex flex-wrap gap-2', className)}>
-        {showChamado ? (
-          <Button variant="outlined" size={size} className="gap-1.5" onClick={() => openTipo('chamado')}>
-            <Bell className="h-4 w-4" />
-            Abrir chamado
-          </Button>
-        ) : null}
-        {showOs ? (
-          <Button variant="outlined" size={size} className="gap-1.5" onClick={() => openTipo('os')}>
-            <Wrench className="h-4 w-4" />
-            Abrir OS avulsa
-          </Button>
-        ) : null}
+        <Button variant="outlined" size={size} className="gap-1.5" onClick={() => setOpen(true)}>
+          <Bell className="h-4 w-4" />
+          Abrir chamado
+        </Button>
       </div>
 
-      <AvulsoSolicitacaoSheet
-        open={sheet === 'chamado'}
-        tipo="chamado"
+      <AbrirChamadoSheet
+        open={open}
         unidade={resolvedUnidade}
         onUnidadeChange={setPickedUnidade}
-        onClose={() => setSheet(null)}
-        onSuccess={onSuccess}
-      />
-      <AvulsoSolicitacaoSheet
-        open={sheet === 'os'}
-        tipo="os"
-        unidade={resolvedUnidade}
-        onUnidadeChange={setPickedUnidade}
-        onClose={() => setSheet(null)}
+        onClose={() => setOpen(false)}
         onSuccess={onSuccess}
       />
     </>
   );
 }
 
-function AvulsoSolicitacaoSheet({
+function AbrirChamadoSheet({
   open,
-  tipo,
   unidade,
   onUnidadeChange,
   onClose,
   onSuccess,
 }: {
   open: boolean;
-  tipo: SolicitacaoTipo;
   unidade: { id: string; nome: string } | null;
   onUnidadeChange: (unidade: { id: string; nome: string } | null) => void;
   onClose: () => void;
@@ -116,9 +83,7 @@ function AvulsoSolicitacaoSheet({
   const router = useRouter();
   const snackbar = useSnackbar();
   const [descricao, setDescricao] = useState('');
-  const [titulo, setTitulo] = useState('');
   const [prioridade, setPrioridade] = useState<(typeof PRIORIDADES)[number]>('MEDIA');
-  const [prazoEm, setPrazoEm] = useState('');
   const [solicitanteNome, setSolicitanteNome] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -163,9 +128,7 @@ function AvulsoSolicitacaoSheet({
 
   function resetForm() {
     setDescricao('');
-    setTitulo('');
     setPrioridade('MEDIA');
-    setPrazoEm('');
     setSolicitanteNome('');
     setPickerSearch('');
     setError(null);
@@ -188,49 +151,33 @@ function AvulsoSolicitacaoSheet({
     setBusy(true);
 
     try {
-      if (tipo === 'chamado') {
-        const chamado = await createChamado({
-          unidadeId: unidade.id,
-          descricao: descricao.trim(),
-          prioridade,
-          origem: 'MANUAL',
-          solicitanteNome: solicitanteNome.trim() || undefined,
-        });
-        snackbar.show(`Chamado ${chamado.codigo} aberto com sucesso.`, 'success');
-        resetForm();
-        onClose();
-        onSuccess?.();
-        router.push(`/chamados?search=${encodeURIComponent(chamado.codigo)}`);
-        return;
-      }
-
-      const ordem = await createOrdemServico({
+      const chamado = await createChamado({
         unidadeId: unidade.id,
-        titulo: titulo.trim(),
         descricao: descricao.trim(),
         prioridade,
-        prazoEm: prazoEm || undefined,
+        origem: 'MANUAL',
+        solicitanteNome: solicitanteNome.trim() || undefined,
       });
-      snackbar.show(`OS ${ordem.codigo} aberta com sucesso.`, 'success');
+      snackbar.show(`Chamado ${chamado.codigo} aberto com sucesso.`, 'success');
       resetForm();
       onClose();
       onSuccess?.();
-      router.push(`/ordens-servico/${ordem.id}`);
+      router.push(`/chamados?search=${encodeURIComponent(chamado.codigo)}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível registrar a solicitação.');
+      setError(err instanceof Error ? err.message : 'Não foi possível registrar o chamado.');
     } finally {
       setBusy(false);
     }
   }
 
-  const tituloSheet = tipo === 'chamado' ? 'Abrir chamado avulso' : 'Abrir ordem de serviço avulsa';
-
   return (
-    <Sheet open={open} onClose={handleClose} title={tituloSheet}>
+    <Sheet open={open} onClose={handleClose} title="Abrir chamado">
       <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
         {!unidade ? (
           <div className="space-y-3">
-            <p className="text-[13px] text-[var(--ink-3)]">Escolha o próprio público para registrar a solicitação avulsa.</p>
+            <p className="text-[13px] text-[var(--ink-3)]">
+              Escolha o próprio público. O chamado seguirá para triagem e atendimento na fila de Chamados.
+            </p>
             <Field label="Buscar próprio">
               <div className="relative">
                 <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
@@ -269,8 +216,8 @@ function AvulsoSolicitacaoSheet({
           </div>
         ) : (
           <p className="text-[13px] text-[var(--ink-3)]">
-            Registro manual para <strong className="text-[var(--ink)]">{unidade.nome}</strong>, sem vínculo com
-            fiscalização ou não conformidade.{' '}
+            Chamado avulso para <strong className="text-[var(--ink)]">{unidade.nome}</strong>. Após abrir, acompanhe a
+            triagem e o atendimento em <strong className="text-[var(--ink)]">Chamados</strong>.{' '}
             <button
               type="button"
               className="font-semibold text-[var(--brand)] hover:underline"
@@ -283,23 +230,7 @@ function AvulsoSolicitacaoSheet({
 
         {unidade ? (
           <>
-            {tipo === 'os' ? (
-              <Field label="Título da OS" hint="Resumo objetivo do serviço (mín. 5 caracteres).">
-                <Input
-                  value={titulo}
-                  onChange={(event) => setTitulo(event.target.value)}
-                  placeholder="Ex.: Reparo na iluminação externa"
-                  minLength={5}
-                  required
-                  disabled={busy}
-                />
-              </Field>
-            ) : null}
-
-            <Field
-              label={tipo === 'chamado' ? 'Descrição do chamado' : 'Descrição detalhada'}
-              hint="Descreva o problema ou serviço necessário (mín. 10 caracteres)."
-            >
+            <Field label="Descrição do chamado" hint="Descreva o problema ou serviço necessário (mín. 10 caracteres).">
               <textarea
                 className={textareaClass}
                 value={descricao}
@@ -325,22 +256,14 @@ function AvulsoSolicitacaoSheet({
               </Select>
             </Field>
 
-            {tipo === 'os' ? (
-              <Field label="Prazo (opcional)" hint="Se vazio, o prazo será calculado conforme a prioridade.">
-                <Input type="date" value={prazoEm} onChange={(event) => setPrazoEm(event.target.value)} disabled={busy} />
-              </Field>
-            ) : null}
-
-            {tipo === 'chamado' ? (
-              <Field label="Solicitante (opcional)">
-                <Input
-                  value={solicitanteNome}
-                  onChange={(event) => setSolicitanteNome(event.target.value)}
-                  placeholder="Nome de quem reportou"
-                  disabled={busy}
-                />
-              </Field>
-            ) : null}
+            <Field label="Solicitante (opcional)">
+              <Input
+                value={solicitanteNome}
+                onChange={(event) => setSolicitanteNome(event.target.value)}
+                placeholder="Nome de quem reportou"
+                disabled={busy}
+              />
+            </Field>
           </>
         ) : null}
 
@@ -352,7 +275,7 @@ function AvulsoSolicitacaoSheet({
           </Button>
           {unidade ? (
             <Button type="submit" variant="filled" disabled={busy}>
-              {busy ? 'Registrando...' : tipo === 'chamado' ? 'Abrir chamado' : 'Abrir OS'}
+              {busy ? 'Registrando...' : 'Abrir chamado'}
             </Button>
           ) : null}
         </div>

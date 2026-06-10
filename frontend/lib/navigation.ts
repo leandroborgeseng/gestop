@@ -9,7 +9,6 @@ import {
   Megaphone,
   Plug,
   Settings,
-  Wrench,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -58,16 +57,6 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'chamados.gerenciar',
     mobilePrimary: true,
     badgeKey: 'chamados',
-  },
-  {
-    id: 'ordens',
-    label: 'Ordens de serviço',
-    shortLabel: 'OS',
-    href: '/ordens-servico',
-    icon: Wrench,
-    permission: 'chamados.gerenciar',
-    mobilePrimary: true,
-    badgeKey: 'ordens',
   },
   {
     id: 'dashboard',
@@ -119,7 +108,7 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export const NAV_GROUPS: NavGroup[] = [
-  { title: 'Operação', itemIds: ['cco', 'mobile', 'chamados', 'ordens'] },
+  { title: 'Operação', itemIds: ['cco', 'mobile', 'chamados'] },
   { title: 'Gestão', itemIds: ['dashboard', 'cronograma', 'relatorios'] },
   { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
 ];

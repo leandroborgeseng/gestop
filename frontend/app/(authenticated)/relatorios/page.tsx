@@ -7,7 +7,6 @@ import {
   FileSpreadsheet,
   FileText,
   Inbox,
-  Wrench,
 } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
@@ -21,7 +20,7 @@ import { Select } from '@/components/ui/select';
 import { downloadRelatorioCsv, downloadRelatorioPdf, getSecretarias } from '@/lib/api';
 import { SecretariaOption } from '@/lib/types';
 
-type RelatorioTipo = 'unidades' | 'chamados' | 'ordens-servico' | 'fiscalizacoes';
+type RelatorioTipo = 'unidades' | 'chamados' | 'fiscalizacoes';
 
 const RELATORIOS: Array<{
   tipo: RelatorioTipo;
@@ -31,8 +30,7 @@ const RELATORIOS: Array<{
 }> = [
   { tipo: 'unidades', title: 'Próprios públicos', hint: 'Cadastro, situação e localização das unidades.', icon: Building2 },
   { tipo: 'fiscalizacoes', title: 'Fiscalizações', hint: 'Checklists aplicados, conformidade e não conformidades.', icon: ClipboardCheck },
-  { tipo: 'ordens-servico', title: 'Ordens de serviço', hint: 'Abertas, em execução, concluídas e prazos (SLA).', icon: Wrench },
-  { tipo: 'chamados', title: 'Chamados', hint: 'Volume por canal, status e tempo de atendimento.', icon: Inbox },
+  { tipo: 'chamados', title: 'Chamados', hint: 'Triagem, atendimento, prazos (SLA) e tempo de resolução.', icon: Inbox },
 ];
 
 export default function RelatoriosPage() {

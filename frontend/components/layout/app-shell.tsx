@@ -255,7 +255,7 @@ function DesktopTopbar({ syncPending }: { syncPending: number }) {
           onKeyDown={(event) => {
             if (event.key === 'Enter') submitSearch();
           }}
-          placeholder="Buscar unidade, OS-, CH-…"
+          placeholder="Buscar unidade, CH-…"
           className="min-w-0 flex-1 border-none bg-transparent text-[13.5px] text-[var(--ink)] outline-none placeholder:text-[var(--ink-4)]"
         />
         <kbd className="mono hidden rounded border border-[var(--line)] bg-[var(--surface)] px-1.5 py-0.5 text-[11px] text-[var(--ink-3)] sm:inline">

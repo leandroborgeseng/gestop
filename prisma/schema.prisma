@@ -80,7 +80,7 @@ enum EvidenciaTipo {
 enum NaoConformidadeStatus {
   ABERTA
   EM_TRIAGEM
-  OS_GERADA
+  CHAMADO_GERADO
   RESOLVIDA
   CANCELADA
 }
@@ -92,36 +92,19 @@ enum Severidade {
   CRITICA
 }
 
-enum OrdemServicoStatus {
-  ABERTA
-  EM_TRIAGEM
-  ATRIBUIDA
-  EM_EXECUCAO
-  CONCLUIDA
-  IMPEDIDA
-  CANCELADA
-}
-
-enum OrdemServicoPrioridade {
+enum ChamadoPrioridade {
   BAIXA
   MEDIA
   ALTA
   URGENTE
 }
 
-enum OrdemServicoOrigem {
-  MANUAL
-  NAO_CONFORMIDADE
-  QR_CODE
-  INTEGRACAO
-  CHAMADO
-}
-
 enum ChamadoStatus {
   ABERTO
   EM_TRIAGEM
-  ENCAMINHADO_OS
-  ENCERRADO
+  EM_ATENDIMENTO
+  IMPEDIDO
+  CONCLUIDO
   CANCELADO
 }
 
@@ -129,6 +112,7 @@ enum ChamadoOrigem {
   MANUAL
   QR_CODE
   INTERNO
+  FISCALIZACAO
 }
 
 enum AuditAction {
@@ -163,7 +147,7 @@ enum EntidadeSincronizavel {
   RESPOSTA_CHECKLIST
   EVIDENCIA
   NAO_CONFORMIDADE
-  ORDEM_SERVICO
+  CHAMADO
 }
 
 enum DashboardEscopo {
@@ -187,7 +171,6 @@ model Secretaria {
   usuarios          Usuario[]
   checklists        Checklist[]
   fiscalizacoes     Fiscalizacao[]
-  ordensServico     OrdemServico[]
   chamados          Chamado[]
   dashboardSnapshots DashboardSnapshot[]
 
@@ -214,7 +197,6 @@ model UnidadePublica {
   secretaria       Secretaria       @relation(fields: [secretariaId], references: [id], onDelete: Restrict)
   fiscalizacoes    Fiscalizacao[]
   naoConformidades NaoConformidade[]
-  ordensServico    OrdemServico[]
   chamados         Chamado[]
   dashboardSnapshots DashboardSnapshot[]
   cronogramas      CronogramaChecagem[]
@@ -244,8 +226,7 @@ model Usuario {
   checklistVersoes ChecklistVersao[]  @relation("ChecklistVersaoPublicadoPor")
   fiscalizacoes    Fiscalizacao[]     @relation("FiscalizacaoAgente")
   naoConformidades NaoConformidade[]  @relation("NaoConformidadeRegistradaPor")
-  ordensSolicitadas OrdemServico[]    @relation("OrdemSolicitante")
-  ordensResponsavel OrdemServico[]    @relation("OrdemResponsavel")
+  chamadosResponsavel Chamado[]         @relation("ChamadoResponsavel")
   historicosStatus  HistoricoStatus[] @relation("HistoricoAlteradoPor")
   logsAuditoria     LogAuditoria[]    @relation("AuditoriaUsuario")
   webmapImports     WebmapImport[]    @relation("WebmapImportUsuario")
@@ -491,7 +472,7 @@ model Evidencia {
   fiscalizacaoId      String?
   respostaId          String?
   naoConformidadeId   String?
-  ordemServicoId      String?
+  chamadoId           String?
   tipo                EvidenciaTipo
   url                 String
   storageKey          String?
@@ -511,12 +492,12 @@ model Evidencia {
   fiscalizacao     Fiscalizacao?     @relation(fields: [fiscalizacaoId], references: [id], onDelete: Cascade)
   resposta         RespostaChecklist? @relation(fields: [respostaId], references: [id], onDelete: Cascade)
   naoConformidade  NaoConformidade?  @relation(fields: [naoConformidadeId], references: [id], onDelete: SetNull)
-  ordemServico     OrdemServico?     @relation(fields: [ordemServicoId], references: [id], onDelete: SetNull)
+  chamado          Chamado?          @relation(fields: [chamadoId], references: [id], onDelete: SetNull)
 
   @@index([fiscalizacaoId])
   @@index([respostaId])
   @@index([naoConformidadeId])
-  @@index([ordemServicoId])
+  @@index([chamadoId])
   @@index([checksum])
 }
 
@@ -544,7 +525,7 @@ model NaoConformidade {
   unidade       UnidadePublica    @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
   registradaPor Usuario           @relation("NaoConformidadeRegistradaPor", fields: [registradaPorId], references: [id], onDelete: Restrict)
   evidencias    Evidencia[]
-  ordemServico  OrdemServico?
+  chamado       Chamado?
 
   @@index([fiscalizacaoId])
   @@index([itemId])
@@ -554,73 +535,46 @@ model NaoConformidade {
   @@index([severidade])
 }
 
-model OrdemServico {
-  id                 String                 @id @default(uuid())
-  codigo             String                 @unique
-  secretariaId        String
-  unidadeId           String
-  naoConformidadeId   String?               @unique
-  solicitanteId       String?
-  responsavelId       String?
-  origem              OrdemServicoOrigem    @default(MANUAL)
-  titulo              String
-  descricao           String
-  prioridade          OrdemServicoPrioridade @default(MEDIA)
-  status              OrdemServicoStatus    @default(ABERTA)
-  prazoEm             DateTime?
-  abertaEm            DateTime              @default(now())
-  concluidaEm         DateTime?
-  impedimentoMotivo   String?
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-
-  secretaria      Secretaria        @relation(fields: [secretariaId], references: [id], onDelete: Restrict)
-  unidade         UnidadePublica     @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
-  naoConformidade NaoConformidade?   @relation(fields: [naoConformidadeId], references: [id], onDelete: SetNull)
-  solicitante     Usuario?           @relation("OrdemSolicitante", fields: [solicitanteId], references: [id], onDelete: SetNull)
-  responsavel     Usuario?           @relation("OrdemResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
-  evidencias      Evidencia[]
-  chamado         Chamado?
-
-  @@index([secretariaId])
-  @@index([unidadeId])
-  @@index([status])
-  @@index([prioridade])
-  @@index([responsavelId])
-  @@index([abertaEm])
-}
-
 model Chamado {
-  id                  String                 @id @default(uuid())
-  codigo              String                 @unique
+  id                  String            @id @default(uuid())
+  codigo              String            @unique
   secretariaId        String
   unidadeId           String
+  naoConformidadeId   String?           @unique
+  titulo              String?
   descricao           String
-  status              ChamadoStatus          @default(ABERTO)
-  origem              ChamadoOrigem          @default(MANUAL)
-  prioridade          OrdemServicoPrioridade @default(MEDIA)
+  status              ChamadoStatus     @default(ABERTO)
+  origem              ChamadoOrigem     @default(MANUAL)
+  prioridade          ChamadoPrioridade @default(MEDIA)
   solicitanteNome     String?
   solicitanteEmail    String?
   solicitanteTelefone String?
-  latitude            Decimal?               @db.Decimal(10, 7)
-  longitude           Decimal?               @db.Decimal(10, 7)
-  ordemServicoId      String?                @unique
+  latitude            Decimal?          @db.Decimal(10, 7)
+  longitude           Decimal?          @db.Decimal(10, 7)
+  responsavelId       String?
   registradoPorId     String?
+  prazoEm             DateTime?
+  concluidoEm         DateTime?
   encerradoEm         DateTime?
+  impedimentoMotivo   String?
   fotoUrl             String?
   fotoMimeType        String?
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
-  secretaria    Secretaria      @relation(fields: [secretariaId], references: [id], onDelete: Restrict)
-  unidade       UnidadePublica  @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
-  ordemServico  OrdemServico?   @relation(fields: [ordemServicoId], references: [id], onDelete: SetNull)
-  registradoPor Usuario?        @relation("ChamadoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
+  secretaria      Secretaria       @relation(fields: [secretariaId], references: [id], onDelete: Restrict)
+  unidade         UnidadePublica   @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
+  naoConformidade NaoConformidade? @relation(fields: [naoConformidadeId], references: [id], onDelete: SetNull)
+  responsavel     Usuario?         @relation("ChamadoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  registradoPor   Usuario?         @relation("ChamadoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
+  evidencias      Evidencia[]
 
   @@index([secretariaId])
   @@index([unidadeId])
   @@index([status])
   @@index([origem])
+  @@index([prioridade])
+  @@index([responsavelId])
   @@index([createdAt])
 }
 

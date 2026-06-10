@@ -3,15 +3,24 @@ import {
   AuditAction,
   ChamadoOrigem,
   ChamadoStatus,
-  OrdemServicoOrigem,
-  OrdemServicoStatus,
+  NaoConformidadeStatus,
+  Prisma,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { CreateChamadoDto, PublicCreateChamadoDto, UpdateChamadoStatusDto } from './chamados.dto';
-import { buildChamadoCode } from './chamados.rules';
+import {
+  assertValidChamadoTransition,
+  buildChamadoCode,
+  buildChamadoTitleFromNc,
+  buildDefaultDeadlineFromSeverity,
+  priorityFromSeverity,
+  shouldGenerateChamadoFromNc,
+} from './chamados.rules';
+
+type Tx = Prisma.TransactionClient;
 
 @Injectable()
 export class ChamadosService {
@@ -28,8 +37,14 @@ export class ChamadosService {
     });
   }
 
-  getChamado(id: string) {
-    return this.getChamadoOrThrow(id);
+  async getChamado(id: string) {
+    const chamado = await this.getChamadoOrThrow(id);
+    const historico = await this.prisma.historicoStatus.findMany({
+      where: { entidadeTipo: 'Chamado', entidadeId: id },
+      orderBy: { createdAt: 'asc' },
+      include: { alteradoPor: { select: { id: true, nome: true } } },
+    });
+    return { ...chamado, historico };
   }
 
   async getUnidadePublicaByCodigo(codigoPatrimonial: string) {
@@ -141,99 +156,138 @@ export class ChamadosService {
 
   async updateStatus(id: string, dto: UpdateChamadoStatusDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
-    const chamado = await this.prisma.chamado.update({
-      where: { id },
-      data: {
-        status: dto.status,
-        encerradoEm:
-          dto.status === ChamadoStatus.ENCERRADO || dto.status === ChamadoStatus.CANCELADO
-            ? new Date()
-            : before.encerradoEm,
-      },
-      include: this.includeRelations(),
-    });
 
-    await this.prisma.historicoStatus.create({
-      data: {
-        entidadeTipo: 'Chamado',
-        entidadeId: id,
-        statusAnterior: before.status,
-        statusNovo: dto.status,
-        motivo: dto.motivo ?? 'Atualizacao de status do chamado.',
-        alteradoPorId: user.sub,
-      },
-    });
-
-    await this.audit(user.sub, AuditAction.STATUS_CHANGE, id, before, chamado);
-    return chamado;
-  }
-
-  async convertToOrdemServico(id: string, user: JwtPayload) {
-    const chamado = await this.getChamadoOrThrow(id);
-    if (chamado.ordemServicoId) {
-      throw new BadRequestException('Chamado ja possui ordem de servico vinculada.');
-    }
-    if (chamado.status === ChamadoStatus.CANCELADO || chamado.status === ChamadoStatus.ENCERRADO) {
-      throw new BadRequestException('Chamado encerrado nao pode gerar OS.');
+    try {
+      assertValidChamadoTransition(before.status, dto.status);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Transição inválida');
     }
 
-    const osSequence = (await this.prisma.ordemServico.count()) + 1;
-    const osCodigo = `OS-${new Date().getFullYear()}-${String(osSequence).padStart(6, '0')}`;
-
-    const result = await this.prisma.$transaction(async (tx) => {
-      const ordem = await tx.ordemServico.create({
-        data: {
-          codigo: osCodigo,
-          secretariaId: chamado.secretariaId,
-          unidadeId: chamado.unidadeId,
-          solicitanteId: user.sub,
-          origem: OrdemServicoOrigem.CHAMADO,
-          titulo: `Chamado ${chamado.codigo}`,
-          descricao: chamado.descricao,
-          prioridade: chamado.prioridade,
-          status: OrdemServicoStatus.ABERTA,
-        },
-      });
-
-      const updatedChamado = await tx.chamado.update({
+    const chamado = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.chamado.update({
         where: { id },
         data: {
-          ordemServicoId: ordem.id,
-          status: ChamadoStatus.ENCAMINHADO_OS,
+          status: dto.status,
+          responsavelId: dto.responsavelId ?? before.responsavelId,
+          impedimentoMotivo: dto.impedimentoMotivo ?? before.impedimentoMotivo,
+          concluidoEm: dto.status === ChamadoStatus.CONCLUIDO ? new Date() : before.concluidoEm,
+          encerradoEm:
+            dto.status === ChamadoStatus.CONCLUIDO || dto.status === ChamadoStatus.CANCELADO
+              ? new Date()
+              : before.encerradoEm,
         },
         include: this.includeRelations(),
       });
 
-      await tx.historicoStatus.createMany({
-        data: [
-          {
-            entidadeTipo: 'OrdemServico',
-            entidadeId: ordem.id,
-            statusNovo: OrdemServicoStatus.ABERTA,
-            motivo: `OS gerada a partir do chamado ${chamado.codigo}.`,
-            alteradoPorId: user.sub,
+      await tx.historicoStatus.create({
+        data: {
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          statusAnterior: before.status,
+          statusNovo: dto.status,
+          motivo: dto.motivo ?? 'Atualização de status do chamado.',
+          alteradoPorId: user.sub,
+          metadata: {
+            responsavelId: dto.responsavelId ?? before.responsavelId,
+            impedimentoMotivo: dto.impedimentoMotivo,
           },
-          {
-            entidadeTipo: 'Chamado',
-            entidadeId: id,
-            statusAnterior: chamado.status,
-            statusNovo: ChamadoStatus.ENCAMINHADO_OS,
-            motivo: `Convertido para ${ordem.codigo}.`,
-            alteradoPorId: user.sub,
-          },
-        ],
+        },
       });
 
-      return { chamado: updatedChamado, ordemServico: ordem };
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.STATUS_CHANGE,
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          valorAntigo: JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue,
+          valorNovo: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
+        },
+      });
+
+      return updated;
     });
 
-    await this.integracoesService.notify(
-      'chamado.convertido-os',
-      { chamadoId: id, ordemServicoId: result.ordemServico.id },
-      user,
-    );
+    return chamado;
+  }
 
-    return result;
+  async generateForNaoConformidade(naoConformidadeId: string, user: JwtPayload) {
+    return this.prisma.$transaction((tx) => this.generateForNaoConformidadeTx(tx, naoConformidadeId, user.sub));
+  }
+
+  async generateForNaoConformidadeTx(tx: Tx, naoConformidadeId: string, usuarioId: string) {
+    const naoConformidade = await tx.naoConformidade.findUnique({
+      where: { id: naoConformidadeId },
+      include: {
+        chamado: true,
+        item: true,
+        fiscalizacao: true,
+        unidade: true,
+        evidencias: true,
+      },
+    });
+
+    if (!naoConformidade) {
+      throw new NotFoundException('Não conformidade não encontrada');
+    }
+
+    if (!shouldGenerateChamadoFromNc({ naoConformidadeId, chamadoId: naoConformidade.chamado?.id })) {
+      return naoConformidade.chamado;
+    }
+
+    const sequence = (await tx.chamado.count()) + 1;
+    const chamado = await tx.chamado.create({
+      data: {
+        codigo: buildChamadoCode(sequence),
+        secretariaId: naoConformidade.fiscalizacao.secretariaId,
+        unidadeId: naoConformidade.unidadeId,
+        naoConformidadeId: naoConformidade.id,
+        titulo: buildChamadoTitleFromNc(naoConformidade.item.titulo),
+        descricao: naoConformidade.descricao,
+        origem: ChamadoOrigem.FISCALIZACAO,
+        prioridade: priorityFromSeverity(naoConformidade.severidade),
+        status: ChamadoStatus.ABERTO,
+        prazoEm: buildDefaultDeadlineFromSeverity(naoConformidade.severidade),
+        registradoPorId: usuarioId,
+      },
+      include: this.includeRelations(),
+    });
+
+    await tx.naoConformidade.update({
+      where: { id: naoConformidade.id },
+      data: { status: NaoConformidadeStatus.CHAMADO_GERADO },
+    });
+
+    await tx.evidencia.updateMany({
+      where: { naoConformidadeId: naoConformidade.id },
+      data: { chamadoId: chamado.id },
+    });
+
+    await tx.historicoStatus.create({
+      data: {
+        entidadeTipo: 'Chamado',
+        entidadeId: chamado.id,
+        statusNovo: ChamadoStatus.ABERTO,
+        motivo: 'Chamado criado automaticamente a partir de não conformidade.',
+        alteradoPorId: usuarioId,
+        metadata: {
+          naoConformidadeId: naoConformidade.id,
+          fiscalizacaoId: naoConformidade.fiscalizacaoId,
+        },
+      },
+    });
+
+    await tx.logAuditoria.create({
+      data: {
+        usuarioId,
+        acao: AuditAction.CREATE,
+        entidadeTipo: 'Chamado',
+        entidadeId: chamado.id,
+        valorNovo: JSON.parse(JSON.stringify(chamado)) as Prisma.InputJsonValue,
+      },
+    });
+
+    return chamado;
   }
 
   private async getActiveUnidadeOrThrow(unidadeId: string) {
@@ -257,8 +311,17 @@ export class ChamadosService {
     return {
       secretaria: { select: { id: true, nome: true, sigla: true } },
       unidade: { select: { id: true, nome: true, codigoPatrimonial: true, endereco: true, bairro: true } },
-      ordemServico: { select: { id: true, codigo: true, status: true } },
+      responsavel: { select: { id: true, nome: true } },
       registradoPor: { select: { id: true, nome: true } },
+      naoConformidade: {
+        select: {
+          id: true,
+          descricao: true,
+          severidade: true,
+          status: true,
+          item: { select: { codigo: true, titulo: true } },
+        },
+      },
     };
   }
 

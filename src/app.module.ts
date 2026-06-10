@@ -11,8 +11,6 @@ import { IntegracoesModule } from './integracoes/integracoes.module';
 import { MobileModule } from './mobile/mobile.module';
 import { MonitoramentoModule } from './monitoramento/monitoramento.module';
 import { OperacionalModule } from './operacional/operacional.module';
-import { OrdensServicoModule } from './ordens-servico/ordens-servico.module';
-import { LgpdModule } from './lgpd/lgpd.module';
 import { ChamadosModule } from './chamados/chamados.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
@@ -20,6 +18,7 @@ import { CronogramaModule } from './cronograma/cronograma.module';
 import { EmailModule } from './email/email.module';
 import { PrismaService } from './prisma/prisma.service';
 import { StorageModule } from './storage/storage.module';
+import { LgpdModule } from './lgpd/lgpd.module';
 
 @Module({
   imports: [
@@ -33,7 +32,6 @@ import { StorageModule } from './storage/storage.module';
     ChecklistsModule,
     CronogramaModule,
     MobileModule,
-    OrdensServicoModule,
     MonitoramentoModule,
     IntegracoesModule,
     OperacionalModule,

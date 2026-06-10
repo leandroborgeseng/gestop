@@ -20,7 +20,7 @@ export type OperacionalResumo = {
   totalSecretarias: number;
   fiscalizacoesConcluidas: number;
   naoConformidadesAbertas: number;
-  ordensServicoAbertas: number;
+  chamadosAbertos: number;
   eventosSyncPendentes: number;
 };
 
@@ -43,12 +43,12 @@ export type UnidadeOperacional = {
   };
   pendencias: {
     naoConformidadesAbertas: number;
-    ordensServicoAbertas: number;
+    chamadosAbertos: number;
   };
   totais: {
     fiscalizacoes: number;
     naoConformidadesAbertas: number;
-    ordensServicoAbertas: number;
+    chamadosAbertos: number;
   };
 };
 
@@ -86,13 +86,14 @@ export type UnidadeDetalhe = UnidadeOperacional & {
         titulo: string;
       };
     }>;
-    ordensServico: Array<{
+    chamados: Array<{
       id: string;
       codigo: string;
-      titulo: string;
+      titulo: string | null;
+      descricao: string;
       prioridade: string;
       status: string;
-      abertaEm: string;
+      createdAt: string;
       prazoEm: string | null;
       responsavel: {
         id: string;
@@ -385,74 +386,38 @@ export type MobileQueuedInspection = {
   }>;
 };
 
-export type OrdemServicoResumo = {
-  id: string;
-  codigo: string;
-  titulo: string;
-  descricao: string;
-  prioridade: string;
-  status: string;
-  origem: string;
-  abertaEm: string;
-  prazoEm?: string | null;
-  secretaria: SecretariaOption;
-  unidade: {
-    id: string;
-    nome: string;
-    codigoPatrimonial: string;
-  };
-  responsavel?: {
-    id: string;
-    nome: string;
-  } | null;
-  naoConformidade?: {
-    id: string;
-    descricao: string;
-    severidade: string;
-    status: string;
-    fiscalizacaoId: string;
-    item: {
-      codigo: string;
-      titulo: string;
-    };
-  } | null;
-};
-
-export type OrdemServicoDetalhe = OrdemServicoResumo & {
-  impedimentoMotivo?: string | null;
-  concluidaEm?: string | null;
-  evidencias: Array<{
-    id: string;
-    url: string;
-    mimeType?: string | null;
-    capturadaEm: string;
-  }>;
-  historico: Array<{
-    id: string;
-    statusAnterior?: string | null;
-    statusNovo: string;
-    motivo?: string | null;
-    createdAt: string;
-    alteradoPor?: { id: string; nome: string } | null;
-  }>;
-};
-
 export type ChamadoStatus =
   | 'ABERTO'
   | 'EM_TRIAGEM'
-  | 'ENCAMINHADO_OS'
-  | 'ENCERRADO'
+  | 'EM_ATENDIMENTO'
+  | 'IMPEDIDO'
+  | 'CONCLUIDO'
   | 'CANCELADO';
 
-export type ChamadoOrigem = 'MANUAL' | 'QR_CODE' | 'INTERNO';
+export type ChamadoOrigem = 'MANUAL' | 'QR_CODE' | 'INTERNO' | 'FISCALIZACAO';
+
+export type ChamadoNaoConformidade = {
+  id: string;
+  descricao: string;
+  severidade: string;
+  status: string;
+  item: {
+    codigo: string;
+    titulo: string;
+  };
+};
 
 export type ChamadoResumo = {
   id: string;
   codigo: string;
+  titulo?: string | null;
   descricao: string;
   status: ChamadoStatus;
   origem: ChamadoOrigem;
   prioridade: string;
+  prazoEm?: string | null;
+  concluidoEm?: string | null;
+  impedimentoMotivo?: string | null;
   solicitanteNome?: string | null;
   solicitanteEmail?: string | null;
   solicitanteTelefone?: string | null;
@@ -468,8 +433,20 @@ export type ChamadoResumo = {
     endereco?: string;
     bairro?: string | null;
   };
-  ordemServico?: { id: string; codigo: string; status: string } | null;
+  responsavel?: { id: string; nome: string } | null;
+  naoConformidade?: ChamadoNaoConformidade | null;
   registradoPor?: { id: string; nome: string } | null;
+};
+
+export type ChamadoDetalhe = ChamadoResumo & {
+  historico: Array<{
+    id: string;
+    statusAnterior?: string | null;
+    statusNovo: string;
+    motivo?: string | null;
+    createdAt: string;
+    alteradoPor?: { id: string; nome: string } | null;
+  }>;
 };
 
 export type PublicUnidadeChamado = {
@@ -489,10 +466,10 @@ export type DashboardData = {
     totalUnidades: number;
     fiscalizacoes: number;
     naoConformidades: number;
-    ordensServico: {
-      abertas: number;
-      emExecucao: number;
-      concluidas: number;
+    chamados: {
+      abertos: number;
+      emAtendimento: number;
+      concluidos: number;
     };
     syncPendentes: number;
   };
@@ -500,22 +477,23 @@ export type DashboardData = {
     id: string;
     sigla: string;
     nome: string;
-    ordensPendentes: number;
+    chamadosPendentes: number;
     fiscalizacoes: number;
   }>;
 };
 
 export type AlertasOperacionais = {
   resumo: {
-    osAtrasadas: number;
+    chamadosAtrasados: number;
     chamadosSemTriagem: number;
     syncFalhas: number;
-    osUrgentes: number;
+    chamadosUrgentes: number;
   };
-  osAtrasadas: Array<{
+  chamadosAtrasados: Array<{
     id: string;
     codigo: string;
-    titulo: string;
+    titulo: string | null;
+    descricao: string;
     prioridade: string;
     status: string;
     prazoEm: string;

@@ -16,9 +16,8 @@ import {
   MobileFieldPackage,
   MobileQueuedInspection,
   OperacionalResumo,
-  OrdemServicoResumo,
-  OrdemServicoDetalhe,
   ChamadoResumo,
+  ChamadoDetalhe,
   PublicUnidadeChamado,
   SecretariaOption,
   UnidadeDetalhe,
@@ -359,36 +358,6 @@ export function syncMobileInspection(payload: MobileQueuedInspection) {
   });
 }
 
-export function listOrdensServico() {
-  return request<OrdemServicoResumo[]>('/ordens-servico');
-}
-
-export function createOrdemServico(payload: {
-  unidadeId: string;
-  titulo: string;
-  descricao: string;
-  prioridade?: string;
-  prazoEm?: string;
-}) {
-  return request<OrdemServicoResumo>('/ordens-servico', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-}
-
-export function getOrdemServico(id: string) {
-  return request<OrdemServicoDetalhe>(`/ordens-servico/${id}`);
-}
-
-export function updateOrdemServico(id: string, payload: Record<string, unknown>) {
-  return request<OrdemServicoResumo>(`/ordens-servico/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-}
-
 export function changePassword(currentPassword: string, newPassword: string) {
   return request<{ ok: boolean }>('/auth/change-password', {
     method: 'POST',
@@ -505,7 +474,7 @@ export function createChamado(payload: {
 }
 
 export function getChamado(id: string) {
-  return request<ChamadoResumo>(`/chamados/${id}`);
+  return request<ChamadoDetalhe>(`/chamados/${id}`);
 }
 
 export function updateChamadoStatus(id: string, payload: { status: string; motivo?: string }) {
@@ -516,19 +485,13 @@ export function updateChamadoStatus(id: string, payload: { status: string; motiv
   });
 }
 
-export function convertChamadoToOs(id: string) {
-  return request<{ chamado: ChamadoResumo; ordemServico: OrdemServicoResumo }>(`/chamados/${id}/converter-os`, {
-    method: 'POST',
-  });
-}
-
 export function getAlertasOperacionais() {
   return request<AlertasOperacionais>('/monitoramento/alertas');
 }
 
 async function downloadRelatorio(
   formato: 'csv' | 'pdf',
-  tipo: 'unidades' | 'chamados' | 'ordens-servico' | 'fiscalizacoes',
+  tipo: 'unidades' | 'chamados' | 'fiscalizacoes',
   params: Record<string, string> = {},
 ) {
   const token = getStoredAuth()?.accessToken;
@@ -571,14 +534,14 @@ async function downloadRelatorio(
 }
 
 export function downloadRelatorioCsv(
-  tipo: 'unidades' | 'chamados' | 'ordens-servico' | 'fiscalizacoes',
+  tipo: 'unidades' | 'chamados' | 'fiscalizacoes',
   params: Record<string, string> = {},
 ) {
   return downloadRelatorio('csv', tipo, params);
 }
 
 export function downloadRelatorioPdf(
-  tipo: 'unidades' | 'chamados' | 'ordens-servico' | 'fiscalizacoes',
+  tipo: 'unidades' | 'chamados' | 'fiscalizacoes',
   params: Record<string, string> = {},
 ) {
   return downloadRelatorio('pdf', tipo, params);

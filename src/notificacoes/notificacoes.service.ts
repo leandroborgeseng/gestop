@@ -67,10 +67,10 @@ export class NotificacoesService implements OnModuleInit {
   async dispararAlertasOperacionais(origem: 'manual' | 'scheduler' = 'manual') {
     const alertas = await this.monitoramentoService.getAlertasOperacionais();
     const total =
-      alertas.resumo.osAtrasadas +
+      alertas.resumo.chamadosAtrasados +
       alertas.resumo.chamadosSemTriagem +
       alertas.resumo.syncFalhas +
-      alertas.resumo.osUrgentes;
+      alertas.resumo.chamadosUrgentes;
 
     if (total === 0) {
       return { enviados: 0, webhook: false, push: 0, origem, resumo: alertas.resumo };
@@ -78,9 +78,9 @@ export class NotificacoesService implements OnModuleInit {
 
     const titulo = 'GestOP — Alertas operacionais';
     const corpo = [
-      alertas.resumo.osAtrasadas ? `${alertas.resumo.osAtrasadas} OS atrasadas` : null,
+      alertas.resumo.chamadosAtrasados ? `${alertas.resumo.chamadosAtrasados} chamados atrasados` : null,
       alertas.resumo.chamadosSemTriagem ? `${alertas.resumo.chamadosSemTriagem} chamados parados` : null,
-      alertas.resumo.osUrgentes ? `${alertas.resumo.osUrgentes} OS urgentes` : null,
+      alertas.resumo.chamadosUrgentes ? `${alertas.resumo.chamadosUrgentes} chamados urgentes` : null,
       alertas.resumo.syncFalhas ? `${alertas.resumo.syncFalhas} falhas de sync` : null,
     ]
       .filter(Boolean)
@@ -89,7 +89,7 @@ export class NotificacoesService implements OnModuleInit {
     const webhook = await this.integracoesService.notifySystem('alertas.operacionais', {
       origem,
       resumo: alertas.resumo,
-      osAtrasadas: alertas.osAtrasadas.slice(0, 5),
+      chamadosAtrasados: alertas.chamadosAtrasados.slice(0, 5),
       chamadosSemTriagem: alertas.chamadosSemTriagem.slice(0, 5),
     });
 

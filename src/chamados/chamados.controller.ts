@@ -32,9 +32,4 @@ export class ChamadosController {
   updateStatus(@Param('id') id: string, @Body() body: UpdateChamadoStatusDto, @CurrentUser() user: JwtPayload) {
     return this.chamadosService.updateStatus(id, body, user);
   }
-
-  @Post(':id/converter-os')
-  convertToOs(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.chamadosService.convertToOrdemServico(id, user);
-  }
 }

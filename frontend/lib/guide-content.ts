@@ -32,7 +32,7 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
         t: 'Ver tudo sobre uma unidade',
         s: [
           'Clique numa linha da lista ou num marcador do mapa.',
-          'Abre o painel com fiscalizações, não conformidades e ordens de serviço.',
+          'Abre o painel com fiscalizações, não conformidades e chamados.',
           'Use as abas para navegar entre cada tipo de registro.',
         ],
       },
@@ -47,7 +47,7 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
     glossario: [
       { k: 'Situação', v: 'Estado operacional: Operacional, Com pendências, Sem localização ou Inativa.' },
       { k: 'NC — Não conformidade', v: 'Item reprovado durante uma fiscalização.' },
-      { k: 'OS — Ordem de serviço', v: 'Tarefa de manutenção gerada a partir de uma NC ou chamado.' },
+      { k: 'Chamado', v: 'Demanda operacional do cidadão, fiscalização ou registro interno.' },
       { k: 'Sem GPS', v: 'Próprio sem georreferência — aparece na lista, mas não no mapa.' },
     ],
   },
@@ -66,7 +66,7 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
       },
     ],
     glossario: [
-      { k: 'SLA', v: 'Prazo acordado para concluir uma OS.' },
+      { k: 'SLA', v: 'Prazo acordado para concluir um chamado.' },
       { k: 'Auditoria', v: 'Registro de quem fez o quê e quando.' },
     ],
   },
@@ -98,37 +98,20 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
   },
   chamados: {
     nome: 'Chamados',
-    resumo: 'Fila de chamados do cidadão, app ou telefone. Triagem e encaminhamento para OS.',
+    resumo: 'Fila unificada de demandas — cidadão, fiscalização ou registro interno. Triagem, atendimento e conclusão.',
     comoFazer: [
       {
-        t: 'Triar um chamado novo',
+        t: 'Triar e atender um chamado',
         s: [
           "Selecione um chamado 'Aberto'.",
-          "Clique em 'Iniciar triagem'.",
-          "Se exigir manutenção, use 'Encaminhar para OS'.",
+          "Use 'Atualizar status' para avançar no fluxo.",
+          'Acompanhe prazo, responsável e linha do tempo no painel à direita.',
         ],
       },
     ],
     glossario: [
-      { k: 'Canal', v: 'Como o chamado chegou: QR Code, App ou Telefone.' },
-    ],
-  },
-  os: {
-    nome: 'Ordens de serviço',
-    resumo: 'Prazo, responsável, origem e linha do tempo de execução.',
-    comoFazer: [
-      {
-        t: 'Acompanhar uma OS',
-        s: [
-          'Selecione a OS na lista.',
-          'Veja prazo e timeline à direita.',
-          "Use 'Atualizar status' conforme avança.",
-        ],
-      },
-    ],
-    glossario: [
-      { k: 'Origem', v: 'De onde nasceu: NC ou chamado.' },
-      { k: 'Prazo / SLA', v: 'Data limite para conclusão.' },
+      { k: 'Canal', v: 'Como o chamado chegou: QR Code, fiscalização, app ou manual.' },
+      { k: 'Prazo / SLA', v: 'Data limite para conclusão do atendimento.' },
     ],
   },
   cronograma: {
@@ -211,7 +194,7 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
     comoFazer: [
       {
         t: 'Navegar pelos registros',
-        s: ['Use as abas de fiscalizações, NCs e OS.', 'Cada item mostra data e status.'],
+        s: ['Use as abas de fiscalizações, NCs e chamados.', 'Cada item mostra data e status.'],
       },
     ],
     glossario: [
@@ -239,7 +222,7 @@ export function resolveGuideKey(pathname: string): string {
   if (pathname.startsWith('/cco')) return 'cco';
   if (pathname.startsWith('/mobile')) return 'mobile';
   if (pathname.startsWith('/chamados')) return 'chamados';
-  if (pathname.startsWith('/ordens-servico')) return 'os';
+  if (pathname.startsWith('/ordens-servico')) return 'chamados';
   if (pathname.startsWith('/dashboard')) return 'dashboard';
   if (pathname.startsWith('/cronograma')) return 'cronograma';
   if (pathname.startsWith('/relatorios')) return 'relatorios';

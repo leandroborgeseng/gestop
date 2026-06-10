@@ -9,7 +9,7 @@ import {
   ClipboardList,
   MapPin,
   UserRound,
-  Wrench,
+  Megaphone,
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
 import { UnidadeDetalhe } from '@/lib/types';
@@ -62,7 +62,7 @@ export default function UnidadeDetalhePage() {
       backHref="/cco"
     >
       <TipBanner id="unidade-detalhe">
-        Visão completa do patrimônio: fiscalizações, não conformidades e ordens de serviço vinculadas a este próprio.
+        Visão completa do patrimônio: fiscalizações, não conformidades e chamados vinculados a este próprio.
       </TipBanner>
 
       {error ? <ErrorState message={error} /> : null}
@@ -121,7 +121,7 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
           hint="abertas"
           deltaTone={unidade.pendencias.naoConformidadesAbertas > 0 ? 'warn' : undefined}
         />
-        <MetricCard icon={Wrench} title="Ordens de serviço" value={unidade.pendencias.ordensServicoAbertas} hint="ativas" />
+        <MetricCard icon={Megaphone} title="Chamados" value={unidade.pendencias.chamadosAbertos} hint="abertos" />
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
@@ -203,10 +203,10 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
           )}
         </Panel>
 
-        <Panel title="Pendências e ordens relacionadas">
+        <Panel title="Pendências e chamados relacionados">
           <div className="space-y-3">
             {unidade.pendenciasDetalhadas.naoConformidades.length === 0 &&
-            unidade.pendenciasDetalhadas.ordensServico.length === 0 ? (
+            unidade.pendenciasDetalhadas.chamados.length === 0 ? (
               <p className="text-[13px] text-[var(--ink-3)]">Nenhuma pendência ativa para este próprio.</p>
             ) : null}
 
@@ -222,14 +222,14 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
               </div>
             ))}
 
-            {unidade.pendenciasDetalhadas.ordensServico.map((ordem) => (
-              <div key={ordem.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--brand-soft)] p-4">
+            {unidade.pendenciasDetalhadas.chamados.map((chamado) => (
+              <div key={chamado.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--brand-soft)] p-4">
                 <Chip variant="brand" className="mb-2">
-                  {ordem.codigo} · {ordem.status} · {ordem.prioridade}
+                  {chamado.codigo} · {chamado.status} · {chamado.prioridade}
                 </Chip>
-                <p className="text-[14px] font-semibold text-[var(--ink)]">{ordem.titulo}</p>
+                <p className="text-[14px] font-semibold text-[var(--ink)]">{chamado.titulo ?? chamado.descricao}</p>
                 <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                  Responsável: {ordem.responsavel?.nome ?? 'não atribuído'}
+                  Responsável: {chamado.responsavel?.nome ?? 'não atribuído'}
                 </p>
               </div>
             ))}

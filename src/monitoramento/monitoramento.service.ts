@@ -1,8 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { ChamadoStatus, NaoConformidadeStatus, OfflineSyncStatus, OrdemServicoStatus } from '@prisma/client';
+import { ChamadoStatus, NaoConformidadeStatus, OfflineSyncStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 const CHAMADO_ALERTA_HORAS = 48;
+
+const CHAMADO_ABERTOS: ChamadoStatus[] = [
+  ChamadoStatus.ABERTO,
+  ChamadoStatus.EM_TRIAGEM,
+  ChamadoStatus.EM_ATENDIMENTO,
+  ChamadoStatus.IMPEDIDO,
+];
 
 @Injectable()
 export class MonitoramentoService {
@@ -13,19 +20,23 @@ export class MonitoramentoService {
       totalUnidades,
       fiscalizacoes,
       naoConformidades,
-      osAbertas,
-      osExecucao,
-      osConcluidas,
+      chamadosAbertos,
+      chamadosEmAtendimento,
+      chamadosConcluidos,
       syncPendentes,
       pendenciasPorSecretaria,
     ] = await Promise.all([
       this.prisma.unidadePublica.count({ where: { ativo: true } }),
       this.prisma.fiscalizacao.count(),
       this.prisma.naoConformidade.count({ where: { status: { not: NaoConformidadeStatus.RESOLVIDA } } }),
-      this.prisma.ordemServico.count({ where: { status: { in: [OrdemServicoStatus.ABERTA, OrdemServicoStatus.EM_TRIAGEM, OrdemServicoStatus.ATRIBUIDA] } } }),
-      this.prisma.ordemServico.count({ where: { status: OrdemServicoStatus.EM_EXECUCAO } }),
-      this.prisma.ordemServico.count({ where: { status: OrdemServicoStatus.CONCLUIDA } }),
-      this.prisma.offlineSyncEvent.count({ where: { status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.CONFLITO, OfflineSyncStatus.FALHOU] } } }),
+      this.prisma.chamado.count({
+        where: { status: { in: [ChamadoStatus.ABERTO, ChamadoStatus.EM_TRIAGEM] } },
+      }),
+      this.prisma.chamado.count({ where: { status: ChamadoStatus.EM_ATENDIMENTO } }),
+      this.prisma.chamado.count({ where: { status: ChamadoStatus.CONCLUIDO } }),
+      this.prisma.offlineSyncEvent.count({
+        where: { status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.CONFLITO, OfflineSyncStatus.FALHOU] } },
+      }),
       this.prisma.secretaria.findMany({
         where: { ativo: true },
         select: {
@@ -34,7 +45,7 @@ export class MonitoramentoService {
           nome: true,
           _count: {
             select: {
-              ordensServico: { where: { status: { not: OrdemServicoStatus.CONCLUIDA } } },
+              chamados: { where: { status: { in: CHAMADO_ABERTOS } } },
               fiscalizacoes: true,
             },
           },
@@ -48,10 +59,10 @@ export class MonitoramentoService {
         totalUnidades,
         fiscalizacoes,
         naoConformidades,
-        ordensServico: {
-          abertas: osAbertas,
-          emExecucao: osExecucao,
-          concluidas: osConcluidas,
+        chamados: {
+          abertos: chamadosAbertos,
+          emAtendimento: chamadosEmAtendimento,
+          concluidos: chamadosConcluidos,
         },
         syncPendentes,
       },
@@ -59,7 +70,7 @@ export class MonitoramentoService {
         id: secretaria.id,
         sigla: secretaria.sigla,
         nome: secretaria.nome,
-        ordensPendentes: secretaria._count.ordensServico,
+        chamadosPendentes: secretaria._count.chamados,
         fiscalizacoes: secretaria._count.fiscalizacoes,
       })),
     };
@@ -79,11 +90,11 @@ export class MonitoramentoService {
     const now = new Date();
     const chamadoLimite = new Date(now.getTime() - CHAMADO_ALERTA_HORAS * 60 * 60 * 1000);
 
-    const [osAtrasadas, chamadosSemTriagem, syncFalhas, osUrgentes] = await Promise.all([
-      this.prisma.ordemServico.findMany({
+    const [chamadosAtrasados, chamadosSemTriagem, syncFalhas, chamadosUrgentes] = await Promise.all([
+      this.prisma.chamado.findMany({
         where: {
           prazoEm: { lt: now },
-          status: { notIn: [OrdemServicoStatus.CONCLUIDA, OrdemServicoStatus.CANCELADA] },
+          status: { in: CHAMADO_ABERTOS },
         },
         orderBy: { prazoEm: 'asc' },
         take: 20,
@@ -91,6 +102,7 @@ export class MonitoramentoService {
           id: true,
           codigo: true,
           titulo: true,
+          descricao: true,
           prioridade: true,
           status: true,
           prazoEm: true,
@@ -118,22 +130,22 @@ export class MonitoramentoService {
       this.prisma.offlineSyncEvent.count({
         where: { status: { in: [OfflineSyncStatus.FALHOU, OfflineSyncStatus.CONFLITO] } },
       }),
-      this.prisma.ordemServico.count({
+      this.prisma.chamado.count({
         where: {
           prioridade: 'URGENTE',
-          status: { notIn: [OrdemServicoStatus.CONCLUIDA, OrdemServicoStatus.CANCELADA] },
+          status: { in: CHAMADO_ABERTOS },
         },
       }),
     ]);
 
     return {
       resumo: {
-        osAtrasadas: osAtrasadas.length,
+        chamadosAtrasados: chamadosAtrasados.length,
         chamadosSemTriagem: chamadosSemTriagem.length,
         syncFalhas,
-        osUrgentes,
+        chamadosUrgentes,
       },
-      osAtrasadas,
+      chamadosAtrasados,
       chamadosSemTriagem,
     };
   }

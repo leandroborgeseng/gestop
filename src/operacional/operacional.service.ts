@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
+  ChamadoStatus,
   NaoConformidadeStatus,
-  OrdemServicoStatus,
   Prisma,
   UnidadeTipo,
 } from '@prisma/client';
@@ -16,15 +16,14 @@ import { UnidadeListQuery } from './operacional.types';
 const NON_CONFORMITY_OPEN_STATUSES: NaoConformidadeStatus[] = [
   NaoConformidadeStatus.ABERTA,
   NaoConformidadeStatus.EM_TRIAGEM,
-  NaoConformidadeStatus.OS_GERADA,
+  NaoConformidadeStatus.CHAMADO_GERADO,
 ];
 
-const WORK_ORDER_OPEN_STATUSES: OrdemServicoStatus[] = [
-  OrdemServicoStatus.ABERTA,
-  OrdemServicoStatus.EM_TRIAGEM,
-  OrdemServicoStatus.ATRIBUIDA,
-  OrdemServicoStatus.EM_EXECUCAO,
-  OrdemServicoStatus.IMPEDIDA,
+const CHAMADO_OPEN_STATUSES: ChamadoStatus[] = [
+  ChamadoStatus.ABERTO,
+  ChamadoStatus.EM_TRIAGEM,
+  ChamadoStatus.EM_ATENDIMENTO,
+  ChamadoStatus.IMPEDIDO,
 ];
 
 @Injectable()
@@ -38,7 +37,7 @@ export class OperacionalService {
       totalSecretarias,
       fiscalizacoesConcluidas,
       naoConformidadesAbertas,
-      ordensServicoAbertas,
+      chamadosAbertos,
       eventosSyncPendentes,
     ] = await Promise.all([
       this.prisma.unidadePublica.count(),
@@ -48,8 +47,8 @@ export class OperacionalService {
       this.prisma.naoConformidade.count({
         where: { status: { in: NON_CONFORMITY_OPEN_STATUSES } },
       }),
-      this.prisma.ordemServico.count({
-        where: { status: { in: WORK_ORDER_OPEN_STATUSES } },
+      this.prisma.chamado.count({
+        where: { status: { in: CHAMADO_OPEN_STATUSES } },
       }),
       this.prisma.offlineSyncEvent.count({
         where: { status: { in: ['PENDENTE', 'PROCESSANDO', 'CONFLITO', 'FALHOU'] } },
@@ -62,7 +61,7 @@ export class OperacionalService {
       totalSecretarias,
       fiscalizacoesConcluidas,
       naoConformidadesAbertas,
-      ordensServicoAbertas,
+      chamadosAbertos,
       eventosSyncPendentes,
     };
   }
@@ -180,8 +179,8 @@ export class OperacionalService {
             naoConformidades: {
               where: { status: { in: NON_CONFORMITY_OPEN_STATUSES } },
             },
-            ordensServico: {
-              where: { status: { in: WORK_ORDER_OPEN_STATUSES } },
+            chamados: {
+              where: { status: { in: CHAMADO_OPEN_STATUSES } },
             },
           },
         },
@@ -192,7 +191,7 @@ export class OperacionalService {
       mapUnidadeOperacional(unidade as UnidadeBaseRecord, {
         fiscalizacoes: unidade._count.fiscalizacoes,
         naoConformidadesAbertas: unidade._count.naoConformidades,
-        ordensServicoAbertas: unidade._count.ordensServico,
+        chamadosAbertos: unidade._count.chamados,
       }),
     );
 
@@ -275,17 +274,18 @@ export class OperacionalService {
             },
           },
         },
-        ordensServico: {
-          where: { status: { in: WORK_ORDER_OPEN_STATUSES } },
-          orderBy: { abertaEm: 'desc' },
+        chamados: {
+          where: { status: { in: CHAMADO_OPEN_STATUSES } },
+          orderBy: { createdAt: 'desc' },
           take: 10,
           select: {
             id: true,
             codigo: true,
             titulo: true,
+            descricao: true,
             prioridade: true,
             status: true,
-            abertaEm: true,
+            createdAt: true,
             prazoEm: true,
             responsavel: {
               select: {
@@ -301,8 +301,8 @@ export class OperacionalService {
             naoConformidades: {
               where: { status: { in: NON_CONFORMITY_OPEN_STATUSES } },
             },
-            ordensServico: {
-              where: { status: { in: WORK_ORDER_OPEN_STATUSES } },
+            chamados: {
+              where: { status: { in: CHAMADO_OPEN_STATUSES } },
             },
           },
         },
@@ -316,7 +316,7 @@ export class OperacionalService {
     const resumo = mapUnidadeOperacional(unidade as UnidadeBaseRecord, {
       fiscalizacoes: unidade._count.fiscalizacoes,
       naoConformidadesAbertas: unidade._count.naoConformidades,
-      ordensServicoAbertas: unidade._count.ordensServico,
+      chamadosAbertos: unidade._count.chamados,
     });
 
     return {
@@ -331,7 +331,7 @@ export class OperacionalService {
       })),
       pendenciasDetalhadas: {
         naoConformidades: unidade.naoConformidades,
-        ordensServico: unidade.ordensServico,
+        chamados: unidade.chamados,
       },
     };
   }

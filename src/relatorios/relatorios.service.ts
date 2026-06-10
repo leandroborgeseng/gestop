@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ChamadoStatus, OrdemServicoStatus, Prisma } from '@prisma/client';
+import { ChamadoStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RelatorioFiltroDto } from './relatorios.dto';
 import { buildCsv, formatIsoDate } from './relatorios.csv';
@@ -28,21 +28,13 @@ export class RelatoriosService {
       include: {
         secretaria: { select: { sigla: true } },
         unidade: { select: { codigoPatrimonial: true, nome: true } },
-        ordemServico: { select: { codigo: true } },
+        responsavel: { select: { nome: true } },
       },
     });
   }
 
   exportOrdensServico(filtro: RelatorioFiltroDto) {
-    return this.prisma.ordemServico.findMany({
-      where: this.ordemServicoWhere(filtro),
-      orderBy: { abertaEm: 'desc' },
-      include: {
-        secretaria: { select: { sigla: true } },
-        unidade: { select: { codigoPatrimonial: true, nome: true } },
-        responsavel: { select: { nome: true } },
-      },
-    });
+    return this.exportChamados(filtro);
   }
 
   exportFiscalizacoes(filtro: RelatorioFiltroDto) {
@@ -107,11 +99,11 @@ export class RelatoriosService {
           'secretaria_sigla',
           'unidade_codigo',
           'unidade_nome',
+          'titulo',
           'descricao',
-          'solicitante_nome',
-          'solicitante_email',
-          'solicitante_telefone',
-          'ordem_servico',
+          'responsavel',
+          'prazo_em',
+          'concluido_em',
           'criado_em',
           'encerrado_em',
         ],
@@ -123,11 +115,11 @@ export class RelatoriosService {
           item.secretaria.sigla,
           item.unidade.codigoPatrimonial,
           item.unidade.nome,
+          item.titulo ?? '',
           item.descricao,
-          item.solicitanteNome,
-          item.solicitanteEmail,
-          item.solicitanteTelefone,
-          item.ordemServico?.codigo ?? '',
+          item.responsavel?.nome ?? '',
+          formatIsoDate(item.prazoEm),
+          formatIsoDate(item.concluidoEm),
           formatIsoDate(item.createdAt),
           formatIsoDate(item.encerradoEm),
         ]),
@@ -136,40 +128,7 @@ export class RelatoriosService {
   }
 
   ordensServicoCsv(filtro: RelatorioFiltroDto) {
-    return this.exportOrdensServico(filtro).then((items) =>
-      buildCsv(
-        [
-          'codigo',
-          'status',
-          'prioridade',
-          'origem',
-          'secretaria_sigla',
-          'unidade_codigo',
-          'unidade_nome',
-          'titulo',
-          'descricao',
-          'responsavel',
-          'aberta_em',
-          'prazo_em',
-          'concluida_em',
-        ],
-        items.map((item) => [
-          item.codigo,
-          item.status,
-          item.prioridade,
-          item.origem,
-          item.secretaria.sigla,
-          item.unidade.codigoPatrimonial,
-          item.unidade.nome,
-          item.titulo,
-          item.descricao,
-          item.responsavel?.nome ?? '',
-          formatIsoDate(item.abertaEm),
-          formatIsoDate(item.prazoEm),
-          formatIsoDate(item.concluidaEm),
-        ]),
-      ),
-    );
+    return this.chamadosCsv(filtro);
   }
 
   fiscalizacoesCsv(filtro: RelatorioFiltroDto) {
@@ -226,36 +185,23 @@ export class RelatoriosService {
     return this.exportChamados(filtro).then((items) =>
       buildTablePdf({
         title: 'GestOP — Chamados',
-        headers: ['Codigo', 'Status', 'Origem', 'Secretaria', 'Unidade', 'Descricao', 'Criado em'],
+        headers: ['Codigo', 'Status', 'Origem', 'Prioridade', 'Secretaria', 'Unidade', 'Titulo', 'Prazo'],
         rows: items.map((item) => [
           item.codigo,
           item.status,
           item.origem,
+          item.prioridade,
           item.secretaria.sigla,
           item.unidade.nome,
-          item.descricao,
-          formatIsoDate(item.createdAt),
+          item.titulo ?? item.descricao.slice(0, 60),
+          formatIsoDate(item.prazoEm),
         ]),
       }),
     );
   }
 
   ordensServicoPdf(filtro: RelatorioFiltroDto) {
-    return this.exportOrdensServico(filtro).then((items) =>
-      buildTablePdf({
-        title: 'GestOP — Ordens de servico',
-        headers: ['Codigo', 'Status', 'Prioridade', 'Secretaria', 'Unidade', 'Titulo', 'Prazo'],
-        rows: items.map((item) => [
-          item.codigo,
-          item.status,
-          item.prioridade,
-          item.secretaria.sigla,
-          item.unidade.nome,
-          item.titulo,
-          formatIsoDate(item.prazoEm),
-        ]),
-      }),
-    );
+    return this.chamadosPdf(filtro);
   }
 
   fiscalizacoesPdf(filtro: RelatorioFiltroDto) {
@@ -283,21 +229,6 @@ export class RelatoriosService {
       ...(filtro.from || filtro.to
         ? {
             createdAt: {
-              ...(filtro.from ? { gte: new Date(filtro.from) } : {}),
-              ...(filtro.to ? { lte: new Date(`${filtro.to}T23:59:59.999Z`) } : {}),
-            },
-          }
-        : {}),
-    };
-  }
-
-  private ordemServicoWhere(filtro: RelatorioFiltroDto): Prisma.OrdemServicoWhereInput {
-    return {
-      ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
-      ...(filtro.status ? { status: filtro.status as OrdemServicoStatus } : {}),
-      ...(filtro.from || filtro.to
-        ? {
-            abertaEm: {
               ...(filtro.from ? { gte: new Date(filtro.from) } : {}),
               ...(filtro.to ? { lte: new Date(`${filtro.to}T23:59:59.999Z`) } : {}),
             },

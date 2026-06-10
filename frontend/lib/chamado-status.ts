@@ -1,37 +1,35 @@
-export const OS_STATUS_META: Record<
+export const CHAMADO_STATUS_META: Record<
   string,
   { label: string; badge: 'info' | 'warning' | 'brand' | 'success' | 'muted' | 'danger' }
 > = {
-  ABERTA: { label: 'Aberta', badge: 'info' },
+  ABERTO: { label: 'Aberto', badge: 'info' },
   EM_TRIAGEM: { label: 'Em triagem', badge: 'warning' },
-  ATRIBUIDA: { label: 'Atribuída', badge: 'brand' },
-  EM_EXECUCAO: { label: 'Em execução', badge: 'brand' },
-  IMPEDIDA: { label: 'Impedida', badge: 'danger' },
-  CONCLUIDA: { label: 'Concluída', badge: 'success' },
-  CANCELADA: { label: 'Cancelada', badge: 'muted' },
+  EM_ATENDIMENTO: { label: 'Em atendimento', badge: 'brand' },
+  IMPEDIDO: { label: 'Impedido', badge: 'danger' },
+  CONCLUIDO: { label: 'Concluído', badge: 'success' },
+  CANCELADO: { label: 'Cancelado', badge: 'muted' },
 };
 
-export function osStatusLabel(status: string) {
-  return OS_STATUS_META[status]?.label ?? status;
+export function chamadoStatusLabel(status: string) {
+  return CHAMADO_STATUS_META[status]?.label ?? status;
 }
 
-export function nextOsStatuses(status: string) {
+export function nextChamadoStatuses(status: string) {
   const transitions: Record<string, string[]> = {
-    ABERTA: ['EM_TRIAGEM', 'ATRIBUIDA', 'CANCELADA'],
-    EM_TRIAGEM: ['ATRIBUIDA', 'CANCELADA'],
-    ATRIBUIDA: ['EM_EXECUCAO', 'IMPEDIDA', 'CANCELADA'],
-    EM_EXECUCAO: ['CONCLUIDA', 'IMPEDIDA'],
-    IMPEDIDA: ['ATRIBUIDA', 'EM_EXECUCAO', 'CANCELADA'],
-    CONCLUIDA: [],
-    CANCELADA: [],
+    ABERTO: ['EM_TRIAGEM', 'EM_ATENDIMENTO', 'CANCELADO'],
+    EM_TRIAGEM: ['EM_ATENDIMENTO', 'CANCELADO'],
+    EM_ATENDIMENTO: ['IMPEDIDO', 'CONCLUIDO', 'CANCELADO'],
+    IMPEDIDO: ['EM_ATENDIMENTO', 'CANCELADO'],
+    CONCLUIDO: [],
+    CANCELADO: [],
   };
   return transitions[status] ?? [];
 }
 
-export function nextOsStatusFlow(status: string) {
-  const flow = ['ABERTA', 'EM_TRIAGEM', 'ATRIBUIDA', 'EM_EXECUCAO', 'CONCLUIDA'];
+export function nextChamadoStatusFlow(status: string) {
+  const flow = ['ABERTO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'CONCLUIDO'];
   const index = flow.indexOf(status);
-  if (index === -1 || status === 'IMPEDIDA') return null;
+  if (index === -1 || status === 'IMPEDIDO') return null;
   if (index >= flow.length - 1) return null;
   return flow[index + 1];
 }
@@ -44,8 +42,8 @@ export function prioridadeVariant(prioridade: string): 'danger' | 'warning' | 'n
 }
 
 export function prazoInfo(prazoEm: string | null | undefined, status: string) {
-  if (status === 'CONCLUIDA') {
-    return { label: 'Concluída', tone: 'success' as const, days: null };
+  if (status === 'CONCLUIDO') {
+    return { label: 'Concluído', tone: 'success' as const, days: null };
   }
   if (!prazoEm) {
     return { label: 'Sem prazo', tone: 'neutral' as const, days: null };
@@ -69,7 +67,7 @@ export function prazoInfo(prazoEm: string | null | undefined, status: string) {
   return { label: `${days} dias`, tone: 'neutral' as const, days };
 }
 
-export type OsTimelineStep = {
+export type ChamadoTimelineStep = {
   title: string;
   date: string;
   sub?: string;
@@ -77,59 +75,53 @@ export type OsTimelineStep = {
   active: boolean;
 };
 
-export function buildOsTimeline(
+export function buildChamadoTimeline(
   status: string,
-  abertaEm: string,
+  abertoEm: string,
   prazoEm: string | null | undefined,
-  concluidaEm: string | null | undefined,
+  concluidoEm: string | null | undefined,
   responsavel?: string | null,
   prioridade?: string,
   origem?: string,
-): OsTimelineStep[] {
+): ChamadoTimelineStep[] {
   const doneFrom = (step: string) => {
-    const order = ['ABERTA', 'EM_TRIAGEM', 'ATRIBUIDA', 'EM_EXECUCAO', 'IMPEDIDA', 'CONCLUIDA'];
-    const current = status === 'CANCELADA' ? 'ABERTA' : status;
+    const order = ['ABERTO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'IMPEDIDO', 'CONCLUIDO'];
+    const current = status === 'CANCELADO' ? 'ABERTO' : status;
     return order.indexOf(current) >= order.indexOf(step);
   };
 
   const formatDate = (value?: string | null) =>
     value ? new Date(value).toLocaleDateString('pt-BR') : '—';
 
-  const execTitle = status === 'IMPEDIDA' ? 'Impedida' : 'Em execução';
-  const execActive = status === 'EM_EXECUCAO' || status === 'IMPEDIDA';
+  const atendimentoTitle = status === 'IMPEDIDO' ? 'Impedido' : 'Em atendimento';
+  const atendimentoActive = status === 'EM_ATENDIMENTO' || status === 'IMPEDIDO';
 
   return [
     {
-      title: 'Aberta',
-      date: formatDate(abertaEm),
+      title: 'Aberto',
+      date: formatDate(abertoEm),
       sub: origem,
-      done: doneFrom('ABERTA'),
-      active: status === 'ABERTA',
+      done: doneFrom('ABERTO'),
+      active: status === 'ABERTO',
     },
     {
-      title: 'Triada e priorizada',
-      date: formatDate(abertaEm),
+      title: 'Triagem',
+      date: formatDate(abertoEm),
       sub: prioridade ? `Prioridade ${prioridade}` : undefined,
       done: doneFrom('EM_TRIAGEM'),
       active: status === 'EM_TRIAGEM',
     },
     {
-      title: 'Atribuída',
+      title: atendimentoTitle,
       date: '—',
       sub: responsavel ?? 'Aguardando responsável',
-      done: doneFrom('ATRIBUIDA'),
-      active: status === 'ATRIBUIDA',
+      done: doneFrom('EM_ATENDIMENTO') || status === 'IMPEDIDO',
+      active: atendimentoActive,
     },
     {
-      title: execTitle,
-      date: '—',
-      done: doneFrom('EM_EXECUCAO') || status === 'IMPEDIDA',
-      active: execActive,
-    },
-    {
-      title: 'Concluída',
-      date: formatDate(concluidaEm ?? (status === 'CONCLUIDA' ? prazoEm : null)),
-      done: status === 'CONCLUIDA',
+      title: 'Concluído',
+      date: formatDate(concluidoEm ?? (status === 'CONCLUIDO' ? prazoEm : null)),
+      done: status === 'CONCLUIDO',
       active: false,
     },
   ];

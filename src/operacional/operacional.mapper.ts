@@ -37,7 +37,7 @@ export function deriveUnidadeSituacao(input: {
   latitude: DecimalLike;
   longitude: DecimalLike;
   naoConformidadesAbertas: number;
-  ordensServicoAbertas: number;
+  chamadosAbertos: number;
 }): UnidadeSituacao {
   if (!input.ativo) {
     return 'INATIVA';
@@ -47,7 +47,7 @@ export function deriveUnidadeSituacao(input: {
     return 'SEM_LOCALIZACAO';
   }
 
-  if (input.naoConformidadesAbertas > 0 || input.ordensServicoAbertas > 0) {
+  if (input.naoConformidadesAbertas > 0 || input.chamadosAbertos > 0) {
     return 'COM_PENDENCIAS';
   }
 
@@ -63,7 +63,7 @@ export function mapUnidadeOperacional(
     latitude: unidade.latitude,
     longitude: unidade.longitude,
     naoConformidadesAbertas: counts.naoConformidadesAbertas,
-    ordensServicoAbertas: counts.ordensServicoAbertas,
+    chamadosAbertos: counts.chamadosAbertos,
   });
 
   return {
@@ -82,7 +82,7 @@ export function mapUnidadeOperacional(
     secretaria: unidade.secretaria,
     pendencias: {
       naoConformidadesAbertas: counts.naoConformidadesAbertas,
-      ordensServicoAbertas: counts.ordensServicoAbertas,
+      chamadosAbertos: counts.chamadosAbertos,
     },
     totais: counts,
   };
@@ -102,7 +102,7 @@ export function applyInMemoryUnidadeFilters<T extends UnidadeOperacional>(
 
     if (filters.pendencias !== undefined) {
       const hasPendencias =
-        unidade.pendencias.naoConformidadesAbertas > 0 || unidade.pendencias.ordensServicoAbertas > 0;
+        unidade.pendencias.naoConformidadesAbertas > 0 || unidade.pendencias.chamadosAbertos > 0;
 
       if (hasPendencias !== filters.pendencias) {
         return false;

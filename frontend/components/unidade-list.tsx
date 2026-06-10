@@ -129,9 +129,9 @@ export function UnidadeList({
                       {unidade.pendencias.naoConformidadesAbertas} NC
                     </span>
                   ) : null}
-                  {unidade.pendencias.ordensServicoAbertas > 0 ? (
+                  {unidade.pendencias.chamadosAbertos > 0 ? (
                     <span className="mono inline-flex items-center rounded-md bg-[var(--brand-soft)] px-1 py-0.5 text-[11px] font-bold text-[var(--brand-bright)]">
-                      {unidade.pendencias.ordensServicoAbertas} OS
+                      {unidade.pendencias.chamadosAbertos} CH
                     </span>
                   ) : null}
                 </span>

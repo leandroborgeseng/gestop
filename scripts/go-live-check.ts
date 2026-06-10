@@ -90,7 +90,7 @@ async function main() {
     });
   }
 
-  const [secretarias, unidades, usuarios, chamados, webmapImports, checklistsPublicados, osAbertas] =
+  const [secretarias, unidades, usuarios, chamados, webmapImports, checklistsPublicados, chamadosAbertos] =
     await Promise.all([
     prisma.secretaria.count({ where: { ativo: true } }),
     prisma.unidadePublica.count({ where: { ativo: true } }),
@@ -98,8 +98,8 @@ async function main() {
     prisma.chamado.count(),
     prisma.webmapImport.count({ where: { dryRun: false } }),
     prisma.checklistVersao.count({ where: { status: 'PUBLICADA' } }),
-    prisma.ordemServico.count({
-      where: { status: { notIn: ['CONCLUIDA', 'CANCELADA'] } },
+    prisma.chamado.count({
+      where: { status: { notIn: ['CONCLUIDO', 'CANCELADO'] } },
     }),
   ]);
 
@@ -149,7 +149,7 @@ async function main() {
 
   checks.push({
     ok: true,
-    label: `Ordens de servico abertas (${osAbertas})`,
+    label: `Chamados abertos (${chamadosAbertos})`,
   });
 
   try {

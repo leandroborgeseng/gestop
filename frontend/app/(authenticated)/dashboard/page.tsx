@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, BarChart3, Building2, ClipboardCheck, DatabaseZap, ShieldAlert, Wrench } from 'lucide-react';
+import { AlertTriangle, BarChart3, Building2, ClipboardCheck, DatabaseZap, Megaphone, ShieldAlert } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
@@ -34,10 +34,10 @@ export default function DashboardPage() {
 
   const hasAlertas =
     alertas &&
-    (alertas.resumo.osAtrasadas > 0 ||
+    (alertas.resumo.chamadosAtrasados > 0 ||
       alertas.resumo.chamadosSemTriagem > 0 ||
       alertas.resumo.syncFalhas > 0 ||
-      alertas.resumo.osUrgentes > 0);
+      alertas.resumo.chamadosUrgentes > 0);
 
   return (
     <RequirePermissions permissions={['dashboard.visualizar']}>
@@ -49,7 +49,7 @@ export default function DashboardPage() {
         backHref="/cco"
       >
         <TipBanner id="dashboard-alertas">
-          KPIs refletem o estado atual do sistema. Alertas operacionais destacam OS atrasadas, chamados sem triagem e falhas de sync.
+          KPIs refletem o estado atual do sistema. Alertas operacionais destacam chamados atrasados, sem triagem e falhas de sync.
         </TipBanner>
 
         {error ? (
@@ -70,19 +70,13 @@ export default function DashboardPage() {
                   Alertas operacionais
                 </p>
                 <p className="mt-2 text-[13px] text-[var(--ink-2)]">
-                  {alertas!.resumo.osAtrasadas} OS atrasadas · {alertas!.resumo.chamadosSemTriagem} chamados sem triagem ·{' '}
-                  {alertas!.resumo.osUrgentes} OS urgentes · {alertas!.resumo.syncFalhas} falhas de sync
+                  {alertas!.resumo.chamadosAtrasados} chamados atrasados · {alertas!.resumo.chamadosSemTriagem} sem triagem ·{' '}
+                  {alertas!.resumo.chamadosUrgentes} urgentes · {alertas!.resumo.syncFalhas} falhas de sync
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Link
-                    href="/ordens-servico"
-                    className="inline-flex h-8 items-center rounded-[var(--r-md)] bg-[var(--brand)] px-3 text-[12.5px] font-semibold text-white shadow-[var(--sh-sm)] hover:bg-[var(--brand-hover)]"
-                  >
-                    Ver ordens de serviço
-                  </Link>
-                  <Link
                     href="/chamados"
-                    className="inline-flex h-8 items-center rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[12.5px] font-semibold text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
+                    className="inline-flex h-8 items-center rounded-[var(--r-md)] bg-[var(--brand)] px-3 text-[12.5px] font-semibold text-white shadow-[var(--sh-sm)] hover:bg-[var(--brand-hover)]"
                   >
                     Ver chamados
                   </Link>
@@ -100,8 +94,8 @@ export default function DashboardPage() {
                 icon={ShieldAlert}
                 deltaTone={dashboard.indicadores.naoConformidades > 0 ? 'warn' : undefined}
               />
-              <MetricCard title="OS abertas" value={dashboard.indicadores.ordensServico.abertas} hint="aguardando ação" icon={Wrench} />
-              <MetricCard title="OS em execução" value={dashboard.indicadores.ordensServico.emExecucao} hint="em andamento" icon={Wrench} />
+              <MetricCard title="Chamados abertos" value={dashboard.indicadores.chamados.abertos} hint="aguardando ação" icon={Megaphone} />
+              <MetricCard title="Em atendimento" value={dashboard.indicadores.chamados.emAtendimento} hint="em andamento" icon={Megaphone} />
               <MetricCard
                 title="Sync pendente"
                 value={dashboard.indicadores.syncPendentes}
@@ -125,7 +119,7 @@ export default function DashboardPage() {
                       <strong className="text-[14px] font-semibold text-[var(--ink)]">{item.sigla}</strong>
                       <span className="text-[13px] text-[var(--ink-3)]"> — {item.nome}</span>
                       <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                        {item.ordensPendentes} OS pendentes · {item.fiscalizacoes} fiscalizações
+                        {item.chamadosPendentes} chamados pendentes · {item.fiscalizacoes} fiscalizações
                       </p>
                     </div>
                   ))}

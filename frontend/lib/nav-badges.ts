@@ -1,6 +1,6 @@
 import type { AlertasOperacionais, OperacionalResumo } from '@/lib/types';
 
-export type NavBadgeKey = 'chamados' | 'ordens' | 'integracoes';
+export type NavBadgeKey = 'chamados' | 'integracoes';
 
 export type NavBadges = Partial<Record<NavBadgeKey, number>>;
 
@@ -12,11 +12,11 @@ export function buildNavBadges(
   const badges: NavBadges = {};
 
   if (permissions.includes('chamados.gerenciar') || permissions.includes('dashboard.visualizar')) {
-    const chamados = alertas?.resumo.chamadosSemTriagem ?? 0;
+    const chamados =
+      (alertas?.resumo.chamadosSemTriagem ?? 0) +
+      (alertas?.resumo.chamadosUrgentes ?? 0) +
+      (resumo?.chamadosAbertos ?? 0);
     if (chamados > 0) badges.chamados = chamados;
-
-    const ordens = (resumo?.ordensServicoAbertas ?? 0) + (alertas?.resumo.osUrgentes ?? 0);
-    if (ordens > 0) badges.ordens = ordens;
   }
 
   if (permissions.includes('auditoria.visualizar') || permissions.includes('dashboard.visualizar')) {
@@ -32,10 +32,7 @@ export function resolveGlobalSearchRoute(query: string): string {
   if (!trimmed) return '/cco';
 
   const upper = trimmed.toUpperCase();
-  if (upper.startsWith('OS-') || upper.startsWith('OS')) {
-    return `/ordens-servico?search=${encodeURIComponent(trimmed)}`;
-  }
-  if (upper.startsWith('CH-') || upper.startsWith('CH')) {
+  if (upper.startsWith('CH-') || upper.startsWith('CH') || upper.startsWith('OS-') || upper.startsWith('OS')) {
     return `/chamados?search=${encodeURIComponent(trimmed)}`;
   }
 

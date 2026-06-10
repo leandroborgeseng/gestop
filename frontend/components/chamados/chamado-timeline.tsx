@@ -1,8 +1,8 @@
 import { Check } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { OsTimelineStep } from '@/lib/os-status';
+import { ChamadoTimelineStep } from '@/lib/chamado-status';
 
-export function OsTimeline({ steps }: { steps: OsTimelineStep[] }) {
+export function ChamadoTimeline({ steps }: { steps: ChamadoTimelineStep[] }) {
   return (
     <div className="space-y-0">
       {steps.map((step, index) => (

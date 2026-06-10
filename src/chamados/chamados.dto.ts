@@ -1,4 +1,4 @@
-import { ChamadoOrigem, ChamadoStatus, OrdemServicoPrioridade } from '@prisma/client';
+import { ChamadoOrigem, ChamadoPrioridade, ChamadoStatus } from '@prisma/client';
 import { IsEmail, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class CreateChamadoDto {
@@ -10,8 +10,8 @@ export class CreateChamadoDto {
   descricao!: string;
 
   @IsOptional()
-  @IsEnum(OrdemServicoPrioridade)
-  prioridade?: OrdemServicoPrioridade;
+  @IsEnum(ChamadoPrioridade)
+  prioridade?: ChamadoPrioridade;
 
   @IsOptional()
   @IsEnum(ChamadoOrigem)
@@ -47,7 +47,6 @@ export class PublicCreateChamadoDto {
   @IsString()
   solicitanteTelefone?: string;
 
-  /** Data URL (base64) de foto opcional enviada pelo cidadão via QR Code. */
   @IsOptional()
   @IsString()
   fotoDataUrl?: string;
@@ -60,4 +59,12 @@ export class UpdateChamadoStatusDto {
   @IsOptional()
   @IsString()
   motivo?: string;
+
+  @IsOptional()
+  @IsString()
+  responsavelId?: string;
+
+  @IsOptional()
+  @IsString()
+  impedimentoMotivo?: string;
 }

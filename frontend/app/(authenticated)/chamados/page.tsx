@@ -2,60 +2,55 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import {
   Bell,
   Building2,
+  ClipboardList,
   Clock,
   Crosshair,
   GitBranch,
   Inbox,
   Megaphone,
+  RefreshCw,
   Search,
   Smartphone,
-  Wrench,
+  UserRound,
 } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
+import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
+import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
-import { convertChamadoToOs, listChamados, updateChamadoStatus } from '@/lib/api';
+import { getChamado, listChamados, updateChamadoStatus } from '@/lib/api';
 import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 import { cn } from '@/lib/cn';
-import { ChamadoOrigem, ChamadoResumo, ChamadoStatus } from '@/lib/types';
+import {
+  CHAMADO_STATUS_META,
+  buildChamadoTimeline,
+  chamadoStatusLabel,
+  nextChamadoStatusFlow,
+  nextChamadoStatuses,
+  prazoInfo,
+  prioridadeVariant,
+} from '@/lib/chamado-status';
+import { ChamadoDetalhe, ChamadoOrigem, ChamadoResumo, ChamadoStatus } from '@/lib/types';
 
 type StatusFilter = 'TODOS' | ChamadoStatus;
+type PrioridadeFilter = 'TODAS' | string;
 
 const STATUS_CHIPS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'TODOS', label: 'Todos' },
-  { value: 'ABERTO', label: 'Abertos' },
-  { value: 'EM_TRIAGEM', label: 'Em triagem' },
-  { value: 'ENCAMINHADO_OS', label: 'Encaminhados' },
-  { value: 'ENCERRADO', label: 'Encerrados' },
-  { value: 'CANCELADO', label: 'Cancelados' },
+  ...Object.entries(CHAMADO_STATUS_META).map(([value, meta]) => ({ value: value as ChamadoStatus, label: meta.label })),
 ];
 
-const STATUS_META: Record<
-  ChamadoStatus,
-  { label: string; badge: 'info' | 'warning' | 'brand' | 'success' | 'muted' | 'danger' }
-> = {
-  ABERTO: { label: 'Aberto', badge: 'info' },
-  EM_TRIAGEM: { label: 'Em triagem', badge: 'warning' },
-  ENCAMINHADO_OS: { label: 'Encaminhado p/ OS', badge: 'brand' },
-  ENCERRADO: { label: 'Encerrado', badge: 'success' },
-  CANCELADO: { label: 'Cancelado', badge: 'muted' },
-};
-
-function prioridadeVariant(prioridade: string): 'danger' | 'warning' | 'neutral' {
-  const value = prioridade.toUpperCase();
-  if (value.includes('ALTA') || value.includes('URG')) return 'danger';
-  if (value.includes('MED')) return 'warning';
-  return 'neutral';
+function chamadoTitulo(chamado: Pick<ChamadoResumo, 'titulo' | 'descricao'>) {
+  return chamado.titulo?.trim() || chamado.descricao;
 }
 
 function origemMeta(origem: ChamadoOrigem) {
@@ -64,6 +59,8 @@ function origemMeta(origem: ChamadoOrigem) {
       return { label: 'QR Code', icon: Crosshair };
     case 'INTERNO':
       return { label: 'App interno', icon: Smartphone };
+    case 'FISCALIZACAO':
+      return { label: 'Fiscalização', icon: ClipboardList };
     default:
       return { label: 'Manual', icon: Bell };
   }
@@ -81,21 +78,54 @@ function ChamadosPageContent() {
   const searchParams = useSearchParams();
   const snackbar = useSnackbar();
   const [chamados, setChamados] = useState<ChamadoResumo[]>([]);
+  const [detail, setDetail] = useState<ChamadoDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('TODOS');
+  const [prioridade, setPrioridade] = useState<PrioridadeFilter>('TODAS');
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
 
   useEffect(() => {
     const value = searchParams.get('search');
     if (value) setSearch(value);
   }, [searchParams]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('id'));
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const id = searchParams.get('id');
+    if (id) setSelectedId(id);
+  }, [searchParams]);
 
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    if (!selectedId) {
+      setDetail(null);
+      return;
+    }
+
+    let active = true;
+    setDetailLoading(true);
+    getChamado(selectedId)
+      .then((data) => {
+        if (active) setDetail(data);
+      })
+      .catch((err) => {
+        if (active) setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe do chamado.');
+      })
+      .finally(() => {
+        if (active) setDetailLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedId]);
 
   function load() {
     setLoading(true);
@@ -108,17 +138,17 @@ function ChamadosPageContent() {
       .finally(() => setLoading(false));
   }
 
+  const prioridades = useMemo(() => {
+    const set = new Set<string>();
+    for (const chamado of chamados) set.add(chamado.prioridade);
+    return Array.from(set).sort();
+  }, [chamados]);
+
   const counts = useMemo(() => {
-    const next: Record<StatusFilter, number> = {
-      TODOS: chamados.length,
-      ABERTO: 0,
-      EM_TRIAGEM: 0,
-      ENCAMINHADO_OS: 0,
-      ENCERRADO: 0,
-      CANCELADO: 0,
-    };
+    const next: Record<string, number> = { TODOS: chamados.length };
+    for (const key of Object.keys(CHAMADO_STATUS_META)) next[key] = 0;
     for (const item of chamados) {
-      next[item.status] += 1;
+      if (next[item.status] != null) next[item.status] += 1;
     }
     return next;
   }, [chamados]);
@@ -127,37 +157,46 @@ function ChamadosPageContent() {
     const query = search.trim().toLowerCase();
     return chamados.filter((item) => {
       if (filter !== 'TODOS' && item.status !== filter) return false;
+      if (prioridade !== 'TODAS' && item.prioridade !== prioridade) return false;
       if (!query) return true;
       const haystack = [
         item.codigo,
+        item.titulo,
         item.descricao,
         item.unidade.nome,
         item.unidade.codigoPatrimonial,
         item.solicitanteNome,
+        item.responsavel?.nome,
       ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [chamados, filter, search]);
+  }, [chamados, filter, prioridade, search]);
 
   const selected = useMemo(() => {
     if (selectedId) {
       const match = filtered.find((item) => item.id === selectedId);
       if (match) return match;
+      const anyMatch = chamados.find((item) => item.id === selectedId);
+      if (anyMatch) return anyMatch;
     }
     return filtered[0] ?? null;
-  }, [filtered, selectedId]);
+  }, [filtered, selectedId, chamados]);
 
-  async function changeStatus(id: string, status: ChamadoStatus, codigo: string) {
+  async function transition(id: string, status: ChamadoStatus, codigo: string) {
     setBusyId(id);
     setError(null);
     try {
-      await updateChamadoStatus(id, { status, motivo: `Atualizado via painel para ${status}` });
+      await updateChamadoStatus(id, { status, motivo: `Transição via painel para ${status}` });
       const items = await listChamados();
       setChamados(items);
-      snackbar.show(`${codigo} ${statusToastLabel(status)}`, 'success');
+      if (selectedId === id) {
+        const refreshed = await getChamado(id);
+        setDetail(refreshed);
+      }
+      snackbar.show(`${codigo} → ${chamadoStatusLabel(status)}`, 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Falha ao atualizar chamado.';
       setError(message);
@@ -167,35 +206,25 @@ function ChamadosPageContent() {
     }
   }
 
-  async function convertToOs(id: string, codigo: string) {
-    setBusyId(id);
-    setError(null);
-    try {
-      await convertChamadoToOs(id);
-      const items = await listChamados();
-      setChamados(items);
-      snackbar.show(`${codigo} encaminhado para ordem de serviço`, 'success');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Falha ao converter chamado em OS.';
-      setError(message);
-      snackbar.show(message, 'error');
-    } finally {
-      setBusyId(null);
-    }
+  async function advanceStatus(chamado: ChamadoResumo) {
+    const next = nextChamadoStatusFlow(chamado.status);
+    if (!next) return;
+    await transition(chamado.id, next as ChamadoStatus, chamado.codigo);
   }
 
   return (
     <RequirePermissions permissions={['chamados.gerenciar']}>
       <PageShell
-        kicker="Atendimento ao cidadão"
+        kicker="Atendimento operacional"
         icon={Megaphone}
         title="Chamados"
-        description="Triagem e encaminhamento de chamados — abertos via QR Code, app de campo e registro interno."
+        description="Triagem, atendimento e acompanhamento — abertos via QR Code, fiscalização, app de campo e registro interno."
         backHref="/cco"
-        action={<UnidadeAvulsoActions showOs={false} size="md" />}
+        action={<UnidadeAvulsoActions size="md" />}
       >
         <TipBanner id="chamados-triagem">
-          Selecione um chamado na lista para ver detalhes e avançar o fluxo. Use os chips para filtrar por status.
+          Selecione um chamado na lista para ver prazo, responsável e linha do tempo. Use <b>Atualizar status</b> para
+          avançar no fluxo operacional.
         </TipBanner>
 
         {error ? (
@@ -204,17 +233,31 @@ function ChamadosPageContent() {
           </div>
         ) : null}
 
-        <div className="situ-chips mb-4 flex shrink-0 flex-wrap gap-1.5">
-          {STATUS_CHIPS.map((item) => (
-            <Chip
-              key={item.value}
-              active={filter === item.value}
-              count={counts[item.value]}
-              onClick={() => setFilter(item.value)}
-            >
-              {item.label}
-            </Chip>
-          ))}
+        <div className="mb-4 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="situ-chips flex flex-wrap gap-1.5">
+            {STATUS_CHIPS.map((item) => (
+              <Chip
+                key={item.value}
+                active={filter === item.value}
+                count={counts[item.value] ?? 0}
+                onClick={() => setFilter(item.value)}
+              >
+                {item.label}
+              </Chip>
+            ))}
+          </div>
+          <Select
+            value={prioridade}
+            onChange={(event) => setPrioridade(event.target.value)}
+            className="h-9 w-full max-w-[220px] text-xs"
+          >
+            <option value="TODAS">Todas prioridades</option>
+            {prioridades.map((item) => (
+              <option key={item} value={item}>
+                {item}
+              </option>
+            ))}
+          </Select>
         </div>
 
         {loading ? <LoadingState label="Carregando chamados..." /> : null}
@@ -242,9 +285,10 @@ function ChamadosPageContent() {
                   />
                 ) : (
                   filtered.map((chamado) => {
-                    const st = STATUS_META[chamado.status];
+                    const st = CHAMADO_STATUS_META[chamado.status] ?? { label: chamado.status, badge: 'neutral' as const };
                     const canal = origemMeta(chamado.origem);
                     const CanalIcon = canal.icon;
+                    const prazo = prazoInfo(chamado.prazoEm, chamado.status);
                     const isSelected = selected?.id === chamado.id;
 
                     return (
@@ -263,18 +307,32 @@ function ChamadosPageContent() {
                           <span className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{chamado.codigo}</span>
                           <Badge variant={prioridadeVariant(chamado.prioridade)}>{chamado.prioridade}</Badge>
                         </div>
-                        <p className="line-clamp-2 text-[13px] font-semibold text-[var(--ink)]">{chamado.descricao}</p>
+                        <p className="line-clamp-2 text-[13px] font-semibold text-[var(--ink)]">{chamadoTitulo(chamado)}</p>
                         <p className="truncate text-[12px] text-[var(--ink-3)]">{chamado.unidade.nome}</p>
                         <div className="flex flex-wrap items-center gap-2 pt-0.5">
                           <Badge variant={st.badge}>{st.label}</Badge>
-                          <span className="inline-flex items-center gap-1 text-[11px] text-[var(--ink-3)]">
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1 text-[11px] font-semibold',
+                              prazo.tone === 'danger' && 'text-[var(--danger)]',
+                              prazo.tone === 'warning' && 'text-[var(--warn)]',
+                              prazo.tone === 'neutral' && 'text-[var(--ink-3)]',
+                              prazo.tone === 'success' && 'text-[var(--ok)]',
+                            )}
+                          >
                             <Clock className="h-3 w-3" />
-                            {new Date(chamado.createdAt).toLocaleDateString('pt-BR')}
+                            {prazo.label}
                           </span>
                           <span className="inline-flex items-center gap-1 text-[11px] text-[var(--ink-3)]">
                             <CanalIcon className="h-3 w-3" />
                             {canal.label}
                           </span>
+                          {chamado.responsavel ? (
+                            <span className="inline-flex items-center gap-1 text-[11px] text-[var(--ink-3)]">
+                              <UserRound className="h-3 w-3" />
+                              {chamado.responsavel.nome}
+                            </span>
+                          ) : null}
                         </div>
                       </button>
                     );
@@ -285,10 +343,12 @@ function ChamadosPageContent() {
 
             <section className="min-h-[320px]">
               <ChamadoDetailPanel
-                chamado={selected}
+                resumo={selected}
+                detail={detail?.id === selected?.id ? detail : null}
+                loading={detailLoading && !!selected}
                 busy={busyId === selected?.id}
-                onChangeStatus={changeStatus}
-                onConvertToOs={convertToOs}
+                onTransition={transition}
+                onAdvance={advanceStatus}
               />
             </section>
           </div>
@@ -299,160 +359,211 @@ function ChamadosPageContent() {
 }
 
 function ChamadoDetailPanel({
-  chamado,
+  resumo,
+  detail,
+  loading,
   busy,
-  onChangeStatus,
-  onConvertToOs,
+  onTransition,
+  onAdvance,
 }: {
-  chamado: ChamadoResumo | null;
+  resumo: ChamadoResumo | null;
+  detail: ChamadoDetalhe | null;
+  loading: boolean;
   busy: boolean;
-  onChangeStatus: (id: string, status: ChamadoStatus, codigo: string) => void;
-  onConvertToOs: (id: string, codigo: string) => void;
+  onTransition: (id: string, status: ChamadoStatus, codigo: string) => void;
+  onAdvance: (chamado: ChamadoResumo) => void;
 }) {
-  if (!chamado) {
+  if (!resumo) {
     return (
       <Card elevation={1} className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
         <CardContent className="flex flex-col items-center gap-2 p-8">
           <Inbox className="h-8 w-8 text-[var(--ink-3)]" />
           <p className="text-[15px] font-semibold text-[var(--ink)]">Selecione um chamado</p>
           <p className="max-w-xs text-[13px] text-[var(--ink-3)]">
-            Escolha um item da lista para ver detalhes e agir no fluxo de triagem.
+            Escolha um item da lista para ver prazo, responsável e linha do tempo.
           </p>
         </CardContent>
       </Card>
     );
   }
 
-  const st = STATUS_META[chamado.status];
-  const canal = origemMeta(chamado.origem);
+  const st = CHAMADO_STATUS_META[resumo.status] ?? { label: resumo.status, badge: 'neutral' as const };
+  const canal = origemMeta(resumo.origem);
   const CanalIcon = canal.icon;
-  const canAct = chamado.status !== 'ENCERRADO' && chamado.status !== 'CANCELADO';
+  const prazo = prazoInfo(resumo.prazoEm, resumo.status);
+  const canAct = resumo.status !== 'CONCLUIDO' && resumo.status !== 'CANCELADO';
+  const timeline = buildChamadoTimeline(
+    resumo.status,
+    resumo.createdAt,
+    resumo.prazoEm,
+    detail?.concluidoEm ?? resumo.concluidoEm,
+    resumo.responsavel?.nome,
+    resumo.prioridade,
+    resumo.origem,
+  );
 
   return (
     <Card elevation={1} className="h-full overflow-hidden">
       <CardContent className="flex h-full flex-col p-0">
         <div className="border-b border-[var(--line-2)] p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
-            <span className="mono text-[13px] font-semibold text-[var(--brand-hover)]">{chamado.codigo}</span>
+            <span className="mono text-[13px] font-semibold text-[var(--brand-hover)]">{resumo.codigo}</span>
             <div className="flex flex-wrap gap-1.5">
-              <Badge variant={prioridadeVariant(chamado.prioridade)}>{chamado.prioridade}</Badge>
+              <Badge variant={prioridadeVariant(resumo.prioridade)}>{resumo.prioridade}</Badge>
               <Badge variant={st.badge}>{st.label}</Badge>
             </div>
           </div>
-          <h2 className="mt-3 text-[17px] font-semibold leading-snug text-[var(--ink)]">{chamado.descricao}</h2>
+          <h2 className="mt-3 text-[17px] font-semibold leading-snug text-[var(--ink)]">{chamadoTitulo(resumo)}</h2>
+          {resumo.titulo && resumo.titulo !== resumo.descricao ? (
+            <p className="mt-2 text-[13px] text-[var(--ink-3)]">{resumo.descricao}</p>
+          ) : null}
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--ink-3)]">
             <span className="inline-flex items-center gap-1.5">
               <Building2 className="h-3.5 w-3.5" />
-              {chamado.unidade.nome}
+              {resumo.unidade.nome}
             </span>
-            <span className="mono">{chamado.unidade.codigoPatrimonial}</span>
+            <span className="mono">{resumo.unidade.codigoPatrimonial}</span>
           </div>
         </div>
 
-        <div className="flex-1 space-y-5 p-5">
+        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <SummaryCard
+              label="Prazo"
+              value={prazo.label}
+              sub={resumo.prazoEm ? new Date(resumo.prazoEm).toLocaleDateString('pt-BR') : undefined}
+              tone={prazo.tone}
+            />
+            <SummaryCard
+              label="Responsável"
+              value={resumo.responsavel?.nome ?? 'Não atribuído'}
+              sub={resumo.secretaria.sigla}
+            />
+            <SummaryCard label="Canal" value={canal.label} />
+          </div>
+
           <dl className="grid gap-3 sm:grid-cols-2">
-            <DetailField label="Canal">
-              <span className="inline-flex items-center gap-1.5">
-                <CanalIcon className="h-3.5 w-3.5" />
-                {canal.label}
-              </span>
-            </DetailField>
             <DetailField label="Aberto em">
-              {new Date(chamado.createdAt).toLocaleString('pt-BR')}
+              {new Date(resumo.createdAt).toLocaleString('pt-BR')}
             </DetailField>
-            <DetailField label="Secretaria">{chamado.secretaria.sigla}</DetailField>
-            <DetailField label="Bairro">{chamado.unidade.bairro ?? '—'}</DetailField>
+            <DetailField label="Bairro">{resumo.unidade.bairro ?? '—'}</DetailField>
             <DetailField label="Solicitante" className="sm:col-span-2">
-              {chamado.solicitanteNome ?? '—'}
-              {chamado.solicitanteTelefone ? ` · ${chamado.solicitanteTelefone}` : ''}
+              {resumo.solicitanteNome ?? '—'}
+              {resumo.solicitanteTelefone ? ` · ${resumo.solicitanteTelefone}` : ''}
             </DetailField>
           </dl>
 
-          {chamado.unidade.endereco ? (
+          {resumo.unidade.endereco ? (
             <div>
               <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Endereço</p>
-              <p className="mt-1 text-[13px] text-[var(--ink-2)]">{chamado.unidade.endereco}</p>
+              <p className="mt-1 text-[13px] text-[var(--ink-2)]">{resumo.unidade.endereco}</p>
             </div>
           ) : null}
 
-          {chamado.fotoUrl ? (
+          {resumo.fotoUrl ? (
             <div>
               <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Foto anexada</p>
               <a
-                href={chamado.fotoUrl}
+                href={resumo.fotoUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-2 block overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={chamado.fotoUrl} alt="Foto do chamado" className="max-h-56 w-full object-cover" />
+                <img src={resumo.fotoUrl} alt="Foto do chamado" className="max-h-56 w-full object-cover" />
               </a>
             </div>
           ) : null}
 
-          {chamado.ordemServico ? (
+          {resumo.naoConformidade ? (
             <div className="rounded-[var(--r-md)] border border-[var(--brand-soft)] bg-[var(--brand-soft)] p-4">
               <p className="flex items-center gap-2 text-[12px] font-bold text-[var(--brand-hover)]">
                 <GitBranch className="h-4 w-4" />
-                Ordem de serviço vinculada
+                Origem auditável (NC)
               </p>
               <p className="mt-2 text-[13px] text-[var(--ink-2)]">
-                <Link href={`/ordens-servico/${chamado.ordemServico.id}`} className="font-semibold text-[var(--brand-hover)] underline">
-                  {chamado.ordemServico.codigo}
-                </Link>{' '}
-                · {chamado.ordemServico.status}
+                {resumo.naoConformidade.item.codigo} — {resumo.naoConformidade.item.titulo}
               </p>
+              <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resumo.naoConformidade.descricao}</p>
             </div>
           ) : null}
 
+          {detail?.impedimentoMotivo || resumo.impedimentoMotivo ? (
+            <div className="rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[13px] text-[var(--warn)]">
+              <strong>Impedimento:</strong> {detail?.impedimentoMotivo ?? resumo.impedimentoMotivo}
+            </div>
+          ) : null}
+
+          <div>
+            <p className="mb-3 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Linha do tempo</p>
+            {loading ? <LoadingState label="Carregando timeline..." /> : <ChamadoTimeline steps={timeline} />}
+          </div>
+
           {canAct ? (
             <div className="flex flex-wrap gap-2 border-t border-[var(--line-2)] pt-4">
-              {chamado.status === 'ABERTO' ? (
-                <Button
-                  variant="filled"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => onChangeStatus(chamado.id, 'EM_TRIAGEM', chamado.codigo)}
-                >
-                  Iniciar triagem
+              {nextChamadoStatusFlow(resumo.status) ? (
+                <Button variant="filled" size="sm" disabled={busy} onClick={() => onAdvance(resumo)}>
+                  <RefreshCw className="h-4 w-4" />
+                  Atualizar status
                 </Button>
               ) : null}
-              {!chamado.ordemServico && (chamado.status === 'ABERTO' || chamado.status === 'EM_TRIAGEM') ? (
-                <Button
-                  variant="tonal"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => onConvertToOs(chamado.id, chamado.codigo)}
-                >
-                  <Wrench className="h-4 w-4" />
-                  Encaminhar para OS
-                </Button>
-              ) : null}
-              {chamado.status === 'EM_TRIAGEM' ? (
+              {nextChamadoStatuses(resumo.status).includes('CONCLUIDO') ? (
                 <Button
                   variant="outlined"
                   size="sm"
                   disabled={busy}
-                  onClick={() => onChangeStatus(chamado.id, 'ENCERRADO', chamado.codigo)}
+                  onClick={() => onTransition(resumo.id, 'CONCLUIDO', resumo.codigo)}
                 >
-                  Encerrar
+                  Concluir chamado
                 </Button>
               ) : null}
-              {chamado.status !== 'CANCELADO' ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => onChangeStatus(chamado.id, 'CANCELADO', chamado.codigo)}
-                >
-                  Cancelar
-                </Button>
-              ) : null}
+              {nextChamadoStatuses(resumo.status)
+                .filter((status) => status !== 'CONCLUIDO')
+                .map((status) => (
+                  <Button
+                    key={status}
+                    variant="tonal"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => onTransition(resumo.id, status as ChamadoStatus, resumo.codigo)}
+                  >
+                    {chamadoStatusLabel(status)}
+                  </Button>
+                ))}
             </div>
           ) : null}
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function SummaryCard({
+  label,
+  value,
+  sub,
+  tone = 'neutral',
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: 'neutral' | 'success' | 'warning' | 'danger';
+}) {
+  const toneClass =
+    tone === 'danger'
+      ? 'border-[var(--danger-bd)] bg-[var(--danger-bg)]'
+      : tone === 'warning'
+        ? 'border-[var(--warn-bd)] bg-[var(--warn-bg)]'
+        : tone === 'success'
+          ? 'border-[var(--ok-bd)] bg-[var(--ok-bg)]'
+          : 'border-[var(--line)] bg-[var(--surface-2)]';
+
+  return (
+    <div className={cn('rounded-[var(--r-md)] border p-3', toneClass)}>
+      <p className="text-[10px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{label}</p>
+      <p className="mt-1 text-[14px] font-semibold text-[var(--ink)]">{value}</p>
+      {sub ? <p className="mono mt-0.5 text-[11px] text-[var(--ink-3)]">{sub}</p> : null}
+    </div>
   );
 }
 
@@ -471,17 +582,4 @@ function DetailField({
       <dd className="mt-0.5 text-[13px] font-medium text-[var(--ink-2)]">{children}</dd>
     </div>
   );
-}
-
-function statusToastLabel(status: ChamadoStatus) {
-  switch (status) {
-    case 'EM_TRIAGEM':
-      return 'movido para triagem';
-    case 'ENCERRADO':
-      return 'encerrado';
-    case 'CANCELADO':
-      return 'cancelado';
-    default:
-      return `atualizado para ${status}`;
-  }
 }

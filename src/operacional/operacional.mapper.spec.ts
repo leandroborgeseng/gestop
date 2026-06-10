@@ -32,7 +32,7 @@ describe('mapeamento operacional de unidades', () => {
         latitude: -20.53936,
         longitude: -47.40081,
         naoConformidadesAbertas: 0,
-        ordensServicoAbertas: 0,
+        chamadosAbertos: 0,
       }),
     ).toBe('OPERACIONAL');
   });
@@ -44,7 +44,7 @@ describe('mapeamento operacional de unidades', () => {
         latitude: -20.53936,
         longitude: -47.40081,
         naoConformidadesAbertas: 3,
-        ordensServicoAbertas: 2,
+        chamadosAbertos: 2,
       }),
     ).toBe('INATIVA');
   });
@@ -53,25 +53,25 @@ describe('mapeamento operacional de unidades', () => {
     const unidade = mapUnidadeOperacional(baseUnidade, {
       fiscalizacoes: 2,
       naoConformidadesAbertas: 1,
-      ordensServicoAbertas: 1,
+      chamadosAbertos: 1,
     });
 
     expect(unidade.situacao).toBe('COM_PENDENCIAS');
-    expect(unidade.pendencias.ordensServicoAbertas).toBe(1);
+    expect(unidade.pendencias.chamadosAbertos).toBe(1);
   });
 
   it('filtra lista por situacao e pendencias', () => {
     const operacional = mapUnidadeOperacional(baseUnidade, {
       fiscalizacoes: 1,
       naoConformidadesAbertas: 0,
-      ordensServicoAbertas: 0,
+      chamadosAbertos: 0,
     });
     const pendente = mapUnidadeOperacional(
       { ...baseUnidade, id: 'unidade-2', nome: 'UBS Teste', tipo: 'UBS' },
       {
         fiscalizacoes: 1,
         naoConformidadesAbertas: 0,
-        ordensServicoAbertas: 2,
+        chamadosAbertos: 2,
       },
     );
 
