@@ -14,6 +14,7 @@ import {
 import { getUnidadeDetalhe } from '@/lib/api';
 import { UnidadeDetalhe } from '@/lib/types';
 import { PageShell } from '@/components/layout/page-shell';
+import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 import { TipBanner } from '@/components/help/tip-banner';
 import { MetricCard } from '@/components/metric-card';
 import { StatusBadge } from '@/components/status-badge';
@@ -66,12 +67,19 @@ export default function UnidadeDetalhePage() {
 
       {error ? <ErrorState message={error} /> : null}
       {loading ? <LoadingState label="Carregando detalhe do próprio..." /> : null}
-      {!loading && unidade ? <UnidadeDetalheView unidade={unidade} /> : null}
+      {!loading && unidade ? (
+        <UnidadeDetalheView
+          unidade={unidade}
+          onRefresh={() =>
+            getUnidadeDetalhe(params.id).then(setUnidade).catch(() => undefined)
+          }
+        />
+      ) : null}
     </PageShell>
   );
 }
 
-function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
+function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; onRefresh: () => void }) {
   return (
     <div className="space-y-6">
       <Card elevation={1}>
@@ -86,6 +94,13 @@ function UnidadeDetalheView({ unidade }: { unidade: UnidadeDetalhe }) {
               <p className="mt-2 text-[14px] text-[var(--ink-3)]">
                 {unidade.tipo} · {unidade.secretaria.sigla} — {unidade.secretaria.nome}
               </p>
+              <UnidadeAvulsoActions
+                className="mt-4"
+                unidadeId={unidade.id}
+                unidadeNome={unidade.nome}
+                onSuccess={onRefresh}
+                size="md"
+              />
             </div>
             <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] px-4 py-3">
               <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Raio de validação</p>

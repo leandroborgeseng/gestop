@@ -437,8 +437,8 @@ a {
   isolation: isolate;
   width: 100%;
   aspect-ratio: 5 / 4;
-  min-height: 300px;
-  max-height: min(520px, calc(100dvh - 260px));
+  min-height: 220px;
+  max-height: min(440px, calc(100dvh - 300px));
 }
 
 .gestop-map-shell .gestop-map-canvas,
@@ -512,7 +512,7 @@ a {
 
 @media (min-width: 1280px) {
   .gestop-main .cco-list-panel {
-    min-height: min(640px, calc(100dvh - 260px));
+    min-height: min(460px, calc(100dvh - 300px));
   }
 
   .gestop-main .cco-map-panel {
@@ -520,6 +520,19 @@ a {
   }
 
   .gestop-main .cco-map-panel .gestop-map-shell {
-    max-height: min(560px, calc(100dvh - 260px));
+    max-height: min(460px, calc(100dvh - 300px));
+  }
+}
+
+@media (max-width: 1279px) {
+  .gestop-main .cco-list-panel {
+    max-height: min(380px, calc(100dvh - 340px));
+    min-height: 240px;
+  }
+
+  .gestop-main .cco-map-panel .gestop-map-shell {
+    aspect-ratio: 16 / 10;
+    max-height: min(300px, calc(100dvh - 360px));
+    min-height: 200px;
   }
 }

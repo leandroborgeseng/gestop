@@ -4,33 +4,35 @@ import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
 import { RequirePermissions } from '../auth/permissions';
 import { PermissionsGuard } from '../auth/permissions.guard';
-import { UpdateOrdemServicoDto } from './ordens-servico.dto';
+import { CreateOrdemServicoDto, UpdateOrdemServicoDto } from './ordens-servico.dto';
 import { OrdensServicoService } from './ordens-servico.service';
 
 @UseGuards(AuthGuard, PermissionsGuard)
+@RequirePermissions('chamados.gerenciar')
 @Controller('ordens-servico')
 export class OrdensServicoController {
   constructor(private readonly ordensServicoService: OrdensServicoService) {}
 
-  @RequirePermissions('chamados.gerenciar')
   @Get()
   listOrdens() {
     return this.ordensServicoService.listOrdens();
   }
 
-  @RequirePermissions('chamados.gerenciar')
+  @Post()
+  createOrdem(@Body() body: CreateOrdemServicoDto, @CurrentUser() user: JwtPayload) {
+    return this.ordensServicoService.createOrdemServico(body, user);
+  }
+
   @Get(':id')
   getOrdem(@Param('id') id: string) {
     return this.ordensServicoService.getOrdem(id);
   }
 
-  @RequirePermissions('chamados.gerenciar')
   @Put(':id')
   updateOrdem(@Param('id') id: string, @Body() body: UpdateOrdemServicoDto, @CurrentUser() user: JwtPayload) {
     return this.ordensServicoService.updateOrdem(id, body, user);
   }
 
-  @RequirePermissions('chamados.gerenciar')
   @Post('gerar/nao-conformidades/:id')
   generateForNaoConformidade(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.ordensServicoService.generateForNaoConformidade(id, user);

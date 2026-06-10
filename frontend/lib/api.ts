@@ -363,6 +363,20 @@ export function listOrdensServico() {
   return request<OrdemServicoResumo[]>('/ordens-servico');
 }
 
+export function createOrdemServico(payload: {
+  unidadeId: string;
+  titulo: string;
+  descricao: string;
+  prioridade?: string;
+  prazoEm?: string;
+}) {
+  return request<OrdemServicoResumo>('/ordens-servico', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function getOrdemServico(id: string) {
   return request<OrdemServicoDetalhe>(`/ordens-servico/${id}`);
 }
@@ -472,6 +486,22 @@ export function createPublicChamado(
 
 export function listChamados() {
   return request<ChamadoResumo[]>('/chamados');
+}
+
+export function createChamado(payload: {
+  unidadeId: string;
+  descricao: string;
+  prioridade?: string;
+  origem?: string;
+  solicitanteNome?: string;
+  solicitanteEmail?: string;
+  solicitanteTelefone?: string;
+}) {
+  return request<ChamadoResumo>('/chamados', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 export function getChamado(id: string) {

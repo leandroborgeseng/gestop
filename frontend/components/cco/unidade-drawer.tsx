@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { Tabs } from '@/components/ui/tabs';
 import { ErrorState, LoadingState } from '@/components/ui-states';
+import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 
 type DrawerTab = 'geral' | 'fisc' | 'nc' | 'os';
 
@@ -96,7 +97,7 @@ export function UnidadeDrawer({
       <aside
         role="dialog"
         aria-label={`Detalhe ${unidade.nome}`}
-        className="fixed top-0 right-0 z-50 flex h-dvh w-full max-w-[440px] flex-col border-l border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-lg)]"
+        className="fixed top-0 right-0 z-50 flex h-dvh w-full max-w-[min(440px,calc(100%-2.5rem))] flex-col border-l border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-lg)] lg:max-w-[440px]"
       >
         <header className="shrink-0 border-b border-[var(--line-2)] p-4">
           <div className="flex items-start justify-between gap-3">
@@ -133,7 +134,13 @@ export function UnidadeDrawer({
 
           {!loading && !error && detalhe ? (
             <>
-              {tab === 'geral' ? <GeralTab unidade={detalhe} onClose={onClose} /> : null}
+              {tab === 'geral' ? (
+                <GeralTab
+                  unidade={detalhe}
+                  onClose={onClose}
+                  onRefresh={() => void getUnidadeDetalhe(unidade.id).then(setDetalhe)}
+                />
+              ) : null}
               {tab === 'fisc' ? <FiscTab unidade={detalhe} /> : null}
               {tab === 'nc' ? <NcTab unidade={detalhe} /> : null}
               {tab === 'os' ? <OsTab unidade={detalhe} /> : null}
@@ -145,7 +152,15 @@ export function UnidadeDrawer({
   );
 }
 
-function GeralTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => void }) {
+function GeralTab({
+  unidade,
+  onClose,
+  onRefresh,
+}: {
+  unidade: UnidadeDetalhe;
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
   const hasGps = unidade.latitude !== null && unidade.longitude !== null;
 
   return (
@@ -174,6 +189,7 @@ function GeralTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () =
       </dl>
 
       <div className="flex flex-wrap gap-2">
+        <UnidadeAvulsoActions unidadeId={unidade.id} unidadeNome={unidade.nome} onSuccess={onRefresh} />
         <Link href="/mobile" onClick={onClose}>
           <Button variant="filled" size="sm" className="gap-1.5">
             <ClipboardList className="h-4 w-4" />

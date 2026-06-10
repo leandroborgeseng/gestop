@@ -14,12 +14,14 @@ export function UnidadeList({
   hoveredId = null,
   onSelect,
   onHover,
+  embedded = false,
 }: {
   unidades: UnidadeOperacional[];
   selectedId?: string | null;
   hoveredId?: string | null;
   onSelect?: (id: string) => void;
   onHover?: (id: string | null) => void;
+  embedded?: boolean;
 }) {
 
   if (unidades.length === 0) {
@@ -32,15 +34,22 @@ export function UnidadeList({
   }
 
   return (
-    <div className="unit-list flex min-h-0 flex-1 flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
-      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--line-2)] px-4 py-3">
-        <h2 className="text-[13.5px] font-semibold text-[var(--ink)]">Próprios públicos</h2>
-        <span className="mono ml-auto rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-0.5 text-xs font-semibold text-[var(--ink-3)]">
+    <div
+      className={cn(
+        'unit-list flex min-h-0 flex-1 flex-col overflow-hidden',
+        embedded
+          ? 'bg-transparent'
+          : 'rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]',
+      )}
+    >
+      <div className="flex shrink-0 items-center gap-2 border-b border-[var(--line-2)] px-3.5 py-2.5">
+        <h2 className="text-[13px] font-semibold text-[var(--ink)]">Próprios públicos</h2>
+        <span className="mono ml-auto rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-3)]">
           {unidades.length}
         </span>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         {unidades.map((unidade) => {
           const selected = selectedId === unidade.id;
           const hovered = hoveredId === unidade.id;
@@ -54,14 +63,15 @@ export function UnidadeList({
               onMouseEnter={() => onHover?.(unidade.id)}
               onMouseLeave={() => onHover?.(null)}
               className={cn(
-                'unit-row mb-0.5 flex w-full gap-2.5 overflow-hidden rounded-[var(--r-md)] border border-transparent py-[var(--row-py)] pr-2.5 pl-0 text-left transition-colors',
+                'unit-row relative flex w-full touch-manipulation gap-2.5 overflow-hidden border-y border-transparent py-[var(--row-py)] pr-3 pl-3.5 text-left transition-colors',
+                'min-h-[44px]',
                 selected || hovered
-                  ? 'border-[color-mix(in_srgb,var(--brand)_30%,transparent)] bg-[var(--brand-soft)]'
-                  : 'hover:bg-[var(--surface-2)]',
+                  ? 'border-[color-mix(in_srgb,var(--brand)_22%,transparent)] bg-[var(--brand-soft)]'
+                  : 'hover:bg-[var(--surface-2)] active:bg-[var(--surface-2)]',
               )}
             >
               <span
-                className="w-[3px] shrink-0 self-stretch rounded-r"
+                className="pointer-events-none absolute inset-y-2 left-0 w-[3px] rounded-r"
                 style={{ background: situacaoRailColor(unidade.situacao) }}
                 aria-hidden
               />

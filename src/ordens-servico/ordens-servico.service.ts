@@ -3,12 +3,13 @@ import {
   AuditAction,
   NaoConformidadeStatus,
   OrdemServicoOrigem,
+  OrdemServicoPrioridade,
   OrdemServicoStatus,
   Prisma,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { PrismaService } from '../prisma/prisma.service';
-import { UpdateOrdemServicoDto } from './ordens-servico.dto';
+import { UpdateOrdemServicoDto, CreateOrdemServicoDto } from './ordens-servico.dto';
 import {
   assertValidOrderTransition,
   buildServiceOrderCode,
@@ -48,6 +49,59 @@ export class OrdensServicoService {
     });
 
     return { ...ordem, historico };
+  }
+
+  async createOrdemServico(dto: CreateOrdemServicoDto, user: JwtPayload) {
+    const unidade = await this.prisma.unidadePublica.findFirst({
+      where: { id: dto.unidadeId, ativo: true },
+    });
+    if (!unidade) throw new NotFoundException('Unidade não encontrada.');
+
+    const sequence = (await this.prisma.ordemServico.count()) + 1;
+    const prioridade = dto.prioridade ?? OrdemServicoPrioridade.MEDIA;
+    const prazoEm = dto.prazoEm ? new Date(dto.prazoEm) : buildDefaultDeadlineForPriority(prioridade);
+
+    const ordem = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.ordemServico.create({
+        data: {
+          codigo: buildServiceOrderCode(sequence),
+          secretariaId: unidade.secretariaId,
+          unidadeId: unidade.id,
+          solicitanteId: user.sub,
+          origem: OrdemServicoOrigem.MANUAL,
+          titulo: dto.titulo.trim(),
+          descricao: dto.descricao.trim(),
+          prioridade,
+          status: OrdemServicoStatus.ABERTA,
+          prazoEm,
+        },
+        include: this.includeRelations(),
+      });
+
+      await tx.historicoStatus.create({
+        data: {
+          entidadeTipo: 'OrdemServico',
+          entidadeId: created.id,
+          statusNovo: OrdemServicoStatus.ABERTA,
+          motivo: 'OS avulsa aberta manualmente pela CCO.',
+          alteradoPorId: user.sub,
+        },
+      });
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.CREATE,
+          entidadeTipo: 'OrdemServico',
+          entidadeId: created.id,
+          valorNovo: JSON.parse(JSON.stringify(created)) as Prisma.InputJsonValue,
+        },
+      });
+
+      return created;
+    });
+
+    return ordem;
   }
 
   async updateOrdem(id: string, dto: UpdateOrdemServicoDto, user: JwtPayload) {
@@ -205,6 +259,20 @@ export class OrdensServicoService {
 function buildDefaultDeadline(severidade: string) {
   const date = new Date();
   const days = severidade === 'CRITICA' ? 1 : severidade === 'ALTA' ? 2 : severidade === 'MEDIA' ? 5 : 10;
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function buildDefaultDeadlineForPriority(prioridade: OrdemServicoPrioridade) {
+  const date = new Date();
+  const days =
+    prioridade === OrdemServicoPrioridade.URGENTE
+      ? 1
+      : prioridade === OrdemServicoPrioridade.ALTA
+        ? 2
+        : prioridade === OrdemServicoPrioridade.MEDIA
+          ? 5
+          : 10;
   date.setDate(date.getDate() + days);
   return date;
 }
