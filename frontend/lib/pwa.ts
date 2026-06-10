@@ -10,6 +10,64 @@ export function registerServiceWorker() {
   });
 }
 
+export function subscribePwaUpdates(onUpdate: () => void) {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return () => {};
+
+  let registration: ServiceWorkerRegistration | undefined;
+  let refreshing = false;
+
+  function notifyIfWaiting(worker: ServiceWorker | null) {
+    if (worker?.state === 'installed' && navigator.serviceWorker.controller) {
+      onUpdate();
+    }
+  }
+
+  navigator.serviceWorker
+    .register('/sw.js')
+    .then((reg) => {
+      registration = reg;
+      if (reg.waiting) onUpdate();
+
+      reg.addEventListener('updatefound', () => {
+        notifyIfWaiting(reg.installing);
+        reg.installing?.addEventListener('statechange', () => notifyIfWaiting(reg.installing));
+      });
+    })
+    .catch(() => undefined);
+
+  const onControllerChange = () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  };
+
+  navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+
+  const interval = window.setInterval(() => {
+    registration?.update().catch(() => undefined);
+  }, 60 * 60 * 1000);
+
+  return () => {
+    window.clearInterval(interval);
+    navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+  };
+}
+
+export async function applyPwaUpdate() {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    window.location.reload();
+    return;
+  }
+
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (registration?.waiting) {
+    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    return;
+  }
+
+  window.location.reload();
+}
+
 export async function requestNotificationPermission() {
   if (typeof window === 'undefined' || !('Notification' in window)) return false;
   if (Notification.permission === 'granted') return true;

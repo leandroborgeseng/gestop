@@ -25,6 +25,7 @@ import { Chip } from '@/components/ui/chip';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { convertChamadoToOs, listChamados, updateChamadoStatus } from '@/lib/api';
+import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 import { cn } from '@/lib/cn';
 import { ChamadoOrigem, ChamadoResumo, ChamadoStatus } from '@/lib/types';
 
@@ -191,6 +192,7 @@ function ChamadosPageContent() {
         title="Chamados"
         description="Triagem e encaminhamento de chamados — abertos via QR Code, app de campo e registro interno."
         backHref="/cco"
+        action={<UnidadeAvulsoActions showOs={false} size="md" />}
       >
         <TipBanner id="chamados-triagem">
           Selecione um chamado na lista para ver detalhes e avançar o fluxo. Use os chips para filtrar por status.

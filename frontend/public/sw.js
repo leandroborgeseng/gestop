@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gestop-campo-v1';
+const CACHE_NAME = 'gestop-campo-v2';
 const PRECACHE_URLS = ['/mobile', '/icon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -14,6 +14,12 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener('push', (event) => {
@@ -49,23 +55,51 @@ self.addEventListener('notificationclick', (event) => {
   );
 });
 
+function shouldBypassCache(url) {
+  return (
+    url.pathname.startsWith('/api-gestop') ||
+    url.pathname.startsWith('/_next') ||
+    url.pathname.startsWith('/login') ||
+    url.pathname.startsWith('/recuperar-senha')
+  );
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith('/api-gestop')) return;
+  if (url.origin !== self.location.origin) return;
+  if (shouldBypassCache(url)) return;
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
         .then((response) => {
-          if (!response.ok || url.origin !== self.location.origin) return response;
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
           return response;
         })
-        .catch(() => cached ?? Response.error());
-    }),
-  );
+        .catch(() => caches.match(event.request)),
+    );
+    return;
+  }
+
+  const offlineFirst = url.pathname === '/mobile' || url.pathname === '/icon.svg' || url.pathname === '/manifest.webmanifest';
+
+  if (offlineFirst) {
+    event.respondWith(
+      caches.match(event.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(event.request).then((response) => {
+          if (response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return response;
+        });
+      }),
+    );
+  }
 });

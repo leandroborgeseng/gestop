@@ -18,6 +18,7 @@ import { OperationalMap } from '@/components/operational-map';
 import { UnidadeFiltersPanel } from '@/components/unidade-filters';
 import { UnidadeList } from '@/components/unidade-list';
 import { UnidadeDrawer } from '@/components/cco/unidade-drawer';
+import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Hint } from '@/components/help/hint';
 import { ErrorState, LoadingState } from '@/components/ui-states';
@@ -189,12 +190,18 @@ function CcoPageContent() {
       icon={Activity}
       title="Visão operacional dos próprios públicos"
       description="Mapa e lista sincronizados — filtros, busca e seleção refletem nos dois painéis."
-      action={<Badge variant="ok">RBAC ativo</Badge>}
+      action={
+        <div className="flex flex-wrap items-center gap-2">
+          <UnidadeAvulsoActions size="md" />
+          <Badge variant="ok">RBAC ativo</Badge>
+        </div>
+      }
       className="min-h-0"
     >
       <TipBanner id="cco-map-list-sync">
         <b className="text-[var(--brand-hover)]">Mapa e lista trabalham juntos.</b> Filtre ou passe o mouse na lista
-        para destacar o pin correspondente. Pressione <span className="mono">?</span> para abrir o guia.
+        para destacar o pin correspondente. Use <b>Abrir chamado</b> ou <b>Abrir OS avulsa</b> no topo ou no detalhe de um
+        próprio. Pressione <span className="mono">?</span> para abrir o guia.
       </TipBanner>
 
       <section className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">

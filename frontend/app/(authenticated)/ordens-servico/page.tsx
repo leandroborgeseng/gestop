@@ -26,6 +26,7 @@ import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { getOrdemServico, listOrdensServico, updateOrdemServico } from '@/lib/api';
+import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 import { cn } from '@/lib/cn';
 import {
   OS_STATUS_META,
@@ -183,6 +184,7 @@ function OrdensServicoPageContent() {
         title="Ordens de serviço"
         description="Acompanhamento de OS com prazo, responsável e linha do tempo de execução."
         backHref="/cco"
+        action={<UnidadeAvulsoActions showChamado={false} size="md" />}
       >
         <TipBanner id="os-lista-timeline">
           Selecione uma OS para ver prazo, responsável e linha do tempo. Use os chips para filtrar por status.

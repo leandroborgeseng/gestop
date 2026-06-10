@@ -6,13 +6,19 @@ import { getMe, getStoredAuth, StoredAuth } from '@/lib/api';
 import { AUTH_EXPIRED_EVENT } from '@/lib/security';
 import { AppShell } from '@/components/layout/app-shell';
 import { GuideProvider } from '@/components/help/guide-provider';
+import { PwaUpdateBanner } from '@/components/pwa/pwa-update-banner';
 import { PageContainer } from '@/components/layout/page-shell';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { registerServiceWorker } from '@/lib/pwa';
 
 export function SessionLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [auth, setAuth] = useState<StoredAuth | null>(null);
   const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    registerServiceWorker();
+  }, []);
 
   useEffect(() => {
     function redirectToLogin() {
@@ -64,6 +70,7 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
       <AppShell userName={auth.user.nome} userRoles={auth.user.perfis} permissions={auth.user.permissoes}>
         {children}
       </AppShell>
+      <PwaUpdateBanner />
     </GuideProvider>
   );
 }
