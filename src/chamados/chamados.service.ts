@@ -248,6 +248,11 @@ export class ChamadosService {
       await this.ensureEquipeAtiva(dto.equipeId);
     }
 
+    const nextEquipeId = dto.equipeId !== undefined ? dto.equipeId || null : before.equipeId;
+    if (dto.status === ChamadoStatus.EM_EXECUCAO && !nextEquipeId) {
+      throw new BadRequestException('Informe uma equipe antes de mover o chamado para Em execução.');
+    }
+
     const isTerminal = (status: ChamadoStatus) =>
       status === ChamadoStatus.CONCLUIDO || status === ChamadoStatus.CANCELADO;
 
@@ -257,7 +262,7 @@ export class ChamadosService {
         data: {
           status: dto.status,
           responsavelId: dto.responsavelId ?? before.responsavelId,
-          equipeId: dto.equipeId !== undefined ? dto.equipeId || null : before.equipeId,
+          equipeId: nextEquipeId,
           impedimentoMotivo:
             dto.status === ChamadoStatus.IMPEDIDO
               ? (dto.impedimentoMotivo ?? before.impedimentoMotivo)

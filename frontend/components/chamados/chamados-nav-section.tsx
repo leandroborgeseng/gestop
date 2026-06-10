@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { ChevronDown, Megaphone } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { listChamadosEmExecucao } from '@/lib/api';
+import { listChamadoEquipes, listChamadosEmExecucao } from '@/lib/api';
 import { isChamadosSectionActive, isNavActive, type NavItem } from '@/lib/navigation';
 
 export function ChamadosNavSection({
@@ -33,17 +33,30 @@ export function ChamadosNavSection({
 
   useEffect(() => {
     let active = true;
-    listChamadosEmExecucao()
-      .then((data) => {
+    Promise.all([listChamadosEmExecucao(), listChamadoEquipes()])
+      .then(([execData, equipes]) => {
         if (!active) return;
-        setExecTotal(data.total);
-        setGrupos(
-          data.grupos.map((grupo) => ({
-            key: grupo.equipe?.id ?? 'sem-equipe',
-            label: grupo.equipe?.nome ?? 'Sem equipe',
-            count: grupo.chamados.length,
-          })),
-        );
+
+        const countByEquipe = new Map<string, number>();
+        for (const grupo of execData.grupos) {
+          countByEquipe.set(grupo.equipe?.id ?? 'sem-equipe', grupo.chamados.length);
+        }
+
+        const items = equipes
+          .map((equipe) => ({
+            key: equipe.id,
+            label: equipe.secretaria?.sigla ? `${equipe.nome} · ${equipe.secretaria.sigla}` : equipe.nome,
+            count: countByEquipe.get(equipe.id) ?? 0,
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+
+        const semEquipeCount = countByEquipe.get('sem-equipe') ?? 0;
+        if (semEquipeCount > 0) {
+          items.push({ key: 'sem-equipe', label: 'Sem equipe', count: semEquipeCount });
+        }
+
+        setExecTotal(execData.total);
+        setGrupos(items);
       })
       .catch(() => {
         if (active) {
@@ -84,9 +97,9 @@ export function ChamadosNavSection({
       >
         <span className="relative shrink-0">
           <Icon className="h-[19px] w-[19px]" strokeWidth={sectionActive ? 2.2 : 1.9} />
-          {(badge ?? 0) + execTotal > 0 ? (
+          {(badge ?? 0) > 0 ? (
             <span className="mono absolute -top-1.5 -right-2 flex h-[15px] min-w-[15px] items-center justify-center rounded-[var(--r-pill)] bg-[var(--warn)] px-1 text-[9px] font-bold text-white">
-              {(badge ?? 0) + execTotal > 99 ? '99+' : (badge ?? 0) + execTotal}
+              {(badge ?? 0) > 99 ? '99+' : badge}
             </span>
           ) : null}
         </span>
@@ -114,10 +127,10 @@ export function ChamadosNavSection({
           />
         ) : null}
         <span className="relative shrink-0">
-          <Megaphone className="h-[19px] w-[19px]" strokeWidth={sectionActive ? 2.2 : 1.9} />
-          {(badge ?? 0) + execTotal > 0 ? (
+          <Icon className="h-[19px] w-[19px]" strokeWidth={sectionActive ? 2.2 : 1.9} />
+          {badge != null && badge > 0 ? (
             <span className="mono absolute -top-1.5 -right-2 flex h-[15px] min-w-[15px] items-center justify-center rounded-[var(--r-pill)] bg-[var(--warn)] px-1 text-[9px] font-bold text-white">
-              {(badge ?? 0) + execTotal > 99 ? '99+' : (badge ?? 0) + execTotal}
+              {badge > 99 ? '99+' : badge}
             </span>
           ) : null}
         </span>
@@ -163,22 +176,27 @@ export function ChamadosNavSection({
                   <span>Todas as equipes</span>
                   <span className="mono text-[10px] text-[var(--ink-3)]">{execTotal}</span>
                 </Link>
-                {grupos.map((grupo) => {
-                  const href = `/chamados/em-execucao?equipe=${grupo.key}`;
-                  const active = execucaoActive && activeEquipe === grupo.key;
-                  return (
-                    <Link
-                      key={grupo.key}
-                      href={href}
-                      prefetch
-                      className={subLinkClass(active)}
-                      aria-current={active ? 'page' : undefined}
-                    >
-                      <span className="truncate">{grupo.label}</span>
-                      <span className="mono text-[10px] text-[var(--ink-3)]">{grupo.count}</span>
-                    </Link>
-                  );
-                })}
+                {grupos.length === 0 ? (
+                  <p className="px-1 py-1.5 text-[11px] text-[var(--ink-3)]">Nenhuma equipe cadastrada.</p>
+                ) : (
+                  grupos.map((grupo) => {
+                    const href = `/chamados/em-execucao?equipe=${grupo.key}`;
+                    const active = execucaoActive && activeEquipe === grupo.key;
+                    return (
+                      <Link
+                        key={grupo.key}
+                        href={href}
+                        prefetch
+                        className={cn(subLinkClass(active), 'pl-1')}
+                        aria-current={active ? 'page' : undefined}
+                        title={grupo.label}
+                      >
+                        <span className="min-w-0 flex-1 truncate">{grupo.label}</span>
+                        <span className="mono shrink-0 text-[10px] text-[var(--ink-3)]">{grupo.count}</span>
+                      </Link>
+                    );
+                  })
+                )}
               </div>
             ) : null}
           </div>

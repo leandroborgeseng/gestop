@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
-import { listChamadosEmExecucao } from '@/lib/api';
+import { listChamadoEquipes, listChamadosEmExecucao } from '@/lib/api';
 import { CHAMADO_STATUS_META, prazoInfo, prioridadeVariant } from '@/lib/chamado-status';
 import { cn } from '@/lib/cn';
 import { ChamadosEmExecucaoGrupo, ChamadoResumo } from '@/lib/types';
@@ -40,13 +40,43 @@ function ChamadosEmExecucaoPageContent() {
   function load() {
     setLoading(true);
     setError(null);
-    listChamadosEmExecucao()
-      .then((data) => {
-        setGrupos(data.grupos);
-        setTotal(data.total);
-        const keys = new Set(data.grupos.map((g) => g.equipe?.id ?? 'sem-equipe'));
+    Promise.all([listChamadosEmExecucao(), listChamadoEquipes()])
+      .then(([execData, equipes]) => {
+        const chamadosByEquipe = new Map(
+          execData.grupos.map((grupo) => [grupo.equipe?.id ?? 'sem-equipe', grupo.chamados]),
+        );
+
+        const merged: ChamadosEmExecucaoGrupo[] = equipes.map((equipe) => ({
+          equipe: {
+            id: equipe.id,
+            nome: equipe.nome,
+            secretaria: equipe.secretaria ? { sigla: equipe.secretaria.sigla } : null,
+          },
+          chamados: chamadosByEquipe.get(equipe.id) ?? [],
+        }));
+
+        const semEquipeChamados = chamadosByEquipe.get('sem-equipe');
+        if (semEquipeChamados?.length) {
+          merged.push({ equipe: null, chamados: semEquipeChamados });
+        }
+
+        merged.sort((a, b) => {
+          const nomeA = a.equipe?.nome ?? 'Sem equipe';
+          const nomeB = b.equipe?.nome ?? 'Sem equipe';
+          return nomeA.localeCompare(nomeB, 'pt-BR');
+        });
+
+        setGrupos(merged);
+        setTotal(execData.total);
+
+        const keys = new Set<string>();
         if (equipeFilter) keys.add(equipeFilter);
-        else if (data.grupos.length === 1) keys.add(data.grupos[0]?.equipe?.id ?? 'sem-equipe');
+        else if (merged.length === 1) keys.add(merged[0]?.equipe?.id ?? 'sem-equipe');
+        else {
+          for (const grupo of merged) {
+            if (grupo.chamados.length > 0) keys.add(grupo.equipe?.id ?? 'sem-equipe');
+          }
+        }
         setOpenKeys(keys);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados em execução.'))
@@ -55,7 +85,7 @@ function ChamadosEmExecucaoPageContent() {
 
   useEffect(() => {
     load();
-  }, []);
+  }, [equipeFilter]);
 
   useEffect(() => {
     if (!equipeFilter) return;
@@ -104,14 +134,14 @@ function ChamadosEmExecucaoPageContent() {
 
         {loading ? <LoadingState label="Carregando chamados em execução..." /> : null}
 
-        {!loading && total === 0 ? (
+        {!loading && total === 0 && grupos.length === 0 ? (
           <EmptyState
             title="Nenhum chamado em execução"
-            description="Altere o status de um chamado para Em execução na fila geral."
+            description="Cadastre equipes na administração e altere o status de um chamado para Em execução."
           />
         ) : null}
 
-        {!loading && total > 0 ? (
+        {!loading && grupos.length > 0 ? (
           <div className="space-y-3">
             <p className="text-[13px] text-[var(--ink-3)]">
               {total} chamado(s) em execução
@@ -149,9 +179,11 @@ function ChamadosEmExecucaoPageContent() {
 
                   {open ? (
                     <CardContent className="divide-y divide-[var(--line-2)] p-0">
-                      {grupo.chamados.map((chamado) => (
-                        <ChamadoExecucaoRow key={chamado.id} chamado={chamado} />
-                      ))}
+                      {grupo.chamados.length === 0 ? (
+                        <p className="px-4 py-3 text-[13px] text-[var(--ink-3)]">Nenhum chamado em execução nesta equipe.</p>
+                      ) : (
+                        grupo.chamados.map((chamado) => <ChamadoExecucaoRow key={chamado.id} chamado={chamado} />)
+                      )}
                     </CardContent>
                   ) : null}
                 </Card>
