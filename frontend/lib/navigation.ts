@@ -149,7 +149,19 @@ export function isNavActive(pathname: string, href: string) {
     return pathname === '/cco' || pathname.startsWith('/cco/');
   }
 
+  if (href === '/chamados') {
+    return pathname === '/chamados' || (pathname.startsWith('/chamados/') && !pathname.startsWith('/chamados/em-execucao'));
+  }
+
+  if (href.startsWith('/chamados/em-execucao')) {
+    return pathname === href || pathname.startsWith(`${href}?`) || pathname.startsWith('/chamados/em-execucao');
+  }
+
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function isChamadosSectionActive(pathname: string) {
+  return pathname === '/chamados' || pathname.startsWith('/chamados/');
 }
 
 export const MORE_NAV_ICON = LayoutGrid;

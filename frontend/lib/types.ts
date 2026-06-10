@@ -415,9 +415,20 @@ export type ChamadoStatus =
   | 'ABERTO'
   | 'EM_TRIAGEM'
   | 'EM_ATENDIMENTO'
+  | 'EM_EXECUCAO'
   | 'IMPEDIDO'
   | 'CONCLUIDO'
   | 'CANCELADO';
+
+export type ChamadosEmExecucaoGrupo = {
+  equipe: { id: string; nome: string; secretaria?: { sigla: string } | null } | null;
+  chamados: ChamadoResumo[];
+};
+
+export type ChamadosEmExecucaoResponse = {
+  total: number;
+  grupos: ChamadosEmExecucaoGrupo[];
+};
 
 export type ChamadoOrigem = 'MANUAL' | 'QR_CODE' | 'INTERNO' | 'FISCALIZACAO';
 

@@ -30,6 +30,7 @@ const ALL_CHAMADO_STATUSES: ChamadoStatus[] = [
   'ABERTO',
   'EM_TRIAGEM',
   'EM_ATENDIMENTO',
+  'EM_EXECUCAO',
   'IMPEDIDO',
   'CONCLUIDO',
   'CANCELADO',
@@ -57,7 +58,7 @@ export function assertValidChamadoTransition(from: ChamadoStatus, to: ChamadoSta
 }
 
 export function nextChamadoStatusFlow(status: ChamadoStatus): ChamadoStatus | null {
-  const flow: ChamadoStatus[] = ['ABERTO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'CONCLUIDO'];
+  const flow: ChamadoStatus[] = ['ABERTO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CONCLUIDO'];
   const index = flow.indexOf(status);
   if (index === -1 || status === 'IMPEDIDO') return null;
   if (index >= flow.length - 1) return null;

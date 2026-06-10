@@ -5,6 +5,7 @@ export const CHAMADO_STATUS_META: Record<
   ABERTO: { label: 'Aberto', badge: 'info' },
   EM_TRIAGEM: { label: 'Em triagem', badge: 'warning' },
   EM_ATENDIMENTO: { label: 'Em atendimento', badge: 'brand' },
+  EM_EXECUCAO: { label: 'Em execução', badge: 'warning' },
   IMPEDIDO: { label: 'Impedido', badge: 'danger' },
   CONCLUIDO: { label: 'Concluído', badge: 'success' },
   CANCELADO: { label: 'Cancelado', badge: 'muted' },
@@ -24,7 +25,7 @@ export function nextChamadoStatuses(status: string) {
 }
 
 export function nextChamadoStatusFlow(status: string) {
-  const flow = ['ABERTO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'CONCLUIDO'];
+  const flow = ['ABERTO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CONCLUIDO'];
   const index = flow.indexOf(status);
   if (index === -1 || status === 'IMPEDIDO') return null;
   if (index >= flow.length - 1) return null;

@@ -37,6 +37,50 @@ export class ChamadosService {
     });
   }
 
+  async listEmExecucaoPorEquipe() {
+    const chamados = await this.prisma.chamado.findMany({
+      where: { status: ChamadoStatus.EM_EXECUCAO },
+      orderBy: [{ equipe: { nome: 'asc' } }, { prioridade: 'desc' }, { createdAt: 'asc' }],
+      include: this.includeRelations(),
+    });
+
+    const gruposMap = new Map<
+      string,
+      {
+        equipe: { id: string; nome: string; secretaria?: { sigla: string } | null } | null;
+        chamados: typeof chamados;
+      }
+    >();
+
+    for (const chamado of chamados) {
+      const key = chamado.equipeId ?? '__sem_equipe__';
+      if (!gruposMap.has(key)) {
+        gruposMap.set(key, {
+          equipe: chamado.equipe
+            ? {
+                id: chamado.equipe.id,
+                nome: chamado.equipe.nome,
+                secretaria: chamado.secretaria ? { sigla: chamado.secretaria.sigla } : null,
+              }
+            : null,
+          chamados: [],
+        });
+      }
+      gruposMap.get(key)!.chamados.push(chamado);
+    }
+
+    const grupos = Array.from(gruposMap.values()).sort((a, b) => {
+      if (!a.equipe) return 1;
+      if (!b.equipe) return -1;
+      return a.equipe.nome.localeCompare(b.equipe.nome, 'pt-BR');
+    });
+
+    return {
+      total: chamados.length,
+      grupos,
+    };
+  }
+
   listEquipesAtivas() {
     return this.prisma.equipe.findMany({
       where: { ativo: true },

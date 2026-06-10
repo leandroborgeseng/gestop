@@ -18,7 +18,7 @@ describe('canTransitionChamadoStatus', () => {
   });
 
   it('lista todos os demais status como opcoes', () => {
-    expect(selectableChamadoStatuses(ChamadoStatus.ABERTO)).toHaveLength(5);
+    expect(selectableChamadoStatuses(ChamadoStatus.ABERTO)).toHaveLength(6);
     expect(selectableChamadoStatuses(ChamadoStatus.ABERTO)).not.toContain('ABERTO');
   });
 });

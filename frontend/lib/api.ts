@@ -20,6 +20,7 @@ import {
   OperacionalResumo,
   ChamadoResumo,
   ChamadoDetalhe,
+  ChamadosEmExecucaoResponse,
   PublicUnidadeChamado,
   SecretariaOption,
   UnidadeDetalhe,
@@ -473,6 +474,10 @@ export function createPublicChamado(
 
 export function listChamados() {
   return request<ChamadoResumo[]>('/chamados');
+}
+
+export function listChamadosEmExecucao() {
+  return request<ChamadosEmExecucaoResponse>('/chamados/em-execucao');
 }
 
 export function createChamado(payload: {

@@ -8,6 +8,7 @@ const CHAMADO_ABERTOS: ChamadoStatus[] = [
   ChamadoStatus.ABERTO,
   ChamadoStatus.EM_TRIAGEM,
   ChamadoStatus.EM_ATENDIMENTO,
+  ChamadoStatus.EM_EXECUCAO,
   ChamadoStatus.IMPEDIDO,
 ];
 

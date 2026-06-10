@@ -18,6 +18,11 @@ export class ChamadosController {
     return this.chamadosService.listEquipesAtivas();
   }
 
+  @Get('em-execucao')
+  listEmExecucaoPorEquipe() {
+    return this.chamadosService.listEmExecucaoPorEquipe();
+  }
+
   @Get()
   list() {
     return this.chamadosService.listChamados();

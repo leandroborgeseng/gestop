@@ -23,6 +23,7 @@ const CHAMADO_OPEN_STATUSES: ChamadoStatus[] = [
   ChamadoStatus.ABERTO,
   ChamadoStatus.EM_TRIAGEM,
   ChamadoStatus.EM_ATENDIMENTO,
+  ChamadoStatus.EM_EXECUCAO,
   ChamadoStatus.IMPEDIDO,
 ];
 
