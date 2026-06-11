@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { AuditAction, OfflineSyncStatus } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
+import { MobileService } from '../mobile/mobile.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 type NotifyResult = {
@@ -15,7 +16,11 @@ type NotifyResult = {
 export class IntegracoesService {
   private readonly logger = new Logger(IntegracoesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => MobileService))
+    private readonly mobileService: MobileService,
+  ) {}
 
   async listEventosTecnicos() {
     const [syncFalhas, auditoriaIntegracoes] = await Promise.all([
@@ -126,16 +131,18 @@ export class IntegracoesService {
       },
     });
 
+    const replay = await this.mobileService.reprocessPendingSyncEvents(user);
+
     await this.prisma.logAuditoria.create({
       data: {
         usuarioId: user.sub,
         acao: AuditAction.SYNC,
         entidadeTipo: 'Integracao',
         entidadeId: 'retry-offline-sync',
-        valorNovo: { reenfileirados: result.count },
+        valorNovo: { reenfileirados: result.count, replay },
       },
     });
 
-    return { reenfileirados: result.count };
+    return { reenfileirados: result.count, ...replay };
   }
 }

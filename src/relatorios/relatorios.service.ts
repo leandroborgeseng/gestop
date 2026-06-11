@@ -34,7 +34,20 @@ export class RelatoriosService {
   }
 
   exportOrdensServico(filtro: RelatorioFiltroDto) {
-    return this.exportChamados(filtro);
+    return this.prisma.chamado.findMany({
+      where: {
+        ...this.chamadoWhere(filtro),
+        status: {
+          in: [ChamadoStatus.EM_ATENDIMENTO, ChamadoStatus.EM_EXECUCAO, ChamadoStatus.IMPEDIDO],
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        secretaria: { select: { sigla: true } },
+        unidade: { select: { codigoPatrimonial: true, nome: true } },
+        responsavel: { select: { nome: true } },
+      },
+    });
   }
 
   exportFiscalizacoes(filtro: RelatorioFiltroDto) {
@@ -128,7 +141,42 @@ export class RelatoriosService {
   }
 
   ordensServicoCsv(filtro: RelatorioFiltroDto) {
-    return this.chamadosCsv(filtro);
+    return this.exportOrdensServico(filtro).then((items) =>
+      buildCsv(
+        [
+          'codigo',
+          'status',
+          'origem',
+          'prioridade',
+          'secretaria_sigla',
+          'unidade_codigo',
+          'unidade_nome',
+          'titulo',
+          'descricao',
+          'responsavel',
+          'prazo_em',
+          'concluido_em',
+          'criado_em',
+          'encerrado_em',
+        ],
+        items.map((item) => [
+          item.codigo,
+          item.status,
+          item.origem,
+          item.prioridade,
+          item.secretaria.sigla,
+          item.unidade.codigoPatrimonial,
+          item.unidade.nome,
+          item.titulo ?? '',
+          item.descricao,
+          item.responsavel?.nome ?? '',
+          formatIsoDate(item.prazoEm),
+          formatIsoDate(item.concluidoEm),
+          formatIsoDate(item.createdAt),
+          formatIsoDate(item.encerradoEm),
+        ]),
+      ),
+    );
   }
 
   fiscalizacoesCsv(filtro: RelatorioFiltroDto) {
@@ -201,7 +249,21 @@ export class RelatoriosService {
   }
 
   ordensServicoPdf(filtro: RelatorioFiltroDto) {
-    return this.chamadosPdf(filtro);
+    return this.exportOrdensServico(filtro).then((items) =>
+      buildTablePdf({
+        title: 'GestOP — Chamados em operacao',
+        headers: ['Codigo', 'Status', 'Prioridade', 'Secretaria', 'Unidade', 'Responsavel', 'Prazo'],
+        rows: items.map((item) => [
+          item.codigo,
+          item.status,
+          item.prioridade,
+          item.secretaria.sigla,
+          item.unidade.nome,
+          item.responsavel?.nome ?? '',
+          formatIsoDate(item.prazoEm),
+        ]),
+      }),
+    );
   }
 
   fiscalizacoesPdf(filtro: RelatorioFiltroDto) {

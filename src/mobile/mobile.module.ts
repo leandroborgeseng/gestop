@@ -11,5 +11,6 @@ import { MobileService } from './mobile.service';
   imports: [AuthModule, CronogramaModule, ChamadosModule, StorageModule],
   controllers: [MobileController],
   providers: [MobileService, PrismaService],
+  exports: [MobileService],
 })
 export class MobileModule {}

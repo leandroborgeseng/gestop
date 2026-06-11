@@ -35,6 +35,16 @@ export const CHAMADO_OPEN_STATUSES: ChamadoStatus[] = [
   'IMPEDIDO',
 ];
 
+const ALLOWED_CHAMADO_TRANSITIONS: Record<ChamadoStatus, ChamadoStatus[]> = {
+  ABERTO: ['EM_TRIAGEM', 'EM_ATENDIMENTO', 'CANCELADO'],
+  EM_TRIAGEM: ['ABERTO', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CANCELADO'],
+  EM_ATENDIMENTO: ['EM_TRIAGEM', 'EM_EXECUCAO', 'IMPEDIDO', 'CONCLUIDO', 'CANCELADO'],
+  EM_EXECUCAO: ['EM_ATENDIMENTO', 'IMPEDIDO', 'CONCLUIDO', 'CANCELADO'],
+  IMPEDIDO: ['EM_TRIAGEM', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CANCELADO'],
+  CONCLUIDO: ['EM_TRIAGEM', 'EM_ATENDIMENTO'],
+  CANCELADO: ['ABERTO', 'EM_TRIAGEM'],
+};
+
 const ALL_CHAMADO_STATUSES: ChamadoStatus[] = [
   ...CHAMADO_OPEN_STATUSES,
   'CONCLUIDO',
@@ -42,7 +52,7 @@ const ALL_CHAMADO_STATUSES: ChamadoStatus[] = [
 ];
 
 export function selectableChamadoStatuses(from: ChamadoStatus): ChamadoStatus[] {
-  return ALL_CHAMADO_STATUSES.filter((status) => status !== from);
+  return ALLOWED_CHAMADO_TRANSITIONS[from] ?? [];
 }
 
 /** @deprecated Prefer selectableChamadoStatuses — mantido para compatibilidade de imports antigos */
@@ -52,7 +62,7 @@ export function nextChamadoStatuses(status: ChamadoStatus) {
 
 export function canTransitionChamadoStatus(from: ChamadoStatus, to: ChamadoStatus) {
   if (from === to) return false;
-  return ALL_CHAMADO_STATUSES.includes(to);
+  return ALLOWED_CHAMADO_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
 export function assertValidChamadoTransition(from: ChamadoStatus, to: ChamadoStatus) {

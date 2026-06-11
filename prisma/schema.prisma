@@ -347,6 +347,11 @@ model EquipeUsuario {
   @@index([usuarioId])
 }
 
+model ChamadoSequencia {
+  ano    Int @id
+  ultimo Int @default(0)
+}
+
 model Checklist {
   id            String          @id @default(uuid())
   secretariaId  String?

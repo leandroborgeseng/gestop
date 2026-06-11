@@ -55,14 +55,24 @@ describe('buildChamadoCode', () => {
 });
 
 describe('canTransitionChamadoStatus', () => {
-  it('permite alterar para qualquer status diferente do atual', () => {
+  it('permite transicoes operacionais validas', () => {
     expect(canTransitionChamadoStatus('EM_ATENDIMENTO', 'EM_TRIAGEM')).toBe(true);
+    expect(canTransitionChamadoStatus('EM_ATENDIMENTO', 'EM_EXECUCAO')).toBe(true);
     expect(canTransitionChamadoStatus('CONCLUIDO', 'EM_ATENDIMENTO')).toBe(true);
     expect(canTransitionChamadoStatus('ABERTO', 'ABERTO')).toBe(false);
   });
 
-  it('lista todos os demais status como opcoes', () => {
-    expect(selectableChamadoStatuses(ChamadoStatus.ABERTO)).toHaveLength(6);
+  it('bloqueia saltos invalidos', () => {
+    expect(canTransitionChamadoStatus('ABERTO', 'CONCLUIDO')).toBe(false);
+    expect(canTransitionChamadoStatus('CONCLUIDO', 'CANCELADO')).toBe(false);
+  });
+
+  it('lista apenas destinos permitidos', () => {
+    expect(selectableChamadoStatuses(ChamadoStatus.ABERTO)).toEqual([
+      'EM_TRIAGEM',
+      'EM_ATENDIMENTO',
+      'CANCELADO',
+    ]);
     expect(selectableChamadoStatuses(ChamadoStatus.ABERTO)).not.toContain('ABERTO');
   });
 });

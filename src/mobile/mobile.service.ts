@@ -102,6 +102,14 @@ export class MobileService {
       return { status: 'duplicado', syncEventId: existingEvent.id, fiscalizacaoId: existingEvent.entidadeId };
     }
 
+    const fiscalizacaoExistente = await this.prisma.fiscalizacao.findUnique({
+      where: { clientId: dto.clientEventId },
+      select: { id: true },
+    });
+    if (fiscalizacaoExistente) {
+      return { status: 'duplicado', fiscalizacaoId: fiscalizacaoExistente.id };
+    }
+
     const unidade = await this.prisma.unidadePublica.findUniqueOrThrow({
       where: { id: dto.unidadeId },
     });
@@ -297,6 +305,83 @@ export class MobileService {
       status: 'sincronizado',
       fiscalizacaoId: result.fiscalizacao.id,
       syncEventId: result.syncEvent.id,
+    };
+  }
+
+  async reprocessPendingSyncEvents(actor: JwtPayload, limit = 25) {
+    const events = await this.prisma.offlineSyncEvent.findMany({
+      where: {
+        status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.FALHOU, OfflineSyncStatus.CONFLITO] },
+        entidadeTipo: EntidadeSincronizavel.FISCALIZACAO,
+      },
+      orderBy: { recebidoEm: 'asc' },
+      take: limit,
+    });
+
+    let processados = 0;
+    let sucesso = 0;
+    let falhas = 0;
+    const erros: Array<{ id: string; erro: string }> = [];
+
+    for (const event of events) {
+      processados += 1;
+      const user = await this.resolveSyncUser(event.usuarioId, actor);
+      try {
+        const dto = event.payload as unknown as MobileSyncFiscalizacaoDto;
+        const result = await this.syncFiscalizacao(dto, user);
+        if (result.status === 'sincronizado' || result.status === 'duplicado') {
+          sucesso += 1;
+        } else {
+          falhas += 1;
+        }
+      } catch (error) {
+        falhas += 1;
+        erros.push({
+          id: event.id,
+          erro: error instanceof Error ? error.message : 'Erro desconhecido',
+        });
+      }
+    }
+
+    return { processados, sucesso, falhas, erros };
+  }
+
+  private async resolveSyncUser(usuarioId: string | null, fallback: JwtPayload): Promise<JwtPayload> {
+    if (!usuarioId) return fallback;
+
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: {
+        id: true,
+        email: true,
+        nome: true,
+        perfis: {
+          select: {
+            perfil: {
+              select: {
+                nome: true,
+                permissoes: { select: { permissao: { select: { chave: true } } } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!usuario) return fallback;
+
+    return {
+      sub: usuario.id,
+      email: usuario.email,
+      nome: usuario.nome,
+      perfis: usuario.perfis.map((item) => item.perfil.nome),
+      permissoes: Array.from(
+        new Set(
+          usuario.perfis.flatMap((item) =>
+            item.perfil.permissoes.map((perfilPermissao) => perfilPermissao.permissao.chave),
+          ),
+        ),
+      ),
     };
   }
 

@@ -393,26 +393,40 @@ export class ChamadosService {
     };
   }
 
+  private async nextChamadoSequence(tx?: Tx): Promise<number> {
+    const year = new Date().getFullYear();
+    const client = tx ?? this.prisma;
+    const rows = await client.$queryRaw<Array<{ ultimo: number }>>`
+      INSERT INTO "ChamadoSequencia" ("ano", "ultimo")
+      VALUES (${year}, 1)
+      ON CONFLICT ("ano") DO UPDATE SET "ultimo" = "ChamadoSequencia"."ultimo" + 1
+      RETURNING "ultimo"
+    `;
+    return Number(rows[0]?.ultimo ?? 1);
+  }
+
   async createChamado(dto: CreateChamadoDto, user: JwtPayload) {
     const unidade = await this.getActiveUnidadeOrThrow(dto.unidadeId);
-    const sequence = (await this.prisma.chamado.count()) + 1;
 
-    const chamado = await this.prisma.chamado.create({
-      data: {
-        codigo: buildChamadoCode(sequence),
-        secretariaId: unidade.secretariaId,
-        unidadeId: unidade.id,
-        descricao: dto.descricao.trim(),
-        prioridade: dto.prioridade,
-        origem: dto.origem ?? ChamadoOrigem.INTERNO,
-        solicitanteNome: dto.solicitanteNome?.trim(),
-        solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
-        solicitanteTelefone: dto.solicitanteTelefone?.trim(),
-        latitude: unidade.latitude,
-        longitude: unidade.longitude,
-        registradoPorId: user.sub,
-      },
-      include: this.includeRelations(),
+    const chamado = await this.prisma.$transaction(async (tx) => {
+      const sequence = await this.nextChamadoSequence(tx);
+      return tx.chamado.create({
+        data: {
+          codigo: buildChamadoCode(sequence),
+          secretariaId: unidade.secretariaId,
+          unidadeId: unidade.id,
+          descricao: dto.descricao.trim(),
+          prioridade: dto.prioridade,
+          origem: dto.origem ?? ChamadoOrigem.INTERNO,
+          solicitanteNome: dto.solicitanteNome?.trim(),
+          solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
+          solicitanteTelefone: dto.solicitanteTelefone?.trim(),
+          latitude: unidade.latitude,
+          longitude: unidade.longitude,
+          registradoPorId: user.sub,
+        },
+        include: this.includeRelations(),
+      });
     });
 
     await this.audit(user.sub, AuditAction.CREATE, chamado.id, null, chamado);
@@ -446,23 +460,25 @@ export class ChamadosService {
       fotoMimeType = stored.mimeType;
     }
 
-    const sequence = (await this.prisma.chamado.count()) + 1;
-    const chamado = await this.prisma.chamado.create({
-      data: {
-        codigo: buildChamadoCode(sequence),
-        secretariaId: unidade.secretariaId,
-        unidadeId: unidade.id,
-        descricao: dto.descricao.trim(),
-        origem: ChamadoOrigem.QR_CODE,
-        solicitanteNome: dto.solicitanteNome?.trim(),
-        solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
-        solicitanteTelefone: dto.solicitanteTelefone?.trim(),
-        latitude: unidade.latitude,
-        longitude: unidade.longitude,
-        fotoUrl,
-        fotoMimeType,
-      },
-      include: this.includeRelations(),
+    const chamado = await this.prisma.$transaction(async (tx) => {
+      const sequence = await this.nextChamadoSequence(tx);
+      return tx.chamado.create({
+        data: {
+          codigo: buildChamadoCode(sequence),
+          secretariaId: unidade.secretariaId,
+          unidadeId: unidade.id,
+          descricao: dto.descricao.trim(),
+          origem: ChamadoOrigem.QR_CODE,
+          solicitanteNome: dto.solicitanteNome?.trim(),
+          solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
+          solicitanteTelefone: dto.solicitanteTelefone?.trim(),
+          latitude: unidade.latitude,
+          longitude: unidade.longitude,
+          fotoUrl,
+          fotoMimeType,
+        },
+        include: this.includeRelations(),
+      });
     });
 
     await this.prisma.logAuditoria.create({
@@ -655,7 +671,7 @@ export class ChamadosService {
       return naoConformidade.chamado;
     }
 
-    const sequence = (await tx.chamado.count()) + 1;
+    const sequence = await this.nextChamadoSequence(tx);
     const chamado = await tx.chamado.create({
       data: {
         codigo: buildChamadoCode(sequence),
