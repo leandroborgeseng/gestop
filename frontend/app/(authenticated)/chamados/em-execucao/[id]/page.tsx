@@ -18,7 +18,7 @@ export default function ChamadoExecucaoPage() {
   }
 
   return (
-    <RequirePermissions permissions={['chamados.gerenciar']}>
+    <RequirePermissions permissions={['chamados.gerenciar', 'chamados.executar']} match="any">
       <PageShell
         kicker="Execução de campo"
         icon={HardHat}

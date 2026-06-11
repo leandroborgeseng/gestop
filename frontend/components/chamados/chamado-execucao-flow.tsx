@@ -14,6 +14,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
+import { AuthenticatedImage } from '@/components/ui/authenticated-image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -370,7 +371,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                 {evidencias.map((evidencia) => (
                   <figure key={evidencia.id} className="overflow-hidden rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={evidencia.url} alt="Evidência da execução" className="aspect-[4/3] w-full object-cover" />
+                    <AuthenticatedImage src={evidencia.url} alt="Evidência da execução" className="aspect-[4/3] w-full object-cover" />
                     <figcaption className="px-2 py-1 text-[11px] text-[var(--ink-3)]">
                       {new Date(evidencia.capturadaEm).toLocaleString('pt-BR')}
                     </figcaption>

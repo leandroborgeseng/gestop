@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, BarChart3, Building2, ClipboardCheck, DatabaseZap, Megaphone, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, BarChart3, Building2, ClipboardCheck, DatabaseZap, MapPin, Megaphone, ShieldAlert } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
@@ -84,7 +84,7 @@ export default function DashboardPage() {
               </Alert>
             ) : null}
 
-            <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+            <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard title="Próprios" value={dashboard.indicadores.totalUnidades} hint="cadastrados" icon={Building2} />
               <MetricCard title="Vistorias" value={dashboard.indicadores.fiscalizacoes} hint="registradas" icon={ClipboardCheck} />
               <MetricCard
@@ -94,8 +94,28 @@ export default function DashboardPage() {
                 icon={ShieldAlert}
                 deltaTone={dashboard.indicadores.naoConformidades > 0 ? 'warn' : undefined}
               />
-              <MetricCard title="Chamados abertos" value={dashboard.indicadores.chamados.abertos} hint="aguardando ação" icon={Megaphone} />
-              <MetricCard title="Em atendimento" value={dashboard.indicadores.chamados.emAtendimento} hint="em andamento" icon={Megaphone} />
+              <MetricCard
+                title="Chamados abertos"
+                value={dashboard.indicadores.chamados.abertos}
+                hint="triagem + fila operacional"
+                icon={Megaphone}
+                deltaTone={dashboard.indicadores.chamados.abertos > 0 ? 'warn' : undefined}
+              />
+              <MetricCard title="Em atendimento" value={dashboard.indicadores.chamados.emAtendimento} hint="backoffice" icon={Megaphone} />
+              <MetricCard
+                title="Em execução"
+                value={dashboard.indicadores.chamados.emExecucao}
+                hint="equipe em campo"
+                icon={MapPin}
+                deltaTone={dashboard.indicadores.chamados.emExecucao > 0 ? 'warn' : undefined}
+              />
+              <MetricCard
+                title="Impedidos"
+                value={dashboard.indicadores.chamados.impedidos}
+                hint="bloqueados"
+                icon={AlertTriangle}
+                deltaTone={dashboard.indicadores.chamados.impedidos > 0 ? 'warn' : undefined}
+              />
               <MetricCard
                 title="Sync pendente"
                 value={dashboard.indicadores.syncPendentes}

@@ -174,6 +174,7 @@ export class AdminService {
 
   async createEquipe(dto: EquipeDto, user: JwtPayload) {
     await this.ensureUsuariosExist(dto.usuarioIds);
+    await this.ensureEquipeMembrosCoerentes(dto.secretariaId, dto.usuarioIds);
 
     const equipe = await this.prisma.equipe.create({
       data: {
@@ -197,6 +198,7 @@ export class AdminService {
   async updateEquipe(id: string, dto: EquipeDto, user: JwtPayload) {
     const before = await this.getEquipeOrThrow(id);
     await this.ensureUsuariosExist(dto.usuarioIds);
+    await this.ensureEquipeMembrosCoerentes(dto.secretariaId, dto.usuarioIds);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.equipeUsuario.deleteMany({ where: { equipeId: id } });
@@ -391,6 +393,20 @@ export class AdminService {
       },
       _count: { select: { chamados: true } },
     } satisfies Prisma.EquipeInclude;
+  }
+
+  private async ensureEquipeMembrosCoerentes(secretariaId: string | null | undefined, usuarioIds: string[]) {
+    if (!secretariaId || usuarioIds.length === 0) return;
+
+    const usuarios = await this.prisma.usuario.findMany({
+      where: { id: { in: usuarioIds } },
+      select: { id: true, secretariaId: true },
+    });
+
+    const invalidos = usuarios.filter((usuario) => usuario.secretariaId !== secretariaId);
+    if (invalidos.length > 0) {
+      throw new BadRequestException('Membros devem pertencer à mesma secretaria da equipe.');
+    }
   }
 
   private async ensureUsuariosExist(usuarioIds: string[]) {

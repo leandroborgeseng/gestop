@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AuditAction,
   ChamadoOrigem,
@@ -17,6 +17,7 @@ import {
   buildChamadoCode,
   buildChamadoTitleFromNc,
   buildDefaultDeadlineFromSeverity,
+  canUsuarioExecutarChamado,
   historicoHasExecucaoCheckin,
   isEvidenciaExecucaoCampo,
   parseExecucaoCheckinMetadata,
@@ -44,9 +45,17 @@ export class ChamadosService {
       .then((items) => items.map((item) => this.serializeChamado(item)));
   }
 
-  async listEmExecucaoPorEquipe() {
+  async listEmExecucaoPorEquipe(user: JwtPayload) {
+    const onlyExecutor =
+      !user.permissoes.includes('chamados.gerenciar') && user.permissoes.includes('chamados.executar');
+
     const chamados = await this.prisma.chamado.findMany({
-      where: { status: ChamadoStatus.EM_EXECUCAO },
+      where: {
+        status: ChamadoStatus.EM_EXECUCAO,
+        ...(onlyExecutor
+          ? { equipe: { membros: { some: { usuarioId: user.sub } } } }
+          : {}),
+      },
       orderBy: [{ equipe: { nome: 'asc' } }, { prioridade: 'desc' }, { createdAt: 'asc' }],
       include: this.includeRelations(),
     });
@@ -118,8 +127,9 @@ export class ChamadosService {
     return { ...this.serializeChamado(chamado), historico };
   }
 
-  async getChamadoParaExecucao(id: string) {
+  async getChamadoParaExecucao(id: string, user: JwtPayload) {
     const chamado = await this.getChamadoOrThrow(id);
+    await this.assertUsuarioPodeExecutarChamado(chamado, user);
     if (chamado.status !== ChamadoStatus.EM_EXECUCAO) {
       throw new BadRequestException('Somente chamados em execução podem ser atendidos neste fluxo.');
     }
@@ -177,6 +187,7 @@ export class ChamadosService {
 
   async registrarCheckinExecucao(id: string, dto: ChamadoExecucaoCheckinDto, user: JwtPayload) {
     const chamado = await this.getChamadoOrThrow(id);
+    await this.assertUsuarioPodeExecutarChamado(chamado, user);
     this.assertChamadoEmExecucao(chamado.status);
 
     const unidade = await this.prisma.unidadePublica.findUnique({
@@ -217,11 +228,12 @@ export class ChamadosService {
       },
     });
 
-    return this.getChamadoParaExecucao(id);
+    return this.getChamadoParaExecucao(id, user);
   }
 
   async adicionarEvidenciaExecucao(id: string, dto: ChamadoExecucaoEvidenciaDto, user: JwtPayload) {
     const chamado = await this.getChamadoOrThrow(id);
+    await this.assertUsuarioPodeExecutarChamado(chamado, user);
     this.assertChamadoEmExecucao(chamado.status);
     await this.assertCheckinExecucaoRegistrado(id);
 
@@ -262,6 +274,7 @@ export class ChamadosService {
 
   async concluirExecucao(id: string, dto: ChamadoExecucaoConcluirDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
+    await this.assertUsuarioPodeExecutarChamado(before, user);
     this.assertChamadoEmExecucao(before.status);
     await this.assertCheckinExecucaoRegistrado(id);
 
@@ -742,6 +755,39 @@ export class ChamadosService {
         },
       },
     };
+  }
+
+  private async assertUsuarioPodeExecutarChamado(
+    chamado: { equipeId: string | null },
+    user: JwtPayload,
+  ) {
+    if (user.permissoes.includes('chamados.gerenciar')) {
+      return;
+    }
+
+    if (!user.permissoes.includes('chamados.executar')) {
+      throw new ForbiddenException('Seu perfil não pode executar chamados em campo.');
+    }
+
+    if (!chamado.equipeId) {
+      throw new ForbiddenException('Chamado sem equipe atribuída.');
+    }
+
+    const membros = await this.prisma.equipeUsuario.findMany({
+      where: { equipeId: chamado.equipeId },
+      select: { usuarioId: true },
+    });
+
+    if (
+      !canUsuarioExecutarChamado(
+        user.permissoes,
+        user.sub,
+        chamado,
+        membros.map((item) => item.usuarioId),
+      )
+    ) {
+      throw new ForbiddenException('Você não faz parte da equipe deste chamado.');
+    }
   }
 
   private assertChamadoEmExecucao(status: ChamadoStatus) {

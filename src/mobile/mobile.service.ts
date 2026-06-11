@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   AuditAction,
+  ChecklistEscopo,
   ConformidadeStatus,
   EntidadeSincronizavel,
   EvidenciaTipo,
@@ -30,10 +31,20 @@ export class MobileService {
     private readonly cronogramaService: CronogramaService,
   ) {}
 
-  async getFieldPackage() {
+  async getFieldPackage(user: JwtPayload) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: user.sub },
+      select: { secretariaId: true },
+    });
+
+    const unidadeWhere = {
+      ativo: true,
+      ...(usuario?.secretariaId ? { secretariaId: usuario.secretariaId } : {}),
+    };
+
     const [unidades, checklists] = await Promise.all([
       this.prisma.unidadePublica.findMany({
-        where: { ativo: true },
+        where: unidadeWhere,
         orderBy: { nome: 'asc' },
         select: {
           id: true,
@@ -52,6 +63,12 @@ export class MobileService {
         where: {
           ativo: true,
           versoes: { some: { status: 'PUBLICADA' } },
+          OR: [
+            { escopo: ChecklistEscopo.GLOBAL },
+            ...(usuario?.secretariaId
+              ? [{ escopo: ChecklistEscopo.SECRETARIA, secretariaId: usuario.secretariaId }]
+              : []),
+          ],
         },
         orderBy: { nome: 'asc' },
         include: {

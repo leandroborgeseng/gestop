@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { AuditAction, ChecklistVersaoStatus, Prisma } from '@prisma/client';
+import { AuditAction, ChecklistEscopo, ChecklistVersaoStatus, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChecklistDto, ChecklistVersionDto } from './checklists.dto';
@@ -44,6 +44,7 @@ export class ChecklistsService {
   async createChecklist(dto: ChecklistDto, user: JwtPayload) {
     this.assertChecklistEscopo(dto);
     const binding = normalizeChecklistBinding(dto);
+    await this.ensureUnidadeAtiva(binding.unidadeId);
 
     const checklist = await this.prisma.checklist.create({
       data: {
@@ -72,6 +73,7 @@ export class ChecklistsService {
   async updateChecklist(id: string, dto: ChecklistDto, user: JwtPayload) {
     this.assertChecklistEscopo(dto);
     const binding = normalizeChecklistBinding(dto);
+    await this.ensureUnidadeAtiva(binding.unidadeId);
     const before = await this.getChecklist(id);
     const checklist = await this.prisma.checklist.update({
       where: { id },
@@ -229,6 +231,23 @@ export class ChecklistsService {
 
     await this.audit(user, AuditAction.UPDATE, 'ChecklistVersao', versionId, version, published);
     return published;
+  }
+
+  private async ensureUnidadeAtiva(unidadeId?: string | null) {
+    if (!unidadeId) return;
+
+    const unidade = await this.prisma.unidadePublica.findUnique({
+      where: { id: unidadeId },
+      select: { id: true, ativo: true },
+    });
+
+    if (!unidade) {
+      throw new BadRequestException('Unidade informada para o checklist nao existe.');
+    }
+
+    if (!unidade.ativo) {
+      throw new BadRequestException('Unidade informada para o checklist esta inativa.');
+    }
   }
 
   private assertChecklistEscopo(dto: ChecklistDto) {

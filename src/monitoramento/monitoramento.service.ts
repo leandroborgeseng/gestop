@@ -1,16 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { ChamadoStatus, NaoConformidadeStatus, OfflineSyncStatus } from '@prisma/client';
+import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import { PrismaService } from '../prisma/prisma.service';
 
 const CHAMADO_ALERTA_HORAS = 48;
-
-const CHAMADO_ABERTOS: ChamadoStatus[] = [
-  ChamadoStatus.ABERTO,
-  ChamadoStatus.EM_TRIAGEM,
-  ChamadoStatus.EM_ATENDIMENTO,
-  ChamadoStatus.EM_EXECUCAO,
-  ChamadoStatus.IMPEDIDO,
-];
 
 @Injectable()
 export class MonitoramentoService {
@@ -23,6 +16,8 @@ export class MonitoramentoService {
       naoConformidades,
       chamadosAbertos,
       chamadosEmAtendimento,
+      chamadosEmExecucao,
+      chamadosImpedidos,
       chamadosConcluidos,
       syncPendentes,
       pendenciasPorSecretaria,
@@ -30,10 +25,10 @@ export class MonitoramentoService {
       this.prisma.unidadePublica.count({ where: { ativo: true } }),
       this.prisma.fiscalizacao.count(),
       this.prisma.naoConformidade.count({ where: { status: { not: NaoConformidadeStatus.RESOLVIDA } } }),
-      this.prisma.chamado.count({
-        where: { status: { in: [ChamadoStatus.ABERTO, ChamadoStatus.EM_TRIAGEM] } },
-      }),
+      this.prisma.chamado.count({ where: { status: { in: CHAMADO_OPEN_STATUSES } } }),
       this.prisma.chamado.count({ where: { status: ChamadoStatus.EM_ATENDIMENTO } }),
+      this.prisma.chamado.count({ where: { status: ChamadoStatus.EM_EXECUCAO } }),
+      this.prisma.chamado.count({ where: { status: ChamadoStatus.IMPEDIDO } }),
       this.prisma.chamado.count({ where: { status: ChamadoStatus.CONCLUIDO } }),
       this.prisma.offlineSyncEvent.count({
         where: { status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.CONFLITO, OfflineSyncStatus.FALHOU] } },
@@ -46,7 +41,7 @@ export class MonitoramentoService {
           nome: true,
           _count: {
             select: {
-              chamados: { where: { status: { in: CHAMADO_ABERTOS } } },
+              chamados: { where: { status: { in: CHAMADO_OPEN_STATUSES } } },
               fiscalizacoes: true,
             },
           },
@@ -63,6 +58,8 @@ export class MonitoramentoService {
         chamados: {
           abertos: chamadosAbertos,
           emAtendimento: chamadosEmAtendimento,
+          emExecucao: chamadosEmExecucao,
+          impedidos: chamadosImpedidos,
           concluidos: chamadosConcluidos,
         },
         syncPendentes,
@@ -95,7 +92,7 @@ export class MonitoramentoService {
       this.prisma.chamado.findMany({
         where: {
           prazoEm: { lt: now },
-          status: { in: CHAMADO_ABERTOS },
+          status: { in: CHAMADO_OPEN_STATUSES },
         },
         orderBy: { prazoEm: 'asc' },
         take: 20,
@@ -134,7 +131,7 @@ export class MonitoramentoService {
       this.prisma.chamado.count({
         where: {
           prioridade: 'URGENTE',
-          status: { in: CHAMADO_ABERTOS },
+          status: { in: CHAMADO_OPEN_STATUSES },
         },
       }),
     ]);

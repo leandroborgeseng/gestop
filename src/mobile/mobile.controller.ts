@@ -14,8 +14,8 @@ export class MobileController {
 
   @RequirePermissions('fiscalizacoes.executar')
   @Get('field-package')
-  getFieldPackage() {
-    return this.mobileService.getFieldPackage();
+  getFieldPackage(@CurrentUser() user: JwtPayload) {
+    return this.mobileService.getFieldPackage(user);
   }
 
   @RequirePermissions('fiscalizacoes.executar')

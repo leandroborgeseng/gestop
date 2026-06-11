@@ -12,6 +12,8 @@ export type StoredObject = {
   checksum: string;
 };
 
+const ALLOWED_EVIDENCE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+
 @Injectable()
 export class StorageService {
   private readonly logger = new Logger(StorageService.name);
@@ -23,17 +25,7 @@ export class StorageService {
       return this.storeBuffer(parsed.buffer, parsed.mimeType, 'evidencias');
     }
 
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return {
-        url,
-        storageKey: extractStorageKeyFromUrl(url),
-        mimeType: mimeType ?? 'application/octet-stream',
-        tamanhoBytes: 0,
-        checksum: createHash('sha256').update(url).digest('hex'),
-      };
-    }
-
-    throw new BadRequestException('URL de evidencia invalida.');
+    throw new BadRequestException('Envie a evidencia como upload (data URL). URLs externas nao sao aceitas.');
   }
 
   private async storeBuffer(buffer: Buffer, mimeType: string, prefix: string): Promise<StoredObject> {
@@ -112,7 +104,10 @@ function parseDataUrl(url: string, fallbackMimeType?: string | null) {
     throw new BadRequestException('Data URL de evidencia invalida.');
   }
 
-  const mimeType = match[1] || fallbackMimeType || 'application/octet-stream';
+  const mimeType = (match[1] || fallbackMimeType || 'application/octet-stream').toLowerCase();
+  if (!ALLOWED_EVIDENCE_MIMES.has(mimeType)) {
+    throw new BadRequestException(`Tipo de arquivo nao permitido: ${mimeType}`);
+  }
   const payload = match[2];
   const buffer = url.includes(';base64,')
     ? Buffer.from(payload, 'base64')

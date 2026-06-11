@@ -3,11 +3,48 @@ import { ChamadoStatus } from '@prisma/client';
 import {
   buildChamadoCode,
   canTransitionChamadoStatus,
+  canUsuarioExecutarChamado,
+  CHAMADO_OPEN_STATUSES,
   historicoHasExecucaoCheckin,
   isEvidenciaExecucaoCampo,
   parseExecucaoCheckinMetadata,
   selectableChamadoStatuses,
 } from './chamados.rules';
+
+describe('canUsuarioExecutarChamado', () => {
+  it('gestor com gerenciar pode executar qualquer chamado', () => {
+    expect(
+      canUsuarioExecutarChamado(['chamados.gerenciar'], 'u1', { equipeId: 'eq1' }, []),
+    ).toBe(true);
+  });
+
+  it('operador precisa ser membro da equipe', () => {
+    expect(
+      canUsuarioExecutarChamado(['chamados.executar'], 'u1', { equipeId: 'eq1' }, ['u2']),
+    ).toBe(false);
+    expect(
+      canUsuarioExecutarChamado(['chamados.executar'], 'u1', { equipeId: 'eq1' }, ['u1', 'u2']),
+    ).toBe(true);
+  });
+
+  it('operador nao executa chamado sem equipe', () => {
+    expect(canUsuarioExecutarChamado(['chamados.executar'], 'u1', { equipeId: null }, ['u1'])).toBe(false);
+  });
+});
+
+describe('CHAMADO_OPEN_STATUSES', () => {
+  it('inclui todos os status operacionais nao encerrados', () => {
+    expect(CHAMADO_OPEN_STATUSES).toEqual([
+      'ABERTO',
+      'EM_TRIAGEM',
+      'EM_ATENDIMENTO',
+      'EM_EXECUCAO',
+      'IMPEDIDO',
+    ]);
+    expect(CHAMADO_OPEN_STATUSES).not.toContain('CONCLUIDO');
+    expect(CHAMADO_OPEN_STATUSES).not.toContain('CANCELADO');
+  });
+});
 
 describe('buildChamadoCode', () => {
   it('formata codigo com ano e sequencia', () => {

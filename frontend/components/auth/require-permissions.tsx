@@ -7,13 +7,15 @@ import { ErrorState } from '@/components/ui-states';
 
 export function RequirePermissions({
   permissions = [],
+  match = 'all',
   children,
 }: {
   permissions?: string[];
+  match?: 'all' | 'any';
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const permissionKey = useMemo(() => permissions.slice().sort().join('|'), [permissions]);
+  const permissionKey = useMemo(() => `${match}:${permissions.slice().sort().join('|')}`, [match, permissions]);
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -29,16 +31,20 @@ export function RequirePermissions({
       return;
     }
 
-    const hasAll = permissions.every((permission) => stored.user.permissoes.includes(permission));
+    const userPermissions = stored.user.permissoes;
+    const hasAccess =
+      match === 'any'
+        ? permissions.some((permission) => userPermissions.includes(permission))
+        : permissions.every((permission) => userPermissions.includes(permission));
 
-    if (!hasAll) {
+    if (!hasAccess) {
       router.replace('/cco?reason=denied');
       setAllowed(false);
       return;
     }
 
     setAllowed(true);
-  }, [router, permissionKey, permissions]);
+  }, [router, permissionKey, permissions, match]);
 
   if (allowed === null) {
     return null;

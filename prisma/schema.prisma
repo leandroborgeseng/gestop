@@ -200,6 +200,7 @@ model UnidadePublica {
   fiscalizacoes    Fiscalizacao[]
   naoConformidades NaoConformidade[]
   chamados         Chamado[]
+  checklists       Checklist[]
   dashboardSnapshots DashboardSnapshot[]
   cronogramas      CronogramaChecagem[]
 
@@ -359,6 +360,7 @@ model Checklist {
   updatedAt     DateTime        @updatedAt
 
   secretaria Secretaria?      @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
+  unidade    UnidadePublica?  @relation(fields: [unidadeId], references: [id], onDelete: SetNull)
   versoes    ChecklistVersao[]
   cronogramas CronogramaChecagem[]
 

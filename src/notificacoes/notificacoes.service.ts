@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, ForbiddenException } from '@nestjs/common';
 import webpush from 'web-push';
 import { EmailService } from '../email/email.service';
 import { IntegracoesService } from '../integracoes/integracoes.service';
@@ -41,6 +41,15 @@ export class NotificacoesService implements OnModuleInit {
   }
 
   async subscribePush(usuarioId: string, dto: PushSubscribeDto) {
+    const existing = await this.prisma.pushSubscription.findUnique({
+      where: { endpoint: dto.endpoint },
+      select: { usuarioId: true },
+    });
+
+    if (existing && existing.usuarioId !== usuarioId) {
+      throw new ForbiddenException('Este dispositivo já está registrado para outro usuário.');
+    }
+
     return this.prisma.pushSubscription.upsert({
       where: { endpoint: dto.endpoint },
       create: {

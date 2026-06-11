@@ -105,7 +105,7 @@ function ChamadosEmExecucaoPageContent() {
     : null;
 
   return (
-    <RequirePermissions permissions={['chamados.gerenciar']}>
+    <RequirePermissions permissions={['chamados.gerenciar', 'chamados.executar']} match="any">
       <PageShell
         kicker="Chamados operacionais"
         icon={UsersRound}

@@ -26,12 +26,17 @@ export function buildDefaultDeadlineFromSeverity(severidade: string) {
   return date;
 }
 
-const ALL_CHAMADO_STATUSES: ChamadoStatus[] = [
+/** Status considerados "abertos" em KPIs operacionais (CCO, dashboard, pendências). */
+export const CHAMADO_OPEN_STATUSES: ChamadoStatus[] = [
   'ABERTO',
   'EM_TRIAGEM',
   'EM_ATENDIMENTO',
   'EM_EXECUCAO',
   'IMPEDIDO',
+];
+
+const ALL_CHAMADO_STATUSES: ChamadoStatus[] = [
+  ...CHAMADO_OPEN_STATUSES,
   'CONCLUIDO',
   'CANCELADO',
 ];
@@ -55,6 +60,18 @@ export function assertValidChamadoTransition(from: ChamadoStatus, to: ChamadoSta
   if (!canTransitionChamadoStatus(from, to)) {
     throw new Error(`Transição inválida de ${from} para ${to}`);
   }
+}
+
+export function canUsuarioExecutarChamado(
+  permissoes: string[],
+  usuarioId: string,
+  chamado: { equipeId: string | null },
+  membrosEquipeIds: string[],
+) {
+  if (permissoes.includes('chamados.gerenciar')) return true;
+  if (!permissoes.includes('chamados.executar')) return false;
+  if (!chamado.equipeId) return false;
+  return membrosEquipeIds.includes(usuarioId);
 }
 
 export function isEvidenciaExecucaoCampo(metadata: unknown) {

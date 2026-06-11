@@ -556,6 +556,8 @@ export type DashboardData = {
     chamados: {
       abertos: number;
       emAtendimento: number;
+      emExecucao: number;
+      impedidos: number;
       concluidos: number;
     };
     syncPendentes: number;

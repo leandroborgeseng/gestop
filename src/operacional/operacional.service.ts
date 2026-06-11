@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
-  ChamadoStatus,
   NaoConformidadeStatus,
   Prisma,
   UnidadeTipo,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import {
   applyInMemoryUnidadeFilters,
   mapUnidadeOperacional,
@@ -17,14 +17,6 @@ const NON_CONFORMITY_OPEN_STATUSES: NaoConformidadeStatus[] = [
   NaoConformidadeStatus.ABERTA,
   NaoConformidadeStatus.EM_TRIAGEM,
   NaoConformidadeStatus.CHAMADO_GERADO,
-];
-
-const CHAMADO_OPEN_STATUSES: ChamadoStatus[] = [
-  ChamadoStatus.ABERTO,
-  ChamadoStatus.EM_TRIAGEM,
-  ChamadoStatus.EM_ATENDIMENTO,
-  ChamadoStatus.EM_EXECUCAO,
-  ChamadoStatus.IMPEDIDO,
 ];
 
 @Injectable()

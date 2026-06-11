@@ -196,7 +196,7 @@ function GeralTab({
             Nova vistoria
           </Button>
         </Link>
-        <Link href="/chamados" onClick={onClose}>
+        <Link href={`/chamados?search=${encodeURIComponent(unidade.nome)}`} onClick={onClose}>
           <Button variant="outlined" size="sm" className="gap-1.5">
             <Megaphone className="h-4 w-4" />
             Ver chamados
@@ -289,10 +289,16 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
 
   return (
     <div className="space-y-2">
-      {items.map((chamado) => (
+      {items.map((chamado) => {
+        const href =
+          chamado.status === 'EM_EXECUCAO'
+            ? `/chamados/em-execucao/${chamado.id}`
+            : `/chamados?id=${chamado.id}`;
+
+        return (
         <Link
           key={chamado.id}
-          href={`/chamados?id=${chamado.id}`}
+          href={href}
           onClick={onClose}
           className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]"
         >
@@ -310,7 +316,8 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
             {chamado.prioridade}
           </Badge>
         </Link>
-      ))}
+        );
+      })}
     </div>
   );
 }

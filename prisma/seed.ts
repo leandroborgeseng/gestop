@@ -174,6 +174,7 @@ async function main() {
       ['checklists.gerenciar', 'Criar e publicar checklists', 'fiscalizacao'],
       ['fiscalizacoes.executar', 'Executar fiscalizacoes em campo', 'fiscalizacao'],
       ['chamados.gerenciar', 'Gerenciar chamados operacionais', 'chamados'],
+      ['chamados.executar', 'Executar chamados em campo', 'chamados'],
       ['dashboard.visualizar', 'Visualizar indicadores operacionais', 'dashboard'],
       ['auditoria.visualizar', 'Visualizar trilhas de auditoria', 'auditoria'],
     ].map(([chave, descricao, modulo]) =>
@@ -208,7 +209,7 @@ async function main() {
         .filter((permissao) => permissao.chave === 'fiscalizacoes.executar')
         .map((permissao) => ({ perfilId: fiscalPerfil.id, permissaoId: permissao.id })),
       ...permissoes
-        .filter((permissao) => permissao.chave === 'chamados.gerenciar')
+        .filter((permissao) => permissao.chave === 'chamados.executar')
         .map((permissao) => ({ perfilId: manutencaoPerfil.id, permissaoId: permissao.id })),
     ],
   });

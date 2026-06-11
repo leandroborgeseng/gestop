@@ -202,8 +202,7 @@ function CcoPageContent() {
     >
       <TipBanner id="cco-map-list-sync">
         <b className="text-[var(--brand-hover)]">Mapa e lista trabalham juntos.</b> Filtre ou passe o mouse na lista
-        para destacar o pin correspondente. Use <b>Abrir chamado</b> no topo ou no detalhe de um próprio; a OS é
-        gerada na triagem em <b>Chamados</b>. Pressione <span className="mono">?</span> para abrir o guia.
+        para destacar o pin correspondente. Use <b>Abrir chamado</b> no topo ou no detalhe de um próprio; a triagem e o encaminhamento para campo ficam em <b>Chamados</b>. Pressione <span className="mono">?</span> para abrir o guia.
       </TipBanner>
 
       <section className="grid shrink-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">

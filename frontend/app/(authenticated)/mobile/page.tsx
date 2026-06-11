@@ -187,7 +187,8 @@ export default function MobilePage() {
 
       const checkin = await captureCurrentPosition(fallback);
       if (checkin.source === 'fallback') {
-        setGpsNotice('GPS indisponível — check-in usou coordenadas do próprio. Ative a localização para validação na vistoria.');
+        setError('GPS indisponível. Ative a localização do dispositivo para registrar a vistoria.');
+        return;
       }
 
       const now = new Date().toISOString();

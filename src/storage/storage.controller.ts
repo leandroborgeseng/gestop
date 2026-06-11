@@ -1,7 +1,9 @@
-import { Controller, Get, NotFoundException, Param, StreamableFile } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param, StreamableFile, UseGuards } from '@nestjs/common';
 import { createReadStream, existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { AuthGuard } from '../auth/auth.guard';
 
+@UseGuards(AuthGuard)
 @Controller('storage')
 export class StorageController {
   @Get('*path')

@@ -21,6 +21,8 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   permission?: string;
+  /** Qualquer uma das permissões concede acesso ao item. */
+  permissions?: string[];
   mobilePrimary?: boolean;
   badgeKey?: NavBadgeKey;
 };
@@ -55,7 +57,7 @@ export const NAV_ITEMS: NavItem[] = [
     shortLabel: 'Chamados',
     href: '/chamados',
     icon: Megaphone,
-    permission: 'chamados.gerenciar',
+    permissions: ['chamados.gerenciar', 'chamados.executar'],
     mobilePrimary: true,
     badgeKey: 'chamados',
   },
@@ -117,7 +119,12 @@ export const NAV_GROUPS: NavGroup[] = [
 const MAX_BOTTOM_SLOTS = 4;
 
 export function getVisibleNavItems(permissions: string[]) {
-  return NAV_ITEMS.filter((item) => !item.permission || permissions.includes(item.permission));
+  return NAV_ITEMS.filter((item) => {
+    if (item.permissions?.length) {
+      return item.permissions.some((permission) => permissions.includes(permission));
+    }
+    return !item.permission || permissions.includes(item.permission);
+  });
 }
 
 export function getGroupedNavItems(permissions: string[]) {
@@ -159,6 +166,14 @@ export function isNavActive(pathname: string, href: string) {
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+export function hasChamadosGerenciar(permissions: string[]) {
+  return permissions.includes('chamados.gerenciar');
+}
+
+export function hasChamadosExecutar(permissions: string[]) {
+  return permissions.includes('chamados.executar') || permissions.includes('chamados.gerenciar');
 }
 
 export function isChamadosSectionActive(pathname: string) {

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import { listChamadoEquipes, listChamadosEmExecucao } from '@/lib/api';
+import { listChamadoEquipes, listChamadosEmExecucao, getStoredAuth } from '@/lib/api';
 import { isChamadosSectionActive, isNavActive, type NavItem } from '@/lib/navigation';
 
 export function ChamadosNavSection({
@@ -20,6 +20,7 @@ export function ChamadosNavSection({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeEquipe = searchParams.get('equipe');
+  const canGerenciar = getStoredAuth()?.user.permissoes.includes('chamados.gerenciar') ?? false;
   const sectionActive = isChamadosSectionActive(pathname);
   const [open, setOpen] = useState(sectionActive);
   const [execOpen, setExecOpen] = useState(pathname.startsWith('/chamados/em-execucao'));
@@ -84,7 +85,7 @@ export function ChamadosNavSection({
   if (collapsed) {
     return (
       <Link
-        href="/chamados"
+        href={canGerenciar ? '/chamados' : '/chamados/em-execucao'}
         prefetch
         title={item.label}
         className={cn(
@@ -140,12 +141,14 @@ export function ChamadosNavSection({
 
       {open ? (
         <div className="mt-0.5 ml-3 border-l border-[var(--line-2)] pl-2">
-          <Link href="/chamados" prefetch className={subLinkClass(todosActive)} aria-current={todosActive ? 'page' : undefined}>
-            <span>Todos os chamados</span>
-            {badge != null && badge > 0 ? (
-              <span className="mono rounded-[var(--r-pill)] bg-[var(--surface-2)] px-1.5 text-[10px]">{badge}</span>
-            ) : null}
-          </Link>
+          {canGerenciar ? (
+            <Link href="/chamados" prefetch className={subLinkClass(todosActive)} aria-current={todosActive ? 'page' : undefined}>
+              <span>Todos os chamados</span>
+              {badge != null && badge > 0 ? (
+                <span className="mono rounded-[var(--r-pill)] bg-[var(--surface-2)] px-1.5 text-[10px]">{badge}</span>
+              ) : null}
+            </Link>
+          ) : null}
 
           <div>
             <button
