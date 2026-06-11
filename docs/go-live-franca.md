@@ -35,6 +35,7 @@ Guia operacional para colocar o GestOP em produção na Prefeitura de Franca/SP 
 | `WEB_PUSH_VAPID_PRIVATE_KEY` | Sim | Par da chave acima |
 | `WEB_PUSH_VAPID_SUBJECT` | Sim | `mailto:gestop@franca.sp.gov.br` |
 | `ALERTAS_INTERVAL_MS` | Não | `21600000` (6h) ou `0` desliga |
+| `SYNC_REPLAY_INTERVAL_MS` | Não | `1800000` (30 min) — replay automático de sync offline; `0` desliga |
 | `INTEGRACOES_WEBHOOK_URL` | Não | Webhook municipal (Teams/Slack/n8n) |
 
 **E-mail transacional:**

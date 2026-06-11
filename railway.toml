@@ -12,3 +12,4 @@ restartPolicyMaxRetries = 10
 [env]
 NODE_ENV = "production"
 INITIAL_ADMIN_PASSWORD = "Gestop@123"
+SYNC_REPLAY_INTERVAL_MS = "1800000"

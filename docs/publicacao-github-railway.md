@@ -180,6 +180,8 @@ O `startup.js` faz automaticamente: bootstrap → migrate → seed → sobe a AP
 | `PORT` | Auto | Railway injeta automaticamente |
 | `FORCE_DB_RESET` | Não | `true` só para resetar banco (temporário) |
 | `FORCE_SEED_ON_START` | Não | `true` força seed mesmo com dados |
+| `ALERTAS_INTERVAL_MS` | Não | `21600000` (6h) — alertas push/webhook; `0` desliga |
+| `SYNC_REPLAY_INTERVAL_MS` | Não | `1800000` (30 min) — replay sync offline; `0` desliga |
 | `INITIAL_ADMIN_PASSWORD` | Sim* | Senha do admin (primeiro seed e sincronização no startup em produção via `railway.toml`) |
 
 **Backend:** use `railway.toml` na raiz do repo para variáveis do container (serviço gestop com Root Directory = `/`).
