@@ -6,7 +6,8 @@ Guia rápido para equipe CCO e TI da Prefeitura de Franca.
 
 | Papel | Rota principal | Permissão |
 |-------|----------------|-----------|
-| CCO / Gestor | `/cco`, `/chamados`, `/ordens-servico` | `chamados.gerenciar`, `dashboard.visualizar` |
+| CCO / Gestor | `/cco`, `/chamados`, `/dashboard` | `chamados.gerenciar`, `dashboard.visualizar` |
+| Operador de manutenção | `/chamados/em-execucao` | `chamados.executar` (membro da equipe) |
 | Agente de campo | `/mobile` | `fiscalizacoes.executar` |
 | Admin TI | `/admin` | `usuarios.gerenciar` |
 
@@ -17,11 +18,11 @@ Login: URL do frontend Railway. Credenciais iniciais via seed (`INITIAL_ADMIN_PA
 ## Rotina diária CCO
 
 1. Abrir **CCO** — mapa com clusters de unidades e pendências
-2. Revisar **Chamados** abertos (filtro "Abertos")
-3. **Iniciar triagem** → analisar descrição e unidade
-4. **Converter em OS** quando houver demanda de manutenção
-5. Acompanhar **Ordens de serviço** até conclusão
-6. Verificar **Integrações** se houver falhas de sync mobile
+2. Revisar **Chamados** — triagem e atribuição de equipe
+3. Mover chamado para **Em execução** (exige equipe vinculada)
+4. Operador acompanha fila em **Chamados → Em execução** (mapa + lista)
+5. Execução em campo: check-in GPS → evidências → concluir ou impedir
+6. Verificar **Integrações** se houver falhas de sync mobile (replay manual ou automático)
 
 ## Chamado via QR Code (cidadão)
 
@@ -77,8 +78,9 @@ npm run import:unidades data/unidades-franca.csv
 - `JWT_SECRET` com 32+ caracteres
 
 ### Sync mobile pendente
-- Integrações → retry de falhas
-- Verificar conectividade e token JWT válido no dispositivo
+- **Integrações** → botão retry reenfileira e reprocessa eventos
+- Replay automático: `SYNC_REPLAY_INTERVAL_MS=1800000` (30 min; `0` desliga)
+- Verificar conectividade, GPS real (precisão ≤ 50 m) e token JWT válido no dispositivo
 
 ### Recuperação de senha
 - `FRONTEND_PUBLIC_URL` configurado no backend
@@ -87,7 +89,7 @@ npm run import:unidades data/unidades-franca.csv
 ## Relatórios CSV
 
 - Rota: `/relatorios` (permissão `dashboard.visualizar`)
-- Tipos: unidades, chamados, ordens de serviço, fiscalizações
+- Tipos: unidades, chamados, ordens de serviço (fila operacional), fiscalizações
 - Filtros: secretaria, intervalo de datas
 - API: `GET /relatorios/export/{tipo}.csv`
 

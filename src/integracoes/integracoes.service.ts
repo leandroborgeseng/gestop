@@ -1,8 +1,16 @@
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
 import { AuditAction, OfflineSyncStatus } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { MobileService } from '../mobile/mobile.service';
 import { PrismaService } from '../prisma/prisma.service';
+
+const SYSTEM_SYNC_ACTOR: JwtPayload = {
+  sub: 'system-sync-replay',
+  email: 'system@gestop.local',
+  nome: 'GestOP Sync Scheduler',
+  perfis: [],
+  permissoes: [],
+};
 
 type NotifyResult = {
   adapter: 'webhook' | 'mock';
@@ -13,14 +21,55 @@ type NotifyResult = {
 };
 
 @Injectable()
-export class IntegracoesService {
+export class IntegracoesService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(IntegracoesService.name);
+  private syncReplayHandle: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => MobileService))
     private readonly mobileService: MobileService,
   ) {}
+
+  onModuleInit() {
+    const intervalMs = Number(process.env.SYNC_REPLAY_INTERVAL_MS ?? 30 * 60 * 1000);
+    if (intervalMs > 0) {
+      this.syncReplayHandle = setInterval(() => {
+        void this.runScheduledSyncReplay().catch((error) => {
+          this.logger.error(
+            'Falha no replay agendado de sync offline',
+            error instanceof Error ? error.stack : error,
+          );
+        });
+      }, intervalMs);
+      this.logger.log(`Replay automatico de sync offline a cada ${intervalMs}ms`);
+    }
+  }
+
+  onModuleDestroy() {
+    if (this.syncReplayHandle) {
+      clearInterval(this.syncReplayHandle);
+    }
+  }
+
+  private async runScheduledSyncReplay() {
+    const pending = await this.prisma.offlineSyncEvent.count({
+      where: {
+        status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.FALHOU, OfflineSyncStatus.CONFLITO] },
+      },
+    });
+
+    if (pending === 0) {
+      return;
+    }
+
+    const replay = await this.mobileService.reprocessPendingSyncEvents(SYSTEM_SYNC_ACTOR);
+    if (replay.processados > 0) {
+      this.logger.log(
+        `Replay automatico: ${replay.sucesso}/${replay.processados} eventos processados (${replay.falhas} falhas)`,
+      );
+    }
+  }
 
   async listEventosTecnicos() {
     const [syncFalhas, auditoriaIntegracoes] = await Promise.all([

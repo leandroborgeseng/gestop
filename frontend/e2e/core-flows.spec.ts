@@ -38,6 +38,16 @@ test.describe('Fluxo autenticado', () => {
     await expect(page.locator('body')).toContainText(/unidade|mapa|CCO/i);
   });
 
+  test('fila em execucao carrega apos login', async ({ page }) => {
+    await page.goto('/login');
+    await page.getByLabel(/e-mail/i).fill(adminEmail!);
+    await page.getByLabel(/senha/i).fill(adminPassword!);
+    await page.getByRole('button', { name: /entrar/i }).click();
+    await page.goto('/chamados/em-execucao');
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page.locator('body')).toContainText(/execu/i);
+  });
+
   test('admin importacao acessivel', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel(/e-mail/i).fill(adminEmail!);

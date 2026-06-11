@@ -265,6 +265,17 @@ async function main() {
     ],
   });
 
+  const equipeManutencao = await prisma.equipe.create({
+    data: {
+      secretariaId: servicos.id,
+      nome: 'Manutencao Escolar',
+      descricao: 'Equipe de manutencao predial das escolas municipais.',
+      membros: {
+        create: [{ usuarioId: operador.id }],
+      },
+    },
+  });
+
   const checklist = await prisma.checklist.create({
     data: {
       secretariaId: educacao.id,
@@ -432,11 +443,12 @@ async function main() {
       naoConformidadeId: naoConformidade.id,
       registradoPorId: gestor.id,
       responsavelId: operador.id,
+      equipeId: equipeManutencao.id,
       origem: ChamadoOrigem.FISCALIZACAO,
       titulo: 'Reparo de vazamento em banheiro escolar',
       descricao: 'Corrigir vazamento identificado durante vistoria predial escolar.',
       prioridade: ChamadoPrioridade.ALTA,
-      status: ChamadoStatus.EM_ATENDIMENTO,
+      status: ChamadoStatus.EM_EXECUCAO,
       prazoEm: new Date('2026-05-20T20:00:00.000Z'),
     },
   });
@@ -466,7 +478,22 @@ async function main() {
         motivo: 'Responsavel de manutencao definido.',
         alteradoPorId: gestor.id,
       },
+      {
+        entidadeTipo: 'Chamado',
+        entidadeId: chamado.id,
+        statusAnterior: ChamadoStatus.EM_ATENDIMENTO,
+        statusNovo: ChamadoStatus.EM_EXECUCAO,
+        motivo: 'Encaminhado para equipe de manutencao em campo.',
+        alteradoPorId: gestor.id,
+        metadata: { equipeId: equipeManutencao.id },
+      },
     ],
+  });
+
+  await prisma.chamadoSequencia.upsert({
+    where: { ano: 2026 },
+    create: { ano: 2026, ultimo: 1 },
+    update: { ultimo: 1 },
   });
 
   await prisma.offlineSyncEvent.create({
@@ -537,6 +564,7 @@ async function main() {
   logInfo('seed', `Seed concluido: ${secretarias} secretarias, ${unidadesCount} unidades, ${usuarios} usuarios.`);
   if (!isProduction) {
     logInfo('seed', 'Login inicial de desenvolvimento: admin.gestop@franca.sp.gov.br / Gestop@123');
+    logInfo('seed', 'Operador de campo (execucao): lucas.almeida@franca.sp.gov.br / Gestop@123');
   } else {
     logInfo('seed', 'Administrador inicial: admin.gestop@franca.sp.gov.br (senha definida via INITIAL_ADMIN_PASSWORD).');
   }
