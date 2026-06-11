@@ -196,7 +196,7 @@ function ChamadosPageContent() {
     setError(null);
     try {
       await updateChamadoAtribuicao(id, {
-        equipeId: equipeId || undefined,
+        equipeId,
         responsavelId: responsavelId || undefined,
         motivo: motivo?.trim() || 'Atribuição de equipe atualizada.',
       });

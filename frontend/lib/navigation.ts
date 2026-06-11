@@ -37,6 +37,7 @@ export const NAV_ITEMS: NavItem[] = [
     shortLabel: 'CCO',
     href: '/cco',
     icon: Activity,
+    permission: 'dashboard.visualizar',
     mobilePrimary: true,
   },
   {

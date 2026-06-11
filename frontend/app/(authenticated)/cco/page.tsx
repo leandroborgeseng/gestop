@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Activity, AlertTriangle, Building2, ClipboardCheck, DatabaseZap, Search, SlidersHorizontal } from 'lucide-react';
+import { RequirePermissions } from '@/components/auth/require-permissions';
 import { getOpcoesFiltroUnidades, getResumoOperacional, getUnidades } from '@/lib/api';
 import {
   OperacionalResumo,
@@ -185,7 +186,8 @@ function CcoPageContent() {
   }
 
   return (
-    <PageShell
+    <RequirePermissions permissions={['dashboard.visualizar']}>
+      <PageShell
       kicker="Central de Controle Operacional"
       icon={Activity}
       title="Visão operacional dos próprios públicos"
@@ -342,5 +344,6 @@ function CcoPageContent() {
         onClose={() => setDrawerOpen(false)}
       />
     </PageShell>
+    </RequirePermissions>
   );
 }

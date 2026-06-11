@@ -11,6 +11,7 @@ import {
   UserRound,
   Megaphone,
 } from 'lucide-react';
+import { RequirePermissions } from '@/components/auth/require-permissions';
 import { getUnidadeDetalhe } from '@/lib/api';
 import { UnidadeDetalhe } from '@/lib/types';
 import { PageShell } from '@/components/layout/page-shell';
@@ -54,7 +55,8 @@ export default function UnidadeDetalhePage() {
   }, [params.id]);
 
   return (
-    <PageShell
+    <RequirePermissions permissions={['dashboard.visualizar']}>
+      <PageShell
       kicker="Próprio público"
       title={unidade?.nome ?? 'Detalhe do próprio'}
       description={unidade ? `${unidade.tipo} · ${unidade.secretaria.sigla}` : 'Carregando informações da unidade'}
@@ -76,6 +78,7 @@ export default function UnidadeDetalhePage() {
         />
       ) : null}
     </PageShell>
+    </RequirePermissions>
   );
 }
 

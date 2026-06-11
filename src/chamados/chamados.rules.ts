@@ -57,6 +57,40 @@ export function assertValidChamadoTransition(from: ChamadoStatus, to: ChamadoSta
   }
 }
 
+export function isEvidenciaExecucaoCampo(metadata: unknown) {
+  if (!metadata || typeof metadata !== 'object') return false;
+  return (metadata as { origem?: string }).origem === 'execucao_campo';
+}
+
+export function historicoHasExecucaoCheckin(historico: Array<{ metadata: unknown }>) {
+  return historico.some((item) => {
+    if (!item.metadata || typeof item.metadata !== 'object') return false;
+    return (item.metadata as { tipo?: string }).tipo === 'execucao_checkin';
+  });
+}
+
+export function parseExecucaoCheckinMetadata(metadata: unknown, createdAt: Date | string) {
+  if (!metadata || typeof metadata !== 'object') return null;
+  const data = metadata as {
+    latitude?: number;
+    longitude?: number;
+    precisaoMetros?: number;
+    distanciaMetros?: number;
+    raioMetros?: number;
+  };
+
+  if (data.latitude == null || data.longitude == null) return null;
+
+  return {
+    latitude: data.latitude,
+    longitude: data.longitude,
+    precisaoMetros: data.precisaoMetros ?? null,
+    distanciaMetros: data.distanciaMetros ?? null,
+    raioMetros: data.raioMetros ?? null,
+    createdAt: typeof createdAt === 'string' ? createdAt : createdAt.toISOString(),
+  };
+}
+
 export function nextChamadoStatusFlow(status: ChamadoStatus): ChamadoStatus | null {
   const flow: ChamadoStatus[] = ['ABERTO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CONCLUIDO'];
   const index = flow.indexOf(status);

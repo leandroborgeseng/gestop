@@ -144,7 +144,7 @@ function ChamadosEmExecucaoPageContent() {
         {!loading && (total > 0 || grupos.length > 0) ? (
           <>
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <Badge variant="warning">{total} em execução</Badge>
+              <Badge variant="warning">{chamados.length} em execução{equipeFilter ? ' (filtro)' : ''}</Badge>
               <Badge variant="neutral">{mapPoints.length} no mapa</Badge>
               {equipeLabel ? <Badge variant="brand">{equipeLabel}</Badge> : null}
             </div>
@@ -162,6 +162,14 @@ function ChamadosEmExecucaoPageContent() {
                   {equipe.nome}
                 </Chip>
               ))}
+              {grupos.some((grupo) => !grupo.equipe && grupo.chamados.length > 0) ? (
+                <Chip
+                  active={equipeFilter === 'sem-equipe'}
+                  onClick={() => router.push('/chamados/em-execucao?equipe=sem-equipe')}
+                >
+                  Sem equipe
+                </Chip>
+              ) : null}
             </div>
 
             <div className="grid shrink-0 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-stretch">

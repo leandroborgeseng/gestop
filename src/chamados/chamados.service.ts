@@ -17,6 +17,9 @@ import {
   buildChamadoCode,
   buildChamadoTitleFromNc,
   buildDefaultDeadlineFromSeverity,
+  historicoHasExecucaoCheckin,
+  isEvidenciaExecucaoCampo,
+  parseExecucaoCheckinMetadata,
   priorityFromSeverity,
   shouldGenerateChamadoFromNc,
 } from './chamados.rules';
@@ -154,9 +157,11 @@ export class ChamadosService {
     return {
       ...this.serializeChamado(chamado),
       historico,
-      evidencias: evidencias.map((item) => this.serializeEvidencia(item)),
+      evidencias: evidencias
+        .filter((item) => isEvidenciaExecucaoCampo(item.metadata))
+        .map((item) => this.serializeEvidencia(item)),
       execucaoCheckin: execucaoCheckin
-        ? this.parseExecucaoCheckinMetadata(execucaoCheckin.metadata, execucaoCheckin.createdAt)
+        ? parseExecucaoCheckinMetadata(execucaoCheckin.metadata, execucaoCheckin.createdAt)
         : null,
       unidadeExecucao: unidade
         ? {
@@ -218,6 +223,7 @@ export class ChamadosService {
   async adicionarEvidenciaExecucao(id: string, dto: ChamadoExecucaoEvidenciaDto, user: JwtPayload) {
     const chamado = await this.getChamadoOrThrow(id);
     this.assertChamadoEmExecucao(chamado.status);
+    await this.assertCheckinExecucaoRegistrado(id);
 
     const stored = await this.storageService.persistEvidenceUrl(dto.url.trim(), dto.mimeType);
     const evidencia = await this.prisma.evidencia.create({
@@ -234,7 +240,10 @@ export class ChamadosService {
         precisaoMetros: dto.localizacao.precisaoMetros,
         capturadaEm: new Date(dto.capturadaEm),
         enviadaEm: new Date(),
-        metadata: dto.descricao?.trim() ? { descricao: dto.descricao.trim() } : undefined,
+        metadata: {
+          origem: 'execucao_campo',
+          ...(dto.descricao?.trim() ? { descricao: dto.descricao.trim() } : {}),
+        },
       },
     });
 
@@ -254,6 +263,7 @@ export class ChamadosService {
   async concluirExecucao(id: string, dto: ChamadoExecucaoConcluirDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
     this.assertChamadoEmExecucao(before.status);
+    await this.assertCheckinExecucaoRegistrado(id);
 
     const unidade = await this.prisma.unidadePublica.findUnique({
       where: { id: before.unidadeId },
@@ -274,9 +284,9 @@ export class ChamadosService {
       throw new BadRequestException(checkinValidation.reasons.join('; '));
     }
 
-    const evidenciasCount = await this.prisma.evidencia.count({ where: { chamadoId: id } });
+    const evidenciasCount = await this.countEvidenciasExecucaoCampo(id);
     if (evidenciasCount < 1) {
-      throw new BadRequestException('Registre ao menos uma evidência fotográfica antes de encerrar a execução.');
+      throw new BadRequestException('Registre ao menos uma evidência fotográfica da execução em campo.');
     }
 
     const nextStatus = dto.impedimento ? ChamadoStatus.IMPEDIDO : ChamadoStatus.CONCLUIDO;
@@ -297,7 +307,7 @@ export class ChamadosService {
           status: nextStatus,
           impedimentoMotivo: dto.impedimento ? dto.impedimentoMotivo?.trim() : null,
           concluidoEm: nextStatus === ChamadoStatus.CONCLUIDO ? new Date() : before.concluidoEm,
-          encerradoEm: nextStatus === ChamadoStatus.CONCLUIDO || nextStatus === ChamadoStatus.IMPEDIDO ? new Date() : before.encerradoEm,
+          encerradoEm: nextStatus === ChamadoStatus.CONCLUIDO ? new Date() : before.encerradoEm,
         },
         include: this.includeRelations(),
       });
@@ -406,7 +416,7 @@ export class ChamadosService {
 
     await this.integracoesService.notify('chamado.criado', { chamadoId: chamado.id, codigo: chamado.codigo }, user);
 
-    return chamado;
+    return this.serializeChamado(chamado);
   }
 
   async createChamadoPublico(codigoPatrimonial: string, dto: PublicCreateChamadoDto) {
@@ -467,7 +477,7 @@ export class ChamadosService {
       secretariaId: unidade.secretariaId,
     });
 
-    return chamado;
+    return this.serializeChamado(chamado);
   }
 
   async updateStatus(id: string, dto: UpdateChamadoStatusDto, user: JwtPayload) {
@@ -546,13 +556,14 @@ export class ChamadosService {
       return updated;
     });
 
-    return chamado;
+    return this.serializeChamado(chamado);
   }
 
   async updateAtribuicao(id: string, dto: UpdateChamadoAtribuicaoDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
     const equipeId = dto.equipeId === undefined ? before.equipeId : dto.equipeId || null;
-    const responsavelId = dto.responsavelId === undefined ? before.responsavelId : dto.responsavelId || null;
+    let responsavelId = dto.responsavelId === undefined ? before.responsavelId : dto.responsavelId || null;
+    if (!equipeId) responsavelId = null;
 
     if (equipeId) {
       await this.ensureEquipeAtiva(equipeId);
@@ -563,7 +574,7 @@ export class ChamadosService {
     }
 
     if (equipeId === before.equipeId && responsavelId === before.responsavelId) {
-      return before;
+      return this.serializeChamado(before);
     }
 
     const chamado = await this.prisma.$transaction(async (tx) => {
@@ -604,7 +615,7 @@ export class ChamadosService {
       return updated;
     });
 
-    return chamado;
+    return this.serializeChamado(chamado);
   }
 
   async generateForNaoConformidade(naoConformidadeId: string, user: JwtPayload) {
@@ -739,6 +750,28 @@ export class ChamadosService {
     }
   }
 
+  private async assertCheckinExecucaoRegistrado(chamadoId: string) {
+    const historico = await this.prisma.historicoStatus.findMany({
+      where: { entidadeTipo: 'Chamado', entidadeId: chamadoId },
+      orderBy: { createdAt: 'desc' },
+      take: 30,
+      select: { metadata: true },
+    });
+
+    if (!historicoHasExecucaoCheckin(historico)) {
+      throw new BadRequestException('Confirme o check-in no local antes de continuar a execução.');
+    }
+  }
+
+  private async countEvidenciasExecucaoCampo(chamadoId: string) {
+    const evidencias = await this.prisma.evidencia.findMany({
+      where: { chamadoId },
+      select: { metadata: true },
+    });
+
+    return evidencias.filter((item) => isEvidenciaExecucaoCampo(item.metadata)).length;
+  }
+
   private serializeChamado<T extends {
     latitude?: unknown;
     longitude?: unknown;
@@ -788,28 +821,6 @@ export class ChamadosService {
         evidencia.metadata && typeof evidencia.metadata === 'object' && evidencia.metadata !== null && 'descricao' in evidencia.metadata
           ? String((evidencia.metadata as { descricao?: string }).descricao ?? '')
           : null,
-    };
-  }
-
-  private parseExecucaoCheckinMetadata(metadata: unknown, createdAt: Date) {
-    if (!metadata || typeof metadata !== 'object') return null;
-    const data = metadata as {
-      latitude?: number;
-      longitude?: number;
-      precisaoMetros?: number;
-      distanciaMetros?: number;
-      raioMetros?: number;
-    };
-
-    if (data.latitude == null || data.longitude == null) return null;
-
-    return {
-      latitude: data.latitude,
-      longitude: data.longitude,
-      precisaoMetros: data.precisaoMetros ?? null,
-      distanciaMetros: data.distanciaMetros ?? null,
-      raioMetros: data.raioMetros ?? null,
-      createdAt: createdAt.toISOString(),
     };
   }
 

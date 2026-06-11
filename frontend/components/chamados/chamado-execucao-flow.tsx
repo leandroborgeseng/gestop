@@ -96,9 +96,11 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
     [detail],
   );
 
-  async function resolvePosition() {
+  const checkinDone = Boolean(detail?.execucaoCheckin);
+
+  async function resolvePosition(options?: { allowFallback?: boolean }) {
     const fallback =
-      detail?.unidadeExecucao != null
+      options?.allowFallback && detail?.unidadeExecucao != null
         ? {
             latitude: detail.unidadeExecucao.latitude,
             longitude: detail.unidadeExecucao.longitude,
@@ -109,12 +111,31 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
 
     const next = await captureCurrentPosition(fallback);
     if (next.source === 'fallback') {
-      setGpsNotice('GPS indisponível — usando coordenadas do próprio para continuar.');
-    } else {
-      setGpsNotice(null);
+      throw new Error('GPS indisponível ou impreciso. Ative a localização e tente novamente no local do serviço.');
     }
+    setGpsNotice(null);
     setPosition(next);
     return next;
+  }
+
+  function checkinPayloadFrom(positionSource: GeoPosition) {
+    return {
+      latitude: positionSource.latitude,
+      longitude: positionSource.longitude,
+      precisaoMetros: positionSource.precisaoMetros,
+    };
+  }
+
+  function resolveCheckinForSubmit() {
+    if (position) return checkinPayloadFrom(position);
+    if (detail?.execucaoCheckin) {
+      return {
+        latitude: detail.execucaoCheckin.latitude,
+        longitude: detail.execucaoCheckin.longitude,
+        precisaoMetros: detail.execucaoCheckin.precisaoMetros ?? 0,
+      };
+    }
+    return null;
   }
 
   async function handleCheckin() {
@@ -123,13 +144,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
     setError(null);
     try {
       const checkin = await resolvePosition();
-      const updated = await checkinChamadoExecucao(chamadoId, {
-        checkin: {
-          latitude: checkin.latitude,
-          longitude: checkin.longitude,
-          precisaoMetros: checkin.precisaoMetros,
-        },
-      });
+      const updated = await checkinChamadoExecucao(chamadoId, { checkin: checkinPayloadFrom(checkin) });
       setDetail(updated);
       setEvidencias(updated.evidencias);
       setStep('registro');
@@ -148,10 +163,15 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
     event.target.value = '';
     if (!file || !detail) return;
 
+    if (!checkinDone) {
+      setError('Confirme o check-in no local antes de anexar evidências.');
+      return;
+    }
+
     setBusy(true);
     setError(null);
     try {
-      const geo = position ?? (await resolvePosition());
+      const geo = resolveCheckinForSubmit() ?? checkinPayloadFrom(await resolvePosition());
       const dataUrl = await fileToDataUrl(file);
       const created = await addChamadoExecucaoEvidencia(chamadoId, {
         url: dataUrl,
@@ -192,14 +212,10 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
     setBusy(true);
     setError(null);
     try {
-      const checkin = position ?? (await resolvePosition());
+      const checkin = resolveCheckinForSubmit() ?? checkinPayloadFrom(await resolvePosition());
       await concluirChamadoExecucao(chamadoId, {
         relatorio: relatorio.trim(),
-        checkin: {
-          latitude: checkin.latitude,
-          longitude: checkin.longitude,
-          precisaoMetros: checkin.precisaoMetros,
-        },
+        checkin,
         impedimento,
         impedimentoMotivo: impedimento ? impedimentoMotivo.trim() : undefined,
       });
@@ -218,8 +234,6 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   if (loading) return <LoadingState label="Carregando execução de campo..." />;
   if (error && !detail) return <ErrorState message={error} onRetry={load} />;
   if (!detail || !st) return <ErrorState message="Chamado não encontrado." onRetry={load} />;
-
-  const checkinDone = Boolean(detail.execucaoCheckin);
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-24">
@@ -328,7 +342,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
         </Card>
       ) : null}
 
-      {step === 'registro' ? (
+      {step === 'registro' && checkinDone ? (
         <Card elevation={1}>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
