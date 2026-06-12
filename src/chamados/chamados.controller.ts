@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -19,6 +19,16 @@ import { ChamadosService } from './chamados.service';
 @Controller('chamados')
 export class ChamadosController {
   constructor(private readonly chamadosService: ChamadosService) {}
+
+  @RequirePermissions('chamados.gerenciar')
+  @Get('programacao')
+  listProgramacao(
+    @Query('from') from: string,
+    @Query('to') to: string,
+    @Query('equipeId') equipeId?: string,
+  ) {
+    return this.chamadosService.listProgramacao(from, to, equipeId);
+  }
 
   @RequirePermissions('chamados.gerenciar')
   @Get('equipes/opcoes')

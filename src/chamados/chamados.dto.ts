@@ -131,6 +131,10 @@ export class UpdateChamadoPlanejamentoDto {
   @IsOptional()
   @IsDateString()
   previstaExecucaoEm?: string | null;
+
+  @IsOptional()
+  @IsString()
+  equipeId?: string | null;
 }
 
 class ChamadoExecucaoGeoDto {

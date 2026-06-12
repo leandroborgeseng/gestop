@@ -433,6 +433,21 @@ export type ChamadosEmExecucaoResponse = {
   grupos: ChamadosEmExecucaoGrupo[];
 };
 
+export type ChamadoProgramacaoDia = {
+  data: string;
+  chamados: ChamadoResumo[];
+};
+
+export type ChamadoProgramacaoResponse = {
+  from: string;
+  to: string;
+  equipeId: string | null;
+  totalProgramados: number;
+  programados: ChamadoResumo[];
+  pendentes: ChamadoResumo[];
+  porDia: ChamadoProgramacaoDia[];
+};
+
 export type ChamadoOrigem = 'MANUAL' | 'QR_CODE' | 'INTERNO' | 'FISCALIZACAO';
 
 export type ChamadoNaoConformidade = {

@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
+import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +44,7 @@ import { ChamadoDetalhe, ChamadoOrigem, ChamadoResumo, ChamadoStatus, EquipeOpca
 
 type StatusFilter = 'TODOS' | ChamadoStatus;
 type PrioridadeFilter = 'TODAS' | string;
+type ChamadosView = 'triagem' | 'programacao';
 
 const STATUS_CHIPS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'TODOS', label: 'Todos' },
@@ -85,6 +87,7 @@ function ChamadosPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('TODOS');
   const [prioridade, setPrioridade] = useState<PrioridadeFilter>('TODAS');
+  const [view, setView] = useState<ChamadosView>('triagem');
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
 
   useEffect(() => {
@@ -220,11 +223,19 @@ function ChamadosPageContent() {
     }
   }
 
-  async function savePlanejamento(id: string, codigo: string, previstaExecucaoEm: string | null) {
+  async function savePlanejamento(
+    id: string,
+    codigo: string,
+    previstaExecucaoEm: string | null,
+    equipeId?: string | null,
+  ) {
     setBusyId(id);
     setError(null);
     try {
-      await updateChamadoPlanejamento(id, { previstaExecucaoEm });
+      await updateChamadoPlanejamento(id, {
+        previstaExecucaoEm,
+        ...(equipeId !== undefined ? { equipeId } : {}),
+      });
       const items = await listChamados();
       setChamados(items);
       if (selectedId === id) {
@@ -290,46 +301,62 @@ function ChamadosPageContent() {
         }
       >
         <TipBanner id="chamados-triagem">
-          Selecione um chamado na lista para ver prazo, responsável e linha do tempo. Use a lista de status para
-          alterar ou voltar etapas — cada mudança fica registrada no histórico.
+          {view === 'triagem'
+            ? 'Selecione um chamado na lista para ver prazo, responsável e linha do tempo. Use a lista de status para alterar ou voltar etapas — cada mudança fica registrada no histórico.'
+            : 'Programe chamados para datas futuras e defina a equipe de execução. Clique em um dia no calendário para ver ou ajustar a fila programada.'}
         </TipBanner>
 
-        {error ? (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <Chip active={view === 'triagem'} onClick={() => setView('triagem')}>
+            Triagem
+          </Chip>
+          <Chip active={view === 'programacao'} onClick={() => setView('programacao')}>
+            Programação
+          </Chip>
+        </div>
+
+        {view === 'programacao' ? (
+          <ChamadosProgramacaoPanel equipes={equipes} onScheduled={() => void load()} />
+        ) : null}
+
+        {view === 'triagem' && error ? (
           <div className="mb-4 shrink-0">
             <ErrorState message={error} onRetry={load} />
           </div>
         ) : null}
 
-        <div className="mb-4 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="situ-chips flex flex-wrap gap-1.5">
-            {STATUS_CHIPS.map((item) => (
-              <Chip
-                key={item.value}
-                active={filter === item.value}
-                count={counts[item.value] ?? 0}
-                onClick={() => setFilter(item.value)}
-              >
-                {item.label}
-              </Chip>
-            ))}
+        {view === 'triagem' ? (
+          <div className="mb-4 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="situ-chips flex flex-wrap gap-1.5">
+              {STATUS_CHIPS.map((item) => (
+                <Chip
+                  key={item.value}
+                  active={filter === item.value}
+                  count={counts[item.value] ?? 0}
+                  onClick={() => setFilter(item.value)}
+                >
+                  {item.label}
+                </Chip>
+              ))}
+            </div>
+            <Select
+              value={prioridade}
+              onChange={(event) => setPrioridade(event.target.value)}
+              className="h-9 w-full max-w-[220px] text-xs"
+            >
+              <option value="TODAS">Todas prioridades</option>
+              {prioridades.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </Select>
           </div>
-          <Select
-            value={prioridade}
-            onChange={(event) => setPrioridade(event.target.value)}
-            className="h-9 w-full max-w-[220px] text-xs"
-          >
-            <option value="TODAS">Todas prioridades</option>
-            {prioridades.map((item) => (
-              <option key={item} value={item}>
-                {item}
-              </option>
-            ))}
-          </Select>
-        </div>
+        ) : null}
 
-        {loading ? <LoadingState label="Carregando chamados..." /> : null}
+        {view === 'triagem' && loading ? <LoadingState label="Carregando chamados..." /> : null}
 
-        {!loading ? (
+        {view === 'triagem' && !loading ? (
           <div className="grid min-h-0 flex-1 gap-3.5 xl:grid-cols-[minmax(320px,388px)_1fr]">
             <section className="flex min-h-[420px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] xl:min-h-[520px]">
               <div className="shrink-0 border-b border-[var(--line-2)] p-3.5">
@@ -469,7 +496,7 @@ function ChamadoDetailPanel({
     impedimentoMotivo?: string,
   ) => void;
   onAssignTeam: (id: string, codigo: string, equipeId: string, responsavelId: string, motivo?: string) => void;
-  onSavePlanejamento: (id: string, codigo: string, previstaExecucaoEm: string | null) => void;
+  onSavePlanejamento: (id: string, codigo: string, previstaExecucaoEm: string | null, equipeId?: string | null) => void;
 }) {
   const [pendingStatus, setPendingStatus] = useState<ChamadoStatus>('ABERTO');
   const [motivo, setMotivo] = useState('');
@@ -513,6 +540,8 @@ function ChamadoDetailPanel({
   const statusChanged = pendingStatus !== resumo.status;
   const previstaChanged =
     pendingPrevista !== (resumo.previstaExecucaoEm ? resumo.previstaExecucaoEm.slice(0, 10) : '');
+  const equipePlanejamentoChanged = pendingEquipeId !== (resumo.equipe?.id ?? '');
+  const planejamentoChanged = previstaChanged || equipePlanejamentoChanged;
   const atribuicaoChanged =
     pendingEquipeId !== (resumo.equipe?.id ?? '') || pendingResponsavelId !== (resumo.responsavel?.id ?? '');
   const selectedEquipe = equipes.find((equipe) => equipe.id === pendingEquipeId);
@@ -570,33 +599,61 @@ function ChamadoDetailPanel({
 
           <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
             <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Planejamento de execução</p>
-            <div className="flex flex-wrap items-end gap-2">
-              <div className="min-w-[180px] flex-1">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
                 <label htmlFor="chamado-prevista" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
                   Data prevista para execução
                 </label>
                 <input
                   id="chamado-prevista"
                   type="date"
+                  min={new Date().toISOString().slice(0, 10)}
                   value={pendingPrevista}
                   onChange={(event) => setPendingPrevista(event.target.value)}
                   disabled={busy}
                   className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
                 />
               </div>
+              <div>
+                <label htmlFor="chamado-prevista-equipe" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Equipe de execução
+                </label>
+                <Select
+                  id="chamado-prevista-equipe"
+                  value={pendingEquipeId}
+                  onChange={(event) => setPendingEquipeId(event.target.value)}
+                  className="h-9 w-full text-xs"
+                  disabled={busy}
+                >
+                  <option value="">Sem equipe</option>
+                  {equipes.map((equipe) => (
+                    <option key={equipe.id} value={equipe.id}>
+                      {equipe.nome}
+                      {equipe.secretaria?.sigla ? ` · ${equipe.secretaria.sigla}` : ''}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
               <Button
                 variant="outlined"
                 size="sm"
-                disabled={busy || !previstaChanged}
+                disabled={busy || !planejamentoChanged}
                 onClick={() =>
-                  onSavePlanejamento(resumo.id, resumo.codigo, pendingPrevista ? `${pendingPrevista}T12:00:00.000Z` : null)
+                  onSavePlanejamento(
+                    resumo.id,
+                    resumo.codigo,
+                    pendingPrevista ? `${pendingPrevista}T12:00:00.000Z` : null,
+                    pendingEquipeId || null,
+                  )
                 }
               >
-                Salvar data
+                Salvar programação
               </Button>
               {pendingPrevista ? (
                 <Button variant="text" size="sm" disabled={busy} onClick={() => setPendingPrevista('')}>
-                  Limpar
+                  Limpar data
                 </Button>
               ) : null}
             </div>

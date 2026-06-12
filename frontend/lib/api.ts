@@ -23,6 +23,7 @@ import {
   ChamadoEvidencia,
   ChamadoExecucaoDetalhe,
   ChamadosEmExecucaoResponse,
+  ChamadoProgramacaoResponse,
   EquipeOpcaoResumo,
   PublicUnidadeChamado,
   SecretariaOption,
@@ -550,7 +551,16 @@ export function updateChamadoAtribuicao(
   });
 }
 
-export function updateChamadoPlanejamento(id: string, payload: { previstaExecucaoEm?: string | null }) {
+export function listChamadosProgramacao(params: { from: string; to: string; equipeId?: string }) {
+  const query = new URLSearchParams({ from: params.from, to: params.to });
+  if (params.equipeId) query.set('equipeId', params.equipeId);
+  return request<ChamadoProgramacaoResponse>(`/chamados/programacao?${query.toString()}`);
+}
+
+export function updateChamadoPlanejamento(
+  id: string,
+  payload: { previstaExecucaoEm?: string | null; equipeId?: string | null },
+) {
   return request<ChamadoResumo>(`/chamados/${id}/planejamento`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
