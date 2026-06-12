@@ -5,6 +5,16 @@ import { RelatorioFiltroDto } from './relatorios.dto';
 import { buildCsv, formatIsoDate } from './relatorios.csv';
 import { buildTablePdf } from './relatorios.pdf';
 
+function chamadoUnidadeCodigo(item: { unidade: { codigoPatrimonial: string } | null }) {
+  return item.unidade?.codigoPatrimonial ?? '';
+}
+
+function chamadoUnidadeNome(item: { unidade: { nome: string } | null; enderecoTexto?: string | null }) {
+  if (item.unidade?.nome) return item.unidade.nome;
+  if (item.enderecoTexto?.trim()) return item.enderecoTexto.trim();
+  return 'Sem unidade vinculada';
+}
+
 @Injectable()
 export class RelatoriosService {
   constructor(private readonly prisma: PrismaService) {}
@@ -126,8 +136,8 @@ export class RelatoriosService {
           item.origem,
           item.prioridade,
           item.secretaria.sigla,
-          item.unidade.codigoPatrimonial,
-          item.unidade.nome,
+          chamadoUnidadeCodigo(item),
+          chamadoUnidadeNome(item),
           item.titulo ?? '',
           item.descricao,
           item.responsavel?.nome ?? '',
@@ -165,8 +175,8 @@ export class RelatoriosService {
           item.origem,
           item.prioridade,
           item.secretaria.sigla,
-          item.unidade.codigoPatrimonial,
-          item.unidade.nome,
+          chamadoUnidadeCodigo(item),
+          chamadoUnidadeNome(item),
           item.titulo ?? '',
           item.descricao,
           item.responsavel?.nome ?? '',
@@ -240,7 +250,7 @@ export class RelatoriosService {
           item.origem,
           item.prioridade,
           item.secretaria.sigla,
-          item.unidade.nome,
+          chamadoUnidadeNome(item),
           item.titulo ?? item.descricao.slice(0, 60),
           formatIsoDate(item.prazoEm),
         ]),
@@ -258,7 +268,7 @@ export class RelatoriosService {
           item.status,
           item.prioridade,
           item.secretaria.sigla,
-          item.unidade.nome,
+          chamadoUnidadeNome(item),
           item.responsavel?.nome ?? '',
           formatIsoDate(item.prazoEm),
         ]),
