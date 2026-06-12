@@ -13,3 +13,5 @@ restartPolicyMaxRetries = 10
 NODE_ENV = "production"
 INITIAL_ADMIN_PASSWORD = "Gestop@123"
 SYNC_REPLAY_INTERVAL_MS = "1800000"
+# Referenciavel pelo frontend: ${{gestop.BACKEND_LISTEN_PORT}}
+BACKEND_LISTEN_PORT = "8080"

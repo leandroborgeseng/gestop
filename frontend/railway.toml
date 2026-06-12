@@ -11,5 +11,5 @@ restartPolicyMaxRetries = 10
 
 [env]
 NODE_ENV = "production"
-# Nome do servico backend no Railway deve ser "gestop" (ajuste se renomeou no dashboard)
-BACKEND_INTERNAL_URL = "http://${{gestop.RAILWAY_PRIVATE_DOMAIN}}:${{gestop.PORT}}"
+# Servico backend no Railway deve se chamar "gestop" (ajuste o prefixo se renomeou)
+BACKEND_INTERNAL_URL = "http://${{gestop.RAILWAY_PRIVATE_DOMAIN}}:${{gestop.BACKEND_LISTEN_PORT}}"

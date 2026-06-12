@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { resolveBackendUrl } from '@/lib/backend-url';
+import { describeBackendUrlConfig, resolveBackendUrl } from '@/lib/backend-url';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const backendUrl = resolveBackendUrl();
+  const config = describeBackendUrlConfig();
 
   try {
     const [healthResponse, dbResponse] = await Promise.all([
@@ -18,10 +19,7 @@ export async function GET() {
 
     return NextResponse.json({
       status: healthResponse.ok && dbResponse.ok ? 'ok' : 'degraded',
-      frontend: {
-        nodeEnv: process.env.NODE_ENV ?? null,
-        backendUrl,
-      },
+      frontend: config,
       backend: {
         health,
         db,
@@ -33,12 +31,12 @@ export async function GET() {
     return NextResponse.json(
       {
         status: 'error',
-        frontend: {
-          nodeEnv: process.env.NODE_ENV ?? null,
-          backendUrl,
-        },
+        frontend: config,
         message: 'Frontend nao conseguiu contatar o backend.',
         error: message,
+        hint: config.usingFallback
+          ? 'Defina BACKEND_INTERNAL_URL no servico frontend do Railway e redeploy.'
+          : 'Verifique se o servico gestop (backend) esta Running nos logs do Railway.',
       },
       { status: 502 },
     );

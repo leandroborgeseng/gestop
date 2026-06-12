@@ -47,8 +47,9 @@ async function bootstrap() {
   );
 
   const port = Number(process.env.PORT ?? 3001);
-  await app.listen(port);
-  console.log(`[SIGMA:api] Servidor ouvindo na porta ${port}`);
+  // Rede privada Railway usa IPv6 — escutar em :: evita "fetch failed" do frontend.
+  await app.listen(port, '::');
+  console.log(`[SIGMA:api] Servidor ouvindo em [::]:${port}`);
 }
 
 void bootstrap().catch((error) => {
