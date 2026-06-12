@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Map, MapPinned, Search, UsersRound } from 'lucide-react';
+import { Map as MapIcon, MapPinned, Search, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ChamadosExecucaoList } from '@/components/chamados/chamados-execucao-list';
 import { ChamadosExecucaoMap } from '@/components/chamados/chamados-execucao-map';
@@ -153,7 +153,7 @@ function ChamadosEmExecucaoPageContent() {
             <div className="mb-3 flex flex-wrap items-center gap-2 xl:hidden">
               <Chip active={mobilePanel === 'mapa'} onClick={() => setMobilePanel('mapa')}>
                 <span className="inline-flex items-center gap-1.5">
-                  <Map className="h-3.5 w-3.5" />
+                  <MapIcon className="h-3.5 w-3.5" />
                   Mapa
                 </span>
               </Chip>
@@ -220,7 +220,7 @@ function ChamadosEmExecucaoPageContent() {
                 className={`cco-map-panel min-h-[min(420px,52vh)] ${mobilePanel === 'mapa' ? 'block' : 'hidden xl:block'}`}
               >
                 <div className="mb-2 hidden items-center gap-2 xl:flex">
-                  <Map className="h-4 w-4 text-[var(--brand)]" />
+                  <MapIcon className="h-4 w-4 text-[var(--brand)]" />
                   <span className="text-[13px] font-semibold text-[var(--ink)]">Mapa operacional</span>
                   <span className="text-[12px] text-[var(--ink-3)]">— clique no pin para executar</span>
                 </div>

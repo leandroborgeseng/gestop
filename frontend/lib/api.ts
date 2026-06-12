@@ -37,8 +37,10 @@ import { notifyAuthExpired } from './security';
 
 // Sempre usa proxy interno do Next.js no browser.
 // NEXT_PUBLIC_API_URL apontando para URL externa quebra login no Railway.
-const API_BASE_URL = '/api-sigma';
+// Proxy Next.js — /api-gestop mantido como alias em producao ate redeploy completo.
+const API_BASE_URL = '/api-gestop';
 const AUTH_STORAGE_KEY = 'sigma.auth';
+const LEGACY_AUTH_STORAGE_KEY = 'gestop.auth';
 
 async function readApiError(response: Response, fallback: string) {
   try {
@@ -60,7 +62,15 @@ export function getStoredAuth(): StoredAuth | null {
     return null;
   }
 
-  const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+  let raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+  if (!raw) {
+    raw = window.localStorage.getItem(LEGACY_AUTH_STORAGE_KEY);
+    if (raw) {
+      window.localStorage.setItem(AUTH_STORAGE_KEY, raw);
+      window.localStorage.removeItem(LEGACY_AUTH_STORAGE_KEY);
+    }
+  }
+
   if (!raw) {
     return null;
   }

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SIGMA — Protótipos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="app/styles.css" />
+  <style>
+    body { margin: 0; background: var(--canvas); font-family: var(--font); color: var(--ink); }
+    .hub { max-width: 1080px; margin: 0 auto; padding: 56px 28px 72px; }
+    .hub-head { display: flex; align-items: center; gap: 16px; margin-bottom: 8px; }
+    .hub-mark { width: 46px; height: 55px; object-fit: contain; }
+    .hub-title { font-size: 30px; font-weight: 700; letter-spacing: -.03em; margin: 0; }
+    .hub-sub { font-size: 12px; color: var(--ink-3); font-weight: 600; letter-spacing: .02em; }
+    .hub-intro { font-size: 15px; color: var(--ink-2); line-height: 1.6; max-width: 60ch; margin: 18px 0 12px; }
+    .hub-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 40px; }
+    .hub-tag { font-size: 12px; font-weight: 600; color: var(--brand-hover); background: var(--brand-soft); border-radius: 99px; padding: 5px 12px; }
+    .hub-section { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-4); margin: 0 0 14px; }
+    .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 38px; }
+    .hub-card { display: flex; flex-direction: column; text-decoration: none; color: inherit; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; box-shadow: var(--sh-sm); transition: transform .15s, box-shadow .15s, border-color .15s; }
+    .hub-card:hover { transform: translateY(-3px); box-shadow: var(--sh-md); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
+    .hub-thumb { height: 138px; position: relative; overflow: hidden; display: grid; place-items: center; border-bottom: 1px solid var(--line-2); }
+    .hub-thumb.desktop { background: linear-gradient(135deg, #eaf1fb, #f6f9fd); }
+    .hub-thumb.mobile { background: linear-gradient(135deg, #e9f6ef, #f5fbf8); }
+    .hub-thumb.auth { background: linear-gradient(135deg, var(--brand-hover), var(--brand-bright)); }
+    .hub-thumb.cit { background: linear-gradient(135deg, #fbf3e6, #fdfaf4); }
+    .hub-thumb .ic { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; background: rgba(255,255,255,.7); color: var(--brand); box-shadow: var(--sh-sm); }
+    .hub-thumb.auth .ic { background: rgba(255,255,255,.2); color: #fff; }
+    .hub-badge { position: absolute; top: 12px; left: 12px; font-size: 10.5px; font-weight: 700; padding: 3px 9px; border-radius: 99px; background: rgba(255,255,255,.9); color: var(--ink-2); white-space: nowrap; }
+    .hub-badge.prio { background: var(--brand); color: #fff; }
+    .hub-card-body { padding: 16px 17px 18px; flex: 1; display: flex; flex-direction: column; }
+    .hub-card-title { font-size: 16px; font-weight: 700; letter-spacing: -.01em; display: flex; align-items: center; gap: 7px; }
+    .hub-card-desc { font-size: 13px; color: var(--ink-3); line-height: 1.5; margin-top: 6px; flex: 1; }
+    .hub-card-foot { font-size: 12.5px; font-weight: 600; color: var(--brand); margin-top: 14px; display: flex; align-items: center; gap: 5px; }
+    .hub-foot { font-size: 12.5px; color: var(--ink-4); border-top: 1px solid var(--line-2); padding-top: 22px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute"><defs></defs></svg>
+  <div class="hub">
+    <div class="hub-head">
+      <img class="hub-mark" src="assets/franca-mark.png" alt="Prefeitura de Franca" />
+      <div>
+        <h1 class="hub-title">SIGMA</h1>
+        <div class="hub-sub">CENTRAL OPERACIONAL · PREFEITURA DE FRANCA</div>
+      </div>
+    </div>
+    <p class="hub-intro">Redesign completo da plataforma de gestão georreferenciada de ordens de serviço, fiscalizações e chamados. Protótipos interativos — desktop e mobile — prontos para explorar.</p>
+    <div class="hub-meta">
+      <span class="hub-tag">IBM Plex</span>
+      <span class="hub-tag">Azul PMF #0066CC</span>
+      <span class="hub-tag">Leaflet · Mapa + Satélite</span>
+      <span class="hub-tag">PWA offline</span>
+      <span class="hub-tag">Guia em tempo real</span>
+    </div>
+
+    <h2 class="hub-section">Aplicação web (desktop)</h2>
+    <div class="hub-grid">
+      <a class="hub-card" href="SIGMA - CCO.html">
+        <div class="hub-thumb desktop"><span class="hub-badge prio">Tela principal</span><span class="ic" id="ic-map"></span></div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">CCO — Centro de comando</div>
+          <div class="hub-card-desc">Mapa Leaflet com satélite, 4 KPIs, filtros sincronizados com a lista, drawer de detalhe da unidade, guia contextual e Tweaks. Inclui Dashboard, Chamados, Ordens, Admin, Checklists e mais.</div>
+          <div class="hub-card-foot">Abrir aplicação <span id="ar1"></span></div>
+        </div>
+      </a>
+      <a class="hub-card" href="SIGMA - Acesso.html">
+        <div class="hub-thumb auth"><span class="ic" id="ic-lock"></span></div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">Acesso — Login</div>
+          <div class="hub-card-desc">Login institucional em split layout, recuperação e redefinição de senha, com estados de loading, erro e sessão expirada.</div>
+          <div class="hub-card-foot">Abrir telas de acesso <span id="ar2"></span></div>
+        </div>
+      </a>
+    </div>
+
+    <h2 class="hub-section">Mobile · PWA</h2>
+    <div class="hub-grid">
+      <a class="hub-card" href="SIGMA - Campo Mobile.html">
+        <div class="hub-thumb mobile"><span class="hub-badge prio">Prioridade</span><span class="ic" id="ic-phone"></span></div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">Campo — App do agente</div>
+          <div class="hub-card-desc">Fiscalização offline de alta produtividade: roteiro por proximidade, check-in GPS, checklist fluido com toques grandes, registro de não conformidade com foto, fila de sincronização e modo offline alternável.</div>
+          <div class="hub-card-foot">Abrir app de campo <span id="ar3"></span></div>
+        </div>
+      </a>
+      <a class="hub-card" href="SIGMA - Chamado QR.html">
+        <div class="hub-thumb cit"><span class="ic" id="ic-qr" style="color:var(--warn)"></span></div>
+        <div class="hub-card-body">
+          <div class="hub-card-title">Chamado via QR Code</div>
+          <div class="hub-card-desc">Canal do cidadão sem login: identifica a unidade pelo QR, categorias visuais, descrição, foto e contato opcional, com protocolo de confirmação e aviso de LGPD.</div>
+          <div class="hub-card-foot">Abrir chamado público <span id="ar4"></span></div>
+        </div>
+      </a>
+    </div>
+
+    <p class="hub-foot">Dica: no app de campo, toque no selo <b>Online/Offline</b> no topo para simular a perda de conexão e ver a produtividade offline. Na CCO, use o seletor <b>Mapa / Satélite</b> sobre o mapa e o botão <b>Guia</b> (ou tecla <b>?</b>) para o manual em tempo real.</p>
+  </div>
+
+  <script>
+    // inline icon paint (no React here)
+    const P = {
+      map:'<path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/>',
+      lock:'<path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5l-8-3Z"/>',
+      phone:'<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+      qr:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+      arrow:'<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
+    };
+    function svg(p, size, sw){ return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw||2}" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`; }
+    document.getElementById('ic-map').innerHTML = svg(P.map, 28);
+    document.getElementById('ic-lock').innerHTML = svg(P.lock, 28);
+    document.getElementById('ic-phone').innerHTML = svg(P.phone, 28);
+    document.getElementById('ic-qr').innerHTML = svg(P.qr, 28);
+    ['ar1','ar2','ar3','ar4'].forEach(id => document.getElementById(id).innerHTML = svg(P.arrow, 15));
+  </script>
+</body>
+</html>

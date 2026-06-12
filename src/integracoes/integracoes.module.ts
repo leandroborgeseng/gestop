@@ -1,14 +1,13 @@
 import { forwardRef, Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { MobileModule } from '../mobile/mobile.module';
-import { PrismaService } from '../prisma/prisma.service';
 import { IntegracoesController } from './integracoes.controller';
 import { IntegracoesService } from './integracoes.service';
 
 @Module({
   imports: [AuthModule, forwardRef(() => MobileModule)],
   controllers: [IntegracoesController],
-  providers: [IntegracoesService, PrismaService],
+  providers: [IntegracoesService],
   exports: [IntegracoesService],
 })
 export class IntegracoesModule {}
