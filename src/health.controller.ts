@@ -10,8 +10,8 @@ export class RootController {
   getRoot() {
     return {
       status: 'ok',
-      service: 'gestop-api',
-      message: 'GestOP API online',
+      service: 'sigma-api',
+      message: 'SIGMA API online',
       health: '/health',
       dbHealth: '/health/db',
       docs: {
@@ -32,7 +32,7 @@ export class HealthController {
   getHealth() {
     return {
       status: 'ok',
-      service: 'gestop-api',
+      service: 'sigma-api',
       version: APP_VERSION,
       uptimeSeconds: getUptimeSeconds(),
       observability: {

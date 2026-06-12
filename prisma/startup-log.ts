@@ -1,4 +1,4 @@
-const PREFIX = '[GestOP:startup]';
+const PREFIX = '[SIGMA:startup]';
 
 export function maskDatabaseUrl(url?: string): string {
   if (!url) {

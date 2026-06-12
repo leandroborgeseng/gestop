@@ -1,4 +1,4 @@
-# Runbook de operação — GestOP
+# Runbook de operação — SIGMA
 
 Guia rápido para equipe CCO e TI da Prefeitura de Franca.
 

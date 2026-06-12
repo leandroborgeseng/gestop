@@ -39,7 +39,7 @@ function createChamadoIcon(emphasis: 'normal' | 'hover' | 'selected') {
       : '0 3px 8px rgba(15,27,45,.35)';
 
   return L.divIcon({
-    className: 'gestop-map-marker',
+    className: 'sigma-map-marker',
     html: `<span style="
       display:grid;place-items:center;width:24px;height:24px;
       background:${MARKER_COLOR};border:2px solid #fff;border-radius:50% 50% 50% 0;
@@ -252,17 +252,29 @@ export function ChamadosExecucaoMapClient({
 
   if (pontos.length === 0) {
     return (
-      <div className="flex h-full min-h-[200px] flex-col items-center justify-center rounded-[var(--r-card)] border border-dashed border-[var(--line)] bg-[var(--surface-2)] px-6 text-center">
-        <MapPinOff className="mb-2 h-8 w-8 text-[var(--ink-3)]" />
-        <p className="text-[14px] font-semibold text-[var(--ink)]">Nenhum chamado com localização</p>
-        <p className="mt-1 text-[13px] text-[var(--ink-3)]">Os chamados aparecerão no mapa quando a unidade tiver coordenadas GPS.</p>
+      <div ref={shellRef} className="sigma-map-shell relative h-full w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+        <div ref={containerRef} className="sigma-map-canvas h-full min-h-[200px] w-full" />
+        <MapViewControls
+          basemap={basemap}
+          onBasemapChange={setBasemap}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
+        />
+        <div className="pointer-events-none absolute inset-x-0 top-3 z-[3] flex justify-center px-3">
+          <div className="flex max-w-md items-start gap-2 rounded-[var(--r-md)] border border-[var(--line)] bg-[color-mix(in_srgb,var(--surface)_92%,transparent)] px-3 py-2 shadow-[var(--sh-sm)] backdrop-blur-sm">
+            <MapPinOff className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ink-3)]" />
+            <p className="text-left text-[12px] leading-snug text-[var(--ink-2)]">
+              Nenhum chamado filtrado possui coordenadas. O mapa permanece disponível; ajuste filtros ou confira o GPS da unidade.
+            </p>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div ref={shellRef} className="gestop-map-shell relative h-full w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
-      <div ref={containerRef} className="gestop-map-canvas h-full min-h-[200px] w-full" />
+    <div ref={shellRef} className="sigma-map-shell relative h-full w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+      <div ref={containerRef} className="sigma-map-canvas h-full min-h-[200px] w-full" />
       <MapViewControls
         basemap={basemap}
         onBasemapChange={setBasemap}

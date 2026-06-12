@@ -1,6 +1,6 @@
-# GestOP - Modelo de Dados Base
+# SIGMA - Modelo de Dados Base
 
-Este documento descreve a fundacao de dados do GestOP para os modulos de cadastros, fiscalizacao georreferenciada, checklists versionados, nao conformidades, ordens de servico, auditoria, dashboards e sincronizacao offline-first.
+Este documento descreve a fundacao de dados do SIGMA para os modulos de cadastros, fiscalizacao georreferenciada, checklists versionados, nao conformidades, ordens de servico, auditoria, dashboards e sincronizacao offline-first.
 
 ## Stack de Persistencia
 

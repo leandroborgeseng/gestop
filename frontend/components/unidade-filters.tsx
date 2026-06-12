@@ -97,10 +97,10 @@ export function UnidadeFiltersPanel({
             value={filters.search ?? ''}
             onChange={(event) => update('search', event.target.value)}
             placeholder="Nome, código ou endereço"
-            list="gestop-unidade-busca-sugestoes"
+            list="sigma-unidade-busca-sugestoes"
           />
           {opcoes ? (
-            <datalist id="gestop-unidade-busca-sugestoes">
+            <datalist id="sigma-unidade-busca-sugestoes">
               {opcoes.bairros.map((bairro) => (
                 <option key={bairro} value={bairro} />
               ))}

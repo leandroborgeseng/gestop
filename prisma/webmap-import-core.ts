@@ -426,7 +426,7 @@ function buildSkippedUnit(unidade: NormalizedUnidade, secretariasCadastradas: st
     sugestao:
       reason === 'SECRETARIA_NAO_RESOLVIDA'
         ? `Preencher unidade_municipal no QGIS ou cadastrar secretaria "${unidade.secretariaSigla}". Disponiveis: ${secretariasCadastradas.join(', ')}.`
-        : `Cadastrar secretaria "${unidade.secretariaSigla}" no GestOP ou corrigir unidade_municipal. Disponiveis: ${secretariasCadastradas.join(', ')}.`,
+        : `Cadastrar secretaria "${unidade.secretariaSigla}" no SIGMA ou corrigir unidade_municipal. Disponiveis: ${secretariasCadastradas.join(', ')}.`,
   };
 }
 

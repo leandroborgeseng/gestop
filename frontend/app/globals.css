@@ -4,7 +4,7 @@
 @import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
 /* ============================================================
-   GestOP design tokens — HANDOFF v1 (IBM Plex · slate · #0066CC)
+   SIGMA design tokens — HANDOFF v1 (IBM Plex · slate · #0066CC)
    ============================================================ */
 :root {
   /* Marca */
@@ -114,8 +114,8 @@
   --md-elevation-4: 0 8px 16px rgba(15, 27, 45, 0.08), 0 16px 32px rgba(15, 27, 45, 0.1);
   --md-elevation-5: 0 12px 24px rgba(15, 27, 45, 0.1), 0 24px 48px rgba(15, 27, 45, 0.12);
 
-  --gestop-shadow: var(--sh-md);
-  --gestop-gradient-brand: linear-gradient(135deg, var(--brand) 0%, var(--brand-bright) 100%);
+  --sigma-shadow: var(--sh-md);
+  --sigma-gradient-brand: linear-gradient(135deg, var(--brand) 0%, var(--brand-bright) 100%);
 
   --md-motion-standard: cubic-bezier(0.2, 0, 0, 1);
   --md-motion-emphasized: cubic-bezier(0.4, 0, 0.2, 1);
@@ -367,22 +367,22 @@ a {
 }
 
 /* App shell */
-.gestop-app {
+.sigma-app {
   min-height: 100dvh;
   overflow-x: hidden;
 }
 
-.gestop-main {
+.sigma-main {
   padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
 }
 
 @media (min-width: 1024px) {
-  .gestop-main {
+  .sigma-main {
     padding-bottom: 0;
   }
 }
 
-.gestop-shell {
+.sigma-shell {
   min-height: 100dvh;
   overflow-x: hidden;
   background:
@@ -391,18 +391,18 @@ a {
     var(--canvas);
 }
 
-.gestop-brand-panel {
-  background: var(--gestop-gradient-brand);
+.sigma-brand-panel {
+  background: var(--sigma-gradient-brand);
 }
 
-.gestop-map-marker,
-.gestop-map-reference {
+.sigma-map-marker,
+.sigma-map-reference {
   background: transparent;
   border: 0;
 }
 
-.leaflet-div-icon.gestop-map-marker,
-.leaflet-div-icon.gestop-map-reference {
+.leaflet-div-icon.sigma-map-marker,
+.leaflet-div-icon.sigma-map-reference {
   width: auto !important;
   height: auto !important;
 }
@@ -433,7 +433,7 @@ a {
   z-index: 2;
 }
 
-.gestop-map-shell {
+.sigma-map-shell {
   isolation: isolate;
   width: 100%;
   aspect-ratio: 5 / 4;
@@ -441,15 +441,15 @@ a {
   max-height: min(440px, calc(100dvh - 300px));
 }
 
-.gestop-map-shell .gestop-map-canvas,
-.cco-map-panel .gestop-map-canvas {
+.sigma-map-shell .sigma-map-canvas,
+.cco-map-panel .sigma-map-canvas {
   width: 100%;
   height: 100%;
   min-height: 0;
 }
 
-.gestop-map-shell:fullscreen,
-.gestop-map-shell.gestop-map-fullscreen {
+.sigma-map-shell:fullscreen,
+.sigma-map-shell.sigma-map-fullscreen {
   min-height: 100dvh;
   height: 100dvh;
   width: 100%;
@@ -458,13 +458,13 @@ a {
   background: var(--surface-2);
 }
 
-.gestop-map-shell:fullscreen .gestop-map-canvas,
-.gestop-map-shell.gestop-map-fullscreen .gestop-map-canvas {
+.sigma-map-shell:fullscreen .sigma-map-canvas,
+.sigma-map-shell.sigma-map-fullscreen .sigma-map-canvas {
   min-height: 100%;
   height: 100%;
 }
 
-.gestop-map-controls .leaflet-control-zoom {
+.sigma-map-controls .leaflet-control-zoom {
   margin-top: 0;
 }
 
@@ -511,26 +511,32 @@ a {
 }
 
 @media (min-width: 1280px) {
-  .gestop-main .cco-list-panel {
+  .sigma-main .cco-list-panel {
     min-height: min(460px, calc(100dvh - 300px));
   }
 
-  .gestop-main .cco-map-panel {
+  .sigma-main .cco-map-panel {
     min-height: 0;
   }
 
-  .gestop-main .cco-map-panel .gestop-map-shell {
+  .sigma-main .cco-map-panel .sigma-map-shell {
     max-height: min(460px, calc(100dvh - 300px));
   }
 }
 
 @media (max-width: 1279px) {
-  .gestop-main .cco-list-panel {
+  .sigma-main .cco-list-panel {
     max-height: min(380px, calc(100dvh - 340px));
     min-height: 240px;
   }
 
-  .gestop-main .cco-map-panel .gestop-map-shell {
+  .sigma-main .cco-map-panel:not(.hidden) .sigma-map-shell {
+    aspect-ratio: auto;
+    max-height: min(52vh, 480px);
+    min-height: min(420px, 52vh);
+  }
+
+  .sigma-main .cco-map-panel .sigma-map-shell {
     aspect-ratio: 16 / 10;
     max-height: min(300px, calc(100dvh - 360px));
     min-height: 200px;

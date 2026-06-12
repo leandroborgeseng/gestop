@@ -47,7 +47,7 @@ function createUnitIcon(color: string, emphasis: 'normal' | 'hover' | 'selected'
       : '0 3px 8px rgba(15,27,45,.35)';
 
   return L.divIcon({
-    className: 'gestop-map-marker',
+    className: 'sigma-map-marker',
     html: `<span style="
       display:grid;place-items:center;width:24px;height:24px;
       background:${color};border:2px solid #fff;border-radius:50% 50% 50% 0;
@@ -62,7 +62,7 @@ function createUnitIcon(color: string, emphasis: 'normal' | 'hover' | 'selected'
 
 function createReferenceIcon() {
   return L.divIcon({
-    className: 'gestop-map-reference',
+    className: 'sigma-map-reference',
     html: `<span style="display:block;width:14px;height:14px;border-radius:9999px;background:#0066cc;border:2px solid white;box-shadow:0 2px 8px rgba(0,102,204,.35);"></span>`,
     iconSize: [14, 14],
     iconAnchor: [7, 7],
@@ -463,11 +463,11 @@ export function OperationalMapClient({
       <div
         ref={shellRef}
         className={[
-          'gestop-map-shell relative w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
-          fullscreenMode === 'fallback' ? 'gestop-map-fullscreen fixed inset-0 z-[9999]' : '',
+          'sigma-map-shell relative w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
+          fullscreenMode === 'fallback' ? 'sigma-map-fullscreen fixed inset-0 z-[9999]' : '',
         ].join(' ')}
       >
-        <div ref={containerRef} className="gestop-map-canvas" />
+        <div ref={containerRef} className="sigma-map-canvas" />
 
         <MapViewControls
           basemap={basemap}

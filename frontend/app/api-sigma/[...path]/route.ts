@@ -32,7 +32,7 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
   }
 
   try {
-    console.log(`[GestOP:proxy] ${request.method} ${targetUrl}`);
+    console.log(`[SIGMA:proxy] ${request.method} ${targetUrl}`);
     const response = await fetch(targetUrl, init);
     const contentType = response.headers.get('content-type') ?? 'application/json';
     const isText =
@@ -55,7 +55,7 @@ async function proxyRequest(request: NextRequest, pathSegments: string[]) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro desconhecido';
-    console.error(`[GestOP:proxy] Falha ao conectar em ${targetUrl}: ${message}`);
+    console.error(`[SIGMA:proxy] Falha ao conectar em ${targetUrl}: ${message}`);
 
     return NextResponse.json(
       {

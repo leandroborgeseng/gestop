@@ -1,7 +1,7 @@
 {
   "name": "gestop",
   "version": "1.0.0",
-  "description": "Backend NestJS da plataforma GestOP",
+  "description": "Backend NestJS do SIGMA — Sistema Integrado de Gestão de Manutenção de Ativos",
   "main": "dist/src/main.js",
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.build.json",

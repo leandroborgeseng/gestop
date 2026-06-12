@@ -1,6 +1,6 @@
 # Fase 1 — Go-live mínimo (Railway)
 
-Checklist para colocar o GestOP no ar **usando apenas Railway** — sem AWS.
+Checklist para colocar o SIGMA no ar **usando apenas Railway** — sem AWS.
 
 > **Importante:** Railway hospeda o app (backend, frontend, Postgres).  
 > As fotos das fiscalizações ficam no **Volume persistente** do serviço backend, não em AWS/S3.

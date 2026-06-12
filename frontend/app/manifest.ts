@@ -2,9 +2,9 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'GestOP Vistoria',
+    name: 'SIGMA Vistoria',
     short_name: 'Vistoria',
-    description: 'PWA de vistoria do GestOP — Prefeitura de Franca',
+    description: 'SIGMA — Sistema Integrado de Gestão de Manutenção de Ativos · Prefeitura de Franca',
     start_url: '/mobile',
     scope: '/',
     display: 'standalone',

@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/table';
 
 const SKIP_REASON_LABEL: Record<WebmapSkippedUnit['reason'], string> = {
-  SECRETARIA_NAO_CADASTRADA: 'Secretaria não cadastrada no GestOP',
+  SECRETARIA_NAO_CADASTRADA: 'Secretaria não cadastrada no SIGMA',
   SECRETARIA_NAO_RESOLVIDA: 'Campo unidade_municipal ausente ou inválido',
 };
 
@@ -82,7 +82,7 @@ export function WebmapImportReport({
           <CardHeader>
             <CardTitle className="md-title-md">Unidades ignoradas ({result.skipped})</CardTitle>
             <CardDescription>
-              Entidades lidas do QGIS que não entraram no GestOP. Envie CSV ou GeoJSON para a equipe corrigir.
+              Entidades lidas do QGIS que não entraram no SIGMA. Envie CSV ou GeoJSON para a equipe corrigir.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -147,7 +147,7 @@ export function WebmapImportReport({
         <Card elevation={1}>
           <CardHeader>
             <CardTitle className="md-title-md">Unidades desativadas ({result.deactivatedUnits.length})</CardTitle>
-            <CardDescription>Presentes no GestOP mas ausentes na última sync do webmap.</CardDescription>
+            <CardDescription>Presentes no SIGMA mas ausentes na última sync do webmap.</CardDescription>
           </CardHeader>
           <CardContent>
             <ul className="md-body-md max-h-48 space-y-1 overflow-y-auto text-[var(--md-on-surface-variant)]">

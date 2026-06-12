@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { MapPinned, Search, UsersRound } from 'lucide-react';
+import { Map, MapPinned, Search, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ChamadosExecucaoList } from '@/components/chamados/chamados-execucao-list';
 import { ChamadosExecucaoMap } from '@/components/chamados/chamados-execucao-map';
@@ -37,6 +37,7 @@ function ChamadosEmExecucaoPageContent() {
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const [mobilePanel, setMobilePanel] = useState<'mapa' | 'lista'>('mapa');
 
   function load() {
     setLoading(true);
@@ -81,7 +82,7 @@ function ChamadosEmExecucaoPageContent() {
     const query = search.trim().toLowerCase();
     if (!query) return items;
     return items.filter((chamado) =>
-      `${chamado.codigo} ${chamado.titulo ?? ''} ${chamado.descricao} ${chamado.unidade.nome} ${chamado.equipe?.nome ?? ''}`
+      `${chamado.codigo} ${chamado.titulo ?? ''} ${chamado.descricao} ${chamado.unidade?.nome ?? ''} ${chamado.enderecoTexto ?? ''} ${chamado.equipe?.nome ?? ''}`
         .toLowerCase()
         .includes(query),
     );
@@ -149,6 +150,21 @@ function ChamadosEmExecucaoPageContent() {
               {equipeLabel ? <Badge variant="brand">{equipeLabel}</Badge> : null}
             </div>
 
+            <div className="mb-3 flex flex-wrap items-center gap-2 xl:hidden">
+              <Chip active={mobilePanel === 'mapa'} onClick={() => setMobilePanel('mapa')}>
+                <span className="inline-flex items-center gap-1.5">
+                  <Map className="h-3.5 w-3.5" />
+                  Mapa
+                </span>
+              </Chip>
+              <Chip active={mobilePanel === 'lista'} onClick={() => setMobilePanel('lista')}>
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPinned className="h-3.5 w-3.5" />
+                  Lista
+                </span>
+              </Chip>
+            </div>
+
             <div className="mb-3 flex flex-wrap gap-2">
               <Chip active={!equipeFilter} onClick={() => router.push('/chamados/em-execucao')}>
                 Todas equipes
@@ -173,7 +189,9 @@ function ChamadosEmExecucaoPageContent() {
             </div>
 
             <div className="grid shrink-0 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-stretch">
-              <section className="cco-list-panel flex max-h-[min(460px,calc(100dvh-300px))] min-h-[260px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+              <section
+                className={`cco-list-panel flex max-h-[min(460px,calc(100dvh-300px))] min-h-[260px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] ${mobilePanel === 'lista' ? 'flex' : 'hidden xl:flex'}`}
+              >
                 <div className="filters shrink-0 border-b border-[var(--line-2)] px-3.5 py-3">
                   <div className="mb-2 flex items-center gap-2">
                     <MapPinned className="h-4 w-4 text-[var(--brand)]" />
@@ -198,7 +216,14 @@ function ChamadosEmExecucaoPageContent() {
                 />
               </section>
 
-              <section className="cco-map-panel min-h-[240px]">
+              <section
+                className={`cco-map-panel min-h-[min(420px,52vh)] ${mobilePanel === 'mapa' ? 'block' : 'hidden xl:block'}`}
+              >
+                <div className="mb-2 hidden items-center gap-2 xl:flex">
+                  <Map className="h-4 w-4 text-[var(--brand)]" />
+                  <span className="text-[13px] font-semibold text-[var(--ink)]">Mapa operacional</span>
+                  <span className="text-[12px] text-[var(--ink-3)]">— clique no pin para executar</span>
+                </div>
                 <ChamadosExecucaoMap
                   pontos={mapPoints}
                   selectedId={selectedId}

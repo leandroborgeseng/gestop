@@ -186,11 +186,11 @@ export class AuthService {
   private async dispatchPasswordResetEmail(email: string, nome: string, resetUrl: string) {
     const result = await this.emailService.send({
       to: email,
-      subject: 'GestOP — Redefinir senha',
+      subject: 'SIGMA — Redefinir senha',
       text: [
         `Ola, ${nome}.`,
         '',
-        'Recebemos uma solicitacao para redefinir sua senha no GestOP.',
+        'Recebemos uma solicitacao para redefinir sua senha no SIGMA.',
         `Acesse o link abaixo (valido por 1 hora):`,
         resetUrl,
         '',
@@ -198,7 +198,7 @@ export class AuthService {
       ].join('\n'),
       html: [
         `<p>Ola, <strong>${nome}</strong>.</p>`,
-        `<p>Recebemos uma solicitacao para redefinir sua senha no GestOP.</p>`,
+        `<p>Recebemos uma solicitacao para redefinir sua senha no SIGMA.</p>`,
         `<p><a href="${resetUrl}">Redefinir senha</a> (valido por 1 hora)</p>`,
         `<p>Se voce nao solicitou, ignore este e-mail.</p>`,
       ].join(''),
@@ -206,7 +206,7 @@ export class AuthService {
     });
 
     if (!result.delivered && process.env.NODE_ENV !== 'production') {
-      console.log(`[GestOP:auth] Reset URL para ${email}: ${resetUrl}`);
+      console.log(`[SIGMA:auth] Reset URL para ${email}: ${resetUrl}`);
     }
   }
 

@@ -1,4 +1,4 @@
-# Configuracao do servico Backend (gestop) no Railway.
+# Configuracao do servico Backend (SIGMA) no Railway.
 # Root Directory do servico deve ser a raiz do repositorio (nao frontend/).
 
 [build]

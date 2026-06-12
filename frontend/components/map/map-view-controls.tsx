@@ -18,7 +18,7 @@ export function MapViewControls({
   onToggleFullscreen,
 }: MapViewControlsProps) {
   return (
-    <div className="gestop-map-controls pointer-events-auto absolute top-3.5 right-3.5 z-[500] flex flex-col gap-2">
+    <div className="sigma-map-controls pointer-events-auto absolute top-3.5 right-3.5 z-[500] flex flex-col gap-2">
       <div className="flex gap-0.5 rounded-[10px] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-0.5 shadow-[var(--sh-sm)] backdrop-blur-md">
         <button
           type="button"

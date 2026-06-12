@@ -20,7 +20,7 @@ function downloadCsv(filename: string, headers: string[], rows: Array<Array<stri
 }
 
 export function downloadWebmapSkippedCsv(units: WebmapSkippedUnit[]) {
-  downloadCsv('gestop-webmap-unidades-ignoradas.csv', [
+  downloadCsv('sigma-webmap-unidades-ignoradas.csv', [
     'codigo_patrimonial',
     'nome',
     'secretaria_sigla',
@@ -50,7 +50,7 @@ export function downloadWebmapSkippedCsv(units: WebmapSkippedUnit[]) {
 }
 
 export function downloadWebmapRejectedCsv(features: WebmapRejectedFeature[]) {
-  downloadCsv('gestop-webmap-features-rejeitadas.csv', [
+  downloadCsv('sigma-webmap-features-rejeitadas.csv', [
     'camada',
     'grupo',
     'fid',
@@ -91,7 +91,7 @@ export function downloadWebmapSkippedGeoJson(units: WebmapSkippedUnit[]) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'gestop-webmap-unidades-ignoradas.geojson';
+  link.download = 'sigma-webmap-unidades-ignoradas.geojson';
   link.click();
   URL.revokeObjectURL(url);
 }

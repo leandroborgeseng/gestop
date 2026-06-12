@@ -51,7 +51,7 @@ export default function ContaPage() {
       kicker="Conta"
       icon={KeyRound}
       title="Minha conta"
-      description="Altere sua senha de acesso ao GestOP."
+      description="Altere sua senha de acesso ao SIGMA."
       backHref="/cco"
     >
       <TipBanner id="conta-senha">

@@ -13,23 +13,23 @@ function initSentry() {
     environment: process.env.NODE_ENV ?? 'development',
     tracesSampleRate: Number(process.env.SENTRY_TRACES_SAMPLE_RATE ?? 0.1),
   });
-  console.log('[GestOP:api] Sentry inicializado');
+  console.log('[SIGMA:api] Sentry inicializado');
 }
 
 async function bootstrap() {
   initSentry();
 
-  console.log('[GestOP:api] Validando variaveis de producao...');
+  console.log('[SIGMA:api] Validando variaveis de producao...');
   try {
     assertProductionEnv();
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
-    console.error('[GestOP:api] Corrija as variaveis no Railway → gestop → Variables → Redeploy.');
+    console.error('[SIGMA:api] Corrija as variaveis no Railway → gestop → Variables → Redeploy.');
     process.exit(1);
   }
 
-  console.log('[GestOP:api] Iniciando NestJS...');
-  console.log(`[GestOP:api] NODE_ENV=${process.env.NODE_ENV ?? '(nao definido)'}`);
+  console.log('[SIGMA:api] Iniciando NestJS...');
+  console.log(`[SIGMA:api] NODE_ENV=${process.env.NODE_ENV ?? '(nao definido)'}`);
 
   const app = await NestFactory.create(AppModule, { rawBody: true });
 
@@ -48,11 +48,11 @@ async function bootstrap() {
 
   const port = Number(process.env.PORT ?? 3001);
   await app.listen(port);
-  console.log(`[GestOP:api] Servidor ouvindo na porta ${port}`);
+  console.log(`[SIGMA:api] Servidor ouvindo na porta ${port}`);
 }
 
 void bootstrap().catch((error) => {
   Sentry.captureException(error);
-  console.error('[GestOP:api] Falha ao iniciar', error);
+  console.error('[SIGMA:api] Falha ao iniciar', error);
   process.exit(1);
 });

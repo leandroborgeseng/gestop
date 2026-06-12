@@ -37,14 +37,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         PrismaService.bootLogged = true;
         const connectionString =
           process.env.DATABASE_URL ?? 'postgresql://gestop:gestop@localhost:5432/gestop?schema=public';
-        console.log(`[GestOP:prisma] DATABASE_URL=${maskDatabaseUrl(connectionString)}`);
+        console.log(`[SIGMA:prisma] DATABASE_URL=${maskDatabaseUrl(connectionString)}`);
         const users = await this.usuario.count();
-        console.log(`[GestOP:prisma] Conexao OK. Usuarios no banco: ${users}`);
+        console.log(`[SIGMA:prisma] Conexao OK. Usuarios no banco: ${users}`);
       }
     } catch (error) {
       this.connected = false;
       console.warn(
-        '[GestOP:prisma] Banco indisponivel no boot. A API subiu, mas endpoints com dados falharao.',
+        '[SIGMA:prisma] Banco indisponivel no boot. A API subiu, mas endpoints com dados falharao.',
       );
       console.warn(error);
     }

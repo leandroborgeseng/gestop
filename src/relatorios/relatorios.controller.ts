@@ -13,28 +13,28 @@ export class RelatoriosController {
 
   @Get('export/unidades.csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  @Header('Content-Disposition', 'attachment; filename="gestop-unidades.csv"')
+  @Header('Content-Disposition', 'attachment; filename="sigma-unidades.csv"')
   exportUnidades(@Query('secretariaId') secretariaId?: string) {
     return this.relatoriosService.unidadesCsv(secretariaId);
   }
 
   @Get('export/chamados.csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  @Header('Content-Disposition', 'attachment; filename="gestop-chamados.csv"')
+  @Header('Content-Disposition', 'attachment; filename="sigma-chamados.csv"')
   exportChamados(@Query() filtro: RelatorioFiltroDto) {
     return this.relatoriosService.chamadosCsv(filtro);
   }
 
   @Get('export/ordens-servico.csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  @Header('Content-Disposition', 'attachment; filename="gestop-ordens-servico.csv"')
+  @Header('Content-Disposition', 'attachment; filename="sigma-ordens-servico.csv"')
   exportOrdensServico(@Query() filtro: RelatorioFiltroDto) {
     return this.relatoriosService.ordensServicoCsv(filtro);
   }
 
   @Get('export/fiscalizacoes.csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
-  @Header('Content-Disposition', 'attachment; filename="gestop-fiscalizacoes.csv"')
+  @Header('Content-Disposition', 'attachment; filename="sigma-fiscalizacoes.csv"')
   exportFiscalizacoes(@Query() filtro: RelatorioFiltroDto) {
     return this.relatoriosService.fiscalizacoesCsv(filtro);
   }
@@ -44,7 +44,7 @@ export class RelatoriosController {
     const buffer = await this.relatoriosService.unidadesPdf(secretariaId);
     return new StreamableFile(buffer, {
       type: 'application/pdf',
-      disposition: 'attachment; filename="gestop-unidades.pdf"',
+      disposition: 'attachment; filename="sigma-unidades.pdf"',
     });
   }
 
@@ -53,7 +53,7 @@ export class RelatoriosController {
     const buffer = await this.relatoriosService.chamadosPdf(filtro);
     return new StreamableFile(buffer, {
       type: 'application/pdf',
-      disposition: 'attachment; filename="gestop-chamados.pdf"',
+      disposition: 'attachment; filename="sigma-chamados.pdf"',
     });
   }
 
@@ -62,7 +62,7 @@ export class RelatoriosController {
     const buffer = await this.relatoriosService.ordensServicoPdf(filtro);
     return new StreamableFile(buffer, {
       type: 'application/pdf',
-      disposition: 'attachment; filename="gestop-ordens-servico.pdf"',
+      disposition: 'attachment; filename="sigma-ordens-servico.pdf"',
     });
   }
 
@@ -71,7 +71,7 @@ export class RelatoriosController {
     const buffer = await this.relatoriosService.fiscalizacoesPdf(filtro);
     return new StreamableFile(buffer, {
       type: 'application/pdf',
-      disposition: 'attachment; filename="gestop-fiscalizacoes.pdf"',
+      disposition: 'attachment; filename="sigma-fiscalizacoes.pdf"',
     });
   }
 }

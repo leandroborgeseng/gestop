@@ -1,6 +1,6 @@
-# GestOP
+# SIGMA
 
-Backend inicial da plataforma de gestao de ordens de servico e fiscalizacao georreferenciada da Prefeitura de Franca.
+**Sistema Integrado de Gestão de Manutenção de Ativos** — plataforma de gestão operacional, ordens de serviço e fiscalização georreferenciada da Prefeitura de Franca.
 
 ## Stack
 

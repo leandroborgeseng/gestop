@@ -85,7 +85,7 @@ export class NotificacoesService implements OnModuleInit {
       return { enviados: 0, webhook: false, push: 0, origem, resumo: alertas.resumo };
     }
 
-    const titulo = 'GestOP — Alertas operacionais';
+    const titulo = 'SIGMA — Alertas operacionais';
     const corpo = [
       alertas.resumo.chamadosAtrasados ? `${alertas.resumo.chamadosAtrasados} chamados atrasados` : null,
       alertas.resumo.chamadosSemTriagem ? `${alertas.resumo.chamadosSemTriagem} chamados parados` : null,

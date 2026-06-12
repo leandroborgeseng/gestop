@@ -73,7 +73,7 @@ export default function MobilePage() {
     await writeMobileQueue(remaining);
     if (remaining.length === 0 && initialCount > 0) {
       snackbar.show('Fila sincronizada com sucesso.', 'success');
-      showLocalNotification('GestOP Vistoria', 'Vistorias sincronizadas com sucesso.');
+      showLocalNotification('SIGMA Vistoria', 'Vistorias sincronizadas com sucesso.');
     }
     setSyncing(false);
   }, [syncing, snackbar]);

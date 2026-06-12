@@ -1,6 +1,6 @@
 import { MobileQueuedInspection } from './types';
 
-const DB_NAME = 'gestop-mobile';
+const DB_NAME = 'sigma-mobile';
 const DB_VERSION = 1;
 const STORE = 'inspection-queue';
 

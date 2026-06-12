@@ -202,7 +202,7 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
     ],
   },
   _default: {
-    nome: 'GestOP',
+    nome: 'SIGMA',
     resumo: 'Plataforma de gestão operacional da Prefeitura de Franca.',
     comoFazer: [
       {

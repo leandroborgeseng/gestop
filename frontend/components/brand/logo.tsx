@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '@/lib/cn';
+import { SIGMA_NAME, SIGMA_TAGLINE } from '@/lib/brand';
 
 type LogoVariant = 'full' | 'compact' | 'mark';
 type LogoTheme = 'default' | 'light';
@@ -60,8 +61,8 @@ export function Logo({
 export function ProductLabel({ className }: { className?: string }) {
   return (
     <div className={cn('min-w-0', className)}>
-      <p className="md-title-md font-semibold uppercase tracking-[0.12em] text-[var(--color-brand-primary)]">GestOP</p>
-      <p className="md-body-md mt-0.5 text-[var(--color-text-secondary)]">Central Operacional</p>
+      <p className="md-title-md font-semibold uppercase tracking-[0.12em] text-[var(--color-brand-primary)]">{SIGMA_NAME}</p>
+      <p className="md-body-md mt-0.5 text-[var(--color-text-secondary)]">{SIGMA_TAGLINE}</p>
     </div>
   );
 }

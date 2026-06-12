@@ -215,7 +215,7 @@ export class RelatoriosService {
   unidadesPdf(secretariaId?: string) {
     return this.exportUnidades(secretariaId).then((items) =>
       buildTablePdf({
-        title: 'GestOP — Proprios publicos',
+        title: 'SIGMA — Proprios publicos',
         headers: ['Secretaria', 'Codigo', 'Nome', 'Tipo', 'Bairro', 'Ativo'],
         rows: items.map((item) => [
           item.secretaria.sigla,
@@ -232,7 +232,7 @@ export class RelatoriosService {
   chamadosPdf(filtro: RelatorioFiltroDto) {
     return this.exportChamados(filtro).then((items) =>
       buildTablePdf({
-        title: 'GestOP — Chamados',
+        title: 'SIGMA — Chamados',
         headers: ['Codigo', 'Status', 'Origem', 'Prioridade', 'Secretaria', 'Unidade', 'Titulo', 'Prazo'],
         rows: items.map((item) => [
           item.codigo,
@@ -251,7 +251,7 @@ export class RelatoriosService {
   ordensServicoPdf(filtro: RelatorioFiltroDto) {
     return this.exportOrdensServico(filtro).then((items) =>
       buildTablePdf({
-        title: 'GestOP — Chamados em operacao',
+        title: 'SIGMA — Chamados em operacao',
         headers: ['Codigo', 'Status', 'Prioridade', 'Secretaria', 'Unidade', 'Responsavel', 'Prazo'],
         rows: items.map((item) => [
           item.codigo,
@@ -269,7 +269,7 @@ export class RelatoriosService {
   fiscalizacoesPdf(filtro: RelatorioFiltroDto) {
     return this.exportFiscalizacoes(filtro).then((items) =>
       buildTablePdf({
-        title: 'GestOP — Fiscalizacoes',
+        title: 'SIGMA — Fiscalizacoes',
         headers: ['Status', 'Origem', 'Secretaria', 'Unidade', 'Agente', 'Iniciada', 'Dentro raio'],
         rows: items.map((item) => [
           item.status,

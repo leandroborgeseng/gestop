@@ -75,7 +75,7 @@ export function GuidePanel({
             </span>
             <div className="min-w-0 flex-1">
               <h2 id="guide-title" className="text-base font-bold tracking-[-0.01em]">
-                Guia do GestOP
+                Guia do SIGMA
               </h2>
               <p className="text-xs opacity-85">Manual contextual</p>
             </div>

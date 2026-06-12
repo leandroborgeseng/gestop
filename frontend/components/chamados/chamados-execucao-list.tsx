@@ -1,10 +1,10 @@
 'use client';
 
-import { Building2, Clock, MapPinOff, UsersRound } from 'lucide-react';
+import { Building2, CalendarDays, Clock, MapPinOff, UsersRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/cn';
-import { CHAMADO_STATUS_META, prazoInfo, prioridadeVariant } from '@/lib/chamado-status';
-import { chamadoTitulo, resolveChamadoCoordinates } from '@/lib/chamado-geo';
+import { CHAMADO_STATUS_META, prazoInfo, previstaExecucaoInfo, prioridadeVariant } from '@/lib/chamado-status';
+import { chamadoTitulo, chamadoLocalLabel, resolveChamadoCoordinates } from '@/lib/chamado-geo';
 import { ChamadoResumo } from '@/lib/types';
 
 export function ChamadosExecucaoList({
@@ -36,6 +36,7 @@ export function ChamadosExecucaoList({
         const active = selectedId === chamado.id || hoveredId === chamado.id;
         const st = CHAMADO_STATUS_META[chamado.status] ?? { label: chamado.status, badge: 'neutral' as const };
         const prazo = prazoInfo(chamado.prazoEm, chamado.status);
+        const prevista = previstaExecucaoInfo(chamado.previstaExecucaoEm, chamado.status);
         const hasCoords = Boolean(resolveChamadoCoordinates(chamado));
 
         return (
@@ -58,7 +59,7 @@ export function ChamadosExecucaoList({
             <div className="unit-meta mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[var(--ink-3)]">
               <span className="inline-flex items-center gap-1">
                 <Building2 className="h-3 w-3" />
-                {chamado.unidade.nome}
+                {chamadoLocalLabel(chamado)}
               </span>
               {chamado.equipe ? (
                 <span className="inline-flex items-center gap-1">
@@ -69,6 +70,10 @@ export function ChamadosExecucaoList({
             </div>
             <div className="ch-row-foot mt-2 flex flex-wrap items-center gap-2">
               <Badge variant={st.badge}>{st.label}</Badge>
+              <span className="ch-prazo inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--ink-3)]">
+                <CalendarDays className="h-3 w-3" />
+                {prevista.label}
+              </span>
               <span className="ch-prazo inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--ink-3)]">
                 <Clock className="h-3 w-3" />
                 {prazo.label}

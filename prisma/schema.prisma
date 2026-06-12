@@ -116,6 +116,12 @@ enum ChamadoOrigem {
   FISCALIZACAO
 }
 
+enum ChamadoModoLocalizacao {
+  UNIDADE
+  GEOLOCALIZACAO
+  ENDERECO
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -575,35 +581,39 @@ model NaoConformidade {
 }
 
 model Chamado {
-  id                  String            @id @default(uuid())
-  codigo              String            @unique
+  id                  String                 @id @default(uuid())
+  codigo              String                 @unique
   secretariaId        String
-  unidadeId           String
-  naoConformidadeId   String?           @unique
+  unidadeId           String?
+  naoConformidadeId   String?                @unique
   titulo              String?
   descricao           String
-  status              ChamadoStatus     @default(ABERTO)
-  origem              ChamadoOrigem     @default(MANUAL)
-  prioridade          ChamadoPrioridade @default(MEDIA)
+  status              ChamadoStatus          @default(ABERTO)
+  origem              ChamadoOrigem          @default(MANUAL)
+  prioridade          ChamadoPrioridade      @default(MEDIA)
+  modoLocalizacao     ChamadoModoLocalizacao @default(UNIDADE)
+  enderecoTexto       String?
+  enderecoBairro      String?
   solicitanteNome     String?
   solicitanteEmail    String?
   solicitanteTelefone String?
-  latitude            Decimal?          @db.Decimal(10, 7)
-  longitude           Decimal?          @db.Decimal(10, 7)
+  latitude            Decimal?               @db.Decimal(10, 7)
+  longitude           Decimal?               @db.Decimal(10, 7)
   responsavelId       String?
   equipeId            String?
   registradoPorId     String?
   prazoEm             DateTime?
+  previstaExecucaoEm  DateTime?
   concluidoEm         DateTime?
   encerradoEm         DateTime?
   impedimentoMotivo   String?
   fotoUrl             String?
   fotoMimeType        String?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
 
   secretaria      Secretaria       @relation(fields: [secretariaId], references: [id], onDelete: Restrict)
-  unidade         UnidadePublica   @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
+  unidade         UnidadePublica?  @relation(fields: [unidadeId], references: [id], onDelete: SetNull)
   naoConformidade NaoConformidade? @relation(fields: [naoConformidadeId], references: [id], onDelete: SetNull)
   responsavel     Usuario?         @relation("ChamadoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   equipe          Equipe?          @relation(fields: [equipeId], references: [id], onDelete: SetNull)

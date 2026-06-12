@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Search,
 } from 'lucide-react';
+import { SIGMA_NAME, SIGMA_SHORT_TAGLINE } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { getAlertasOperacionais, getResumoOperacional, logout } from '@/lib/api';
 import { buildNavBadges, resolveGlobalSearchRoute, type NavBadges } from '@/lib/nav-badges';
@@ -118,8 +119,8 @@ function DesktopSidebar({
           <Image src="/franca-mark.png" alt="Prefeitura de Franca" width={30} height={36} className="h-9 w-[30px] object-contain" priority />
           {!collapsed ? (
             <div className="min-w-0 leading-tight">
-              <div className="text-[17px] font-bold tracking-[-0.02em] text-[var(--ink)]">GestOP</div>
-              <div className="text-[11px] font-medium text-[var(--ink-3)]">Central Operacional</div>
+              <div className="text-[17px] font-bold tracking-[-0.02em] text-[var(--ink)]">{SIGMA_NAME}</div>
+              <div className="text-[11px] font-medium text-[var(--ink-3)]">{SIGMA_SHORT_TAGLINE}</div>
             </div>
           ) : null}
         </div>
@@ -307,7 +308,7 @@ export function MobileAppBar({ userName, syncPending }: { userName: string; sync
         <div className="flex min-w-0 items-center gap-3">
           <Image src="/franca-mark.png" alt="" width={28} height={34} className="h-8 w-7 object-contain" />
           <div className="min-w-0 border-l border-[var(--line-2)] pl-3">
-            <p className="text-sm font-bold text-[var(--ink)]">GestOP</p>
+            <p className="text-sm font-bold text-[var(--ink)]">{SIGMA_NAME}</p>
             <p className="truncate text-xs text-[var(--ink-3)]">{userName}</p>
           </div>
         </div>
@@ -483,7 +484,7 @@ export function AppShell({
   }, [permissions]);
 
   return (
-    <div className="gestop-app flex min-h-dvh bg-[var(--canvas)]">
+    <div className="sigma-app flex min-h-dvh bg-[var(--canvas)]">
       <DesktopSidebar
         userName={userName}
         userRoles={userRoles}
@@ -495,7 +496,7 @@ export function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileAppBar userName={userName} syncPending={syncPending} />
         <DesktopTopbar syncPending={syncPending} />
-        <main className="gestop-main relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
+        <main className="sigma-main relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
         <MobileBottomNav permissions={permissions} badges={navBadges} moreOpen={moreOpen} onMoreOpen={setMoreOpen} />
       </div>
     </div>

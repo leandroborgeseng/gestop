@@ -53,7 +53,7 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
 
   if (checking) {
     return (
-      <div className="gestop-shell">
+      <div className="sigma-shell">
         <PageContainer>
           <PageSkeleton />
         </PageContainer>

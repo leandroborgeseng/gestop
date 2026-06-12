@@ -1,4 +1,4 @@
-import { ChamadoOrigem, ChamadoPrioridade, ChamadoStatus, EvidenciaTipo } from '@prisma/client';
+import { ChamadoModoLocalizacao, ChamadoOrigem, ChamadoPrioridade, ChamadoStatus, EvidenciaTipo } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -13,8 +13,33 @@ import {
 } from 'class-validator';
 
 export class CreateChamadoDto {
+  @IsEnum(ChamadoModoLocalizacao)
+  modoLocalizacao!: ChamadoModoLocalizacao;
+
+  @IsOptional()
   @IsString()
-  unidadeId!: string;
+  unidadeId?: string;
+
+  @IsOptional()
+  @IsString()
+  secretariaId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  latitude?: number;
+
+  @IsOptional()
+  @IsNumber()
+  longitude?: number;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(5)
+  enderecoTexto?: string;
+
+  @IsOptional()
+  @IsString()
+  enderecoBairro?: string;
 
   @IsString()
   @MinLength(10)
@@ -39,6 +64,10 @@ export class CreateChamadoDto {
   @IsOptional()
   @IsString()
   solicitanteTelefone?: string;
+
+  @IsOptional()
+  @IsString()
+  fotoDataUrl?: string;
 }
 
 export class PublicCreateChamadoDto {
@@ -96,6 +125,12 @@ export class UpdateChamadoAtribuicaoDto {
   @IsOptional()
   @IsString()
   motivo?: string;
+}
+
+export class UpdateChamadoPlanejamentoDto {
+  @IsOptional()
+  @IsDateString()
+  previstaExecucaoEm?: string | null;
 }
 
 class ChamadoExecucaoGeoDto {

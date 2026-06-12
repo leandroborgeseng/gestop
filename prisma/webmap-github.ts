@@ -15,7 +15,7 @@ const DEFAULT_BRANCH = process.env.WEBMAP_GITHUB_BRANCH?.trim() || 'main';
 export function githubHeaders(): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
-    'User-Agent': 'GestOP-webmap-import',
+    'User-Agent': 'SIGMA-webmap-import',
   };
   const token = process.env.GITHUB_TOKEN?.trim();
   if (token) headers.Authorization = `Bearer ${token}`;

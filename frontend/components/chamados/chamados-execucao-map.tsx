@@ -9,7 +9,7 @@ const ChamadosExecucaoMapClient = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="gestop-map-shell h-full min-h-[200px] w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)]">
+      <div className="sigma-map-shell h-full min-h-[200px] w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)]">
         <Skeleton className="h-full w-full rounded-none" />
       </div>
     ),

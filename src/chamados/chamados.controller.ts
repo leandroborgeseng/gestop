@@ -11,6 +11,7 @@ import {
   CreateChamadoDto,
   UpdateChamadoStatusDto,
   UpdateChamadoAtribuicaoDto,
+  UpdateChamadoPlanejamentoDto,
 } from './chamados.dto';
 import { ChamadosService } from './chamados.service';
 
@@ -87,5 +88,11 @@ export class ChamadosController {
   @Put(':id/atribuicao')
   updateAtribuicao(@Param('id') id: string, @Body() body: UpdateChamadoAtribuicaoDto, @CurrentUser() user: JwtPayload) {
     return this.chamadosService.updateAtribuicao(id, body, user);
+  }
+
+  @RequirePermissions('chamados.gerenciar')
+  @Put(':id/planejamento')
+  updatePlanejamento(@Param('id') id: string, @Body() body: UpdateChamadoPlanejamentoDto, @CurrentUser() user: JwtPayload) {
+    return this.chamadosService.updatePlanejamento(id, body, user);
   }
 }

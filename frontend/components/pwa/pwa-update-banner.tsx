@@ -18,7 +18,7 @@ export function PwaUpdateBanner() {
       className="fixed inset-x-3 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-[60] mx-auto flex max-w-lg flex-col gap-3 rounded-[var(--r-card)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4 shadow-[var(--sh-lg)] lg:bottom-6 lg:left-auto lg:right-6"
     >
       <div>
-        <p className="text-[13.5px] font-semibold text-[var(--ink)]">Atualização do GestOP disponível</p>
+        <p className="text-[13.5px] font-semibold text-[var(--ink)]">Atualização do SIGMA disponível</p>
         <p className="mt-1 text-[12.5px] text-[var(--ink-3)]">
           Você está usando uma versão antiga do app. Atualize o PWA para continuar com as funções mais recentes.
         </p>

@@ -4,7 +4,7 @@ import { buildTablePdf } from './relatorios.pdf';
 describe('buildTablePdf', () => {
   it('gera buffer pdf valido com logo institucional', async () => {
     const buffer = await buildTablePdf({
-      title: 'GestOP — Teste',
+      title: 'SIGMA — Teste',
       headers: ['Coluna A', 'Coluna B'],
       rows: [['Valor 1', 'Valor 2']],
     });

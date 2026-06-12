@@ -115,7 +115,7 @@ export default function ChamadoPublicoPage() {
             </span>
             <div>
               <p className="text-[15px] font-bold leading-tight">Prefeitura de Franca</p>
-              <p className="text-[11px] opacity-90">Chamado via QR Code · GestOP</p>
+              <p className="text-[11px] opacity-90">Chamado via QR Code · SIGMA</p>
             </div>
           </div>
         </header>
@@ -297,7 +297,7 @@ export default function ChamadoPublicoPage() {
         ) : null}
       </div>
 
-      <p className="mt-5 text-center text-[12px] text-[var(--ink-3)]">Prefeitura Municipal de Franca · GestOP</p>
+      <p className="mt-5 text-center text-[12px] text-[var(--ink-3)]">Prefeitura Municipal de Franca · SIGMA</p>
     </main>
   );
 }

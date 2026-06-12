@@ -1,7 +1,7 @@
 {
   "name": "frontend",
   "version": "1.0.0",
-  "description": "Frontend Next.js do GestOP",
+  "description": "Frontend Next.js do SIGMA",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",

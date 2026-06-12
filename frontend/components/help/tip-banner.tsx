@@ -10,7 +10,7 @@ export function TipBanner({
   id: string;
   children: React.ReactNode;
 }) {
-  const storageKey = `gestop-tip-dismissed-${id}`;
+  const storageKey = `sigma-tip-dismissed-${id}`;
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {

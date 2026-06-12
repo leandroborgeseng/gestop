@@ -16,7 +16,7 @@ export default function RedefinirSenhaPage() {
   return (
     <Suspense
       fallback={
-        <main className="gestop-shell flex min-h-dvh items-center justify-center p-4">
+        <main className="sigma-shell flex min-h-dvh items-center justify-center p-4">
           <div className="w-full max-w-md">
             <PageSkeleton />
           </div>

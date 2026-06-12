@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 const SYSTEM_SYNC_ACTOR: JwtPayload = {
   sub: 'system-sync-replay',
   email: 'system@gestop.local',
-  nome: 'GestOP Sync Scheduler',
+  nome: 'SIGMA Sync Scheduler',
   perfis: [],
   permissoes: [],
 };

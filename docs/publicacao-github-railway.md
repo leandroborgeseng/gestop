@@ -1,4 +1,4 @@
-# GestOP — Guia de publicação no GitHub e deploy (Railway)
+# SIGMA — Guia de publicação no GitHub e deploy (Railway)
 
 > **Para uso em outra conta Cursor:** copie este arquivo para o projeto ou cole no chat como contexto.  
 > Ele descreve como publicar o código no GitHub e colocar a aplicação no ar.
@@ -24,7 +24,7 @@ gestop/
 ├── frontend/               # App Next.js
 │   ├── app/                # Rotas (login, cco, admin, etc.)
 │   ├── components/         # UI e layout
-│   └── lib/api.ts          # Cliente API (usa /api-gestop)
+│   └── lib/api.ts          # Cliente API (usa /api-sigma)
 ├── docs/                   # Documentação
 ├── package.json            # Backend
 └── docker-compose.yml        # Postgres local (PostGIS)
@@ -50,7 +50,7 @@ gestop/
 # Na pasta do projeto
 git init
 git add .
-git commit -m "Publicar GestOP"
+git commit -m "Publicar SIGMA"
 
 # Criar repo vazio no GitHub (ex.: gestop) e conectar:
 git remote add origin https://github.com/SEU_USUARIO/gestop.git
@@ -119,7 +119,7 @@ npm run dev
 
 App local: `http://localhost:3000`
 
-O frontend chama a API via proxy interno `/api-gestop` (não usar URL externa no browser).
+O frontend chama a API via proxy interno `/api-sigma` (não usar URL externa no browser).
 
 ---
 
@@ -176,7 +176,7 @@ O `startup.js` faz automaticamente: bootstrap → migrate → seed → sobe a AP
 | `INITIAL_ADMIN_PASSWORD` | Sim* | Senha do admin no **primeiro seed** (*só se banco vazio) |
 | `STORAGE_DRIVER` | Sim | `local` (recomendado no Railway) |
 | `STORAGE_LOCAL_DIR` | Sim** | Pasta no Volume Railway, ex.: `/data/gestop-evidencias` |
-| `STORAGE_PUBLIC_URL_BASE` | Sim** | URL pública do frontend + `/api-gestop` |
+| `STORAGE_PUBLIC_URL_BASE` | Sim** | URL pública do frontend + `/api-sigma` |
 | `PORT` | Auto | Railway injeta automaticamente |
 | `FORCE_DB_RESET` | Não | `true` só para resetar banco (temporário) |
 | `FORCE_SEED_ON_START` | Não | `true` força seed mesmo com dados |
@@ -196,10 +196,10 @@ O `startup.js` faz automaticamente: bootstrap → migrate → seed → sobe a AP
    ```env
    STORAGE_DRIVER=local
    STORAGE_LOCAL_DIR=/data/gestop-evidencias
-   STORAGE_PUBLIC_URL_BASE=https://SEU-FRONTEND.up.railway.app/api-gestop
+   STORAGE_PUBLIC_URL_BASE=https://SEU-FRONTEND.up.railway.app/api-sigma
    ```
 
-As fotos ficam no disco persistente do Railway. O browser acessa via proxy do frontend (`/api-gestop/storage/...`). **Não é necessário AWS, S3 ou bucket externo.**
+As fotos ficam no disco persistente do Railway. O browser acessa via proxy do frontend (`/api-sigma/storage/...`). **Não é necessário AWS, S3 ou bucket externo.**
 
 ### 5.4 Serviço: Frontend (Next.js)
 
@@ -238,9 +238,9 @@ Substitua `gestop` pelo **nome do serviço backend** no Railway.
 NEXT_PUBLIC_API_URL=...
 ```
 
-O browser sempre usa `/api-gestop`, que é proxy server-side em:
+O browser sempre usa `/api-sigma`, que é proxy server-side em:
 
-`frontend/app/api-gestop/[...path]/route.ts`
+`frontend/app/api-sigma/[...path]/route.ts`
 
 ### 5.5 Conectar GitHub ao Railway
 
@@ -292,9 +292,9 @@ curl https://SEU-BACKEND.railway.app/health/db
 Nos logs Railway, procurar:
 
 ```
-[GestOP:startup] Preparacao do banco concluida
-[GestOP:api] Servidor ouvindo na porta ...
-[GestOP:startup] Usuarios cadastrados: 4
+[SIGMA:startup] Preparacao do banco concluida
+[SIGMA:api] Servidor ouvindo na porta ...
+[SIGMA:startup] Usuarios cadastrados: 4
 ```
 
 ### Frontend
@@ -318,7 +318,7 @@ Se retornar 502, revisar `BACKEND_INTERNAL_URL`.
 
 | Problema | Causa | Solução |
 |----------|-------|---------|
-| Login "Load failed" | `NEXT_PUBLIC_API_URL` externa | Remover variável; usar só `/api-gestop` |
+| Login "Load failed" | `NEXT_PUBLIC_API_URL` externa | Remover variável; usar só `/api-sigma` |
 | Backend 502 no frontend | `BACKEND_INTERNAL_URL` errada | Usar rede privada Railway |
 | `Cannot find module dist/main.js` | Path incorreto | Entry é `dist/src/main.js` |
 | `npm ci` falha no frontend | Dependências emnapi | Já estão em `frontend/package.json` |
@@ -362,7 +362,7 @@ Quando pedir para publicar ou fazer deploy:
 
 ```
 Leia docs/publicacao-github-railway.md deste repositório.
-Preciso publicar/atualizar o GestOP no GitHub e validar o deploy no Railway.
+Preciso publicar/atualizar o SIGMA no GitHub e validar o deploy no Railway.
 Siga o guia passo a passo, não commite segredos, e confirme login em /login após o deploy.
 ```
 
@@ -373,8 +373,8 @@ Siga o guia passo a passo, não commite segredos, e confirme login em /login ap�
 | Arquivo | Função |
 |---------|--------|
 | `frontend/lib/backend-url.ts` | Resolve URL interna do backend |
-| `frontend/app/api-gestop/[...path]/route.ts` | Proxy API |
-| `frontend/lib/api.ts` | Cliente sempre usa `/api-gestop` |
+| `frontend/app/api-sigma/[...path]/route.ts` | Proxy API |
+| `frontend/lib/api.ts` | Cliente sempre usa `/api-sigma` |
 | `prisma/startup.ts` | Boot: migrate + seed + API |
 | `prisma/seed.ts` | Dados iniciais |
 | `package.json` (raiz) | Scripts do backend |
@@ -398,4 +398,4 @@ Siga o guia passo a passo, não commite segredos, e confirme login em /login ap�
 
 ---
 
-*Última atualização: maio/2026 — GestOP Prefeitura de Franca*
+*Última atualização: maio/2026 — SIGMA Prefeitura de Franca*

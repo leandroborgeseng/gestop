@@ -7,10 +7,10 @@ function resolveStorageApiPath(url: string) {
   const marker = '/storage/';
   const index = url.indexOf(marker);
   if (index >= 0) {
-    return `/api-gestop/storage/${url.slice(index + marker.length)}`;
+    return `/api-sigma/storage/${url.slice(index + marker.length)}`;
   }
   if (url.startsWith('storage/')) {
-    return `/api-gestop/${url}`;
+    return `/api-sigma/${url}`;
   }
   return null;
 }

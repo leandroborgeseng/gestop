@@ -1,4 +1,4 @@
-# GestOP — Brief completo para redesign de UI (Claude Design)
+# SIGMA — Brief completo para redesign de UI (Claude Design)
 
 > **Como usar:** copie a seção **PROMPT PARA CLAUDE DESIGN** (final deste arquivo) e anexe este documento ou trechos relevantes. Depois, devolva os entregáveis ao Cursor para implementação no código Next.js existente.
 
@@ -8,7 +8,7 @@
 
 | Item | Descrição |
 |------|-----------|
-| **Nome** | GestOP — Gestão de Ordens de Serviço e Fiscalização Georreferenciada |
+| **Nome** | SIGMA — Gestão de Ordens de Serviço e Fiscalização Georreferenciada |
 | **Cliente** | Prefeitura Municipal de Franca (SP) |
 | **Tipo** | Plataforma web + PWA para gestão operacional de patrimônio público |
 | **Produção** | https://gestop.up.railway.app |
@@ -80,7 +80,7 @@ Permissões RBAC controlam visibilidade do menu — **não redesenhar fluxo de a
 ┌─────────────────────────────────────────────────────────┐
 │ SIDEBAR 280px          │ MAIN CONTENT                    │
 │ ┌────────────────────┐ │ PageShell: kicker + title +     │
-│ │ Logo PMF + GestOP  │ │ description + action            │
+│ │ Logo PMF + SIGMA  │ │ description + action            │
 │ │ Nome + perfis      │ │                                 │
 │ ├────────────────────┤ │ [conteúdo da página]            │
 │ │ Nav links          │ │                                 │
@@ -99,7 +99,7 @@ Permissões RBAC controlam visibilidade do menu — **não redesenhar fluxo de a
 
 ```
 ┌──────────────────────────┐
-│ AppBar: logo + GestOP +   │
+│ AppBar: logo + SIGMA +   │
 │ usuário + badge Online    │
 ├──────────────────────────┤
 │                          │
@@ -186,7 +186,7 @@ components/ui/
 ### Logo
 
 - Imagem institucional: `prefeitura-franca-logo.png` (PMF)
-- Product label textual: **GestOP** + subtítulo "Central Operacional"
+- Product label textual: **SIGMA** + subtítulo "Central Operacional"
 - Variantes: full, compact, mark; tema light para fundos escuros
 
 ---
@@ -352,7 +352,7 @@ Copie tudo abaixo e cole no Claude Design:
 Você é um product designer sênior especializado em gov-tech e dashboards operacionais.
 
 ## Projeto
-Redesenhar completamente a interface do **GestOP** — plataforma web + PWA da Prefeitura Municipal de Franca (SP) para gestão georreferenciada de ordens de serviço, fiscalizações e chamados em próprios públicos (escolas, UBS, praças).
+Redesenhar completamente a interface do **SIGMA** — plataforma web + PWA da Prefeitura Municipal de Franca (SP) para gestão georreferenciada de ordens de serviço, fiscalizações e chamados em próprios públicos (escolas, UBS, praças).
 
 URL produção: https://gestop.up.railway.app
 Stack: Next.js 16, React 19, Tailwind CSS 4, Lucide icons, Leaflet (mapas).

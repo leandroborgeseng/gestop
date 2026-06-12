@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gestop-campo-v2';
+const CACHE_NAME = 'sigma-campo-v2';
 const PRECACHE_URLS = ['/mobile', '/icon.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
@@ -23,7 +23,7 @@ self.addEventListener('message', (event) => {
 });
 
 self.addEventListener('push', (event) => {
-  let payload = { title: 'GestOP', body: 'Nova notificacao operacional.', url: '/dashboard' };
+  let payload = { title: 'SIGMA', body: 'Nova notificacao operacional.', url: '/dashboard' };
   try {
     if (event.data) payload = { ...payload, ...event.data.json() };
   } catch {
@@ -57,7 +57,7 @@ self.addEventListener('notificationclick', (event) => {
 
 function shouldBypassCache(url) {
   return (
-    url.pathname.startsWith('/api-gestop') ||
+    url.pathname.startsWith('/api-sigma') ||
     url.pathname.startsWith('/_next') ||
     url.pathname.startsWith('/login') ||
     url.pathname.startsWith('/recuperar-senha')

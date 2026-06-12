@@ -1,6 +1,6 @@
 # Importação do webmap QGIS (SMMAFRANCA/webmap)
 
-Importa **Próprio Público Municipal**, **Unidades Escolares** e **Imóvel Público (120)** do repositório [SMMAFRANCA/webmap](https://github.com/SMMAFRANCA/webmap) para `UnidadePublica` no GestOP.
+Importa **Próprio Público Municipal**, **Unidades Escolares** e **Imóvel Público (120)** do repositório [SMMAFRANCA/webmap](https://github.com/SMMAFRANCA/webmap) para `UnidadePublica` no SIGMA.
 
 ## Pré-requisitos
 
@@ -52,7 +52,7 @@ npm run import:webmap -- --local=/tmp/webmap/layers
 
 ## Mapeamento
 
-| Webmap | GestOP |
+| Webmap | SIGMA |
 |--------|--------|
 | `cadastro_imobiliario` | `codigoPatrimonial` → `PMF-{digits}` |
 | Sem cadastro | `PMF-WEBMAP-{camada}-{fid}` |

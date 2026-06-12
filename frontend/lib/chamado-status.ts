@@ -39,6 +39,28 @@ export function prioridadeVariant(prioridade: string): 'danger' | 'warning' | 'n
   return 'neutral';
 }
 
+export function previstaExecucaoInfo(previstaExecucaoEm: string | null | undefined, status: string) {
+  if (status === 'CONCLUIDO' || status === 'CANCELADO') {
+    return { label: '—', tone: 'neutral' as const, date: null };
+  }
+  if (!previstaExecucaoEm) {
+    return { label: 'Sem data', tone: 'neutral' as const, date: null };
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const prevista = new Date(previstaExecucaoEm);
+  prevista.setHours(0, 0, 0, 0);
+  const days = Math.round((prevista.getTime() - today.getTime()) / 86_400_000);
+  const formatted = prevista.toLocaleDateString('pt-BR');
+
+  if (days === 0) return { label: `Hoje · ${formatted}`, tone: 'warning' as const, date: formatted };
+  if (days === 1) return { label: `Amanhã · ${formatted}`, tone: 'brand' as const, date: formatted };
+  if (days < 0) return { label: `${Math.abs(days)}d atrás · ${formatted}`, tone: 'danger' as const, date: formatted };
+  if (days <= 7) return { label: `Em ${days}d · ${formatted}`, tone: 'neutral' as const, date: formatted };
+  return { label: formatted, tone: 'neutral' as const, date: formatted };
+}
+
 export function prazoInfo(prazoEm: string | null | undefined, status: string) {
   if (status === 'CONCLUIDO') {
     return { label: 'Concluído', tone: 'success' as const, days: null };

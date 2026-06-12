@@ -37,8 +37,8 @@ import { notifyAuthExpired } from './security';
 
 // Sempre usa proxy interno do Next.js no browser.
 // NEXT_PUBLIC_API_URL apontando para URL externa quebra login no Railway.
-const API_BASE_URL = '/api-gestop';
-const AUTH_STORAGE_KEY = 'gestop.auth';
+const API_BASE_URL = '/api-sigma';
+const AUTH_STORAGE_KEY = 'sigma.auth';
 
 async function readApiError(response: Response, fallback: string) {
   try {
@@ -483,13 +483,20 @@ export function listChamadosEmExecucao() {
 }
 
 export function createChamado(payload: {
-  unidadeId: string;
+  modoLocalizacao: string;
+  unidadeId?: string;
+  secretariaId?: string;
+  latitude?: number;
+  longitude?: number;
+  enderecoTexto?: string;
+  enderecoBairro?: string;
   descricao: string;
   prioridade?: string;
   origem?: string;
   solicitanteNome?: string;
   solicitanteEmail?: string;
   solicitanteTelefone?: string;
+  fotoDataUrl?: string;
 }) {
   return request<ChamadoResumo>('/chamados', {
     method: 'POST',
@@ -522,6 +529,14 @@ export function updateChamadoAtribuicao(
   payload: { equipeId?: string; responsavelId?: string; motivo?: string },
 ) {
   return request<ChamadoResumo>(`/chamados/${id}/atribuicao`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateChamadoPlanejamento(id: string, payload: { previstaExecucaoEm?: string | null }) {
+  return request<ChamadoResumo>(`/chamados/${id}/planejamento`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -615,7 +630,7 @@ async function downloadRelatorio(
   const blob = await response.blob();
   const filename =
     response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] ??
-    `gestop-${tipo}.${formato}`;
+    `sigma-${tipo}.${formato}`;
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

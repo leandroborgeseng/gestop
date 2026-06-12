@@ -53,4 +53,4 @@ cd frontend && npm run build
 
 Ver `docs/fase-6-implementacao.md`.
 
-**Fora do escopo:** BI externo (Metabase/Power BI) e app nativo — o GestOP permanece **web + PWA** no Next.js.
+**Fora do escopo:** BI externo (Metabase/Power BI) e app nativo — o SIGMA permanece **web + PWA** no Next.js.

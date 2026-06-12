@@ -186,7 +186,7 @@ async function main() {
 
   const [adminPerfil, gestorPerfil, fiscalPerfil, manutencaoPerfil] = await Promise.all([
     prisma.perfil.create({
-      data: { nome: 'Administrador do Sistema', sistema: true, descricao: 'Acesso total ao GestOP' },
+      data: { nome: 'Administrador do Sistema', sistema: true, descricao: 'Acesso total ao SIGMA' },
     }),
     prisma.perfil.create({
       data: { nome: 'Gestor CCO', sistema: true, descricao: 'Operacao da Central de Controle' },
@@ -217,7 +217,7 @@ async function main() {
   const [admin, gestor, fiscal, operador] = await Promise.all([
     prisma.usuario.create({
       data: {
-        nome: 'Administrador GestOP',
+        nome: 'Administrador SIGMA',
         email: 'admin.gestop@franca.sp.gov.br',
         cpf: '00000000000',
         senhaHash: defaultPasswordHash,
@@ -431,7 +431,7 @@ async function main() {
       precisaoMetros: 12,
       capturadaEm: new Date('2026-05-18T11:50:00.000Z'),
       enviadaEm: new Date('2026-05-18T12:06:00.000Z'),
-      marcaDagua: 'GestOP - 18/05/2026 08:50 - Joao Pereira',
+      marcaDagua: 'SIGMA - 18/05/2026 08:50 - Joao Pereira',
     },
   });
 

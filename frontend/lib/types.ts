@@ -443,6 +443,8 @@ export type ChamadoNaoConformidade = {
   };
 };
 
+export type ChamadoModoLocalizacao = 'UNIDADE' | 'GEOLOCALIZACAO' | 'ENDERECO';
+
 export type ChamadoResumo = {
   id: string;
   codigo: string;
@@ -451,7 +453,11 @@ export type ChamadoResumo = {
   status: ChamadoStatus;
   origem: ChamadoOrigem;
   prioridade: string;
+  modoLocalizacao?: ChamadoModoLocalizacao;
+  enderecoTexto?: string | null;
+  enderecoBairro?: string | null;
   prazoEm?: string | null;
+  previstaExecucaoEm?: string | null;
   concluidoEm?: string | null;
   impedimentoMotivo?: string | null;
   solicitanteNome?: string | null;
@@ -464,7 +470,7 @@ export type ChamadoResumo = {
   createdAt: string;
   encerradoEm?: string | null;
   secretaria: SecretariaOption;
-  unidade: {
+  unidade?: {
     id: string;
     nome: string;
     codigoPatrimonial: string;
@@ -473,7 +479,7 @@ export type ChamadoResumo = {
     latitude?: number | null;
     longitude?: number | null;
     raioValidacaoMetros?: number;
-  };
+  } | null;
   responsavel?: { id: string; nome: string } | null;
   equipe?: { id: string; nome: string } | null;
   naoConformidade?: ChamadoNaoConformidade | null;

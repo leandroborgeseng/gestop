@@ -1,6 +1,6 @@
-# GestOP — Especificação de Front-end (Design System)
+# SIGMA — Especificação de Front-end (Design System)
 
-> Documento técnico para geração e manutenção de UI no projeto **GestOP — Gestão de Ordens de Serviço e Fiscalização Georreferenciada** — Prefeitura Municipal de Franca.
+> Documento técnico para geração e manutenção de UI no projeto **SIGMA — Gestão de Ordens de Serviço e Fiscalização Georreferenciada** — Prefeitura Municipal de Franca.
 >
 > Baseado em Next.js, React, Tailwind CSS, tokens CSS próprios e alinhado ao **Prefeitura de Franca Design System** (`franca-design-system`).
 
@@ -10,7 +10,7 @@
 
 | Campo | Valor |
 |-------|--------|
-| **Nome** | GestOP Front-end Design System Spec |
+| **Nome** | SIGMA Front-end Design System Spec |
 | **Versão** | 1.0.0 |
 | **Atualizado em** | 2026-05-18 |
 | **Idioma** | pt-BR |
@@ -27,9 +27,9 @@
 
 ## Contextos visuais
 
-O GestOP usa **dois contextos** do design system municipal, mais uma **tela de login** com estilo próprio.
+O SIGMA usa **dois contextos** do design system municipal, mais uma **tela de login** com estilo próprio.
 
-| ID | Uso no GestOP | Onde |
+| ID | Uso no SIGMA | Onde |
 |----|----------------|------|
 | `legacyPortal` | Portal institucional legado (tokens em `:root`) | Herança / compatibilidade |
 | `servicePortal` | Carta de Serviços — **tema principal logado** | `CcoApp`, painéis, formulários, PWA |
@@ -59,7 +59,7 @@ O GestOP usa **dois contextos** do design system municipal, mais uma **tela de l
 | `--color-feedback-warning` | `#D97706` | confirmed |
 | `--color-feedback-danger` | `#DC2626` | confirmed |
 
-### Cores — `servicePortal` (GestOP logado)
+### Cores — `servicePortal` (SIGMA logado)
 
 | Token CSS | Valor | Confiança |
 |-----------|-------|-----------|
@@ -142,7 +142,7 @@ Aliases adicionais no layout shell (`.iptu-app-shell`):
 
 | Breakpoint | Comportamento |
 |------------|----------------|
-| `max-width: 1100px` | Shell 3 colunas → empilhado; `gestop-two-col` → 1 coluna |
+| `max-width: 1100px` | Shell 3 colunas → empilhado; `sigma-two-col` → 1 coluna |
 | `max-width: 1024px` | `.ds-grid` → 2 colunas |
 | `max-width: 640px` | `.ds-grid` → 1 coluna; toolbar em grid 2 colunas |
 
@@ -152,7 +152,7 @@ Aliases adicionais no layout shell (`.iptu-app-shell`):
 |----------|---------------------|
 | `.ds-app` | `max-width: 1200px`, centralizado |
 | `.iptu-app-shell` | Grid `236px` sidebar + miolo flex (`100vw` max) |
-| `.gestop-two-col` | Form `1fr` + prévia/resumo `260–320px` |
+| `.sigma-two-col` | Form `1fr` + prévia/resumo `260–320px` |
 
 ---
 
@@ -265,8 +265,8 @@ prefeitura-shell
 |----------|----------------|
 | `.ok` | `#EAF8F0` / success |
 | `.warn` | `#FFF5E8` / warning |
-| `.gestop-badge-concluido` | `#E8F4FC` / `#0D6EFD` |
-| `.gestop-badge-critico` | `#FDE8E8` / `#B42318` |
+| `.sigma-badge-concluido` | `#E8F4FC` / `#0D6EFD` |
+| `.sigma-badge-critico` | `#FDE8E8` / `#B42318` |
 
 ### Banner de modo visualização — `.ds-view-banner`
 
@@ -283,26 +283,26 @@ prefeitura-shell
 | Largura | `minmax(200px, 236px)` |
 | Item nav | `.iptu-nav-btn` — padding `10px 12px`, radius `8px` |
 | Active | fundo brand-subtle, borda brand 35% opacity |
-| Toolbar GestOP | `.gestop-nav-toolbar` — botões coluna, largura 100% |
+| Toolbar SIGMA | `.sigma-nav-toolbar` — botões coluna, largura 100% |
 
 ### Topbar — `.iptu-topbar`
 
 - Saudação, chip de perfil com avatar gradiente brand, dropdown perfil (min-width `320px`), ação sair.
 
-### Formulários GestOP — layout duas colunas
+### Formulários SIGMA — layout duas colunas
 
 ```text
-.gestop-two-col
+.sigma-two-col
 ├── Coluna 1: formulário (ds-panel, ds-grid)
-└── Coluna 2: resumo contextual (.gestop-preview-head gradiente brand)
+└── Coluna 2: resumo contextual (.sigma-preview-head gradiente brand)
 ```
 
-### Cards de checklist — `.gestop-checklist-card`
+### Cards de checklist — `.sigma-checklist-card`
 
-- Card clicável com checkbox visual `.gestop-checklist-check`.
+- Card clicável com checkbox visual `.sigma-checklist-check`.
 - Estado on: borda e fundo brand-subtle; check preenchido brand.
 
-### Relatórios — `.gestop-stat-grid` / `.gestop-stat-card`
+### Relatórios — `.sigma-stat-grid` / `.sigma-stat-card`
 
 | Variante | Cor do valor |
 |----------|----------------|
@@ -312,9 +312,9 @@ prefeitura-shell
 | `--danger` | `#DC3545` |
 | `--muted` | text secondary |
 
-Filtros: `.gestop-relatorios-filtros` — grid auto-fill `minmax(160px, 1fr)`.
+Filtros: `.sigma-relatorios-filtros` — grid auto-fill `minmax(160px, 1fr)`.
 
-### Modal — `.gestop-modal-overlay` / `.gestop-modal`
+### Modal — `.sigma-modal-overlay` / `.sigma-modal`
 
 - Overlay fullscreen, modal `max-width: 480px`, `max-height: 80vh`, scroll interno.
 
@@ -341,7 +341,7 @@ Filtros: `.gestop-relatorios-filtros` — grid auto-fill `minmax(160px, 1fr)`.
 
 ## Acessibilidade
 
-| Regra | Implementação GestOP |
+| Regra | Implementação SIGMA |
 |-------|---------------------|
 | Alvo de toque mínimo | Inputs `44px`; botões `40px` | confirmed |
 | Focus visível | `focus-visible` em botões, tabs, inputs | confirmed |
@@ -362,7 +362,7 @@ Filtros: `.gestop-relatorios-filtros` — grid auto-fill `minmax(160px, 1fr)`.
 
 ### Obrigatório
 
-1. **App logado:** usar classes `ds-*`, `iptu-*`, `gestop-*`, Tailwind utilitário quando adequado e `data-theme="servicePortal"`.
+1. **App logado:** usar classes `ds-*`, `iptu-*`, `sigma-*`, Tailwind utilitário quando adequado e `data-theme="servicePortal"`.
 2. **Não hardcodar** `#0066CC` / `#0199DC` em novos componentes — preferir `var(--color-brand-primary)` ou `var(--franca-brand)`.
 3. **Login:** usar Tailwind e manter estilo visual consistente com a identidade municipal.
 4. **Estados interativos:** hover, focus-visible, active, disabled em controles novos.
@@ -397,7 +397,7 @@ frontend/
 
 ### API / proxy
 
-- Dev: proxy `/api-gestop` → backend NestJS.
+- Dev: proxy `/api-sigma` → backend NestJS.
 - Produção Docker: `NEXT_PUBLIC_API_PROXY=true`, `BACKEND_INTERNAL_URL=http://backend:3001`.
 - Portas padrão: frontend **3000**, API **3001**.
 
@@ -405,14 +405,14 @@ frontend/
 
 ## Guia para Cursor / LLM
 
-Ao gerar UI para o GestOP:
+Ao gerar UI para o SIGMA:
 
 1. Reutilizar classes existentes antes de criar CSS novo.
 2. Respeitar `data-theme="servicePortal"` no app logado.
 3. Formulários: `.ds-grid` + `.ds-field` + `.ds-label` + `.ds-input`.
 4. Listagens: `.ds-table-wrap` > `.ds-table`.
 5. Ações primárias: `.ds-btn` (não inventar botão sem borda brand).
-6. Cards de métricas: `.gestop-stat-card` com modificador `--primary|--success|...`.
+6. Cards de métricas: `.sigma-stat-card` com modificador `--primary|--success|...`.
 7. Não alterar o layout `iptu-app-shell` sem revisar breakpoints `1100px` e `640px`.
 8. Login permanece visualmente distinto (gradiente sky/blue) — não forçar `ds-btn` na tela de entrada.
 
@@ -439,4 +439,4 @@ Ao gerar UI para o GestOP:
 
 ---
 
-*Documento base para o GestOP. Atualize este arquivo quando alterar tokens em `portal-ds.css`, Tailwind ou a estrutura de layout.*
+*Documento base para o SIGMA. Atualize este arquivo quando alterar tokens em `portal-ds.css`, Tailwind ou a estrutura de layout.*

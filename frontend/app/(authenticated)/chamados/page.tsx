@@ -1,8 +1,10 @@
 'use client';
 
+import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
+  CalendarDays,
   Bell,
   Building2,
   ClipboardList,
@@ -26,14 +28,15 @@ import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
-import { getChamado, listChamadoEquipes, listChamados, updateChamadoAtribuicao, updateChamadoStatus } from '@/lib/api';
-import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
+import { getChamado, listChamadoEquipes, listChamados, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { chamadoLocalLabel } from '@/lib/chamado-geo';
 import {
   CHAMADO_STATUS_META,
   buildChamadoTimelineFromHistorico,
   chamadoStatusLabel,
   prazoInfo,
+  previstaExecucaoInfo,
   prioridadeVariant,
 } from '@/lib/chamado-status';
 import { ChamadoDetalhe, ChamadoOrigem, ChamadoResumo, ChamadoStatus, EquipeOpcao } from '@/lib/types';
@@ -162,8 +165,9 @@ function ChamadosPageContent() {
         item.codigo,
         item.titulo,
         item.descricao,
-        item.unidade.nome,
-        item.unidade.codigoPatrimonial,
+        item.unidade?.nome,
+        item.unidade?.codigoPatrimonial,
+        item.enderecoTexto,
         item.solicitanteNome,
         item.responsavel?.nome,
         item.equipe?.nome,
@@ -216,6 +220,27 @@ function ChamadosPageContent() {
     }
   }
 
+  async function savePlanejamento(id: string, codigo: string, previstaExecucaoEm: string | null) {
+    setBusyId(id);
+    setError(null);
+    try {
+      await updateChamadoPlanejamento(id, { previstaExecucaoEm });
+      const items = await listChamados();
+      setChamados(items);
+      if (selectedId === id) {
+        const refreshed = await getChamado(id);
+        setDetail(refreshed);
+      }
+      snackbar.show(`${codigo}: data prevista atualizada`, 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Falha ao salvar data prevista.';
+      setError(message);
+      snackbar.show(message, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   async function transition(
     id: string,
     status: ChamadoStatus,
@@ -255,7 +280,14 @@ function ChamadosPageContent() {
         title="Chamados"
         description="Triagem, atendimento e acompanhamento — abertos via QR Code, vistoria, app de vistoria e registro interno."
         backHref="/cco"
-        action={<UnidadeAvulsoActions size="md" />}
+        action={
+          <Link href="/chamados/novo">
+            <Button variant="filled" size="md" className="gap-1.5">
+              <Bell className="h-4 w-4" />
+              Abrir chamado
+            </Button>
+          </Link>
+        }
       >
         <TipBanner id="chamados-triagem">
           Selecione um chamado na lista para ver prazo, responsável e linha do tempo. Use a lista de status para
@@ -324,6 +356,7 @@ function ChamadosPageContent() {
                     const canal = origemMeta(chamado.origem);
                     const CanalIcon = canal.icon;
                     const prazo = prazoInfo(chamado.prazoEm, chamado.status);
+                    const prevista = previstaExecucaoInfo(chamado.previstaExecucaoEm, chamado.status);
                     const isSelected = selected?.id === chamado.id;
 
                     return (
@@ -343,9 +376,21 @@ function ChamadosPageContent() {
                           <Badge variant={prioridadeVariant(chamado.prioridade)}>{chamado.prioridade}</Badge>
                         </div>
                         <p className="line-clamp-2 text-[13px] font-semibold text-[var(--ink)]">{chamadoTitulo(chamado)}</p>
-                        <p className="truncate text-[12px] text-[var(--ink-3)]">{chamado.unidade.nome}</p>
+                        <p className="truncate text-[12px] text-[var(--ink-3)]">{chamadoLocalLabel(chamado)}</p>
                         <div className="flex flex-wrap items-center gap-2 pt-0.5">
                           <Badge variant={st.badge}>{st.label}</Badge>
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1 text-[11px] font-semibold',
+                              prevista.tone === 'danger' && 'text-[var(--danger)]',
+                              prevista.tone === 'warning' && 'text-[var(--warn)]',
+                              prevista.tone === 'brand' && 'text-[var(--brand)]',
+                              prevista.tone === 'neutral' && 'text-[var(--ink-3)]',
+                            )}
+                          >
+                            <CalendarDays className="h-3 w-3" />
+                            {prevista.label}
+                          </span>
                           <span
                             className={cn(
                               'inline-flex items-center gap-1 text-[11px] font-semibold',
@@ -391,6 +436,7 @@ function ChamadosPageContent() {
                 busy={busyId === selected?.id}
                 onTransition={transition}
                 onAssignTeam={assignTeam}
+                onSavePlanejamento={savePlanejamento}
               />
             </section>
           </div>
@@ -408,6 +454,7 @@ function ChamadoDetailPanel({
   busy,
   onTransition,
   onAssignTeam,
+  onSavePlanejamento,
 }: {
   resumo: ChamadoResumo | null;
   detail: ChamadoDetalhe | null;
@@ -422,6 +469,7 @@ function ChamadoDetailPanel({
     impedimentoMotivo?: string,
   ) => void;
   onAssignTeam: (id: string, codigo: string, equipeId: string, responsavelId: string, motivo?: string) => void;
+  onSavePlanejamento: (id: string, codigo: string, previstaExecucaoEm: string | null) => void;
 }) {
   const [pendingStatus, setPendingStatus] = useState<ChamadoStatus>('ABERTO');
   const [motivo, setMotivo] = useState('');
@@ -429,6 +477,7 @@ function ChamadoDetailPanel({
   const [pendingEquipeId, setPendingEquipeId] = useState('');
   const [pendingResponsavelId, setPendingResponsavelId] = useState('');
   const [atribuicaoMotivo, setAtribuicaoMotivo] = useState('');
+  const [pendingPrevista, setPendingPrevista] = useState('');
 
   useEffect(() => {
     if (!resumo) return;
@@ -438,7 +487,8 @@ function ChamadoDetailPanel({
     setPendingEquipeId(resumo.equipe?.id ?? '');
     setPendingResponsavelId(resumo.responsavel?.id ?? '');
     setAtribuicaoMotivo('');
-  }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo, resumo?.equipe?.id, resumo?.responsavel?.id]);
+    setPendingPrevista(resumo.previstaExecucaoEm ? resumo.previstaExecucaoEm.slice(0, 10) : '');
+  }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo, resumo?.equipe?.id, resumo?.responsavel?.id, resumo?.previstaExecucaoEm]);
 
   if (!resumo) {
     return (
@@ -458,8 +508,11 @@ function ChamadoDetailPanel({
   const canal = origemMeta(resumo.origem);
   const CanalIcon = canal.icon;
   const prazo = prazoInfo(resumo.prazoEm, resumo.status);
+  const prevista = previstaExecucaoInfo(resumo.previstaExecucaoEm, resumo.status);
   const statusOptions = Object.keys(CHAMADO_STATUS_META) as ChamadoStatus[];
   const statusChanged = pendingStatus !== resumo.status;
+  const previstaChanged =
+    pendingPrevista !== (resumo.previstaExecucaoEm ? resumo.previstaExecucaoEm.slice(0, 10) : '');
   const atribuicaoChanged =
     pendingEquipeId !== (resumo.equipe?.id ?? '') || pendingResponsavelId !== (resumo.responsavel?.id ?? '');
   const selectedEquipe = equipes.find((equipe) => equipe.id === pendingEquipeId);
@@ -486,16 +539,22 @@ function ChamadoDetailPanel({
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--ink-3)]">
             <span className="inline-flex items-center gap-1.5">
               <Building2 className="h-3.5 w-3.5" />
-              {resumo.unidade.nome}
+              {chamadoLocalLabel(resumo)}
             </span>
-            <span className="mono">{resumo.unidade.codigoPatrimonial}</span>
+            {resumo.unidade?.codigoPatrimonial ? <span className="mono">{resumo.unidade.codigoPatrimonial}</span> : null}
           </div>
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
-              label="Prazo"
+              label="Prevista execução"
+              value={prevista.label}
+              sub={prevista.date ?? undefined}
+              tone={prevista.tone === 'brand' ? 'neutral' : prevista.tone}
+            />
+            <SummaryCard
+              label="Prazo SLA"
               value={prazo.label}
               sub={resumo.prazoEm ? new Date(resumo.prazoEm).toLocaleDateString('pt-BR') : undefined}
               tone={prazo.tone}
@@ -507,6 +566,40 @@ function ChamadoDetailPanel({
               sub={membrosEquipe.length ? `${membrosEquipe.length} membro(s) na equipe` : undefined}
             />
             <SummaryCard label="Canal" value={canal.label} />
+          </div>
+
+          <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
+            <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Planejamento de execução</p>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-[180px] flex-1">
+                <label htmlFor="chamado-prevista" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Data prevista para execução
+                </label>
+                <input
+                  id="chamado-prevista"
+                  type="date"
+                  value={pendingPrevista}
+                  onChange={(event) => setPendingPrevista(event.target.value)}
+                  disabled={busy}
+                  className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+                />
+              </div>
+              <Button
+                variant="outlined"
+                size="sm"
+                disabled={busy || !previstaChanged}
+                onClick={() =>
+                  onSavePlanejamento(resumo.id, resumo.codigo, pendingPrevista ? `${pendingPrevista}T12:00:00.000Z` : null)
+                }
+              >
+                Salvar data
+              </Button>
+              {pendingPrevista ? (
+                <Button variant="text" size="sm" disabled={busy} onClick={() => setPendingPrevista('')}>
+                  Limpar
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
@@ -578,17 +671,17 @@ function ChamadoDetailPanel({
             <DetailField label="Aberto em">
               {new Date(resumo.createdAt).toLocaleString('pt-BR')}
             </DetailField>
-            <DetailField label="Bairro">{resumo.unidade.bairro ?? '—'}</DetailField>
+            <DetailField label="Bairro">{resumo.unidade?.bairro ?? resumo.enderecoBairro ?? '—'}</DetailField>
             <DetailField label="Solicitante" className="sm:col-span-2">
               {resumo.solicitanteNome ?? '—'}
               {resumo.solicitanteTelefone ? ` · ${resumo.solicitanteTelefone}` : ''}
             </DetailField>
           </dl>
 
-          {resumo.unidade.endereco ? (
+          {resumo.unidade?.endereco || resumo.enderecoTexto ? (
             <div>
               <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Endereço</p>
-              <p className="mt-1 text-[13px] text-[var(--ink-2)]">{resumo.unidade.endereco}</p>
+              <p className="mt-1 text-[13px] text-[var(--ink-2)]">{resumo.unidade?.endereco ?? resumo.enderecoTexto}</p>
             </div>
           ) : null}
 

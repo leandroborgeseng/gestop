@@ -23,7 +23,7 @@ export function PwaInstallBanner() {
 
   return (
     <div className="mb-4 rounded-[var(--md-shape-md)] border border-[var(--color-brand-primary)] bg-[var(--color-brand-primary-subtle)] p-4">
-      <p className="md-title-md text-[var(--color-brand-primary)]">Instalar GestOP Vistoria</p>
+      <p className="md-title-md text-[var(--color-brand-primary)]">Instalar SIGMA Vistoria</p>
       <p className="md-body-md mt-1 text-[var(--color-brand-primary)] opacity-90">
         Adicione o app a tela inicial para acesso rápido offline durante vistorias.
       </p>

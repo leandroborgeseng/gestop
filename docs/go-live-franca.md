@@ -1,6 +1,6 @@
 # Go-live Franca — Checklist e piloto (2 semanas)
 
-Guia operacional para colocar o GestOP em produção na Prefeitura de Franca/SP enquanto o redesign de interface está em andamento.
+Guia operacional para colocar o SIGMA em produção na Prefeitura de Franca/SP enquanto o redesign de interface está em andamento.
 
 **URLs produção (referência):**
 - Frontend: https://gestop.up.railway.app
@@ -20,7 +20,7 @@ Guia operacional para colocar o GestOP em produção na Prefeitura de Franca/SP 
 | `INITIAL_ADMIN_PASSWORD` | Sim* | Senha forte (≥ 12 chars) — trocar após go-live |
 | `STORAGE_DRIVER` | Sim | `local` |
 | `STORAGE_LOCAL_DIR` | Sim | `/data/gestop-evidencias` |
-| `STORAGE_PUBLIC_URL_BASE` | Sim | `https://gestop.up.railway.app/api-gestop` |
+| `STORAGE_PUBLIC_URL_BASE` | Sim | `https://gestop.up.railway.app/api-sigma` |
 | `CORS_ORIGINS` | Sim | `https://gestop.up.railway.app` |
 | `FRONTEND_PUBLIC_URL` | Sim | `https://gestop.up.railway.app` |
 | `PORT` | Auto | Railway injeta |
@@ -48,7 +48,7 @@ Guia operacional para colocar o GestOP em produção na Prefeitura de Franca/SP 
 | `SMTP_SECURE` | Se SMTP | `false` para STARTTLS |
 | `SMTP_USER` | Se SMTP | Conta de envio |
 | `SMTP_PASSWORD` | Se SMTP | Senha ou app password |
-| `EMAIL_FROM` | Sim | `GestOP <gestop@franca.sp.gov.br>` |
+| `EMAIL_FROM` | Sim | `SIGMA <gestop@franca.sp.gov.br>` |
 | `EMAIL_ALERTS_ENABLED` | Não | `true` — alertas operacionais por e-mail |
 
 **Webmap QGIS:**
@@ -120,14 +120,14 @@ PLAYWRIGHT_BASE_URL=https://gestop.up.railway.app npm run test:e2e
 ### Sync diária (Railway Cron Job)
 
 ```
-POST https://gestop.up.railway.app/api-gestop/admin/importacao/webmap/automation/cron
+POST https://gestop.up.railway.app/api-sigma/admin/importacao/webmap/automation/cron
 Header: X-Webmap-Cron-Secret: <WEBMAP_CRON_SECRET>
 Schedule: 0 9 * * *   (6h BRT = 9h UTC)
 ```
 
 ### Webhook GitHub (repo SMMAFRANCA/webmap)
 
-- URL: `https://gestop.up.railway.app/api-gestop/admin/importacao/webmap/automation/webhook`
+- URL: `https://gestop.up.railway.app/api-sigma/admin/importacao/webmap/automation/webhook`
 - Content type: `application/json`
 - Secret: mesmo valor de `WEBMAP_WEBHOOK_SECRET`
 - Event: `push` (branch `main`)
@@ -138,7 +138,7 @@ Schedule: 0 9 * * *   (6h BRT = 9h UTC)
 
 ### Equipe mínima
 
-| Papel | Qtd | Perfil GestOP |
+| Papel | Qtd | Perfil SIGMA |
 |-------|-----|---------------|
 | Gestor CCO | 2 | Gestor CCO |
 | Agente de campo | 3 | Agente de Campo |

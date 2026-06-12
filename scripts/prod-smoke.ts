@@ -58,7 +58,7 @@ function logCheck(check: Check) {
 }
 
 async function main() {
-  console.log(`GestOP prod smoke — ${BASE}\n`);
+  console.log(`SIGMA prod smoke — ${BASE}\n`);
 
   const checks: Check[] = [];
 

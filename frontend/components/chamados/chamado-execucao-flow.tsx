@@ -27,7 +27,7 @@ import {
   concluirChamadoExecucao,
   getChamadoExecucao,
 } from '@/lib/api';
-import { chamadoTitulo } from '@/lib/chamado-geo';
+import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import { CHAMADO_STATUS_META, prioridadeVariant } from '@/lib/chamado-status';
 import { captureCurrentPosition, GeoPosition } from '@/lib/geolocation';
 import { ChamadoEvidencia, ChamadoExecucaoDetalhe } from '@/lib/types';
@@ -251,7 +251,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
               <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--ink-3)]">
                 <span className="inline-flex items-center gap-1">
                   <Building2 className="h-3.5 w-3.5" />
-                  {detail.unidade.nome}
+                  {chamadoLocalLabel(detail)}
                 </span>
                 {detail.equipe ? (
                   <span className="inline-flex items-center gap-1">

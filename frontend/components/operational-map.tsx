@@ -9,7 +9,7 @@ const OperationalMapClient = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="gestop-map-shell w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+      <div className="sigma-map-shell w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
         <Skeleton className="h-full w-full rounded-none" />
       </div>
     ),

@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AuditAction,
+  ChamadoModoLocalizacao,
   ChamadoOrigem,
   ChamadoStatus,
   EvidenciaTipo,
@@ -11,7 +12,7 @@ import { JwtPayload } from '../auth/jwt';
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { CreateChamadoDto, PublicCreateChamadoDto, UpdateChamadoStatusDto, UpdateChamadoAtribuicaoDto, ChamadoExecucaoCheckinDto, ChamadoExecucaoConcluirDto, ChamadoExecucaoEvidenciaDto } from './chamados.dto';
+import { CreateChamadoDto, PublicCreateChamadoDto, UpdateChamadoStatusDto, UpdateChamadoAtribuicaoDto, UpdateChamadoPlanejamentoDto, ChamadoExecucaoCheckinDto, ChamadoExecucaoConcluirDto, ChamadoExecucaoEvidenciaDto } from './chamados.dto';
 import {
   assertValidChamadoTransition,
   buildChamadoCode,
@@ -153,16 +154,7 @@ export class ChamadosService {
         return metadata?.tipo === 'execucao_checkin';
       });
 
-    const unidade = await this.prisma.unidadePublica.findUnique({
-      where: { id: chamado.unidadeId },
-      select: {
-        latitude: true,
-        longitude: true,
-        raioValidacaoMetros: true,
-        endereco: true,
-        bairro: true,
-      },
-    });
+    const unidadeExec = await this.resolveUnidadeExecucao(chamado);
 
     return {
       ...this.serializeChamado(chamado),
@@ -173,15 +165,7 @@ export class ChamadosService {
       execucaoCheckin: execucaoCheckin
         ? parseExecucaoCheckinMetadata(execucaoCheckin.metadata, execucaoCheckin.createdAt)
         : null,
-      unidadeExecucao: unidade
-        ? {
-            latitude: Number(unidade.latitude),
-            longitude: Number(unidade.longitude),
-            raioValidacaoMetros: unidade.raioValidacaoMetros,
-            endereco: unidade.endereco,
-            bairro: unidade.bairro,
-          }
-        : null,
+      unidadeExecucao: unidadeExec,
     };
   }
 
@@ -190,18 +174,11 @@ export class ChamadosService {
     await this.assertUsuarioPodeExecutarChamado(chamado, user);
     this.assertChamadoEmExecucao(chamado.status);
 
-    const unidade = await this.prisma.unidadePublica.findUnique({
-      where: { id: chamado.unidadeId },
-      select: { latitude: true, longitude: true, raioValidacaoMetros: true },
-    });
-    if (!unidade) throw new NotFoundException('Unidade do chamado não encontrada.');
+    const checkinTarget = await this.resolveCheckinTarget(chamado);
+    if (!checkinTarget) throw new BadRequestException('Chamado sem localização para validar check-in.');
 
     const validation = validateMobileCheckin({
-      unidade: {
-        latitude: Number(unidade.latitude),
-        longitude: Number(unidade.longitude),
-        raioValidacaoMetros: unidade.raioValidacaoMetros,
-      },
+      unidade: checkinTarget,
       checkin: dto.checkin,
     });
 
@@ -278,18 +255,11 @@ export class ChamadosService {
     this.assertChamadoEmExecucao(before.status);
     await this.assertCheckinExecucaoRegistrado(id);
 
-    const unidade = await this.prisma.unidadePublica.findUnique({
-      where: { id: before.unidadeId },
-      select: { latitude: true, longitude: true, raioValidacaoMetros: true },
-    });
-    if (!unidade) throw new NotFoundException('Unidade do chamado não encontrada.');
+    const checkinTarget = await this.resolveCheckinTarget(before);
+    if (!checkinTarget) throw new BadRequestException('Chamado sem localização para validar check-in.');
 
     const checkinValidation = validateMobileCheckin({
-      unidade: {
-        latitude: Number(unidade.latitude),
-        longitude: Number(unidade.longitude),
-        raioValidacaoMetros: unidade.raioValidacaoMetros,
-      },
+      unidade: checkinTarget,
       checkin: dto.checkin,
     });
 
@@ -406,23 +376,36 @@ export class ChamadosService {
   }
 
   async createChamado(dto: CreateChamadoDto, user: JwtPayload) {
-    const unidade = await this.getActiveUnidadeOrThrow(dto.unidadeId);
+    const location = await this.resolveCreateLocation(dto, user.sub);
+
+    let fotoUrl: string | undefined;
+    let fotoMimeType: string | undefined;
+    if (dto.fotoDataUrl?.trim()) {
+      const stored = await this.storageService.persistEvidenceUrl(dto.fotoDataUrl.trim());
+      fotoUrl = stored.url;
+      fotoMimeType = stored.mimeType;
+    }
 
     const chamado = await this.prisma.$transaction(async (tx) => {
       const sequence = await this.nextChamadoSequence(tx);
       return tx.chamado.create({
         data: {
           codigo: buildChamadoCode(sequence),
-          secretariaId: unidade.secretariaId,
-          unidadeId: unidade.id,
+          secretariaId: location.secretariaId,
+          unidadeId: location.unidadeId,
+          modoLocalizacao: dto.modoLocalizacao,
+          enderecoTexto: location.enderecoTexto,
+          enderecoBairro: location.enderecoBairro,
           descricao: dto.descricao.trim(),
           prioridade: dto.prioridade,
           origem: dto.origem ?? ChamadoOrigem.INTERNO,
           solicitanteNome: dto.solicitanteNome?.trim(),
           solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
           solicitanteTelefone: dto.solicitanteTelefone?.trim(),
-          latitude: unidade.latitude,
-          longitude: unidade.longitude,
+          latitude: location.latitude,
+          longitude: location.longitude,
+          fotoUrl,
+          fotoMimeType,
           registradoPorId: user.sub,
         },
         include: this.includeRelations(),
@@ -647,6 +630,32 @@ export class ChamadosService {
     return this.serializeChamado(chamado);
   }
 
+  async updatePlanejamento(id: string, dto: UpdateChamadoPlanejamentoDto, user: JwtPayload) {
+    const before = await this.getChamadoOrThrow(id);
+    const previstaExecucaoEm =
+      dto.previstaExecucaoEm === undefined
+        ? before.previstaExecucaoEm
+        : dto.previstaExecucaoEm
+          ? new Date(dto.previstaExecucaoEm)
+          : null;
+
+    if (
+      (before.previstaExecucaoEm?.toISOString() ?? null) === (previstaExecucaoEm?.toISOString() ?? null)
+    ) {
+      return this.serializeChamado(before);
+    }
+
+    const chamado = await this.prisma.chamado.update({
+      where: { id },
+      data: { previstaExecucaoEm },
+      include: this.includeRelations(),
+    });
+
+    await this.audit(user.sub, AuditAction.UPDATE, id, before, chamado);
+
+    return this.serializeChamado(chamado);
+  }
+
   async generateForNaoConformidade(naoConformidadeId: string, user: JwtPayload) {
     return this.prisma.$transaction((tx) => this.generateForNaoConformidadeTx(tx, naoConformidadeId, user.sub));
   }
@@ -724,6 +733,121 @@ export class ChamadosService {
     });
 
     return chamado;
+  }
+
+  private async resolveCreateLocation(dto: CreateChamadoDto, usuarioId: string) {
+    if (dto.modoLocalizacao === ChamadoModoLocalizacao.UNIDADE) {
+      if (!dto.unidadeId?.trim()) {
+        throw new BadRequestException('Selecione o próprio público para abrir o chamado.');
+      }
+      const unidade = await this.getActiveUnidadeOrThrow(dto.unidadeId);
+      return {
+        secretariaId: unidade.secretariaId,
+        unidadeId: unidade.id,
+        latitude: unidade.latitude,
+        longitude: unidade.longitude,
+        enderecoTexto: null as string | null,
+        enderecoBairro: null as string | null,
+      };
+    }
+
+    if (dto.latitude == null || dto.longitude == null) {
+      throw new BadRequestException('Informe a localização GPS do chamado.');
+    }
+
+    if (dto.modoLocalizacao === ChamadoModoLocalizacao.ENDERECO && !dto.enderecoTexto?.trim()) {
+      throw new BadRequestException('Informe o endereço do chamado.');
+    }
+
+    let secretariaId = dto.secretariaId?.trim();
+    if (!secretariaId) {
+      const usuario = await this.prisma.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { secretariaId: true },
+      });
+      secretariaId = usuario?.secretariaId ?? undefined;
+    }
+    if (!secretariaId) {
+      throw new BadRequestException('Selecione a secretaria responsável pelo chamado.');
+    }
+
+    const secretaria = await this.prisma.secretaria.findFirst({ where: { id: secretariaId, ativo: true } });
+    if (!secretaria) throw new BadRequestException('Secretaria não encontrada ou inativa.');
+
+    return {
+      secretariaId: secretaria.id,
+      unidadeId: null as string | null,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      enderecoTexto: dto.enderecoTexto?.trim() ?? null,
+      enderecoBairro: dto.enderecoBairro?.trim() ?? null,
+    };
+  }
+
+  private async resolveCheckinTarget(chamado: {
+    unidadeId: string | null;
+    latitude: unknown;
+    longitude: unknown;
+  }) {
+    if (chamado.unidadeId) {
+      const unidade = await this.prisma.unidadePublica.findUnique({
+        where: { id: chamado.unidadeId },
+        select: { latitude: true, longitude: true, raioValidacaoMetros: true },
+      });
+      if (!unidade) return null;
+      return {
+        latitude: Number(unidade.latitude),
+        longitude: Number(unidade.longitude),
+        raioValidacaoMetros: unidade.raioValidacaoMetros,
+      };
+    }
+
+    if (chamado.latitude == null || chamado.longitude == null) return null;
+
+    return {
+      latitude: Number(chamado.latitude),
+      longitude: Number(chamado.longitude),
+      raioValidacaoMetros: 200,
+    };
+  }
+
+  private async resolveUnidadeExecucao(chamado: {
+    unidadeId: string | null;
+    latitude: unknown;
+    longitude: unknown;
+    enderecoTexto: string | null;
+    enderecoBairro: string | null;
+  }) {
+    if (chamado.unidadeId) {
+      const unidade = await this.prisma.unidadePublica.findUnique({
+        where: { id: chamado.unidadeId },
+        select: {
+          latitude: true,
+          longitude: true,
+          raioValidacaoMetros: true,
+          endereco: true,
+          bairro: true,
+        },
+      });
+      if (!unidade) return null;
+      return {
+        latitude: Number(unidade.latitude),
+        longitude: Number(unidade.longitude),
+        raioValidacaoMetros: unidade.raioValidacaoMetros,
+        endereco: unidade.endereco,
+        bairro: unidade.bairro,
+      };
+    }
+
+    if (chamado.latitude == null || chamado.longitude == null) return null;
+
+    return {
+      latitude: Number(chamado.latitude),
+      longitude: Number(chamado.longitude),
+      raioValidacaoMetros: 200,
+      endereco: chamado.enderecoTexto,
+      bairro: chamado.enderecoBairro,
+    };
   }
 
   private async getActiveUnidadeOrThrow(unidadeId: string) {
