@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { getUptimeSeconds } from './config/runtime';
 import { PrismaService } from './prisma/prisma.service';
+import { inspectStorageHealth } from './storage/storage.health';
 
 const APP_VERSION = process.env.npm_package_version ?? '1.0.0';
 
@@ -98,5 +99,10 @@ export class HealthController {
         timestamp: new Date().toISOString(),
       };
     }
+  }
+
+  @Get('storage')
+  async getStorageHealth() {
+    return inspectStorageHealth();
   }
 }

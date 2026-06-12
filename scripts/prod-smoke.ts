@@ -31,6 +31,13 @@ type HealthPayload = {
       };
       migrations?: Array<{ name: string; applied: boolean }>;
     };
+    storage?: {
+      status?: string;
+      localDir?: string;
+      writable?: boolean;
+      readable?: boolean;
+      persistentHint?: string | null;
+    };
   };
 };
 
@@ -96,6 +103,17 @@ async function main() {
     ok: db?.connected === true && db?.status === 'ok',
     label: 'PostgreSQL conectado',
     severity: 'critical',
+  });
+
+  const storage = health.body?.backend?.storage;
+  checks.push({
+    ok: storage?.status === 'ok' && storage.writable === true && storage.readable === true,
+    label: 'Storage de evidencias',
+    detail:
+      storage?.status === 'ok'
+        ? storage.localDir
+        : storage?.persistentHint ?? `status=${storage?.status ?? 'desconhecido'}`,
+    severity: storage?.status === 'warn' ? 'warn' : 'critical',
   });
 
   const secretarias = db?.counts?.secretarias ?? 0;

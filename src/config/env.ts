@@ -46,7 +46,7 @@ export function assertProductionEnv() {
     }
   } else if (storageDriver === 'local' && !process.env.STORAGE_PUBLIC_URL_BASE?.trim()) {
     errors.push(
-      '[SIGMA:env] STORAGE_PUBLIC_URL_BASE obrigatorio em producao com STORAGE_DRIVER=local (URL publica do frontend + /api-sigma).',
+      '[SIGMA:env] STORAGE_PUBLIC_URL_BASE obrigatorio em producao com STORAGE_DRIVER=local (URL publica do frontend + /api-gestop).',
     );
   }
 

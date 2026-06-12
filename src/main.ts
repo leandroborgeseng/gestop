@@ -4,6 +4,7 @@ import { ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { assertProductionEnv } from './config/env';
+import { inspectStorageHealth } from './storage/storage.health';
 
 function initSentry() {
   const dsn = process.env.SENTRY_DSN?.trim();
@@ -26,6 +27,18 @@ async function bootstrap() {
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     console.error('[SIGMA:api] Corrija as variaveis no Railway → gestop → Variables → Redeploy.');
+    process.exit(1);
+  }
+
+  const storageHealth = await inspectStorageHealth();
+  console.log(
+    `[SIGMA:api] Storage ${storageHealth.status}: driver=${storageHealth.driver} dir=${'localDir' in storageHealth ? storageHealth.localDir : 'n/a'}`,
+  );
+  if ('persistentHint' in storageHealth && storageHealth.persistentHint) {
+    console.warn(`[SIGMA:api] ${storageHealth.persistentHint}`);
+  }
+  if ('errors' in storageHealth && storageHealth.errors?.length) {
+    console.error(`[SIGMA:api] Storage indisponivel: ${storageHealth.errors.join('; ')}`);
     process.exit(1);
   }
 
