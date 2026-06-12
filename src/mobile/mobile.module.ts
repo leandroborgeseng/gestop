@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { CronogramaModule } from '../cronograma/cronograma.module';
 import { ChamadosModule } from '../chamados/chamados.module';
@@ -8,7 +8,7 @@ import { MobileController } from './mobile.controller';
 import { MobileService } from './mobile.service';
 
 @Module({
-  imports: [AuthModule, CronogramaModule, ChamadosModule, StorageModule],
+  imports: [AuthModule, CronogramaModule, forwardRef(() => ChamadosModule), StorageModule],
   controllers: [MobileController],
   providers: [MobileService, PrismaService],
   exports: [MobileService],
