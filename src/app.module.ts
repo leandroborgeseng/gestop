@@ -16,7 +16,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { CronogramaModule } from './cronograma/cronograma.module';
 import { EmailModule } from './email/email.module';
-import { PrismaService } from './prisma/prisma.service';
+import { PrismaModule } from './prisma/prisma.module';
 import { StorageModule } from './storage/storage.module';
 import { LgpdModule } from './lgpd/lgpd.module';
 
@@ -25,6 +25,7 @@ import { LgpdModule } from './lgpd/lgpd.module';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    PrismaModule,
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
     EmailModule,
     AuthModule,
@@ -43,10 +44,8 @@ import { LgpdModule } from './lgpd/lgpd.module';
   ],
   controllers: [RootController, HealthController],
   providers: [
-    PrismaService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_FILTER, useClass: GlobalHttpExceptionFilter },
   ],
-  exports: [PrismaService],
 })
 export class AppModule {}
