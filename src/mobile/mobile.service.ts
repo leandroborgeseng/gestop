@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable } from '@nestjs/common';
 import {
   AuditAction,
   ChecklistEscopo,
@@ -26,6 +26,7 @@ import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 export class MobileService {
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => ChamadosService))
     private readonly chamadosService: ChamadosService,
     private readonly storageService: StorageService,
     private readonly cronogramaService: CronogramaService,

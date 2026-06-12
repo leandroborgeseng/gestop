@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AuditAction,
   ChamadoModoLocalizacao,
@@ -33,6 +33,7 @@ type Tx = Prisma.TransactionClient;
 export class ChamadosService {
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => IntegracoesService))
     private readonly integracoesService: IntegracoesService,
     private readonly storageService: StorageService,
   ) {}
