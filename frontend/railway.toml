@@ -1,0 +1,15 @@
+# Servico Frontend (Next.js) — Root Directory = frontend/
+# O proxy /api-sigma usa BACKEND_INTERNAL_URL para falar com o NestJS na rede privada.
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[env]
+NODE_ENV = "production"
+# Nome do servico backend no Railway deve ser "gestop" (ajuste se renomeou no dashboard)
+BACKEND_INTERNAL_URL = "http://${{gestop.RAILWAY_PRIVATE_DOMAIN}}:${{gestop.PORT}}"
