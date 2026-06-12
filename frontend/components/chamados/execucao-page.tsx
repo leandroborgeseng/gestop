@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CirclePlay, Map as MapIcon, MapPinned, Search } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
+import { useCanGerenciarChamados } from '@/components/auth/session-context';
 import { ChamadosExecucaoList } from '@/components/chamados/chamados-execucao-list';
 import { ChamadosExecucaoMap } from '@/components/chamados/chamados-execucao-map';
 import { PageShell } from '@/components/layout/page-shell';
@@ -14,8 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { chamadoToMapPoint } from '@/lib/chamado-geo';
-import { getStoredAuth, listChamadosEmExecucao, listEquipesExecucao } from '@/lib/api';
-import { hasChamadosGerenciar } from '@/lib/navigation';
+import { listChamadosEmExecucao, listEquipesExecucao } from '@/lib/api';
 import { ChamadosEmExecucaoGrupo, EquipeOpcaoResumo } from '@/lib/types';
 
 export function ExecucaoPage() {
@@ -28,7 +28,7 @@ export function ExecucaoPage() {
 
 function ExecucaoPageContent() {
   const router = useRouter();
-  const canGerenciar = hasChamadosGerenciar(getStoredAuth()?.user.permissoes ?? []);
+  const canGerenciar = useCanGerenciarChamados();
   const [grupos, setGrupos] = useState<ChamadosEmExecucaoGrupo[]>([]);
   const [equipesVisiveis, setEquipesVisiveis] = useState<EquipeOpcaoResumo[]>([]);
   const [equipeFilter, setEquipeFilter] = useState<string | null>(null);

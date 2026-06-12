@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSessionUser } from '@/components/auth/session-context';
 import { getStoredAuth } from '@/lib/api';
 import { ErrorState } from '@/components/ui-states';
 
@@ -15,13 +16,20 @@ export function RequirePermissions({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const sessionUser = useSessionUser();
   const permissionKey = useMemo(() => `${match}:${permissions.slice().sort().join('|')}`, [match, permissions]);
   const [allowed, setAllowed] = useState<boolean | null>(null);
 
   useEffect(() => {
     const stored = getStoredAuth();
+    const user = sessionUser ?? stored?.user;
 
-    if (!stored) {
+    if (!stored && !sessionUser) {
+      router.replace('/login?reason=expired');
+      return;
+    }
+
+    if (!user) {
       router.replace('/login?reason=expired');
       return;
     }
@@ -31,7 +39,7 @@ export function RequirePermissions({
       return;
     }
 
-    const userPermissions = stored.user.permissoes;
+    const userPermissions = user.permissoes;
     const hasAccess =
       match === 'any'
         ? permissions.some((permission) => userPermissions.includes(permission))
@@ -44,7 +52,7 @@ export function RequirePermissions({
     }
 
     setAllowed(true);
-  }, [router, permissionKey, permissions, match]);
+  }, [router, permissionKey, permissions, match, sessionUser]);
 
   if (allowed === null) {
     return null;

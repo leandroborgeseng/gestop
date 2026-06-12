@@ -1,27 +1,35 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user';
 import { AuthService } from './auth.service';
 import { JwtPayload } from './jwt';
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH_LOGIN,
+  PASSWORD_MIN_LENGTH_NEW,
+} from './password-policy';
 
 class LoginDto {
   @IsEmail()
   email!: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(PASSWORD_MIN_LENGTH_LOGIN)
+  @MaxLength(PASSWORD_MAX_LENGTH)
   password!: string;
 }
 
 class ChangePasswordDto {
   @IsString()
-  @MinLength(6)
+  @MinLength(PASSWORD_MIN_LENGTH_LOGIN)
+  @MaxLength(PASSWORD_MAX_LENGTH)
   currentPassword!: string;
 
   @IsString()
-  @MinLength(12)
+  @MinLength(PASSWORD_MIN_LENGTH_NEW)
+  @MaxLength(PASSWORD_MAX_LENGTH)
   newPassword!: string;
 }
 
@@ -36,7 +44,8 @@ class ResetPasswordDto {
   token!: string;
 
   @IsString()
-  @MinLength(12)
+  @MinLength(PASSWORD_MIN_LENGTH_NEW)
+  @MaxLength(PASSWORD_MAX_LENGTH)
   newPassword!: string;
 }
 

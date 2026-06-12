@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 export type StoredObject = {
   url: string;
@@ -26,6 +26,39 @@ export class StorageService {
     }
 
     throw new BadRequestException('Envie a evidencia como upload (data URL). URLs externas nao sao aceitas.');
+  }
+
+  async deleteStoredObject(storageKey: string) {
+    const normalizedKey = storageKey.trim();
+    if (!normalizedKey) return;
+
+    const driver = process.env.STORAGE_DRIVER?.trim() || 'local';
+
+    try {
+      if (driver === 's3') {
+        const bucket = process.env.S3_BUCKET?.trim();
+        if (!bucket) return;
+        const client = this.getS3Client();
+        await client.send(
+          new DeleteObjectCommand({
+            Bucket: bucket,
+            Key: normalizedKey,
+          }),
+        );
+        return;
+      }
+
+      const root = process.env.STORAGE_LOCAL_DIR?.trim() || join(process.cwd(), 'storage');
+      await unlink(join(root, normalizedKey));
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao remover objeto ${normalizedKey}: ${error instanceof Error ? error.message : 'erro desconhecido'}`,
+      );
+    }
+  }
+
+  async deleteStoredObjects(storageKeys: string[]) {
+    await Promise.all(storageKeys.map((key) => this.deleteStoredObject(key)));
   }
 
   private async storeBuffer(buffer: Buffer, mimeType: string, prefix: string): Promise<StoredObject> {

@@ -134,6 +134,8 @@ function LoginContent() {
                   onChange={(event) => setPassword(event.target.value)}
                   type="password"
                   autoComplete="current-password"
+                  minLength={6}
+                  maxLength={128}
                   required
                 />
               </Field>

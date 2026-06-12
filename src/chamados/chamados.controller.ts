@@ -51,8 +51,11 @@ export class ChamadosController {
 
   @RequirePermissions('chamados.gerenciar')
   @Get()
-  list() {
-    return this.chamadosService.listChamados();
+  list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+    return this.chamadosService.listChamados({
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
   }
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')

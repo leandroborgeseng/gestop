@@ -170,15 +170,29 @@ export class IntegracoesService implements OnModuleInit, OnModuleDestroy {
   }
 
   async retryFailedSync(user: JwtPayload) {
-    const result = await this.prisma.offlineSyncEvent.updateMany({
-      where: { status: { in: [OfflineSyncStatus.CONFLITO, OfflineSyncStatus.FALHOU] } },
-      data: {
-        status: OfflineSyncStatus.PENDENTE,
-        ultimoErro: null,
-        conflitoMotivo: null,
-        tentativas: { increment: 1 },
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const staleEvents = await this.prisma.offlineSyncEvent.findMany({
+      where: {
+        status: { in: [OfflineSyncStatus.CONFLITO, OfflineSyncStatus.FALHOU] },
+        recebidoEm: { gte: cutoff },
       },
+      orderBy: { recebidoEm: 'asc' },
+      take: 100,
+      select: { id: true },
     });
+
+    const result =
+      staleEvents.length === 0
+        ? { count: 0 }
+        : await this.prisma.offlineSyncEvent.updateMany({
+            where: { id: { in: staleEvents.map((event) => event.id) } },
+            data: {
+              status: OfflineSyncStatus.PENDENTE,
+              ultimoErro: null,
+              conflitoMotivo: null,
+              tentativas: { increment: 1 },
+            },
+          });
 
     const replay = await this.mobileService.reprocessPendingSyncEvents(user);
 

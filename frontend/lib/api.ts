@@ -20,6 +20,7 @@ import {
   OperacionalResumo,
   ChamadoResumo,
   ChamadoDetalhe,
+  ChamadosListResponse,
   ChamadoEvidencia,
   ChamadoExecucaoDetalhe,
   ChamadosEmExecucaoResponse,
@@ -487,8 +488,12 @@ export function createPublicChamado(
   });
 }
 
-export function listChamados() {
-  return request<ChamadoResumo[]>('/chamados');
+export function listChamados(params?: { limit?: number; offset?: number }) {
+  const search = new URLSearchParams();
+  if (params?.limit != null) search.set('limit', String(params.limit));
+  if (params?.offset != null) search.set('offset', String(params.offset));
+  const query = search.toString();
+  return request<ChamadosListResponse>(`/chamados${query ? `?${query}` : ''}`);
 }
 
 export function listChamadosEmExecucao() {

@@ -433,6 +433,14 @@ export type ChamadosEmExecucaoResponse = {
   grupos: ChamadosEmExecucaoGrupo[];
 };
 
+export type ChamadosListResponse = {
+  items: ChamadoResumo[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+};
+
 export type ChamadoProgramacaoDia = {
   data: string;
   chamados: ChamadoResumo[];

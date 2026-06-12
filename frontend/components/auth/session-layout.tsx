@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getMe, getStoredAuth, setStoredAuth, StoredAuth } from '@/lib/api';
 import { AUTH_EXPIRED_EVENT } from '@/lib/security';
+import { SessionProvider } from '@/components/auth/session-context';
 import { AppShell } from '@/components/layout/app-shell';
 import { GuideProvider } from '@/components/help/guide-provider';
 import { PwaUpdateBanner } from '@/components/pwa/pwa-update-banner';
@@ -68,9 +69,11 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <GuideProvider>
-      <AppShell userName={auth.user.nome} userRoles={auth.user.perfis} permissions={auth.user.permissoes}>
-        {children}
-      </AppShell>
+      <SessionProvider user={auth.user}>
+        <AppShell userName={auth.user.nome} userRoles={auth.user.perfis} permissions={auth.user.permissoes}>
+          {children}
+        </AppShell>
+      </SessionProvider>
       <PwaUpdateBanner />
     </GuideProvider>
   );

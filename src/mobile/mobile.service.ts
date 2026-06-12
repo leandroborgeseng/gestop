@@ -189,7 +189,12 @@ export class MobileService {
       })),
     );
 
-    const result = await this.prisma.$transaction(async (tx) => {
+    const persistedStorageKeys = respostasPreparadas.flatMap((resposta) =>
+      resposta.evidenciasArmazenadas.map((evidencia) => evidencia.stored.storageKey),
+    );
+
+    try {
+      const result = await this.prisma.$transaction(async (tx) => {
       const fiscalizacao = await tx.fiscalizacao.create({
         data: {
           clientId: dto.clientEventId,
@@ -294,19 +299,23 @@ export class MobileService {
       });
 
       return { fiscalizacao, syncEvent };
-    });
+      });
 
-    await this.cronogramaService.registrarChecagemRealizada({
-      unidadeId: unidade.id,
-      checklistId: checklistVersao.checklist.id,
-      concluidaEm: new Date(dto.concluidaEm),
-    });
+      await this.cronogramaService.registrarChecagemRealizada({
+        unidadeId: unidade.id,
+        checklistId: checklistVersao.checklist.id,
+        concluidaEm: new Date(dto.concluidaEm),
+      });
 
-    return {
-      status: 'sincronizado',
-      fiscalizacaoId: result.fiscalizacao.id,
-      syncEventId: result.syncEvent.id,
-    };
+      return {
+        status: 'sincronizado',
+        fiscalizacaoId: result.fiscalizacao.id,
+        syncEventId: result.syncEvent.id,
+      };
+    } catch (error) {
+      await this.storageService.deleteStoredObjects(persistedStorageKeys);
+      throw error;
+    }
   }
 
   async reprocessPendingSyncEvents(actor: JwtPayload, limit = 25) {

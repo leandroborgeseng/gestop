@@ -26,6 +26,7 @@ import {
 } from './chamados.rules';
 import { validateMobileCheckin } from '../mobile/mobile.rules';
 import { parseDateKey, todayDateKey, utcDateKeyFromDate } from '../common/date.utils';
+import { DEFAULT_RAIO_VALIDACAO_METROS } from '../domain/constants';
 
 type Tx = Prisma.TransactionClient;
 
@@ -38,13 +39,27 @@ export class ChamadosService {
     private readonly storageService: StorageService,
   ) {}
 
-  listChamados() {
-    return this.prisma.chamado
-      .findMany({
+  async listChamados(params?: { limit?: number; offset?: number }) {
+    const limit = Math.min(Math.max(params?.limit ?? 1000, 1), 2000);
+    const offset = Math.max(params?.offset ?? 0, 0);
+
+    const [items, total] = await Promise.all([
+      this.prisma.chamado.findMany({
         orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
         include: this.includeRelations(),
-      })
-      .then((items) => items.map((item) => this.serializeChamado(item)));
+      }),
+      this.prisma.chamado.count(),
+    ]);
+
+    return {
+      items: items.map((item) => this.serializeChamado(item)),
+      total,
+      limit,
+      offset,
+      hasMore: offset + items.length < total,
+    };
   }
 
   async listEmExecucaoPorEquipe(user: JwtPayload) {
@@ -190,6 +205,7 @@ export class ChamadosService {
           ...equipeFilter,
         },
         orderBy: [{ previstaExecucaoEm: 'asc' }, { prioridade: 'desc' }, { createdAt: 'asc' }],
+        take: 2000,
         include: this.includeRelations(),
       }),
       this.prisma.chamado.findMany({
@@ -329,39 +345,47 @@ export class ChamadosService {
     this.assertChamadoEmExecucao(chamado.status);
     await this.assertCheckinExecucaoRegistrado(id);
 
-    const stored = await this.storageService.persistEvidenceUrl(dto.url.trim(), dto.mimeType);
-    const evidencia = await this.prisma.evidencia.create({
-      data: {
-        chamadoId: id,
-        tipo: dto.tipo ?? EvidenciaTipo.FOTO,
-        url: stored.url,
-        storageKey: stored.storageKey,
-        mimeType: stored.mimeType,
-        tamanhoBytes: stored.tamanhoBytes,
-        checksum: stored.checksum,
-        latitude: dto.localizacao.latitude,
-        longitude: dto.localizacao.longitude,
-        precisaoMetros: dto.localizacao.precisaoMetros,
-        capturadaEm: new Date(dto.capturadaEm),
-        enviadaEm: new Date(),
-        metadata: {
-          origem: 'execucao_campo',
-          ...(dto.descricao?.trim() ? { descricao: dto.descricao.trim() } : {}),
+    let stored: Awaited<ReturnType<StorageService['persistEvidenceUrl']>> | null = null;
+    try {
+      stored = await this.storageService.persistEvidenceUrl(dto.url.trim(), dto.mimeType);
+      const evidencia = await this.prisma.evidencia.create({
+        data: {
+          chamadoId: id,
+          tipo: dto.tipo ?? EvidenciaTipo.FOTO,
+          url: stored.url,
+          storageKey: stored.storageKey,
+          mimeType: stored.mimeType,
+          tamanhoBytes: stored.tamanhoBytes,
+          checksum: stored.checksum,
+          latitude: dto.localizacao.latitude,
+          longitude: dto.localizacao.longitude,
+          precisaoMetros: dto.localizacao.precisaoMetros,
+          capturadaEm: new Date(dto.capturadaEm),
+          enviadaEm: new Date(),
+          metadata: {
+            origem: 'execucao_campo',
+            ...(dto.descricao?.trim() ? { descricao: dto.descricao.trim() } : {}),
+          },
         },
-      },
-    });
+      });
 
-    await this.prisma.logAuditoria.create({
-      data: {
-        usuarioId: user.sub,
-        acao: AuditAction.UPDATE,
-        entidadeTipo: 'Chamado',
-        entidadeId: id,
-        valorNovo: { evidenciaId: evidencia.id, tipo: 'execucao_evidencia' },
-      },
-    });
+      await this.prisma.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          valorNovo: { evidenciaId: evidencia.id, tipo: 'execucao_evidencia' },
+        },
+      });
 
-    return this.serializeEvidencia(evidencia);
+      return this.serializeEvidencia(evidencia);
+    } catch (error) {
+      if (stored?.storageKey) {
+        await this.storageService.deleteStoredObject(stored.storageKey);
+      }
+      throw error;
+    }
   }
 
   async concluirExecucao(id: string, dto: ChamadoExecucaoConcluirDto, user: JwtPayload) {
@@ -993,7 +1017,7 @@ export class ChamadosService {
     return {
       latitude: Number(chamado.latitude),
       longitude: Number(chamado.longitude),
-      raioValidacaoMetros: 200,
+      raioValidacaoMetros: DEFAULT_RAIO_VALIDACAO_METROS,
     };
   }
 
@@ -1030,7 +1054,7 @@ export class ChamadosService {
     return {
       latitude: Number(chamado.latitude),
       longitude: Number(chamado.longitude),
-      raioValidacaoMetros: 200,
+      raioValidacaoMetros: DEFAULT_RAIO_VALIDACAO_METROS,
       endereco: chamado.enderecoTexto,
       bairro: chamado.enderecoBairro,
     };
@@ -1157,12 +1181,15 @@ export class ChamadosService {
   }
 
   private async countEvidenciasExecucaoCampo(chamadoId: string) {
-    const evidencias = await this.prisma.evidencia.findMany({
-      where: { chamadoId },
-      select: { metadata: true },
+    return this.prisma.evidencia.count({
+      where: {
+        chamadoId,
+        metadata: {
+          path: ['origem'],
+          equals: 'execucao_campo',
+        },
+      },
     });
-
-    return evidencias.filter((item) => isEvidenciaExecucaoCampo(item.metadata)).length;
   }
 
   private serializeChamado<T extends {

@@ -1,4 +1,5 @@
 import { GeoPoint, haversineDistanceMeters, isGpsAccuracyAcceptable } from './geo';
+import { DEFAULT_RAIO_VALIDACAO_METROS } from './constants';
 
 export type FiscalizacaoCheckinInput = {
   unidade: GeoPoint & {
@@ -23,7 +24,7 @@ export type NonConformityEvidenceInput = {
 };
 
 export function evaluateFiscalizacaoCheckin(input: FiscalizacaoCheckinInput) {
-  const radiusMeters = input.unidade.raioValidacaoMetros ?? 200;
+  const radiusMeters = input.unidade.raioValidacaoMetros ?? DEFAULT_RAIO_VALIDACAO_METROS;
   const distanceMeters = haversineDistanceMeters(input.unidade, input.agente);
   const gpsAccuracyAccepted = isGpsAccuracyAcceptable(input.agente.precisaoMetros);
 

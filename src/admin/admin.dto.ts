@@ -1,5 +1,6 @@
-import { IsArray, IsBoolean, IsEmail, IsEnum, IsNumber, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsEnum, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { UnidadeTipo } from '@prisma/client';
+import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH_NEW } from '../auth/password-policy';
 
 export class SecretariaDto {
   @IsString()
@@ -117,7 +118,8 @@ export class UsuarioDto {
 
   @IsOptional()
   @IsString()
-  @MinLength(6)
+  @MinLength(PASSWORD_MIN_LENGTH_NEW)
+  @MaxLength(PASSWORD_MAX_LENGTH)
   senha?: string;
 
   @IsArray()
