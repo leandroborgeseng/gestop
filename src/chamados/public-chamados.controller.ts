@@ -13,6 +13,12 @@ export class PublicChamadosController {
     return this.chamadosService.getUnidadePublicaByCodigo(codigo);
   }
 
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Get('chamados/protocolo/:codigo')
+  getChamadoPorProtocolo(@Param('codigo') codigo: string) {
+    return this.chamadosService.getChamadoPublicoPorProtocolo(codigo);
+  }
+
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('unidades/:codigo/chamados')
   createChamado(@Param('codigo') codigo: string, @Body() body: PublicCreateChamadoDto) {

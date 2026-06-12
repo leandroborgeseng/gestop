@@ -9,6 +9,12 @@ import {
   Prisma,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
+import {
+  assertChamadoSecretariaAccess,
+  resolveChamadoSecretariaFilter,
+  resolveEquipeSecretariaFilter,
+  resolveSecretariaScopeId,
+} from '../auth/secretaria-scope';
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -39,18 +45,20 @@ export class ChamadosService {
     private readonly storageService: StorageService,
   ) {}
 
-  async listChamados(params?: { limit?: number; offset?: number }) {
-    const limit = Math.min(Math.max(params?.limit ?? 1000, 1), 2000);
+  async listChamados(params: { limit?: number; offset?: number } | undefined, user: JwtPayload) {
+    const limit = Math.min(Math.max(params?.limit ?? 50, 1), 2000);
     const offset = Math.max(params?.offset ?? 0, 0);
+    const where = resolveChamadoSecretariaFilter(user);
 
     const [items, total] = await Promise.all([
       this.prisma.chamado.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
         include: this.includeRelations(),
       }),
-      this.prisma.chamado.count(),
+      this.prisma.chamado.count({ where }),
     ]);
 
     return {
@@ -71,9 +79,7 @@ export class ChamadosService {
         status: ChamadoStatus.EM_EXECUCAO,
         ...(onlyExecutor
           ? { equipe: { membros: { some: { usuarioId: user.sub } } } }
-          : canGerenciar && user.secretariaId
-            ? { secretariaId: user.secretariaId }
-            : {}),
+          : resolveChamadoSecretariaFilter(user)),
       },
       orderBy: [{ equipe: { nome: 'asc' } }, { prioridade: 'desc' }, { createdAt: 'asc' }],
       include: this.includeRelations(),
@@ -119,9 +125,9 @@ export class ChamadosService {
     };
   }
 
-  async listEquipesAtivas() {
+  async listEquipesAtivas(user: JwtPayload) {
     return this.prisma.equipe.findMany({
-      where: { ativo: true },
+      where: { ativo: true, ...resolveEquipeSecretariaFilter(user) },
       orderBy: { nome: 'asc' },
       select: {
         id: true,
@@ -145,9 +151,7 @@ export class ChamadosService {
         ativo: true,
         ...(onlyExecutor
           ? { membros: { some: { usuarioId: user.sub } } }
-          : canGerenciar && user.secretariaId
-            ? { secretariaId: user.secretariaId }
-            : {}),
+          : resolveEquipeSecretariaFilter(user)),
       },
       orderBy: { nome: 'asc' },
       select: {
@@ -158,7 +162,7 @@ export class ChamadosService {
     });
   }
 
-  async listProgramacao(from: string, to: string, equipeId?: string) {
+  async listProgramacao(from: string, to: string, user: JwtPayload, equipeId?: string) {
     if (!from?.trim() || !to?.trim()) {
       throw new BadRequestException('Informe o intervalo from e to (YYYY-MM-DD).');
     }
@@ -191,9 +195,12 @@ export class ChamadosService {
           ? { equipeId: equipeId.trim() }
           : {};
 
+    const secretariaFilter = resolveChamadoSecretariaFilter(user);
+
     const pendentesWhere = {
       status: statusAtivos,
       previstaExecucaoEm: null,
+      ...secretariaFilter,
       ...equipeFilter,
     };
 
@@ -202,6 +209,7 @@ export class ChamadosService {
         where: {
           status: statusAtivos,
           previstaExecucaoEm: { gte: fromDate, lte: toDate },
+          ...secretariaFilter,
           ...equipeFilter,
         },
         orderBy: [{ previstaExecucaoEm: 'asc' }, { prioridade: 'desc' }, { createdAt: 'asc' }],
@@ -244,8 +252,9 @@ export class ChamadosService {
     };
   }
 
-  async getChamado(id: string) {
+  async getChamado(id: string, user: JwtPayload) {
     const chamado = await this.getChamadoOrThrow(id);
+    assertChamadoSecretariaAccess(user, chamado);
     const historico = await this.prisma.historicoStatus.findMany({
       where: { entidadeTipo: 'Chamado', entidadeId: id },
       orderBy: { createdAt: 'asc' },
@@ -507,6 +516,60 @@ export class ChamadosService {
     };
   }
 
+  async getChamadoPublicoPorProtocolo(codigo: string) {
+    const normalized = codigo.trim().toUpperCase();
+    if (normalized.length < 4) {
+      throw new BadRequestException('Informe um protocolo valido.');
+    }
+
+    const chamado = await this.prisma.chamado.findFirst({
+      where: { codigo: normalized },
+      select: {
+        id: true,
+        codigo: true,
+        status: true,
+        descricao: true,
+        prioridade: true,
+        createdAt: true,
+        encerradoEm: true,
+        concluidoEm: true,
+        enderecoTexto: true,
+        enderecoBairro: true,
+        unidade: { select: { nome: true, codigoPatrimonial: true } },
+        secretaria: { select: { sigla: true, nome: true } },
+      },
+    });
+
+    if (!chamado) throw new NotFoundException('Protocolo nao encontrado.');
+
+    const historico = await this.prisma.historicoStatus.findMany({
+      where: { entidadeTipo: 'Chamado', entidadeId: chamado.id },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        statusNovo: true,
+        motivo: true,
+        createdAt: true,
+      },
+    });
+
+    return {
+      codigo: chamado.codigo,
+      status: chamado.status,
+      prioridade: chamado.prioridade,
+      descricaoResumo: chamado.descricao.length > 160 ? `${chamado.descricao.slice(0, 157)}...` : chamado.descricao,
+      local: chamado.unidade?.nome ?? chamado.enderecoTexto ?? null,
+      bairro: chamado.unidade ? null : chamado.enderecoBairro,
+      secretaria: chamado.secretaria ? `${chamado.secretaria.sigla} — ${chamado.secretaria.nome}` : null,
+      abertoEm: chamado.createdAt.toISOString(),
+      encerradoEm: chamado.encerradoEm?.toISOString() ?? chamado.concluidoEm?.toISOString() ?? null,
+      historico: historico.map((item) => ({
+        status: item.statusNovo,
+        motivo: item.motivo,
+        em: item.createdAt.toISOString(),
+      })),
+    };
+  }
+
   private async nextChamadoSequence(tx?: Tx): Promise<number> {
     const year = new Date().getFullYear();
     const client = tx ?? this.prisma;
@@ -521,6 +584,10 @@ export class ChamadosService {
 
   async createChamado(dto: CreateChamadoDto, user: JwtPayload) {
     const location = await this.resolveCreateLocation(dto, user.sub);
+    const scopeId = resolveSecretariaScopeId(user);
+    if (scopeId && location.secretariaId !== scopeId) {
+      throw new ForbiddenException('Nao e permitido abrir chamado fora da sua secretaria.');
+    }
 
     let fotoUrl: string | undefined;
     let fotoMimeType: string | undefined;
@@ -638,6 +705,7 @@ export class ChamadosService {
 
   async updateStatus(id: string, dto: UpdateChamadoStatusDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
+    assertChamadoSecretariaAccess(user, before);
 
     try {
       assertValidChamadoTransition(before.status, dto.status);
@@ -717,6 +785,7 @@ export class ChamadosService {
 
   async updateAtribuicao(id: string, dto: UpdateChamadoAtribuicaoDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
+    assertChamadoSecretariaAccess(user, before);
     const equipeId = dto.equipeId === undefined ? before.equipeId : dto.equipeId || null;
     let responsavelId = dto.responsavelId === undefined ? before.responsavelId : dto.responsavelId || null;
     if (!equipeId) responsavelId = null;
@@ -776,6 +845,7 @@ export class ChamadosService {
 
   async updatePlanejamento(id: string, dto: UpdateChamadoPlanejamentoDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
+    assertChamadoSecretariaAccess(user, before);
 
     if (before.status === ChamadoStatus.CONCLUIDO || before.status === ChamadoStatus.CANCELADO) {
       throw new BadRequestException('Chamados concluídos ou cancelados não podem ser reprogramados.');

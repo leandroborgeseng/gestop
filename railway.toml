@@ -1,5 +1,13 @@
 # Configuracao do servico Backend (SIGMA) no Railway.
 # Root Directory do servico deve ser a raiz do repositorio (nao frontend/).
+#
+# STORAGE (obrigatorio para fotos persistentes):
+# 1. Volumes → Add Volume → mount path: /data
+# 2. Variables (nao commitar senhas aqui):
+#    STORAGE_DRIVER=local
+#    STORAGE_LOCAL_DIR=/data/gestop-evidencias
+#    STORAGE_PUBLIC_URL_BASE=https://gestop.up.railway.app/api-gestop
+#    INITIAL_ADMIN_PASSWORD=<senha-forte>  (somente via Railway Variables)
 
 [build]
 builder = "NIXPACKS"
@@ -11,7 +19,7 @@ restartPolicyMaxRetries = 10
 
 [env]
 NODE_ENV = "production"
-INITIAL_ADMIN_PASSWORD = "Gestop@123"
 SYNC_REPLAY_INTERVAL_MS = "1800000"
+STORAGE_DRIVER = "local"
 # Referenciavel pelo frontend: ${{gestop.BACKEND_LISTEN_PORT}}
 BACKEND_LISTEN_PORT = "8080"

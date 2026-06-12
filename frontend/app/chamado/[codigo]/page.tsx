@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
   Building2,
@@ -293,6 +294,12 @@ export default function ChamadoPublicoPage() {
             <p className="mono mt-4 rounded-[11px] bg-[var(--brand-soft)] px-4 py-2.5 text-[17px] font-semibold tracking-wide text-[var(--brand-hover)]">
               {chamado.codigo}
             </p>
+            <Link
+              href={`/chamado/protocolo/${encodeURIComponent(chamado.codigo)}`}
+              className="mt-4 text-[13px] font-semibold text-[var(--brand)] hover:underline"
+            >
+              Acompanhar andamento do protocolo
+            </Link>
           </div>
         ) : null}
       </div>

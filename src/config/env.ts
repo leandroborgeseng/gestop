@@ -44,10 +44,25 @@ export function assertProductionEnv() {
     if (missing.length > 0) {
       errors.push(`[SIGMA:env] Variaveis obrigatorias para STORAGE_DRIVER=s3: ${missing.join(', ')}`);
     }
-  } else if (storageDriver === 'local' && !process.env.STORAGE_PUBLIC_URL_BASE?.trim()) {
-    errors.push(
-      '[SIGMA:env] STORAGE_PUBLIC_URL_BASE obrigatorio em producao com STORAGE_DRIVER=local (URL publica do frontend + /api-gestop).',
-    );
+  } else if (storageDriver === 'local') {
+    if (!process.env.STORAGE_PUBLIC_URL_BASE?.trim()) {
+      errors.push(
+        '[SIGMA:env] STORAGE_PUBLIC_URL_BASE obrigatorio em producao com STORAGE_DRIVER=local (URL publica do frontend + /api-gestop).',
+      );
+    }
+
+    const localDir = process.env.STORAGE_LOCAL_DIR?.trim();
+    if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
+      if (!localDir) {
+        errors.push(
+          '[SIGMA:env] STORAGE_LOCAL_DIR obrigatorio no Railway (ex.: /data/gestop-evidencias com Volume montado em /data).',
+        );
+      } else if (!localDir.startsWith('/data/')) {
+        errors.push(
+          '[SIGMA:env] STORAGE_LOCAL_DIR deve apontar para o Volume persistente (/data/gestop-evidencias).',
+        );
+      }
+    }
   }
 
   if (errors.length > 0) {

@@ -25,6 +25,7 @@ import {
   ChamadoExecucaoDetalhe,
   ChamadosEmExecucaoResponse,
   ChamadoProgramacaoResponse,
+  ChamadoProtocoloPublico,
   EquipeOpcaoResumo,
   PublicUnidadeChamado,
   SecretariaOption,
@@ -469,6 +470,12 @@ async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getPublicUnidade(codigoPatrimonial: string) {
   return publicRequest<PublicUnidadeChamado>(`/public/unidades/${encodeURIComponent(codigoPatrimonial)}`);
+}
+
+export function getPublicChamadoProtocolo(codigo: string) {
+  return publicRequest<ChamadoProtocoloPublico>(
+    `/public/chamados/protocolo/${encodeURIComponent(codigo.trim().toUpperCase())}`,
+  );
 }
 
 export function createPublicChamado(

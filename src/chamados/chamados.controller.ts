@@ -26,15 +26,16 @@ export class ChamadosController {
   listProgramacao(
     @Query('from') from: string,
     @Query('to') to: string,
+    @CurrentUser() user: JwtPayload,
     @Query('equipeId') equipeId?: string,
   ) {
-    return this.chamadosService.listProgramacao(from, to, equipeId);
+    return this.chamadosService.listProgramacao(from, to, user, equipeId);
   }
 
   @RequirePermissions('chamados.gerenciar')
   @Get('equipes/opcoes')
-  listEquipes() {
-    return this.chamadosService.listEquipesAtivas();
+  listEquipes(@CurrentUser() user: JwtPayload) {
+    return this.chamadosService.listEquipesAtivas(user);
   }
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
@@ -51,11 +52,18 @@ export class ChamadosController {
 
   @RequirePermissions('chamados.gerenciar')
   @Get()
-  list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
-    return this.chamadosService.listChamados({
-      limit: limit ? Number(limit) : undefined,
-      offset: offset ? Number(offset) : undefined,
-    });
+  list(
+    @CurrentUser() user: JwtPayload,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.chamadosService.listChamados(
+      {
+        limit: limit ? Number(limit) : undefined,
+        offset: offset ? Number(offset) : undefined,
+      },
+      user,
+    );
   }
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
@@ -96,8 +104,8 @@ export class ChamadosController {
 
   @RequirePermissions('chamados.gerenciar')
   @Get(':id')
-  get(@Param('id', ParseUuidPipe) id: string) {
-    return this.chamadosService.getChamado(id);
+  get(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.chamadosService.getChamado(id, user);
   }
 
   @RequirePermissions('chamados.gerenciar')

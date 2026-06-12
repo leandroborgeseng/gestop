@@ -18,3 +18,8 @@ export function useCanGerenciarChamados() {
   const user = useSessionUser();
   return hasChamadosGerenciar(user?.permissoes ?? []);
 }
+
+export function useIsSecretariaGestor() {
+  const user = useSessionUser();
+  return Boolean(user?.permissoes.includes('secretaria.gerenciar') && user.secretaria?.id);
+}

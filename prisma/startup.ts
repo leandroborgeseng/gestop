@@ -182,6 +182,9 @@ async function main() {
   logStep('reset-admin', 'Sincronizando senha do administrador');
   runCommand('reset-admin', 'node dist/prisma/reset-admin-password.js');
 
+  logStep('sync-rbac', 'Sincronizando perfis de sistema');
+  runCommand('sync-rbac', 'node dist/prisma/sync-rbac.js');
+
   logStep('startup-import', 'Verificando dados importados do webmap');
   await runStartupWebmapImportIfNeeded();
 

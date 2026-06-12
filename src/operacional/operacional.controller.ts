@@ -1,6 +1,8 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { UnidadeTipo } from '@prisma/client';
 import { AuthGuard } from '../auth/auth.guard';
+import { CurrentUser } from '../auth/current-user';
+import { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequirePermissions } from '../auth/permissions';
 import { OperacionalService } from './operacional.service';
@@ -13,13 +15,13 @@ export class OperacionalController {
   constructor(private readonly operacionalService: OperacionalService) {}
 
   @Get('resumo')
-  getResumo() {
-    return this.operacionalService.getResumo();
+  getResumo(@CurrentUser() user: JwtPayload) {
+    return this.operacionalService.getResumo(user);
   }
 
   @Get('secretarias')
-  listSecretarias() {
-    return this.operacionalService.listSecretarias();
+  listSecretarias(@CurrentUser() user: JwtPayload) {
+    return this.operacionalService.listSecretarias(user);
   }
 
   @Get('bairros')
@@ -28,12 +30,13 @@ export class OperacionalController {
   }
 
   @Get('opcoes-filtro')
-  getOpcoesFiltro() {
-    return this.operacionalService.getOpcoesFiltro();
+  getOpcoesFiltro(@CurrentUser() user: JwtPayload) {
+    return this.operacionalService.getOpcoesFiltro(user);
   }
 
   @Get('unidades')
   listUnidades(
+    @CurrentUser() user: JwtPayload,
     @Query('search') search?: string,
     @Query('secretariaId') secretariaId?: string,
     @Query('tipo') tipo?: UnidadeTipo,
@@ -54,7 +57,7 @@ export class OperacionalController {
       responsavelEmail: normalizeText(responsavelEmail)?.toLowerCase(),
     };
 
-    return this.operacionalService.listUnidades(query);
+    return this.operacionalService.listUnidades(query, user);
   }
 
   @Get('unidades/:id')

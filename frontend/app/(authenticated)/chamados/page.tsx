@@ -48,6 +48,8 @@ type StatusFilter = 'TODOS' | ChamadoStatus;
 type PrioridadeFilter = 'TODAS' | string;
 type ChamadosView = 'triagem' | 'programacao';
 
+const CHAMADOS_PAGE_SIZE = 50;
+
 const STATUS_CHIPS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'TODOS', label: 'Todos' },
   ...Object.entries(CHAMADO_STATUS_META).map(([value, meta]) => ({ value: value as ChamadoStatus, label: meta.label })),
@@ -83,6 +85,8 @@ function ChamadosPageContent() {
   const snackbar = useSnackbar();
   const [chamados, setChamados] = useState<ChamadoResumo[]>([]);
   const [chamadosTotal, setChamadosTotal] = useState(0);
+  const [hasMoreChamados, setHasMoreChamados] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [equipes, setEquipes] = useState<EquipeOpcao[]>([]);
   const [detail, setDetail] = useState<ChamadoDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,15 +120,40 @@ function ChamadosPageContent() {
     if (view !== 'triagem') return;
 
     setLoading(true);
-    listChamados()
+    listChamados({ limit: CHAMADOS_PAGE_SIZE, offset: 0 })
       .then((response) => {
         setChamados(response.items);
         setChamadosTotal(response.total);
+        setHasMoreChamados(response.hasMore);
         setSelectedId((current) => current ?? response.items[0]?.id ?? null);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
       .finally(() => setLoading(false));
   }, [view]);
+
+  async function refreshChamadosList() {
+    const limit = Math.max(chamados.length, CHAMADOS_PAGE_SIZE);
+    const response = await listChamados({ limit, offset: 0 });
+    setChamados(response.items);
+    setChamadosTotal(response.total);
+    setHasMoreChamados(response.hasMore);
+    return response;
+  }
+
+  async function loadMoreChamados() {
+    setLoadingMore(true);
+    setError(null);
+    try {
+      const response = await listChamados({ limit: CHAMADOS_PAGE_SIZE, offset: chamados.length });
+      setChamados((current) => [...current, ...response.items]);
+      setChamadosTotal(response.total);
+      setHasMoreChamados(response.hasMore);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar mais chamados.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   useEffect(() => {
     if (!selectedId) {
@@ -153,10 +182,11 @@ function ChamadosPageContent() {
   function load() {
     if (view !== 'triagem') return;
     setLoading(true);
-    listChamados()
+    listChamados({ limit: CHAMADOS_PAGE_SIZE, offset: 0 })
       .then((response) => {
         setChamados(response.items);
         setChamadosTotal(response.total);
+        setHasMoreChamados(response.hasMore);
         setSelectedId((current) => current ?? response.items[0]?.id ?? null);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
@@ -227,9 +257,7 @@ function ChamadosPageContent() {
         responsavelId: responsavelId || undefined,
         motivo: motivo?.trim() || 'Atribuição de equipe atualizada.',
       });
-      const response = await listChamados();
-      setChamados(response.items);
-      setChamadosTotal(response.total);
+      await refreshChamadosList();
       if (selectedId === id) {
         const refreshed = await getChamado(id);
         setDetail(refreshed);
@@ -257,9 +285,7 @@ function ChamadosPageContent() {
         previstaExecucaoEm,
         ...(equipeId !== undefined ? { equipeId } : {}),
       });
-      const response = await listChamados();
-      setChamados(response.items);
-      setChamadosTotal(response.total);
+      await refreshChamadosList();
       if (selectedId === id) {
         const refreshed = await getChamado(id);
         setDetail(refreshed);
@@ -289,9 +315,7 @@ function ChamadosPageContent() {
         motivo: motivo?.trim() || `Status alterado para ${chamadoStatusLabel(status)}`,
         impedimentoMotivo,
       });
-      const response = await listChamados();
-      setChamados(response.items);
-      setChamadosTotal(response.total);
+      await refreshChamadosList();
       if (selectedId === id) {
         const refreshed = await getChamado(id);
         setDetail(refreshed);
@@ -342,10 +366,19 @@ function ChamadosPageContent() {
           <ChamadosProgramacaoPanel equipes={equipes} />
         ) : null}
 
-        {view === 'triagem' && chamados.length < chamadosTotal ? (
+        {view === 'triagem' && chamadosTotal > 0 ? (
           <p className="mb-3 text-[12px] text-[var(--ink-3)]">
-            Exibindo {chamados.length} de {chamadosTotal} chamados. Use a busca para refinar a lista.
+            Exibindo {chamados.length} de {chamadosTotal} chamados
+            {hasMoreChamados ? ' — carregue mais para ver a lista completa' : ''}.
           </p>
+        ) : null}
+
+        {view === 'triagem' && hasMoreChamados ? (
+          <div className="mb-4">
+            <Button type="button" variant="outlined" size="sm" disabled={loadingMore} onClick={() => void loadMoreChamados()}>
+              {loadingMore ? 'Carregando...' : `Carregar mais (${CHAMADOS_PAGE_SIZE})`}
+            </Button>
+          </div>
         ) : null}
 
         {view === 'triagem' && error ? (

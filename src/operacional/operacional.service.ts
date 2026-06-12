@@ -4,6 +4,8 @@ import {
   Prisma,
   UnidadeTipo,
 } from '@prisma/client';
+import { JwtPayload } from '../auth/jwt';
+import { resolveSecretariaScopeId } from '../auth/secretaria-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import {
@@ -23,7 +25,13 @@ const NON_CONFORMITY_OPEN_STATUSES: NaoConformidadeStatus[] = [
 export class OperacionalService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getResumo() {
+  async getResumo(user: JwtPayload) {
+    const secretariaId = resolveSecretariaScopeId(user);
+    const unidadeWhere = secretariaId ? { secretariaId } : {};
+    const chamadoWhere = secretariaId ? { secretariaId } : {};
+    const ncWhere = secretariaId ? { unidade: { secretariaId } } : {};
+    const fiscalizacaoWhere = secretariaId ? { secretariaId } : {};
+
     const [
       totalUnidades,
       unidadesAtivas,
@@ -33,15 +41,17 @@ export class OperacionalService {
       chamadosAbertos,
       eventosSyncPendentes,
     ] = await Promise.all([
-      this.prisma.unidadePublica.count(),
-      this.prisma.unidadePublica.count({ where: { ativo: true } }),
-      this.prisma.secretaria.count({ where: { ativo: true } }),
-      this.prisma.fiscalizacao.count({ where: { status: 'CONCLUIDA' } }),
+      this.prisma.unidadePublica.count({ where: unidadeWhere }),
+      this.prisma.unidadePublica.count({ where: { ...unidadeWhere, ativo: true } }),
+      secretariaId
+        ? this.prisma.secretaria.count({ where: { id: secretariaId, ativo: true } })
+        : this.prisma.secretaria.count({ where: { ativo: true } }),
+      this.prisma.fiscalizacao.count({ where: { ...fiscalizacaoWhere, status: 'CONCLUIDA' } }),
       this.prisma.naoConformidade.count({
-        where: { status: { in: NON_CONFORMITY_OPEN_STATUSES } },
+        where: { ...ncWhere, status: { in: NON_CONFORMITY_OPEN_STATUSES } },
       }),
       this.prisma.chamado.count({
-        where: { status: { in: CHAMADO_OPEN_STATUSES } },
+        where: { ...chamadoWhere, status: { in: CHAMADO_OPEN_STATUSES } },
       }),
       this.prisma.offlineSyncEvent.count({
         where: { status: { in: ['PENDENTE', 'PROCESSANDO', 'CONFLITO', 'FALHOU'] } },
@@ -59,9 +69,10 @@ export class OperacionalService {
     };
   }
 
-  async listSecretarias() {
+  async listSecretarias(user: JwtPayload) {
+    const secretariaId = resolveSecretariaScopeId(user);
     return this.prisma.secretaria.findMany({
-      where: { ativo: true },
+      where: { ativo: true, ...(secretariaId ? { id: secretariaId } : {}) },
       orderBy: { nome: 'asc' },
       select: {
         id: true,
@@ -85,12 +96,14 @@ export class OperacionalService {
     return bairros.map((item) => item.bairro).filter((bairro): bairro is string => Boolean(bairro));
   }
 
-  async getOpcoesFiltro() {
+  async getOpcoesFiltro(user: JwtPayload) {
+    const secretariaId = resolveSecretariaScopeId(user);
     const [secretarias, bairros, tiposRows, responsaveisRows] = await Promise.all([
       this.prisma.secretaria.findMany({
         where: {
           ativo: true,
           unidades: { some: { ativo: true } },
+          ...(secretariaId ? { id: secretariaId } : {}),
         },
         orderBy: { nome: 'asc' },
         select: { id: true, nome: true, sigla: true },
@@ -140,8 +153,10 @@ export class OperacionalService {
     };
   }
 
-  async listUnidades(query: UnidadeListQuery) {
-    const where = this.buildUnidadeWhere(query);
+  async listUnidades(query: UnidadeListQuery, user: JwtPayload) {
+    const scopeId = resolveSecretariaScopeId(user);
+    const effectiveQuery = scopeId ? { ...query, secretariaId: scopeId } : query;
+    const where = this.buildUnidadeWhere(effectiveQuery);
     const unidades = await this.prisma.unidadePublica.findMany({
       where,
       orderBy: [{ secretaria: { sigla: 'asc' } }, { nome: 'asc' }],

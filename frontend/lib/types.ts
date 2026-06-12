@@ -441,6 +441,19 @@ export type ChamadosListResponse = {
   hasMore: boolean;
 };
 
+export type ChamadoProtocoloPublico = {
+  codigo: string;
+  status: ChamadoStatus;
+  prioridade: string;
+  descricaoResumo: string;
+  local: string | null;
+  bairro: string | null;
+  secretaria: string | null;
+  abertoEm: string;
+  encerradoEm: string | null;
+  historico: Array<{ status: string; motivo: string | null; em: string }>;
+};
+
 export type ChamadoProgramacaoDia = {
   data: string;
   chamados: ChamadoResumo[];
