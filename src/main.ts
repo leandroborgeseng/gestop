@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/node';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { assertProductionEnv } from './config/env';
 
@@ -31,7 +32,14 @@ async function bootstrap() {
   console.log('[SIGMA:api] Iniciando NestJS...');
   console.log(`[SIGMA:api] NODE_ENV=${process.env.NODE_ENV ?? '(nao definido)'}`);
 
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+    rawBody: true,
+  });
+
+  // Fotos de celular em data URL (evidências de execução) podem passar de 10 MB.
+  app.useBodyParser('json', { limit: '32mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '32mb' });
 
   const corsOrigins = process.env.CORS_ORIGINS?.split(',').map((item) => item.trim()).filter(Boolean);
   app.enableCors({

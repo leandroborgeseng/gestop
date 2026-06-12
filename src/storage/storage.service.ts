@@ -3,6 +3,7 @@ import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { formatEvidenceLimitMb, resolveMaxEvidenceBytes } from './storage.constants';
 
 export type StoredObject = {
   url: string;
@@ -150,9 +151,9 @@ function parseDataUrl(url: string, fallbackMimeType?: string | null) {
     throw new BadRequestException('Evidencia vazia.');
   }
 
-  const maxBytes = Number(process.env.STORAGE_MAX_FILE_BYTES ?? 10 * 1024 * 1024);
+  const maxBytes = resolveMaxEvidenceBytes();
   if (buffer.length > maxBytes) {
-    throw new BadRequestException(`Evidencia excede o limite de ${maxBytes} bytes.`);
+    throw new BadRequestException(`Evidencia excede o limite de ${formatEvidenceLimitMb(maxBytes)}.`);
   }
 
   return { buffer, mimeType };

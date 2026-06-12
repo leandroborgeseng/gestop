@@ -42,14 +42,7 @@ const STEPS: Array<{ id: Step; label: string }> = [
   { id: 'encerramento', label: 'Encerramento' },
 ];
 
-async function fileToDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new Error('Falha ao ler arquivo.'));
-    reader.readAsDataURL(file);
-  });
-}
+import { formatEvidenceSizeLimitMb, prepareEvidenceImage } from '@/lib/evidence-image';
 
 export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   const router = useRouter();
@@ -175,10 +168,10 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
     setError(null);
     try {
       const geo = resolveCheckinForSubmit() ?? checkinPayloadFrom(await resolvePosition());
-      const dataUrl = await fileToDataUrl(file);
+      const prepared = await prepareEvidenceImage(file);
       const created = await addChamadoExecucaoEvidencia(chamadoId, {
-        url: dataUrl,
-        mimeType: file.type,
+        url: prepared.dataUrl,
+        mimeType: prepared.mimeType,
         capturadaEm: new Date().toISOString(),
         localizacao: {
           latitude: geo.latitude,
@@ -387,6 +380,10 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                   <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleEvidence} disabled={busy} />
                 </label>
               </div>
+              <p className="mt-2 text-[12px] text-[var(--ink-3)]">
+                Fotos da câmera do celular são aceitas (até {formatEvidenceSizeLimitMb()}). Imagens grandes são otimizadas
+                automaticamente antes do envio.
+              </p>
             </div>
 
             <div className="flex flex-wrap gap-2">
