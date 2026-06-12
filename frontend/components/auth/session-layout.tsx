@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getMe, getStoredAuth, StoredAuth } from '@/lib/api';
+import { getMe, getStoredAuth, setStoredAuth, StoredAuth } from '@/lib/api';
 import { AUTH_EXPIRED_EVENT } from '@/lib/security';
 import { AppShell } from '@/components/layout/app-shell';
 import { GuideProvider } from '@/components/help/guide-provider';
@@ -41,6 +41,7 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
     getMe()
       .then((user) => {
         const refreshed: StoredAuth = { ...stored, user };
+        setStoredAuth(refreshed);
         setAuth(refreshed);
         setChecking(false);
       })

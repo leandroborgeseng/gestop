@@ -6,6 +6,7 @@ export type JwtPayload = {
   nome: string;
   perfis: string[];
   permissoes: string[];
+  secretariaId?: string | null;
   iat?: number;
   exp?: number;
 };
@@ -60,8 +61,13 @@ export function verifyJwt(token: string, secret: string): JwtPayload {
     throw new Error('Assinatura invalida');
   }
 
-  const payload = base64UrlDecode<JwtPayload>(encodedPayload);
+  const payload = base64UrlDecode<JwtPayload & { alg?: string }>(encodedPayload);
   const now = Math.floor(Date.now() / 1000);
+
+  const header = base64UrlDecode<{ alg?: string }>(encodedHeader);
+  if (header.alg && header.alg !== 'HS256') {
+    throw new Error('Algoritmo de token invalido');
+  }
 
   if (payload.exp && payload.exp < now) {
     throw new Error('Token expirado');

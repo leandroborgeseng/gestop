@@ -2,7 +2,7 @@ import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from
 import { ConfigService } from '@nestjs/config';
 import { resolveJwtSecret } from '../config/env';
 import { isUuid } from '../common/uuid';
-import { PrismaService } from '../prisma/prisma.service';
+import { AuthService } from './auth.service';
 import { AuthenticatedRequest } from './current-user';
 import { verifyJwt } from './jwt';
 
@@ -10,7 +10,7 @@ import { verifyJwt } from './jwt';
 export class AuthGuard implements CanActivate {
   constructor(
     private readonly configService: ConfigService,
-    private readonly prisma: PrismaService,
+    private readonly authService: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext) {
@@ -33,17 +33,15 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Sessao invalida ou expirada');
     }
 
-    let usuario: { id: string; ativo: boolean } | null;
     try {
-      usuario = await this.prisma.usuario.findUnique({
-        where: { id: userId },
-        select: { id: true, ativo: true },
-      });
+      const session = await this.authService.resolveActiveSession(userId);
+      request.user = {
+        ...request.user,
+        perfis: session.perfis,
+        permissoes: session.permissoes,
+        secretariaId: session.secretariaId,
+      };
     } catch {
-      throw new UnauthorizedException('Sessao invalida ou expirada');
-    }
-
-    if (!usuario?.ativo) {
       throw new UnauthorizedException('Sessao invalida ou expirada');
     }
 

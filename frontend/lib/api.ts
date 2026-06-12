@@ -40,7 +40,8 @@ import { notifyAuthExpired } from './security';
 // Sempre usa proxy interno do Next.js no browser.
 // NEXT_PUBLIC_API_URL apontando para URL externa quebra login no Railway.
 // Proxy Next.js — /api-gestop mantido como alias em producao ate redeploy completo.
-const API_BASE_URL = '/api-gestop';
+export const API_PROXY_PREFIX = '/api-gestop';
+const API_BASE_URL = API_PROXY_PREFIX;
 const AUTH_STORAGE_KEY = 'sigma.auth';
 const LEGACY_AUTH_STORAGE_KEY = 'gestop.auth';
 

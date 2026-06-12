@@ -53,13 +53,7 @@ export class AuthController {
   @UseGuards(AuthGuard)
   @Get('me')
   me(@CurrentUser() user: JwtPayload) {
-    return {
-      id: user.sub,
-      nome: user.nome,
-      email: user.email,
-      perfis: user.perfis,
-      permissoes: user.permissoes,
-    };
+    return this.authService.getUserProfile(user.sub);
   }
 
   @UseGuards(AuthGuard)

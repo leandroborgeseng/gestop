@@ -7,6 +7,40 @@ import { resolveJwtSecret } from '../config/env';
 import { hashPassword, verifyPassword } from './password';
 import { signJwt } from './jwt';
 
+const USER_SESSION_SELECT = {
+  id: true,
+  nome: true,
+  email: true,
+  senhaHash: true,
+  ativo: true,
+  secretariaId: true,
+  secretaria: {
+    select: {
+      id: true,
+      nome: true,
+      sigla: true,
+    },
+  },
+  perfis: {
+    select: {
+      perfil: {
+        select: {
+          nome: true,
+          permissoes: {
+            select: {
+              permissao: {
+                select: {
+                  chave: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
 @Injectable()
 export class AuthService {
   constructor(
@@ -18,53 +52,14 @@ export class AuthService {
   async login(email: string, password: string) {
     const usuario = await this.prisma.usuario.findUnique({
       where: { email: email.toLowerCase().trim() },
-      select: {
-        id: true,
-        nome: true,
-        email: true,
-        senhaHash: true,
-        ativo: true,
-        secretaria: {
-          select: {
-            id: true,
-            nome: true,
-            sigla: true,
-          },
-        },
-        perfis: {
-          select: {
-            perfil: {
-              select: {
-                nome: true,
-                permissoes: {
-                  select: {
-                    permissao: {
-                      select: {
-                        chave: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
+      select: USER_SESSION_SELECT,
     });
 
     if (!usuario || !usuario.ativo || !verifyPassword(password, usuario.senhaHash)) {
       throw new UnauthorizedException('Credenciais invalidas');
     }
 
-    const perfis = usuario.perfis.map((item) => item.perfil.nome);
-    const permissoes = Array.from(
-      new Set(
-        usuario.perfis.flatMap((item) =>
-          item.perfil.permissoes.map((perfilPermissao) => perfilPermissao.permissao.chave),
-        ),
-      ),
-    ).sort();
-
+    const { perfis, permissoes } = this.extractPerfisPermissoes(usuario);
     const user = {
       id: usuario.id,
       nome: usuario.nome,
@@ -96,6 +91,76 @@ export class AuthService {
       expiresInSeconds: 60 * 60 * 8,
       user,
     };
+  }
+
+  async resolveActiveSession(userId: string) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: userId },
+      select: {
+        ativo: true,
+        secretariaId: true,
+        perfis: USER_SESSION_SELECT.perfis,
+      },
+    });
+
+    if (!usuario?.ativo) {
+      throw new UnauthorizedException('Sessao invalida ou expirada');
+    }
+
+    const { perfis, permissoes } = this.extractPerfisPermissoes(usuario);
+    return {
+      perfis,
+      permissoes,
+      secretariaId: usuario.secretariaId,
+    };
+  }
+
+  async getUserProfile(userId: string) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        ativo: true,
+        secretaria: USER_SESSION_SELECT.secretaria,
+        perfis: USER_SESSION_SELECT.perfis,
+      },
+    });
+
+    if (!usuario?.ativo) {
+      throw new UnauthorizedException('Sessao invalida ou expirada');
+    }
+
+    const { perfis, permissoes } = this.extractPerfisPermissoes(usuario);
+    return {
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      secretaria: usuario.secretaria,
+      perfis,
+      permissoes,
+    };
+  }
+
+  private extractPerfisPermissoes(usuario: {
+    perfis: Array<{
+      perfil: {
+        nome: string;
+        permissoes: Array<{ permissao: { chave: string } }>;
+      };
+    }>;
+  }) {
+    const perfis = usuario.perfis.map((item) => item.perfil.nome);
+    const permissoes = Array.from(
+      new Set(
+        usuario.perfis.flatMap((item) =>
+          item.perfil.permissoes.map((perfilPermissao) => perfilPermissao.permissao.chave),
+        ),
+      ),
+    ).sort();
+
+    return { perfis, permissoes };
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
@@ -140,9 +205,15 @@ export class AuthService {
     const tokenHash = createHash('sha256').update(rawToken).digest('hex');
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
-    await this.prisma.passwordResetToken.create({
-      data: { usuarioId: usuario.id, tokenHash, expiresAt },
-    });
+    await this.prisma.$transaction([
+      this.prisma.passwordResetToken.updateMany({
+        where: { usuarioId: usuario.id, usedAt: null },
+        data: { usedAt: new Date() },
+      }),
+      this.prisma.passwordResetToken.create({
+        data: { usuarioId: usuario.id, tokenHash, expiresAt },
+      }),
+    ]);
 
     const resetUrl = `${process.env.FRONTEND_PUBLIC_URL ?? 'http://localhost:3000'}/redefinir-senha?token=${rawToken}`;
     await this.dispatchPasswordResetEmail(usuario.email, usuario.nome, resetUrl);

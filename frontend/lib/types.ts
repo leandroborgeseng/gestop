@@ -443,7 +443,8 @@ export type ChamadoProgramacaoResponse = {
   to: string;
   equipeId: string | null;
   totalProgramados: number;
-  programados: ChamadoResumo[];
+  totalPendentes: number;
+  pendentesTruncados: boolean;
   pendentes: ChamadoResumo[];
   porDia: ChamadoProgramacaoDia[];
 };

@@ -4,6 +4,7 @@ import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
 import { RequireAnyPermissions, RequirePermissions } from '../auth/permissions';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { ParseUuidPipe } from '../common/parse-uuid.pipe';
 import {
   ChamadoExecucaoCheckinDto,
   ChamadoExecucaoConcluirDto,
@@ -56,20 +57,24 @@ export class ChamadosController {
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
   @Get(':id/execucao')
-  getExecucao(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+  getExecucao(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
     return this.chamadosService.getChamadoParaExecucao(id, user);
   }
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
   @Post(':id/execucao/checkin')
-  checkinExecucao(@Param('id') id: string, @Body() body: ChamadoExecucaoCheckinDto, @CurrentUser() user: JwtPayload) {
+  checkinExecucao(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: ChamadoExecucaoCheckinDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
     return this.chamadosService.registrarCheckinExecucao(id, body, user);
   }
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
   @Post(':id/execucao/evidencias')
   addEvidenciaExecucao(
-    @Param('id') id: string,
+    @Param('id', ParseUuidPipe) id: string,
     @Body() body: ChamadoExecucaoEvidenciaDto,
     @CurrentUser() user: JwtPayload,
   ) {
@@ -78,13 +83,17 @@ export class ChamadosController {
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
   @Post(':id/execucao/concluir')
-  concluirExecucao(@Param('id') id: string, @Body() body: ChamadoExecucaoConcluirDto, @CurrentUser() user: JwtPayload) {
+  concluirExecucao(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: ChamadoExecucaoConcluirDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
     return this.chamadosService.concluirExecucao(id, body, user);
   }
 
   @RequirePermissions('chamados.gerenciar')
   @Get(':id')
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUuidPipe) id: string) {
     return this.chamadosService.getChamado(id);
   }
 
@@ -96,19 +105,31 @@ export class ChamadosController {
 
   @RequirePermissions('chamados.gerenciar')
   @Put(':id/status')
-  updateStatus(@Param('id') id: string, @Body() body: UpdateChamadoStatusDto, @CurrentUser() user: JwtPayload) {
+  updateStatus(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: UpdateChamadoStatusDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
     return this.chamadosService.updateStatus(id, body, user);
   }
 
   @RequirePermissions('chamados.gerenciar')
   @Put(':id/atribuicao')
-  updateAtribuicao(@Param('id') id: string, @Body() body: UpdateChamadoAtribuicaoDto, @CurrentUser() user: JwtPayload) {
+  updateAtribuicao(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: UpdateChamadoAtribuicaoDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
     return this.chamadosService.updateAtribuicao(id, body, user);
   }
 
   @RequirePermissions('chamados.gerenciar')
   @Put(':id/planejamento')
-  updatePlanejamento(@Param('id') id: string, @Body() body: UpdateChamadoPlanejamentoDto, @CurrentUser() user: JwtPayload) {
+  updatePlanejamento(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: UpdateChamadoPlanejamentoDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
     return this.chamadosService.updatePlanejamento(id, body, user);
   }
 }

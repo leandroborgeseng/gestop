@@ -57,6 +57,7 @@ self.addEventListener('notificationclick', (event) => {
 
 function shouldBypassCache(url) {
   return (
+    url.pathname.startsWith('/api-gestop') ||
     url.pathname.startsWith('/api-sigma') ||
     url.pathname.startsWith('/_next') ||
     url.pathname.startsWith('/login') ||

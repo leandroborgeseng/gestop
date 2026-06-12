@@ -628,6 +628,9 @@ model Chamado {
   @@index([responsavelId])
   @@index([equipeId])
   @@index([createdAt])
+  @@index([previstaExecucaoEm])
+  @@index([status, equipeId])
+  @@index([status, previstaExecucaoEm])
 }
 
 model HistoricoStatus {

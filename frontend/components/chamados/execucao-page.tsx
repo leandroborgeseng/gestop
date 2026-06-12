@@ -152,7 +152,14 @@ function ExecucaoPageContent() {
           />
         ) : null}
 
-        {!loading && totalEmExecucao > 0 ? (
+        {!loading && totalEmExecucao > 0 && chamados.length === 0 ? (
+          <EmptyState
+            title="Nenhum resultado no filtro"
+            description="Ajuste a busca ou selecione outra equipe para ver chamados em execução."
+          />
+        ) : null}
+
+        {!loading && totalEmExecucao > 0 && chamados.length > 0 ? (
           <>
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Badge variant="warning">{chamados.length} em execução</Badge>

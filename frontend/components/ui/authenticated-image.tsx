@@ -1,16 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getStoredAuth } from '@/lib/api';
+import { API_PROXY_PREFIX, getStoredAuth } from '@/lib/api';
 
 function resolveStorageApiPath(url: string) {
   const marker = '/storage/';
   const index = url.indexOf(marker);
   if (index >= 0) {
-    return `/api-sigma/storage/${url.slice(index + marker.length)}`;
+    return `${API_PROXY_PREFIX}/storage/${url.slice(index + marker.length)}`;
   }
   if (url.startsWith('storage/')) {
-    return `/api-sigma/${url}`;
+    return `${API_PROXY_PREFIX}/${url}`;
   }
   return null;
 }

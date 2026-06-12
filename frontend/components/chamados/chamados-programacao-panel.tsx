@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, UsersRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,10 @@ function isoDateNoon(dateKey: string) {
   return `${dateKey}T12:00:00.000Z`;
 }
 
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export function ChamadosProgramacaoPanel({
   equipes,
   onScheduled,
@@ -33,6 +37,7 @@ export function ChamadosProgramacaoPanel({
   onScheduled?: () => void;
 }) {
   const snackbar = useSnackbar();
+  const requestSeq = useRef(0);
   const [month, setMonth] = useState(() => new Date());
   const [equipeFilter, setEquipeFilter] = useState('');
   const [selectedDate, setSelectedDate] = useState<string | null>(() => toInputDate(new Date()));
@@ -43,11 +48,13 @@ export function ChamadosProgramacaoPanel({
   const [formChamadoId, setFormChamadoId] = useState('');
   const [formEquipeId, setFormEquipeId] = useState('');
   const [formDate, setFormDate] = useState('');
+  const [equipeDraft, setEquipeDraft] = useState<Record<string, string>>({});
 
   const bounds = useMemo(() => monthBounds(month), [month]);
   const minDate = toInputDate(new Date());
 
-  async function load() {
+  const load = useCallback(async () => {
+    const seq = ++requestSeq.current;
     setLoading(true);
     setError(null);
     try {
@@ -56,17 +63,20 @@ export function ChamadosProgramacaoPanel({
         to: toInputDate(bounds.end),
         equipeId: equipeFilter || undefined,
       });
+      if (seq !== requestSeq.current) return;
       setData(response);
+      setEquipeDraft({});
     } catch (err) {
+      if (seq !== requestSeq.current) return;
       setError(err instanceof Error ? err.message : 'Falha ao carregar programação.');
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) setLoading(false);
     }
-  }
+  }, [bounds.end, bounds.start, equipeFilter]);
 
   useEffect(() => {
     void load();
-  }, [month, equipeFilter]);
+  }, [load]);
 
   useEffect(() => {
     if (selectedDate) setFormDate(selectedDate);
@@ -86,13 +96,13 @@ export function ChamadosProgramacaoPanel({
     chamadoId: string,
     codigo: string,
     previstaExecucaoEm: string | null,
-    equipeId: string | null,
+    equipeId?: string | null,
   ) {
     setBusyId(chamadoId);
     try {
       await updateChamadoPlanejamento(chamadoId, {
         previstaExecucaoEm,
-        equipeId: equipeId || null,
+        ...(equipeId !== undefined ? { equipeId } : {}),
       });
       await load();
       onScheduled?.();
@@ -104,19 +114,44 @@ export function ChamadosProgramacaoPanel({
     }
   }
 
+  function navigateToScheduledDate(dateKey: string) {
+    const [year, monthIndex] = dateKey.split('-').map(Number);
+    setMonth(new Date(year, monthIndex - 1, 1));
+    setSelectedDate(dateKey);
+  }
+
   async function handleAgendarPendente() {
     if (!formChamadoId || !formDate || !formEquipeId) {
       snackbar.show('Selecione chamado, data futura e equipe.', 'warning');
       return;
     }
+    if (formDate < minDate) {
+      snackbar.show('A data deve ser hoje ou uma data futura.', 'warning');
+      return;
+    }
     const chamado = data?.pendentes.find((item) => item.id === formChamadoId);
     if (!chamado) return;
+
+    const scheduledMonth = formDate.slice(0, 7);
+    const currentMonth = monthKey(month);
+
     await saveProgramacao(chamado.id, chamado.codigo, isoDateNoon(formDate), formEquipeId);
     setFormChamadoId('');
+
+    if (scheduledMonth !== currentMonth) {
+      navigateToScheduledDate(formDate);
+      snackbar.show(
+        `Agendado para ${new Date(`${formDate}T12:00:00`).toLocaleDateString('pt-BR')} — calendário atualizado.`,
+        'success',
+      );
+    }
   }
 
   const cells = buildCalendarCells(month);
   const monthLabel = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const pendentesLabel = data?.pendentesTruncados
+    ? `${data.pendentes.length} de ${data.totalPendentes} aguardando data`
+    : `${data?.totalPendentes ?? 0} aguardando data`;
 
   return (
     <div className="space-y-4">
@@ -142,7 +177,7 @@ export function ChamadosProgramacaoPanel({
           </Select>
         </div>
         <Badge variant="neutral">{data?.totalProgramados ?? 0} programados no mês</Badge>
-        <Badge variant="warning">{data?.pendentes.length ?? 0} aguardando data</Badge>
+        <Badge variant="warning">{pendentesLabel}</Badge>
       </div>
 
       {error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
@@ -256,57 +291,73 @@ export function ChamadosProgramacaoPanel({
                 ) : null}
 
                 <ul className="mt-3 space-y-2">
-                  {chamadosDoDia.map((chamado) => (
-                    <li
-                      key={chamado.id}
-                      className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{chamado.codigo}</p>
-                          <p className="mt-0.5 line-clamp-2 text-[13px] font-semibold text-[var(--ink)]">
-                            {chamadoTitulo(chamado)}
-                          </p>
-                          <p className="mt-1 truncate text-[11px] text-[var(--ink-3)]">{chamadoLocalLabel(chamado)}</p>
+                  {chamadosDoDia.map((chamado) => {
+                    const currentEquipeId = chamado.equipe?.id ?? '';
+                    const draftEquipeId = equipeDraft[chamado.id] ?? currentEquipeId;
+                    const equipeChanged = draftEquipeId !== currentEquipeId;
+
+                    return (
+                      <li
+                        key={chamado.id}
+                        className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{chamado.codigo}</p>
+                            <p className="mt-0.5 line-clamp-2 text-[13px] font-semibold text-[var(--ink)]">
+                              {chamadoTitulo(chamado)}
+                            </p>
+                            <p className="mt-1 truncate text-[11px] text-[var(--ink-3)]">{chamadoLocalLabel(chamado)}</p>
+                          </div>
+                          <Badge variant={prioridadeVariant(chamado.prioridade)}>{chamado.prioridade}</Badge>
                         </div>
-                        <Badge variant={prioridadeVariant(chamado.prioridade)}>{chamado.prioridade}</Badge>
-                      </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--ink-3)]">
-                        <UsersRound className="h-3.5 w-3.5" />
-                        {chamado.equipe?.nome ?? 'Sem equipe'}
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <Select
-                          value={chamado.equipe?.id ?? ''}
-                          onChange={(event) =>
-                            void saveProgramacao(
-                              chamado.id,
-                              chamado.codigo,
-                              chamado.previstaExecucaoEm ?? null,
-                              event.target.value || null,
-                            )
-                          }
-                          className="h-8 min-w-[140px] flex-1 text-xs"
-                          disabled={busyId === chamado.id}
-                        >
-                          <option value="">Sem equipe</option>
-                          {equipes.map((equipe) => (
-                            <option key={equipe.id} value={equipe.id}>
-                              {equipe.nome}
-                            </option>
-                          ))}
-                        </Select>
-                        <Button
-                          variant="text"
-                          size="sm"
-                          disabled={busyId === chamado.id}
-                          onClick={() => void saveProgramacao(chamado.id, chamado.codigo, null, chamado.equipe?.id ?? null)}
-                        >
-                          Remover data
-                        </Button>
-                      </div>
-                    </li>
-                  ))}
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--ink-3)]">
+                          <UsersRound className="h-3.5 w-3.5" />
+                          {chamado.equipe?.nome ?? 'Sem equipe'}
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Select
+                            value={draftEquipeId}
+                            onChange={(event) =>
+                              setEquipeDraft((current) => ({ ...current, [chamado.id]: event.target.value }))
+                            }
+                            className="h-8 min-w-[140px] flex-1 text-xs"
+                            disabled={busyId === chamado.id}
+                          >
+                            <option value="">Sem equipe</option>
+                            {equipes.map((equipe) => (
+                              <option key={equipe.id} value={equipe.id}>
+                                {equipe.nome}
+                              </option>
+                            ))}
+                          </Select>
+                          <Button
+                            variant="outlined"
+                            size="sm"
+                            disabled={busyId === chamado.id || !equipeChanged}
+                            onClick={() =>
+                              void saveProgramacao(
+                                chamado.id,
+                                chamado.codigo,
+                                chamado.previstaExecucaoEm ?? null,
+                                draftEquipeId || null,
+                              )
+                            }
+                          >
+                            Salvar equipe
+                          </Button>
+                          <Button
+                            variant="text"
+                            size="sm"
+                            disabled={busyId === chamado.id}
+                            onClick={() => void saveProgramacao(chamado.id, chamado.codigo, null, undefined)}
+                          >
+                            Remover data
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               </CardContent>
             </Card>

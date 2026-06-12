@@ -8,7 +8,9 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  IsUUID,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -133,7 +135,8 @@ export class UpdateChamadoPlanejamentoDto {
   previstaExecucaoEm?: string | null;
 
   @IsOptional()
-  @IsString()
+  @ValidateIf((_, value) => value !== null && value !== undefined && value !== '')
+  @IsUUID()
   equipeId?: string | null;
 }
 

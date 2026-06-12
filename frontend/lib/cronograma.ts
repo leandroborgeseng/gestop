@@ -16,8 +16,12 @@ export function formatMonthYear(date: Date) {
   return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 }
 
+/** YYYY-MM-DD no fuso local (evita deslocamento de dia com toISOString/UTC). */
 export function toInputDate(date: Date) {
-  return date.toISOString().slice(0, 10);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export function monthBounds(reference: Date) {

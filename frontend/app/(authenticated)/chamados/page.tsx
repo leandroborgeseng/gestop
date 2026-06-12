@@ -32,6 +32,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { getChamado, listChamadoEquipes, listChamados, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { chamadoLocalLabel } from '@/lib/chamado-geo';
+import { toInputDate } from '@/lib/cronograma';
 import {
   CHAMADO_STATUS_META,
   buildChamadoTimelineFromHistorico,
@@ -104,8 +105,23 @@ function ChamadosPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    load();
+    listChamadoEquipes()
+      .then(setEquipes)
+      .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar equipes.'));
   }, []);
+
+  useEffect(() => {
+    if (view !== 'triagem') return;
+
+    setLoading(true);
+    listChamados()
+      .then((items) => {
+        setChamados(items);
+        setSelectedId((current) => current ?? items[0]?.id ?? null);
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
+      .finally(() => setLoading(false));
+  }, [view]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -132,11 +148,11 @@ function ChamadosPageContent() {
   }, [selectedId]);
 
   function load() {
+    if (view !== 'triagem') return;
     setLoading(true);
-    Promise.all([listChamados(), listChamadoEquipes()])
-      .then(([items, nextEquipes]) => {
+    listChamados()
+      .then((items) => {
         setChamados(items);
-        setEquipes(nextEquipes);
         setSelectedId((current) => current ?? items[0]?.id ?? null);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
@@ -316,7 +332,7 @@ function ChamadosPageContent() {
         </div>
 
         {view === 'programacao' ? (
-          <ChamadosProgramacaoPanel equipes={equipes} onScheduled={() => void load()} />
+          <ChamadosProgramacaoPanel equipes={equipes} />
         ) : null}
 
         {view === 'triagem' && error ? (
@@ -501,7 +517,8 @@ function ChamadoDetailPanel({
   const [pendingStatus, setPendingStatus] = useState<ChamadoStatus>('ABERTO');
   const [motivo, setMotivo] = useState('');
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
-  const [pendingEquipeId, setPendingEquipeId] = useState('');
+  const [pendingEquipePlanejamentoId, setPendingEquipePlanejamentoId] = useState('');
+  const [pendingEquipeAtribuicaoId, setPendingEquipeAtribuicaoId] = useState('');
   const [pendingResponsavelId, setPendingResponsavelId] = useState('');
   const [atribuicaoMotivo, setAtribuicaoMotivo] = useState('');
   const [pendingPrevista, setPendingPrevista] = useState('');
@@ -511,7 +528,8 @@ function ChamadoDetailPanel({
     setPendingStatus(resumo.status);
     setMotivo('');
     setImpedimentoMotivo(resumo.impedimentoMotivo ?? '');
-    setPendingEquipeId(resumo.equipe?.id ?? '');
+    setPendingEquipePlanejamentoId(resumo.equipe?.id ?? '');
+    setPendingEquipeAtribuicaoId(resumo.equipe?.id ?? '');
     setPendingResponsavelId(resumo.responsavel?.id ?? '');
     setAtribuicaoMotivo('');
     setPendingPrevista(resumo.previstaExecucaoEm ? resumo.previstaExecucaoEm.slice(0, 10) : '');
@@ -540,11 +558,12 @@ function ChamadoDetailPanel({
   const statusChanged = pendingStatus !== resumo.status;
   const previstaChanged =
     pendingPrevista !== (resumo.previstaExecucaoEm ? resumo.previstaExecucaoEm.slice(0, 10) : '');
-  const equipePlanejamentoChanged = pendingEquipeId !== (resumo.equipe?.id ?? '');
+  const equipePlanejamentoChanged = pendingEquipePlanejamentoId !== (resumo.equipe?.id ?? '');
   const planejamentoChanged = previstaChanged || equipePlanejamentoChanged;
   const atribuicaoChanged =
-    pendingEquipeId !== (resumo.equipe?.id ?? '') || pendingResponsavelId !== (resumo.responsavel?.id ?? '');
-  const selectedEquipe = equipes.find((equipe) => equipe.id === pendingEquipeId);
+    pendingEquipeAtribuicaoId !== (resumo.equipe?.id ?? '') ||
+    pendingResponsavelId !== (resumo.responsavel?.id ?? '');
+  const selectedEquipe = equipes.find((equipe) => equipe.id === pendingEquipeAtribuicaoId);
   const membrosEquipe = selectedEquipe?.membros.map((item) => item.usuario).filter((usuario) => usuario.ativo) ?? [];
   const timeline = detail?.historico?.length
     ? buildChamadoTimelineFromHistorico(detail.historico, resumo.status, resumo.createdAt)
@@ -607,7 +626,7 @@ function ChamadoDetailPanel({
                 <input
                   id="chamado-prevista"
                   type="date"
-                  min={new Date().toISOString().slice(0, 10)}
+                  min={toInputDate(new Date())}
                   value={pendingPrevista}
                   onChange={(event) => setPendingPrevista(event.target.value)}
                   disabled={busy}
@@ -620,8 +639,8 @@ function ChamadoDetailPanel({
                 </label>
                 <Select
                   id="chamado-prevista-equipe"
-                  value={pendingEquipeId}
-                  onChange={(event) => setPendingEquipeId(event.target.value)}
+                  value={pendingEquipePlanejamentoId}
+                  onChange={(event) => setPendingEquipePlanejamentoId(event.target.value)}
                   className="h-9 w-full text-xs"
                   disabled={busy}
                 >
@@ -645,7 +664,7 @@ function ChamadoDetailPanel({
                     resumo.id,
                     resumo.codigo,
                     pendingPrevista ? `${pendingPrevista}T12:00:00.000Z` : null,
-                    pendingEquipeId || null,
+                    equipePlanejamentoChanged ? pendingEquipePlanejamentoId || null : undefined,
                   )
                 }
               >
@@ -668,9 +687,9 @@ function ChamadoDetailPanel({
                 </label>
                 <Select
                   id="chamado-equipe"
-                  value={pendingEquipeId}
+                  value={pendingEquipeAtribuicaoId}
                   onChange={(event) => {
-                    setPendingEquipeId(event.target.value);
+                    setPendingEquipeAtribuicaoId(event.target.value);
                     setPendingResponsavelId('');
                   }}
                   className="h-9 w-full text-xs"
@@ -694,9 +713,9 @@ function ChamadoDetailPanel({
                   value={pendingResponsavelId}
                   onChange={(event) => setPendingResponsavelId(event.target.value)}
                   className="h-9 w-full text-xs"
-                  disabled={busy || !pendingEquipeId}
+                  disabled={busy || !pendingEquipeAtribuicaoId}
                 >
-                  <option value="">{pendingEquipeId ? 'Selecione um membro' : 'Escolha uma equipe primeiro'}</option>
+                  <option value="">{pendingEquipeAtribuicaoId ? 'Selecione um membro' : 'Escolha uma equipe primeiro'}</option>
                   {membrosEquipe.map((usuario) => (
                     <option key={usuario.id} value={usuario.id}>
                       {usuario.nome}
@@ -717,7 +736,13 @@ function ChamadoDetailPanel({
               size="sm"
               disabled={busy || !atribuicaoChanged}
               onClick={() =>
-                onAssignTeam(resumo.id, resumo.codigo, pendingEquipeId, pendingResponsavelId, atribuicaoMotivo)
+                onAssignTeam(
+                  resumo.id,
+                  resumo.codigo,
+                  pendingEquipeAtribuicaoId,
+                  pendingResponsavelId,
+                  atribuicaoMotivo,
+                )
               }
             >
               Salvar equipe

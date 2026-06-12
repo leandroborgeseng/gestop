@@ -26,9 +26,11 @@ import {
   checkinChamadoExecucao,
   concluirChamadoExecucao,
   getChamadoExecucao,
+  getStoredAuth,
 } from '@/lib/api';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import { CHAMADO_STATUS_META, prioridadeVariant } from '@/lib/chamado-status';
+import { hasChamadosGerenciar } from '@/lib/navigation';
 import { captureCurrentPosition, GeoPosition } from '@/lib/geolocation';
 import { ChamadoEvidencia, ChamadoExecucaoDetalhe } from '@/lib/types';
 import { cn } from '@/lib/cn';
@@ -53,6 +55,7 @@ async function fileToDataUrl(file: File) {
 export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   const router = useRouter();
   const snackbar = useSnackbar();
+  const canGerenciar = hasChamadosGerenciar(getStoredAuth()?.user.permissoes ?? []);
   const [detail, setDetail] = useState<ChamadoExecucaoDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -213,7 +216,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
     setBusy(true);
     setError(null);
     try {
-      const checkin = resolveCheckinForSubmit() ?? checkinPayloadFrom(await resolvePosition());
+      const checkin = checkinPayloadFrom(await resolvePosition());
       await concluirChamadoExecucao(chamadoId, {
         relatorio: relatorio.trim(),
         checkin,
@@ -261,9 +264,11 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                 ) : null}
               </p>
             </div>
-            <Link href={`/chamados?id=${detail.id}`} className="text-[13px] font-semibold text-[var(--brand-hover)]">
-              Ver na triagem
-            </Link>
+            {canGerenciar ? (
+              <Link href={`/chamados?id=${detail.id}`} className="text-[13px] font-semibold text-[var(--brand-hover)]">
+                Ver na triagem
+              </Link>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent className="pt-4">

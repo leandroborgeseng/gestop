@@ -29,7 +29,9 @@ export async function proxyToBackend(request: NextRequest, pathSegments: string[
   }
 
   try {
-    console.log(`[SIGMA:proxy] ${request.method} ${targetUrl}`);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[SIGMA:proxy] ${request.method} ${targetUrl}`);
+    }
     const response = await fetch(targetUrl, init);
     const responseContentType = response.headers.get('content-type') ?? 'application/json';
     const isText =
@@ -52,15 +54,12 @@ export async function proxyToBackend(request: NextRequest, pathSegments: string[
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro desconhecido';
-    console.error(`[SIGMA:proxy] Falha ao conectar em ${targetUrl}: ${message}`);
+    console.error(`[SIGMA:proxy] Falha ao conectar no backend: ${message}`);
 
     return NextResponse.json(
       {
         message:
-          'Backend indisponivel. No Railway (servico frontend), defina BACKEND_INTERNAL_URL=http://${{gestop.RAILWAY_PRIVATE_DOMAIN}}:${{gestop.BACKEND_LISTEN_PORT}} e confirme que o servico gestop esta Running.',
-        backendUrl,
-        targetUrl,
-        error: message,
+          'Backend indisponível. Verifique se o serviço gestop está em execução e se BACKEND_INTERNAL_URL está configurado no frontend.',
       },
       { status: 502 },
     );

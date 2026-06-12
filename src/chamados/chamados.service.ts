@@ -19,13 +19,13 @@ import {
   buildChamadoTitleFromNc,
   buildDefaultDeadlineFromSeverity,
   canUsuarioExecutarChamado,
-  historicoHasExecucaoCheckin,
   isEvidenciaExecucaoCampo,
   parseExecucaoCheckinMetadata,
   priorityFromSeverity,
   shouldGenerateChamadoFromNc,
 } from './chamados.rules';
 import { validateMobileCheckin } from '../mobile/mobile.rules';
+import { parseDateKey, todayDateKey, utcDateKeyFromDate } from '../common/date.utils';
 
 type Tx = Prisma.TransactionClient;
 
@@ -48,15 +48,17 @@ export class ChamadosService {
   }
 
   async listEmExecucaoPorEquipe(user: JwtPayload) {
-    const onlyExecutor =
-      !user.permissoes.includes('chamados.gerenciar') && user.permissoes.includes('chamados.executar');
+    const canGerenciar = user.permissoes.includes('chamados.gerenciar');
+    const onlyExecutor = !canGerenciar && user.permissoes.includes('chamados.executar');
 
     const chamados = await this.prisma.chamado.findMany({
       where: {
         status: ChamadoStatus.EM_EXECUCAO,
         ...(onlyExecutor
           ? { equipe: { membros: { some: { usuarioId: user.sub } } } }
-          : {}),
+          : canGerenciar && user.secretariaId
+            ? { secretariaId: user.secretariaId }
+            : {}),
       },
       orderBy: [{ equipe: { nome: 'asc' } }, { prioridade: 'desc' }, { createdAt: 'asc' }],
       include: this.includeRelations(),
@@ -120,13 +122,17 @@ export class ChamadosService {
   }
 
   async listEquipesParaExecucao(user: JwtPayload) {
-    const onlyExecutor =
-      !user.permissoes.includes('chamados.gerenciar') && user.permissoes.includes('chamados.executar');
+    const canGerenciar = user.permissoes.includes('chamados.gerenciar');
+    const onlyExecutor = !canGerenciar && user.permissoes.includes('chamados.executar');
 
     return this.prisma.equipe.findMany({
       where: {
         ativo: true,
-        ...(onlyExecutor ? { membros: { some: { usuarioId: user.sub } } } : {}),
+        ...(onlyExecutor
+          ? { membros: { some: { usuarioId: user.sub } } }
+          : canGerenciar && user.secretariaId
+            ? { secretariaId: user.secretariaId }
+            : {}),
       },
       orderBy: { nome: 'asc' },
       select: {
@@ -142,10 +148,21 @@ export class ChamadosService {
       throw new BadRequestException('Informe o intervalo from e to (YYYY-MM-DD).');
     }
 
-    const fromDate = new Date(`${from.trim()}T00:00:00.000Z`);
-    const toDate = new Date(`${to.trim()}T23:59:59.999Z`);
+    const fromKey = from.trim();
+    const toKey = to.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromKey) || !/^\d{4}-\d{2}-\d{2}$/.test(toKey)) {
+      throw new BadRequestException('Datas devem estar no formato YYYY-MM-DD.');
+    }
+
+    const fromDate = parseDateKey(fromKey);
+    const toDate = new Date(`${toKey}T23:59:59.999Z`);
     if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime()) || fromDate > toDate) {
       throw new BadRequestException('Intervalo de datas inválido.');
+    }
+
+    const rangeDays = (toDate.getTime() - fromDate.getTime()) / 86_400_000;
+    if (rangeDays > 120) {
+      throw new BadRequestException('Intervalo máximo de 120 dias.');
     }
 
     const statusAtivos = {
@@ -159,7 +176,13 @@ export class ChamadosService {
           ? { equipeId: equipeId.trim() }
           : {};
 
-    const [programados, pendentes] = await Promise.all([
+    const pendentesWhere = {
+      status: statusAtivos,
+      previstaExecucaoEm: null,
+      ...equipeFilter,
+    };
+
+    const [programados, pendentes, totalPendentes] = await Promise.all([
       this.prisma.chamado.findMany({
         where: {
           status: statusAtivos,
@@ -170,21 +193,18 @@ export class ChamadosService {
         include: this.includeRelations(),
       }),
       this.prisma.chamado.findMany({
-        where: {
-          status: statusAtivos,
-          previstaExecucaoEm: null,
-          ...equipeFilter,
-        },
+        where: pendentesWhere,
         orderBy: [{ prioridade: 'desc' }, { createdAt: 'asc' }],
-        take: 100,
+        take: 500,
         include: this.includeRelations(),
       }),
+      this.prisma.chamado.count({ where: pendentesWhere }),
     ]);
 
     const porDiaMap = new Map<string, typeof programados>();
     for (const chamado of programados) {
       if (!chamado.previstaExecucaoEm) continue;
-      const key = chamado.previstaExecucaoEm.toISOString().slice(0, 10);
+      const key = utcDateKeyFromDate(chamado.previstaExecucaoEm);
       if (!porDiaMap.has(key)) porDiaMap.set(key, []);
       porDiaMap.get(key)!.push(chamado);
     }
@@ -197,11 +217,12 @@ export class ChamadosService {
       }));
 
     return {
-      from: from.trim(),
-      to: to.trim(),
+      from: fromKey,
+      to: toKey,
       equipeId: equipeId?.trim() || null,
       totalProgramados: programados.length,
-      programados: programados.map((item) => this.serializeChamado(item)),
+      totalPendentes,
+      pendentesTruncados: totalPendentes > pendentes.length,
       pendentes: pendentes.map((item) => this.serializeChamado(item)),
       porDia,
     };
@@ -262,6 +283,11 @@ export class ChamadosService {
     const chamado = await this.getChamadoOrThrow(id);
     await this.assertUsuarioPodeExecutarChamado(chamado, user);
     this.assertChamadoEmExecucao(chamado.status);
+
+    const existingCheckin = await this.findExecucaoCheckinHistorico(id);
+    if (existingCheckin) {
+      return this.getChamadoParaExecucao(id, user);
+    }
 
     const checkinTarget = await this.resolveCheckinTarget(chamado);
     if (!checkinTarget) throw new BadRequestException('Chamado sem localização para validar check-in.');
@@ -354,6 +380,11 @@ export class ChamadosService {
 
     if (!checkinValidation.valid) {
       throw new BadRequestException(checkinValidation.reasons.join('; '));
+    }
+
+    const checkinInicial = await this.findExecucaoCheckinHistorico(id);
+    if (checkinInicial && this.coordsAreEqual(checkinInicial, dto.checkin)) {
+      throw new BadRequestException('Confirme a conclusão com uma nova leitura de GPS no local.');
     }
 
     const evidenciasCount = await this.countEvidenciasExecucaoCampo(id);
@@ -721,6 +752,11 @@ export class ChamadosService {
 
   async updatePlanejamento(id: string, dto: UpdateChamadoPlanejamentoDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
+
+    if (before.status === ChamadoStatus.CONCLUIDO || before.status === ChamadoStatus.CANCELADO) {
+      throw new BadRequestException('Chamados concluídos ou cancelados não podem ser reprogramados.');
+    }
+
     const previstaExecucaoEm =
       dto.previstaExecucaoEm === undefined
         ? before.previstaExecucaoEm
@@ -728,12 +764,28 @@ export class ChamadosService {
           ? new Date(dto.previstaExecucaoEm)
           : null;
 
+    if (previstaExecucaoEm && Number.isNaN(previstaExecucaoEm.getTime())) {
+      throw new BadRequestException('Data prevista inválida.');
+    }
+
+    if (previstaExecucaoEm) {
+      const previstaKey = utcDateKeyFromDate(previstaExecucaoEm);
+      if (previstaKey < todayDateKey()) {
+        throw new BadRequestException('A data prevista não pode ser no passado.');
+      }
+    }
+
     let equipeId = before.equipeId;
     if (dto.equipeId !== undefined) {
       equipeId = dto.equipeId?.trim() ? dto.equipeId.trim() : null;
       if (equipeId) {
         await this.ensureEquipeAtiva(equipeId);
       }
+    }
+
+    const scheduling = dto.previstaExecucaoEm !== undefined && previstaExecucaoEm !== null;
+    if (scheduling && !equipeId) {
+      throw new BadRequestException('Informe a equipe ao programar a execução.');
     }
 
     let responsavelId = before.responsavelId;
@@ -1048,8 +1100,9 @@ export class ChamadosService {
     }
 
     const membros = await this.prisma.equipeUsuario.findMany({
-      where: { equipeId: chamado.equipeId },
+      where: { equipeId: chamado.equipeId, usuarioId: user.sub },
       select: { usuarioId: true },
+      take: 1,
     });
 
     if (
@@ -1071,16 +1124,36 @@ export class ChamadosService {
   }
 
   private async assertCheckinExecucaoRegistrado(chamadoId: string) {
-    const historico = await this.prisma.historicoStatus.findMany({
-      where: { entidadeTipo: 'Chamado', entidadeId: chamadoId },
-      orderBy: { createdAt: 'desc' },
-      take: 30,
-      select: { metadata: true },
-    });
-
-    if (!historicoHasExecucaoCheckin(historico)) {
+    const checkin = await this.findExecucaoCheckinHistorico(chamadoId);
+    if (!checkin) {
       throw new BadRequestException('Confirme o check-in no local antes de continuar a execução.');
     }
+  }
+
+  private async findExecucaoCheckinHistorico(chamadoId: string) {
+    const registro = await this.prisma.historicoStatus.findFirst({
+      where: {
+        entidadeTipo: 'Chamado',
+        entidadeId: chamadoId,
+        metadata: {
+          path: ['tipo'],
+          equals: 'execucao_checkin',
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: { metadata: true, createdAt: true },
+    });
+
+    if (!registro) return null;
+    return parseExecucaoCheckinMetadata(registro.metadata, registro.createdAt);
+  }
+
+  private coordsAreEqual(
+    a: { latitude: number; longitude: number },
+    b: { latitude: number; longitude: number },
+    epsilon = 0.000001,
+  ) {
+    return Math.abs(a.latitude - b.latitude) < epsilon && Math.abs(a.longitude - b.longitude) < epsilon;
   }
 
   private async countEvidenciasExecucaoCampo(chamadoId: string) {
