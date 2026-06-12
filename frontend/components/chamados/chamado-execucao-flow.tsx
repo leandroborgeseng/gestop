@@ -12,6 +12,7 @@ import {
   LoaderCircle,
   MapPin,
   Wrench,
+  X,
 } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { AuthenticatedImage } from '@/components/ui/authenticated-image';
@@ -30,6 +31,7 @@ import {
 } from '@/lib/api';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import { CHAMADO_STATUS_META, prioridadeVariant } from '@/lib/chamado-status';
+import { formatEvidenceSizeLimitMb, prepareEvidenceImage } from '@/lib/evidence-image';
 import { captureCurrentPosition, GeoPosition } from '@/lib/geolocation';
 import { ChamadoEvidencia, ChamadoExecucaoDetalhe } from '@/lib/types';
 import { cn } from '@/lib/cn';
@@ -42,7 +44,40 @@ const STEPS: Array<{ id: Step; label: string }> = [
   { id: 'encerramento', label: 'Encerramento' },
 ];
 
-import { formatEvidenceSizeLimitMb, prepareEvidenceImage } from '@/lib/evidence-image';
+function buildRelatorioFinal(impedimento: boolean, motivo: string, relatorio: string) {
+  if (!impedimento) return relatorio.trim();
+
+  const motivoTrim = motivo.trim();
+  const extra = relatorio.trim();
+  const prefix = `Impedimento: ${motivoTrim}`;
+  if (!extra || extra === motivoTrim) return prefix;
+  if (extra.startsWith('Impedimento:')) return extra;
+  return `${prefix}\n\n${extra}`;
+}
+
+function EvidenceLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Visualizar evidência"
+      onClick={onClose}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        className="absolute top-4 right-4 rounded-full bg-black/50 p-2 text-white hover:bg-black/70"
+        aria-label="Fechar"
+      >
+        <X className="h-5 w-5" />
+      </button>
+      <div className="max-h-[85vh] w-full max-w-4xl" onClick={(event) => event.stopPropagation()}>
+        <AuthenticatedImage src={src} alt="Evidência ampliada" className="mx-auto max-h-[80vh] w-auto rounded-[var(--r-md)] object-contain" />
+      </div>
+    </div>
+  );
+}
 
 export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   const router = useRouter();
@@ -59,6 +94,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   const [impedimento, setImpedimento] = useState(false);
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
   const [evidencias, setEvidencias] = useState<ChamadoEvidencia[]>([]);
+  const [previewEvidenceUrl, setPreviewEvidenceUrl] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -93,6 +129,15 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   );
 
   const checkinDone = Boolean(detail?.execucaoCheckin);
+  const relatorioFinal = useMemo(
+    () => buildRelatorioFinal(impedimento, impedimentoMotivo, relatorio),
+    [impedimento, impedimentoMotivo, relatorio],
+  );
+
+  const execucaoPreenchida = useMemo(() => {
+    if (impedimento) return impedimentoMotivo.trim().length >= 5;
+    return relatorio.trim().length >= 10 && evidencias.length >= 1;
+  }, [impedimento, impedimentoMotivo, relatorio, evidencias.length]);
 
   async function resolvePosition(options?: { allowFallback?: boolean }) {
     const fallback =
@@ -190,27 +235,41 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
     }
   }
 
-  async function handleConcluir() {
-    if (!detail) return;
+  function validateExecucaoStep() {
+    if (impedimento) {
+      if (impedimentoMotivo.trim().length < 5) {
+        setError('Informe o motivo do impedimento com ao menos 5 caracteres.');
+        return false;
+      }
+      return true;
+    }
     if (relatorio.trim().length < 10) {
       setError('Descreva o serviço realizado com ao menos 10 caracteres.');
-      return;
-    }
-    if (impedimento && impedimentoMotivo.trim().length < 5) {
-      setError('Informe o motivo do impedimento.');
-      return;
+      return false;
     }
     if (evidencias.length < 1) {
       setError('Anexe ao menos uma foto como evidência da execução.');
-      return;
+      return false;
     }
+    return true;
+  }
+
+  function handleIrParaEncerramento() {
+    setError(null);
+    if (!validateExecucaoStep()) return;
+    setStep('encerramento');
+  }
+
+  async function handleConcluir() {
+    if (!detail) return;
+    if (!validateExecucaoStep()) return;
 
     setBusy(true);
     setError(null);
     try {
       const checkin = checkinPayloadFrom(await resolvePosition());
       await concluirChamadoExecucao(chamadoId, {
-        relatorio: relatorio.trim(),
+        relatorio: relatorioFinal,
         checkin,
         impedimento,
         impedimentoMotivo: impedimento ? impedimentoMotivo.trim() : undefined,
@@ -233,6 +292,10 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-24">
+      {previewEvidenceUrl ? (
+        <EvidenceLightbox src={previewEvidenceUrl} onClose={() => setPreviewEvidenceUrl(null)} />
+      ) : null}
+
       <Card elevation={1}>
         <CardHeader className="border-b border-[var(--line-2)]">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -269,7 +332,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
               const active = item.id === step;
               const done =
                 (item.id === 'chegada' && checkinDone) ||
-                (item.id === 'registro' && checkinDone && evidencias.length > 0) ||
+                (item.id === 'registro' && checkinDone && execucaoPreenchida && step === 'encerramento') ||
                 (item.id === 'encerramento' && false);
               return (
                 <li
@@ -349,30 +412,80 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 pt-0">
-            <Field label="Relatório do serviço realizado">
-              <textarea
-                value={relatorio}
-                onChange={(event) => setRelatorio(event.target.value)}
-                rows={5}
-                placeholder="Descreva o que foi feito: materiais usados, pontos verificados, pendências remanescentes…"
-                className="w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-[14px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+            <label className="flex items-start gap-3 rounded-[var(--r-md)] border border-[var(--line-2)] px-3 py-3">
+              <input
+                type="checkbox"
+                checked={impedimento}
+                onChange={(event) => {
+                  setImpedimento(event.target.checked);
+                  setError(null);
+                }}
+                className="mt-1"
               />
-            </Field>
+              <span>
+                <span className="block text-[14px] font-semibold text-[var(--ink)]">Registrar impedimento</span>
+                <span className="block text-[13px] text-[var(--ink-3)]">
+                  Marque se não foi possível executar o serviço (falta de acesso, peça, condição no local, etc.).
+                </span>
+              </span>
+            </label>
+
+            {impedimento ? (
+              <Field label="Motivo do impedimento">
+                <textarea
+                  value={impedimentoMotivo}
+                  onChange={(event) => setImpedimentoMotivo(event.target.value)}
+                  rows={4}
+                  placeholder="Descreva o que impediu a execução: acesso negado, material indisponível, risco no local…"
+                  className="w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-[14px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+                />
+              </Field>
+            ) : (
+              <Field label="Relatório do serviço realizado">
+                <textarea
+                  value={relatorio}
+                  onChange={(event) => setRelatorio(event.target.value)}
+                  rows={5}
+                  placeholder="Descreva o que foi feito: materiais usados, pontos verificados, pendências remanescentes…"
+                  className="w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-[14px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+                />
+              </Field>
+            )}
+
+            {impedimento ? (
+              <Field label="Observações adicionais (opcional)">
+                <textarea
+                  value={relatorio}
+                  onChange={(event) => setRelatorio(event.target.value)}
+                  rows={3}
+                  placeholder="Detalhes complementares sobre a visita ou tentativa de execução."
+                  className="w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-[14px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+                />
+              </Field>
+            ) : null}
 
             <div>
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-[13px] font-semibold text-[var(--ink)]">Evidências fotográficas</p>
-                <Badge variant={evidencias.length > 0 ? 'ok' : 'warn'}>{evidencias.length} foto(s)</Badge>
+                <p className="text-[13px] font-semibold text-[var(--ink)]">
+                  Evidências fotográficas{impedimento ? ' (opcional)' : ''}
+                </p>
+                <Badge variant={evidencias.length > 0 ? 'ok' : impedimento ? 'neutral' : 'warn'}>
+                  {evidencias.length} foto(s)
+                </Badge>
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {evidencias.map((evidencia) => (
-                  <figure key={evidencia.id} className="overflow-hidden rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)]">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <button
+                    key={evidencia.id}
+                    type="button"
+                    onClick={() => setPreviewEvidenceUrl(evidencia.url)}
+                    className="overflow-hidden rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)] text-left"
+                  >
                     <AuthenticatedImage src={evidencia.url} alt="Evidência da execução" className="aspect-[4/3] w-full object-cover" />
-                    <figcaption className="px-2 py-1 text-[11px] text-[var(--ink-3)]">
+                    <span className="block px-2 py-1 text-[11px] text-[var(--ink-3)]">
                       {new Date(evidencia.capturadaEm).toLocaleString('pt-BR')}
-                    </figcaption>
-                  </figure>
+                    </span>
+                  </button>
                 ))}
                 <label className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--r-md)] border border-dashed border-[var(--line)] bg-[var(--surface-2)] text-[13px] font-semibold text-[var(--brand-hover)] hover:bg-[var(--brand-soft)]">
                   <Camera className="h-6 w-6" />
@@ -380,17 +493,23 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                   <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleEvidence} disabled={busy} />
                 </label>
               </div>
-              <p className="mt-2 text-[12px] text-[var(--ink-3)]">
-                Fotos da câmera do celular são aceitas (até {formatEvidenceSizeLimitMb()}). Imagens grandes são otimizadas
-                automaticamente antes do envio.
-              </p>
+              {!impedimento ? (
+                <p className="mt-2 text-[12px] text-[var(--ink-3)]">
+                  Fotos da câmera do celular são aceitas (até {formatEvidenceSizeLimitMb()}). Imagens grandes são otimizadas
+                  automaticamente antes do envio.
+                </p>
+              ) : (
+                <p className="mt-2 text-[12px] text-[var(--ink-3)]">
+                  Você pode anexar fotos que documentem o impedimento, mas não é obrigatório.
+                </p>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2">
               <Button variant="ghost" onClick={() => setStep('chegada')}>
                 Voltar
               </Button>
-              <Button variant="filled" onClick={() => setStep('encerramento')} disabled={relatorio.trim().length < 10 || evidencias.length < 1}>
+              <Button variant="filled" onClick={handleIrParaEncerramento} disabled={!execucaoPreenchida}>
                 Ir para encerramento
               </Button>
             </div>
@@ -403,54 +522,69 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-[var(--brand)]" />
-              Encerramento
+              Revisão e encerramento
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 pt-0">
             <p className="text-[14px] text-[var(--ink-2)]">
-              Revise o relatório e as evidências. Conclua a execução ou registre um impedimento se não foi possível
-              finalizar o serviço.
+              Confira os dados registrados na execução. Se estiver tudo correto, conclua o chamado.
             </p>
 
-            <label className="flex items-start gap-3 rounded-[var(--r-md)] border border-[var(--line-2)] px-3 py-3">
-              <input
-                type="checkbox"
-                checked={impedimento}
-                onChange={(event) => setImpedimento(event.target.checked)}
-                className="mt-1"
-              />
-              <span>
-                <span className="block text-[14px] font-semibold text-[var(--ink)]">Registrar impedimento</span>
-                <span className="block text-[13px] text-[var(--ink-3)]">Use quando faltar peça, acesso ou condição para concluir agora.</span>
-              </span>
-            </label>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13px] font-semibold text-[var(--ink-3)]">Resultado:</span>
+              {impedimento ? (
+                <Badge variant="warning">
+                  <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
+                  Impedimento registrado
+                </Badge>
+              ) : (
+                <Badge variant="ok">
+                  <CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />
+                  Serviço executado
+                </Badge>
+              )}
+            </div>
 
-            {impedimento ? (
-              <Field label="Motivo do impedimento">
-                <textarea
-                  value={impedimentoMotivo}
-                  onChange={(event) => setImpedimentoMotivo(event.target.value)}
-                  rows={3}
-                  className="w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2.5 text-[14px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
-                />
-              </Field>
-            ) : null}
+            <div className="rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)] px-4 py-3">
+              <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">
+                {impedimento ? 'Descrição do impedimento' : 'Relatório da execução'}
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-[var(--ink)]">{relatorioFinal || '—'}</p>
+            </div>
 
-            <div className="rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)] px-4 py-3 text-[13px] text-[var(--ink-2)]">
-              <p className="font-semibold text-[var(--ink)]">Resumo</p>
-              <p className="mt-2 line-clamp-4 whitespace-pre-wrap">{relatorio || '—'}</p>
-              <p className="mt-2 text-[var(--ink-3)]">{evidencias.length} evidência(s) anexada(s)</p>
+            <div>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-[13px] font-semibold text-[var(--ink)]">Evidências fotográficas</p>
+                <Badge variant={evidencias.length > 0 ? 'ok' : 'neutral'}>{evidencias.length} foto(s)</Badge>
+              </div>
+              {evidencias.length === 0 ? (
+                <p className="rounded-[var(--r-md)] border border-dashed border-[var(--line)] px-4 py-6 text-center text-[13px] text-[var(--ink-3)]">
+                  Nenhuma foto anexada.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {evidencias.map((evidencia) => (
+                    <button
+                      key={evidencia.id}
+                      type="button"
+                      onClick={() => setPreviewEvidenceUrl(evidencia.url)}
+                      className="group overflow-hidden rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)] text-left transition-shadow hover:shadow-[var(--sh-sm)]"
+                    >
+                      <AuthenticatedImage src={evidencia.url} alt="Evidência da execução" className="aspect-[4/3] w-full object-cover" />
+                      <span className="block px-2 py-1.5 text-[11px] text-[var(--brand-hover)] group-hover:underline">
+                        Abrir foto · {new Date(evidencia.capturadaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2">
               <Button variant="ghost" onClick={() => setStep('registro')}>
-                Voltar
+                Voltar e editar
               </Button>
-              <Button
-                variant={impedimento ? 'outlined' : 'filled'}
-                onClick={handleConcluir}
-                disabled={busy}
-              >
+              <Button variant={impedimento ? 'outlined' : 'filled'} onClick={handleConcluir} disabled={busy}>
                 {busy ? (
                   <LoaderCircle className="h-4 w-4 animate-spin" />
                 ) : impedimento ? (
@@ -458,7 +592,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                 ) : (
                   <CheckCircle2 className="h-4 w-4" />
                 )}
-                {impedimento ? 'Registrar impedimento' : 'Concluir execução'}
+                {impedimento ? 'Confirmar impedimento' : 'Confirmar conclusão'}
               </Button>
             </div>
           </CardContent>

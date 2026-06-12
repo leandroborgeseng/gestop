@@ -412,7 +412,7 @@ export class ChamadosService {
     }
 
     const evidenciasCount = await this.countEvidenciasExecucaoCampo(id);
-    if (evidenciasCount < 1) {
+    if (!dto.impedimento && evidenciasCount < 1) {
       throw new BadRequestException('Registre ao menos uma evidência fotográfica da execução em campo.');
     }
 
