@@ -1,7 +1,7 @@
-import { createProxyHandlers, proxyRouteConfig } from '@/lib/backend-proxy';
+import { createProxyHandlers } from '@/lib/backend-proxy';
 
-export const runtime = proxyRouteConfig.runtime;
-export const dynamic = proxyRouteConfig.dynamic;
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 /** Alias legado — mantido ate todos os clientes usarem /api-sigma. */
 export const { GET, POST, PUT, PATCH, DELETE } = createProxyHandlers();

@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveBackendUrl } from '@/lib/backend-url';
 
-export const proxyRouteConfig = {
-  runtime: 'nodejs' as const,
-  dynamic: 'force-dynamic' as const,
-};
-
 export async function proxyToBackend(request: NextRequest, pathSegments: string[]) {
   const backendUrl = resolveBackendUrl();
   const path = pathSegments.join('/');
