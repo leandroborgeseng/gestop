@@ -20,6 +20,7 @@ import {
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
 import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
+import { AuthenticatedImage } from '@/components/ui/authenticated-image';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Badge } from '@/components/ui/badge';
@@ -775,22 +776,19 @@ function ChamadoDetailPanel({
           {resumo.unidade?.endereco || resumo.enderecoTexto ? (
             <div>
               <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Endereço</p>
-              <p className="mt-1 text-[13px] text-[var(--ink-2)]">{resumo.unidade?.endereco ?? resumo.enderecoTexto}</p>
+              <p className="mt-1 text-[13px] text-[var(--ink-2)]">
+                {resumo.unidade?.endereco ?? resumo.enderecoTexto}
+                {resumo.enderecoBairro ? ` · ${resumo.enderecoBairro}` : ''}
+              </p>
             </div>
           ) : null}
 
           {resumo.fotoUrl ? (
             <div>
               <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Foto anexada</p>
-              <a
-                href={resumo.fotoUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 block overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={resumo.fotoUrl} alt="Foto do chamado" className="max-h-56 w-full object-cover" />
-              </a>
+              <div className="mt-2 overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]">
+                <AuthenticatedImage src={resumo.fotoUrl} alt="Foto do chamado" className="max-h-56 w-full object-cover" />
+              </div>
             </div>
           ) : null}
 

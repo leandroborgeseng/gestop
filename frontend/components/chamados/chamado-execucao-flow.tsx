@@ -605,8 +605,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
             <CardTitle className="text-[15px]">Foto original do chamado</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={detail.fotoUrl} alt="Foto do chamado" className="max-h-64 w-full rounded-[var(--r-md)] object-cover" />
+            <AuthenticatedImage src={detail.fotoUrl} alt="Foto do chamado" className="max-h-64 w-full rounded-[var(--r-md)] object-cover" />
           </CardContent>
         </Card>
       ) : null}

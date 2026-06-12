@@ -9,6 +9,7 @@ import {
   Crosshair,
   Loader2,
   MapPin,
+  RefreshCw,
   Search,
   X,
 } from 'lucide-react';
@@ -21,11 +22,16 @@ import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { createChamado, getSecretarias, getUnidades } from '@/lib/api';
 import { captureCurrentPosition } from '@/lib/geolocation';
-import { searchAddresses } from '@/lib/geocoding';
+import {
+  composeEnderecoTexto,
+  geocodeStructuredAddress,
+  reverseGeocodeAddress,
+  searchAddresses,
+} from '@/lib/geocoding';
 import { UnidadeOperacional } from '@/lib/types';
 
 const PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
-type ModoLocalizacao = 'UNIDADE' | 'GEOLOCALIZACAO' | 'ENDERECO';
+type ModoLocalizacao = 'UNIDADE' | 'ENDERECO';
 
 const textareaClass =
   'min-h-[96px] w-full resize-y rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-[11px] py-2 text-[13px] text-[var(--ink)] transition-all duration-[var(--md-duration-short)] placeholder:text-[var(--ink-4)] hover:border-[#cdd8e6] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)] disabled:cursor-not-allowed disabled:opacity-50';
@@ -44,7 +50,7 @@ export function AbrirChamadoForm({
   const router = useRouter();
   const snackbar = useSnackbar();
 
-  const [modo, setModo] = useState<ModoLocalizacao>(initialUnidadeId ? 'UNIDADE' : 'GEOLOCALIZACAO');
+  const [modo, setModo] = useState<ModoLocalizacao>(initialUnidadeId ? 'UNIDADE' : 'ENDERECO');
   const [descricao, setDescricao] = useState('');
   const [prioridade, setPrioridade] = useState<(typeof PRIORIDADES)[number]>('MEDIA');
   const [solicitanteNome, setSolicitanteNome] = useState('');
@@ -54,12 +60,26 @@ export function AbrirChamadoForm({
   );
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
-  const [enderecoTexto, setEnderecoTexto] = useState('');
-  const [enderecoBairro, setEnderecoBairro] = useState('');
+  const [logradouro, setLogradouro] = useState('');
+  const [numero, setNumero] = useState('');
+  const [complemento, setComplemento] = useState('');
+  const [bairro, setBairro] = useState('');
+  const [cidade, setCidade] = useState('Franca');
   const [addressQuery, setAddressQuery] = useState('');
-  const [addressResults, setAddressResults] = useState<Array<{ label: string; latitude: number; longitude: number; bairro?: string | null }>>([]);
+  const [addressResults, setAddressResults] = useState<
+    Array<{
+      label: string;
+      latitude: number;
+      longitude: number;
+      bairro?: string | null;
+      logradouro?: string | null;
+      numero?: string | null;
+      cidade?: string | null;
+    }>
+  >([]);
   const [addressSearching, setAddressSearching] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
+  const [pinUpdating, setPinUpdating] = useState(false);
   const [fotoDataUrl, setFotoDataUrl] = useState<string | null>(null);
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [fotoGeo, setFotoGeo] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -70,6 +90,11 @@ export function AbrirChamadoForm({
   const [pickerSearch, setPickerSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const enderecoComposto = useMemo(
+    () => composeEnderecoTexto({ logradouro, numero, complemento, cidade }),
+    [logradouro, numero, complemento, cidade],
+  );
 
   useEffect(() => {
     getSecretarias()
@@ -131,6 +156,25 @@ export function AbrirChamadoForm({
       .slice(0, 80);
   }, [pickerSearch, unidades]);
 
+  function applyAddressFields(item: {
+    label: string;
+    latitude: number;
+    longitude: number;
+    bairro?: string | null;
+    logradouro?: string | null;
+    numero?: string | null;
+    cidade?: string | null;
+  }) {
+    setLogradouro(item.logradouro ?? item.label.split(',')[0]?.trim() ?? '');
+    setNumero(item.numero ?? '');
+    setBairro(item.bairro ?? '');
+    setCidade(item.cidade ?? 'Franca');
+    setLatitude(item.latitude);
+    setLongitude(item.longitude);
+    setAddressQuery(item.label);
+    setAddressResults([]);
+  }
+
   async function handleCaptureGeo() {
     setGeoLoading(true);
     setError(null);
@@ -138,13 +182,48 @@ export function AbrirChamadoForm({
       const position = await captureCurrentPosition();
       setLatitude(position.latitude);
       setLongitude(position.longitude);
-      if (modo === 'GEOLOCALIZACAO' && !fotoGeo) {
+
+      const parsed = await reverseGeocodeAddress(position.latitude, position.longitude);
+      if (parsed) {
+        setLogradouro(parsed.logradouro);
+        setNumero(parsed.numero);
+        setComplemento(parsed.complemento);
+        setBairro(parsed.bairro);
+        setCidade(parsed.cidade || 'Franca');
+        setAddressQuery(composeEnderecoTexto(parsed));
+      }
+
+      if (!fotoGeo) {
         setFotoGeo({ latitude: position.latitude, longitude: position.longitude });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível obter a localização.');
     } finally {
       setGeoLoading(false);
+    }
+  }
+
+  async function handleUpdatePinFromAddress() {
+    if (!logradouro.trim()) {
+      setError('Informe o logradouro antes de atualizar o pin.');
+      return;
+    }
+
+    setPinUpdating(true);
+    setError(null);
+    try {
+      const coords = await geocodeStructuredAddress({ logradouro, numero, bairro, cidade });
+      if (!coords) {
+        setError('Endereço não encontrado. Confira logradouro, número e bairro.');
+        return;
+      }
+      setLatitude(coords.latitude);
+      setLongitude(coords.longitude);
+      snackbar.show('Pin atualizado conforme o endereço informado.', 'success');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível localizar o endereço.');
+    } finally {
+      setPinUpdating(false);
     }
   }
 
@@ -176,22 +255,20 @@ export function AbrirChamadoForm({
           : undefined,
       );
       setFotoGeo({ latitude: position.latitude, longitude: position.longitude });
-      if (modo !== 'UNIDADE' && latitude == null) {
+      if (modo === 'ENDERECO' && latitude == null) {
         setLatitude(position.latitude);
         setLongitude(position.longitude);
+        const parsed = await reverseGeocodeAddress(position.latitude, position.longitude);
+        if (parsed && !logradouro.trim()) {
+          setLogradouro(parsed.logradouro);
+          setNumero(parsed.numero);
+          setBairro(parsed.bairro);
+          setCidade(parsed.cidade || 'Franca');
+        }
       }
     } catch {
       // Foto sem GPS — operador pode definir no mapa depois.
     }
-  }
-
-  function selectAddress(item: { label: string; latitude: number; longitude: number; bairro?: string | null }) {
-    setEnderecoTexto(item.label);
-    setEnderecoBairro(item.bairro ?? '');
-    setLatitude(item.latitude);
-    setLongitude(item.longitude);
-    setAddressQuery(item.label);
-    setAddressResults([]);
   }
 
   async function handleSubmit(event: FormEvent) {
@@ -203,13 +280,13 @@ export function AbrirChamadoForm({
       return;
     }
 
-    if (modo !== 'UNIDADE') {
-      if (latitude == null || longitude == null) {
-        setError('Confirme a localização no mapa ou capture o GPS.');
+    if (modo === 'ENDERECO') {
+      if (!logradouro.trim()) {
+        setError('Informe o logradouro.');
         return;
       }
-      if (modo === 'ENDERECO' && !enderecoTexto.trim()) {
-        setError('Informe o endereço do chamado.');
+      if (latitude == null || longitude == null) {
+        setError('Confirme a localização no mapa ou use "Atualizar pin no mapa".');
         return;
       }
       if (!secretariaId) {
@@ -223,11 +300,11 @@ export function AbrirChamadoForm({
       const chamado = await createChamado({
         modoLocalizacao: modo,
         unidadeId: pickedUnidade?.id,
-        secretariaId: modo !== 'UNIDADE' ? secretariaId : undefined,
-        latitude: modo !== 'UNIDADE' ? latitude ?? undefined : undefined,
-        longitude: modo !== 'UNIDADE' ? longitude ?? undefined : undefined,
-        enderecoTexto: modo === 'ENDERECO' ? enderecoTexto.trim() : undefined,
-        enderecoBairro: modo === 'ENDERECO' ? enderecoBairro.trim() || undefined : undefined,
+        secretariaId: modo === 'ENDERECO' ? secretariaId : undefined,
+        latitude: modo === 'ENDERECO' ? latitude ?? undefined : undefined,
+        longitude: modo === 'ENDERECO' ? longitude ?? undefined : undefined,
+        enderecoTexto: modo === 'ENDERECO' ? enderecoComposto : undefined,
+        enderecoBairro: modo === 'ENDERECO' ? bairro.trim() || undefined : undefined,
         descricao: descricao.trim(),
         prioridade,
         origem: 'MANUAL',
@@ -253,12 +330,6 @@ export function AbrirChamadoForm({
             <span className="inline-flex items-center gap-1.5">
               <Building2 className="h-3.5 w-3.5" />
               Por próprio
-            </span>
-          </Chip>
-          <Chip active={modo === 'GEOLOCALIZACAO'} onClick={() => setModo('GEOLOCALIZACAO')}>
-            <span className="inline-flex items-center gap-1.5">
-              <Crosshair className="h-3.5 w-3.5" />
-              Por geolocalização
             </span>
           </Chip>
           <Chip active={modo === 'ENDERECO'} onClick={() => setModo('ENDERECO')}>
@@ -319,29 +390,100 @@ export function AbrirChamadoForm({
         )
       ) : null}
 
-      {modo === 'GEOLOCALIZACAO' ? (
+      {modo === 'ENDERECO' ? (
         <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] p-3">
-          <p className="text-[13px] text-[var(--ink-3)]">
-            Autorize a localização do dispositivo para registrar o ponto exato — ideal para tapa-buraco e ocorrências em via pública.
-          </p>
-          <Button type="button" variant="outlined" size="sm" disabled={busy || geoLoading} onClick={() => void handleCaptureGeo()}>
-            {geoLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Obtendo GPS...
-              </>
-            ) : (
-              <>
-                <Crosshair className="h-4 w-4" />
-                Usar minha localização
-              </>
-            )}
-          </Button>
-          {latitude != null && longitude != null ? (
-            <p className="mono text-[12px] text-[var(--ink-3)]">
-              {latitude.toFixed(6)}, {longitude.toFixed(6)}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outlined" size="sm" disabled={busy || geoLoading} onClick={() => void handleCaptureGeo()}>
+              {geoLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Obtendo GPS...
+                </>
+              ) : (
+                <>
+                  <Crosshair className="h-4 w-4" />
+                  Usar minha localização
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outlined"
+              size="sm"
+              disabled={busy || pinUpdating || !logradouro.trim()}
+              onClick={() => void handleUpdatePinFromAddress()}
+            >
+              {pinUpdating ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Localizando...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4" />
+                  Atualizar pin no mapa
+                </>
+              )}
+            </Button>
+          </div>
+
+          <Field label="Buscar endereço" hint="Digite rua e número para sugerir endereços em Franca.">
+            <Input
+              value={addressQuery}
+              onChange={(event) => setAddressQuery(event.target.value)}
+              placeholder="Ex.: Av. Rio Amazonas"
+              disabled={busy}
+            />
+          </Field>
+          {addressSearching ? <p className="text-[12px] text-[var(--ink-3)]">Buscando endereços...</p> : null}
+          {addressResults.length > 0 ? (
+            <div className="max-h-40 space-y-1 overflow-y-auto rounded-[var(--r-sm)] border border-[var(--line-2)] p-1">
+              {addressResults.map((item) => (
+                <button
+                  key={`${item.latitude}-${item.longitude}-${item.label}`}
+                  type="button"
+                  onClick={() => applyAddressFields(item)}
+                  className="block w-full rounded-[var(--r-sm)] px-3 py-2 text-left text-[13px] hover:bg-[var(--surface-2)]"
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Logradouro">
+              <Input value={logradouro} onChange={(event) => setLogradouro(event.target.value)} placeholder="Rua, avenida..." disabled={busy} required />
+            </Field>
+            <Field label="Número">
+              <Input value={numero} onChange={(event) => setNumero(event.target.value)} placeholder="Ex.: 1000" disabled={busy} />
+            </Field>
+            <Field label="Complemento">
+              <Input value={complemento} onChange={(event) => setComplemento(event.target.value)} placeholder="Apto, bloco, referência..." disabled={busy} />
+            </Field>
+            <Field label="Bairro">
+              <Input value={bairro} onChange={(event) => setBairro(event.target.value)} placeholder="Bairro" disabled={busy} />
+            </Field>
+            <Field label="Cidade" className="sm:col-span-2">
+              <Input value={cidade} onChange={(event) => setCidade(event.target.value)} placeholder="Franca" disabled={busy} />
+            </Field>
+          </div>
+
+          {enderecoComposto ? (
+            <p className="text-[12px] text-[var(--ink-3)]">
+              Endereço registrado: <strong className="text-[var(--ink)]">{enderecoComposto}</strong>
+              {bairro.trim() ? ` · ${bairro.trim()}` : ''}
             </p>
           ) : null}
+
+          {latitude != null && longitude != null ? (
+            <p className="mono text-[12px] text-[var(--ink-3)]">
+              Pin: {latitude.toFixed(6)}, {longitude.toFixed(6)}
+            </p>
+          ) : (
+            <p className="text-[12px] text-[var(--warn)]">Defina o pin no mapa ou use os botões acima.</p>
+          )}
+
           <ChamadoLocationMapPicker
             latitude={latitude}
             longitude={longitude}
@@ -354,52 +496,6 @@ export function AbrirChamadoForm({
       ) : null}
 
       {modo === 'ENDERECO' ? (
-        <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] p-3">
-          <Field label="Endereço" hint="Busque no mapa ou digite rua e número em Franca.">
-            <Input
-              value={addressQuery}
-              onChange={(event) => setAddressQuery(event.target.value)}
-              placeholder="Ex.: Av. Rio Amazonas, 1000"
-              disabled={busy}
-            />
-          </Field>
-          {addressSearching ? (
-            <p className="text-[12px] text-[var(--ink-3)]">Buscando endereços...</p>
-          ) : null}
-          {addressResults.length > 0 ? (
-            <div className="max-h-40 space-y-1 overflow-y-auto rounded-[var(--r-sm)] border border-[var(--line-2)] p-1">
-              {addressResults.map((item) => (
-                <button
-                  key={`${item.latitude}-${item.longitude}`}
-                  type="button"
-                  onClick={() => selectAddress(item)}
-                  className="block w-full rounded-[var(--r-sm)] px-3 py-2 text-left text-[13px] hover:bg-[var(--surface-2)]"
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <Field label="Endereço confirmado">
-            <Input
-              value={enderecoTexto}
-              onChange={(event) => setEnderecoTexto(event.target.value)}
-              placeholder="Confirme ou ajuste o endereço"
-              disabled={busy}
-            />
-          </Field>
-          <ChamadoLocationMapPicker
-            latitude={latitude}
-            longitude={longitude}
-            onChange={({ latitude: lat, longitude: lng }) => {
-              setLatitude(lat);
-              setLongitude(lng);
-            }}
-          />
-        </div>
-      ) : null}
-
-      {modo !== 'UNIDADE' ? (
         <Field label="Secretaria responsável">
           <Select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} disabled={busy}>
             <option value="">Selecione...</option>
