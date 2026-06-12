@@ -23,6 +23,7 @@ import {
   ChamadoEvidencia,
   ChamadoExecucaoDetalhe,
   ChamadosEmExecucaoResponse,
+  EquipeOpcaoResumo,
   PublicUnidadeChamado,
   SecretariaOption,
   UnidadeDetalhe,
@@ -532,6 +533,10 @@ export function updateChamadoStatus(
 
 export function listChamadoEquipes() {
   return request<EquipeOpcao[]>('/chamados/equipes/opcoes');
+}
+
+export function listEquipesExecucao() {
+  return request<EquipeOpcaoResumo[]>('/chamados/equipes/execucao');
 }
 
 export function updateChamadoAtribuicao(

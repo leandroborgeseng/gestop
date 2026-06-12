@@ -2,6 +2,7 @@ import {
   Activity,
   BarChart3,
   CalendarDays,
+  CirclePlay,
   ClipboardList,
   FileSpreadsheet,
   LayoutGrid,
@@ -57,9 +58,18 @@ export const NAV_ITEMS: NavItem[] = [
     shortLabel: 'Chamados',
     href: '/chamados',
     icon: Megaphone,
-    permissions: ['chamados.gerenciar', 'chamados.executar'],
+    permission: 'chamados.gerenciar',
     mobilePrimary: true,
     badgeKey: 'chamados',
+  },
+  {
+    id: 'execucao',
+    label: 'Execução',
+    shortLabel: 'Execução',
+    href: '/execucao',
+    icon: CirclePlay,
+    permissions: ['chamados.gerenciar', 'chamados.executar'],
+    mobilePrimary: true,
   },
   {
     id: 'dashboard',
@@ -111,7 +121,7 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export const NAV_GROUPS: NavGroup[] = [
-  { title: 'Operação', itemIds: ['cco', 'mobile', 'chamados'] },
+  { title: 'Operação', itemIds: ['cco', 'mobile', 'chamados', 'execucao'] },
   { title: 'Gestão', itemIds: ['dashboard', 'cronograma', 'relatorios'] },
   { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
 ];
@@ -161,8 +171,8 @@ export function isNavActive(pathname: string, href: string) {
     return pathname === '/chamados' || (pathname.startsWith('/chamados/') && !pathname.startsWith('/chamados/em-execucao'));
   }
 
-  if (href.startsWith('/chamados/em-execucao')) {
-    return pathname === href || pathname.startsWith(`${href}?`) || pathname.startsWith('/chamados/em-execucao');
+  if (href === '/execucao') {
+    return pathname === '/execucao' || pathname.startsWith('/execucao/') || pathname.startsWith('/chamados/em-execucao');
   }
 
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -176,8 +186,8 @@ export function hasChamadosExecutar(permissions: string[]) {
   return permissions.includes('chamados.executar') || permissions.includes('chamados.gerenciar');
 }
 
-export function isChamadosSectionActive(pathname: string) {
-  return pathname === '/chamados' || pathname.startsWith('/chamados/');
+export function isExecucaoSectionActive(pathname: string) {
+  return pathname === '/execucao' || pathname.startsWith('/execucao/') || pathname.startsWith('/chamados/em-execucao');
 }
 
 export const MORE_NAV_ICON = LayoutGrid;

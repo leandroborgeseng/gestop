@@ -102,7 +102,7 @@ export class ChamadosService {
     };
   }
 
-  listEquipesAtivas() {
+  async listEquipesAtivas() {
     return this.prisma.equipe.findMany({
       where: { ativo: true },
       orderBy: { nome: 'asc' },
@@ -115,6 +115,24 @@ export class ChamadosService {
             usuario: { select: { id: true, nome: true, ativo: true } },
           },
         },
+      },
+    });
+  }
+
+  async listEquipesParaExecucao(user: JwtPayload) {
+    const onlyExecutor =
+      !user.permissoes.includes('chamados.gerenciar') && user.permissoes.includes('chamados.executar');
+
+    return this.prisma.equipe.findMany({
+      where: {
+        ativo: true,
+        ...(onlyExecutor ? { membros: { some: { usuarioId: user.sub } } } : {}),
+      },
+      orderBy: { nome: 'asc' },
+      select: {
+        id: true,
+        nome: true,
+        secretaria: { select: { id: true, sigla: true } },
       },
     });
   }

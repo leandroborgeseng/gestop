@@ -221,6 +221,7 @@ export function resolveGuideKey(pathname: string): string {
   if (pathname.startsWith('/cco/unidades')) return 'unidade';
   if (pathname.startsWith('/cco')) return 'cco';
   if (pathname.startsWith('/mobile')) return 'mobile';
+  if (pathname.startsWith('/execucao') || pathname.startsWith('/chamados/em-execucao')) return 'chamados';
   if (pathname.startsWith('/chamados')) return 'chamados';
   if (pathname.startsWith('/ordens-servico')) return 'chamados';
   if (pathname.startsWith('/dashboard')) return 'dashboard';

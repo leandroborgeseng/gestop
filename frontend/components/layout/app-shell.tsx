@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -18,7 +18,6 @@ import { cn } from '@/lib/cn';
 import { getAlertasOperacionais, getResumoOperacional, logout } from '@/lib/api';
 import { buildNavBadges, resolveGlobalSearchRoute, type NavBadges } from '@/lib/nav-badges';
 import { getGroupedNavItems, getMobileNav, getVisibleNavItems, isNavActive, MORE_NAV_ICON, type NavItem } from '@/lib/navigation';
-import { ChamadosNavSection } from '@/components/chamados/chamados-nav-section';
 import { useGuide } from '@/components/help/guide-provider';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
@@ -146,16 +145,7 @@ function DesktopSidebar({
                 •••
               </div>
             )}
-            {group.items.map((item) =>
-              item.id === 'chamados' ? (
-                <Suspense key={item.id} fallback={<NavLink item={item} active={isNavActive(pathname, item.href)} collapsed={collapsed} badge={item.badgeKey ? badges[item.badgeKey] : undefined} />}>
-                  <ChamadosNavSection
-                    item={item}
-                    collapsed={collapsed}
-                    badge={item.badgeKey ? badges[item.badgeKey] : undefined}
-                  />
-                </Suspense>
-              ) : (
+            {group.items.map((item) => (
                 <NavLink
                   key={item.id}
                   item={item}
@@ -163,8 +153,7 @@ function DesktopSidebar({
                   collapsed={collapsed}
                   badge={item.badgeKey ? badges[item.badgeKey] : undefined}
                 />
-              ),
-            )}
+              ))}
           </div>
         ))}
       </nav>
@@ -243,7 +232,7 @@ function DesktopTopbar({ syncPending }: { syncPending: number }) {
   }
 
   useEffect(() => {
-    if (pathname.startsWith('/cco') || pathname.startsWith('/chamados') || pathname.startsWith('/ordens-servico')) {
+    if (pathname.startsWith('/cco') || pathname.startsWith('/chamados') || pathname.startsWith('/execucao') || pathname.startsWith('/ordens-servico')) {
       return;
     }
     setQuery('');
@@ -413,16 +402,7 @@ export function MobileBottomNav({
 
       <Sheet open={moreOpen} onClose={() => onMoreOpen(false)} title="Mais opções">
         <div className="space-y-1">
-          {secondary.map((item) =>
-            item.id === 'chamados' ? (
-              <Suspense key={item.id} fallback={<NavLink item={item} active={isNavActive(pathname, item.href)} badge={item.badgeKey ? badges[item.badgeKey] : undefined} onClick={() => onMoreOpen(false)} />}>
-                <ChamadosNavSection
-                  item={item}
-                  collapsed={false}
-                  badge={item.badgeKey ? badges[item.badgeKey] : undefined}
-                />
-              </Suspense>
-            ) : (
+          {secondary.map((item) => (
               <NavLink
                 key={item.id}
                 item={item}
@@ -430,8 +410,7 @@ export function MobileBottomNav({
                 badge={item.badgeKey ? badges[item.badgeKey] : undefined}
                 onClick={() => onMoreOpen(false)}
               />
-            ),
-          )}
+            ))}
           <button
             type="button"
             onClick={openGuide}

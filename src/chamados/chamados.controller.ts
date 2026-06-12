@@ -27,6 +27,12 @@ export class ChamadosController {
   }
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
+  @Get('equipes/execucao')
+  listEquipesExecucao(@CurrentUser() user: JwtPayload) {
+    return this.chamadosService.listEquipesParaExecucao(user);
+  }
+
+  @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
   @Get('em-execucao')
   listEmExecucaoPorEquipe(@CurrentUser() user: JwtPayload) {
     return this.chamadosService.listEmExecucaoPorEquipe(user);

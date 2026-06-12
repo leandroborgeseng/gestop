@@ -210,10 +210,13 @@ export type AdminEquipe = {
   _count?: { chamados: number };
 };
 
-export type EquipeOpcao = {
+export type EquipeOpcaoResumo = {
   id: string;
   nome: string;
   secretaria?: SecretariaOption | null;
+};
+
+export type EquipeOpcao = EquipeOpcaoResumo & {
   membros: Array<{
     usuario: { id: string; nome: string; ativo: boolean };
   }>;

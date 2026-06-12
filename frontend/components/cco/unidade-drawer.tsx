@@ -292,7 +292,7 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
       {items.map((chamado) => {
         const href =
           chamado.status === 'EM_EXECUCAO'
-            ? `/chamados/em-execucao/${chamado.id}`
+            ? `/execucao/${chamado.id}`
             : `/chamados?id=${chamado.id}`;
 
         return (

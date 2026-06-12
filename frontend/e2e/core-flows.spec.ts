@@ -43,7 +43,7 @@ test.describe('Fluxo autenticado', () => {
     await page.getByLabel(/e-mail/i).fill(adminEmail!);
     await page.getByLabel(/senha/i).fill(adminPassword!);
     await page.getByRole('button', { name: /entrar/i }).click();
-    await page.goto('/chamados/em-execucao');
+    await page.goto('/execucao');
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page.locator('body')).toContainText(/execu/i);
   });

@@ -221,7 +221,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
         impedimentoMotivo: impedimento ? impedimentoMotivo.trim() : undefined,
       });
       snackbar.show(impedimento ? 'Impedimento registrado.' : 'Execução concluída com sucesso.', 'success');
-      router.push('/chamados/em-execucao');
+      router.push('/execucao');
       router.refresh();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Falha ao encerrar execução.';
