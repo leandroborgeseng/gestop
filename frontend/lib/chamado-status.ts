@@ -88,19 +88,30 @@ export function prazoInfo(prazoEm: string | null | undefined, status: string) {
 }
 
 export type ChamadoTimelineStep = {
+  id?: string;
   title: string;
   date: string;
   sub?: string;
   done: boolean;
   active: boolean;
+  expand?: {
+    descricao?: string;
+    alteracoes?: Array<{ campo: string; label: string; de: string; para: string }>;
+    anexos?: Array<{ id: string; url: string; mimeType?: string | null; nome?: string | null }>;
+    usuario?: string;
+    dataHora?: string;
+  };
 };
 
 export type ChamadoHistoricoEntry = {
+  id?: string;
   statusAnterior?: string | null;
   statusNovo: string;
   motivo?: string | null;
   createdAt: string;
   alteradoPor?: { nome: string } | null;
+  metadata?: Record<string, unknown> | null;
+  anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null }>;
 };
 
 function formatTimelineDate(value?: string | null) {
@@ -126,6 +137,51 @@ export function buildChamadoTimelineFromHistorico(
 
   return historico.map((entry, index) => {
     const isLast = index === historico.length - 1;
+    const metadata = entry.metadata ?? {};
+    const tipo = typeof metadata.tipo === 'string' ? metadata.tipo : null;
+
+    if (tipo === 'HISTORY_UPDATE') {
+      return {
+        id: entry.id,
+        title: 'Atualização de histórico',
+        date: formatTimelineDate(entry.createdAt),
+        done: true,
+        active: false,
+        expand: {
+          descricao: typeof metadata.descricao === 'string' ? metadata.descricao : undefined,
+          anexos: (entry.anexos ?? []).map((item) => ({
+            id: item.id,
+            url: item.url,
+            mimeType: item.mimeType,
+            nome: item.descricao,
+          })),
+          usuario: entry.alteradoPor?.nome,
+          dataHora: formatTimelineDate(entry.createdAt),
+        },
+      };
+    }
+
+    if (tipo === 'programacao_update' || entry.motivo === 'Programação de execução atualizada.') {
+      const alteracoes = Array.isArray(metadata.alteracoes)
+        ? (metadata.alteracoes as Array<{ campo: string; label: string; de: string; para: string }>)
+        : [];
+      return {
+        id: entry.id,
+        title: 'Programação de execução atualizada',
+        date: formatTimelineDate(entry.createdAt),
+        sub: entry.alteradoPor?.nome,
+        done: true,
+        active: false,
+        expand: alteracoes.length
+          ? {
+              alteracoes,
+              usuario: entry.alteradoPor?.nome,
+              dataHora: formatTimelineDate(entry.createdAt),
+            }
+          : undefined,
+      };
+    }
+
     const assignmentOnly = entry.statusAnterior && entry.statusAnterior === entry.statusNovo;
     const title = assignmentOnly
       ? 'Atribuição atualizada'
@@ -135,6 +191,7 @@ export function buildChamadoTimelineFromHistorico(
     const sub = [entry.alteradoPor?.nome, entry.motivo].filter(Boolean).join(' · ');
 
     return {
+      id: entry.id,
       title,
       date: formatTimelineDate(entry.createdAt),
       sub: sub || undefined,

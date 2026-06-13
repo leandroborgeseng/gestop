@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, Download, MapPin, Shield, UserRound, UsersRound } from 'lucide-react';
+import { Building2, ClipboardList, Download, MapPin, Shield, UserRound, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
 import { PageShell } from '@/components/layout/page-shell';
@@ -30,19 +30,22 @@ import {
   listAdminEquipes,
   listAdminPerfis,
   listAdminSecretarias,
+  listAdminTiposChamado,
   listAdminUnidades,
   listAdminUsuarios,
   saveAdminEquipe,
   saveAdminSecretaria,
+  saveAdminTipoChamado,
   saveAdminUnidade,
   saveAdminUsuario,
+  deleteAdminTipoChamado,
   anonymizeUsuarioLgpd,
   purgeAuditoriaLgpd,
 } from '@/lib/api';
-import { AdminEquipe, AdminPerfil, AdminSecretaria, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
+import { AdminEquipe, AdminPerfil, AdminSecretaria, AdminTipoChamado, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 
-type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'importacao';
+type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'tipos-chamado' | 'importacao';
 
 const tipos: UnidadeTipo[] = ['ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO', 'ESPACO_ESPORTIVO', 'OUTRO'];
 
@@ -53,6 +56,7 @@ export default function AdminPage() {
   const [unidades, setUnidades] = useState<AdminUnidade[]>([]);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
   const [equipes, setEquipes] = useState<AdminEquipe[]>([]);
+  const [tiposChamado, setTiposChamado] = useState<AdminTipoChamado[]>([]);
   const [perfis, setPerfis] = useState<AdminPerfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -62,18 +66,20 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextSecretarias, nextUnidades, nextUsuarios, nextEquipes, nextPerfis] = await Promise.all([
+      const [nextSecretarias, nextUnidades, nextUsuarios, nextEquipes, nextPerfis, nextTiposChamado] = await Promise.all([
         listAdminSecretarias(),
         listAdminUnidades(),
         listAdminUsuarios(),
         listAdminEquipes(),
         listAdminPerfis(),
+        listAdminTiposChamado(),
       ]);
       setSecretarias(nextSecretarias);
       setUnidades(nextUnidades);
       setUsuarios(nextUsuarios);
       setEquipes(nextEquipes);
       setPerfis(nextPerfis);
+      setTiposChamado(nextTiposChamado);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar administração.');
     } finally {
@@ -127,6 +133,7 @@ export default function AdminPage() {
               { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" />, count: unidades.length },
               { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" />, count: usuarios.length },
               { id: 'equipes', label: 'Equipes', icon: <UsersRound className="h-4 w-4" />, count: equipes.length },
+              { id: 'tipos-chamado', label: 'Tipos de chamado', icon: <ClipboardList className="h-4 w-4" />, count: tiposChamado.length },
               { id: 'importacao', label: 'Importação', icon: <Download className="h-4 w-4" /> },
             ]}
           />
@@ -145,6 +152,9 @@ export default function AdminPage() {
         ) : null}
         {!loading && tab === 'equipes' ? (
           <EquipesPanel secretarias={secretarias} usuarios={usuarios} equipes={equipes} mutate={mutate} />
+        ) : null}
+        {!loading && tab === 'tipos-chamado' ? (
+          <TiposChamadoPanel tipos={tiposChamado} mutate={mutate} />
         ) : null}
         {!loading && tab === 'importacao' ? (
           <ImportacaoPanel onSynced={() => void load()} />
@@ -180,21 +190,31 @@ export default function AdminPage() {
 }
 
 function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretaria[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
+  const [editing, setEditing] = useState<AdminSecretaria | null>(null);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const isEdit = Boolean(editing);
     const ok = await mutate(
       () =>
-        saveAdminSecretaria({
-          nome: String(form.get('nome')),
-          sigla: String(form.get('sigla')),
-          responsavelNome: String(form.get('responsavelNome') || ''),
-          responsavelEmail: String(form.get('responsavelEmail') || ''),
-          ativo: true,
-        }),
-      'Secretaria cadastrada.',
+        saveAdminSecretaria(
+          {
+            nome: String(form.get('nome')),
+            sigla: String(form.get('sigla')),
+            descricao: String(form.get('descricao') || ''),
+            responsavelNome: String(form.get('responsavelNome') || ''),
+            responsavelEmail: String(form.get('responsavelEmail') || ''),
+            ativo: editing?.ativo ?? true,
+          },
+          editing?.id,
+        ),
+      isEdit ? 'Secretaria atualizada.' : 'Secretaria cadastrada.',
     );
-    if (ok) event.currentTarget.reset();
+    if (ok) {
+      setEditing(null);
+      event.currentTarget.reset();
+    }
   }
 
   return (
@@ -221,13 +241,21 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
       </DataTable>
 
       <FormGrid>
-      <FormSection title="Nova secretaria">
-        <form onSubmit={submit} className="space-y-4">
-          <Field label="Nome"><Input name="nome" required /></Field>
-          <Field label="Sigla"><Input name="sigla" required /></Field>
-          <Field label="Responsável"><Input name="responsavelNome" /></Field>
-          <Field label="E-mail do responsável"><Input name="responsavelEmail" type="email" /></Field>
-          <Button type="submit" variant="filled" className="w-full">Cadastrar secretaria</Button>
+      <FormSection title={editing ? 'Editar secretaria' : 'Nova secretaria'}>
+        <form key={editing?.id ?? 'new-secretaria'} onSubmit={submit} className="space-y-4">
+          <Field label="Nome"><Input name="nome" required defaultValue={editing?.nome} /></Field>
+          <Field label="Sigla"><Input name="sigla" required defaultValue={editing?.sigla} /></Field>
+          <Field label="Descrição"><Input name="descricao" defaultValue={editing?.descricao ?? ''} /></Field>
+          <Field label="Responsável"><Input name="responsavelNome" defaultValue={editing?.responsavelNome ?? ''} /></Field>
+          <Field label="E-mail do responsável"><Input name="responsavelEmail" type="email" defaultValue={editing?.responsavelEmail ?? ''} /></Field>
+          <div className="flex gap-2">
+            <Button type="submit" variant="filled" className="flex-1">{editing ? 'Salvar alterações' : 'Cadastrar secretaria'}</Button>
+            {editing ? (
+              <Button type="button" variant="text" onClick={() => setEditing(null)}>
+                Cancelar
+              </Button>
+            ) : null}
+          </div>
         </form>
       </FormSection>
       <FormSection title="Registros">
@@ -239,9 +267,16 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
               subtitle={secretaria.responsavelNome ?? 'Sem responsável'}
               active={secretaria.ativo}
               actions={
-                <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminSecretaria(secretaria.id), 'Secretaria inativada.')}>
-                  Inativar
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="text" size="sm" onClick={() => setEditing(secretaria)}>
+                    Editar
+                  </Button>
+                  {secretaria.ativo ? (
+                    <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminSecretaria(secretaria.id), 'Secretaria inativada.')}>
+                      Inativar
+                    </Button>
+                  ) : null}
+                </div>
               }
             />
           ))}
@@ -414,6 +449,8 @@ function equipePayloadFromForm(form: FormData, usuarioIds: string[], ativo: bool
     secretariaId: String(form.get('secretariaId') || ''),
     nome: String(form.get('nome')),
     descricao: String(form.get('descricao') || ''),
+    tipo: String(form.get('tipo') || 'PROPRIA'),
+    emailEquipe: String(form.get('emailEquipe')),
     usuarioIds,
     ativo,
   };
@@ -424,6 +461,8 @@ function equipePayloadFromRecord(equipe: AdminEquipe, ativo: boolean) {
     secretariaId: equipe.secretariaId ?? '',
     nome: equipe.nome,
     descricao: equipe.descricao ?? '',
+    tipo: equipe.tipo ?? 'PROPRIA',
+    emailEquipe: equipe.emailEquipe ?? '',
     usuarioIds: equipe.membros.map((item) => item.usuario.id),
     ativo,
   };
@@ -736,6 +775,15 @@ function EquipesPanel({
             <Field label="Descrição">
               <Input name="descricao" defaultValue={editing?.descricao ?? ''} placeholder="Opcional" />
             </Field>
+            <Field label="Tipo da equipe">
+              <Select name="tipo" defaultValue={editing?.tipo ?? 'PROPRIA'}>
+                <option value="PROPRIA">Própria</option>
+                <option value="TERCEIRIZADA">Terceirizada</option>
+              </Select>
+            </Field>
+            <Field label="E-mail da equipe">
+              <Input name="emailEquipe" type="email" required defaultValue={editing?.emailEquipe ?? ''} placeholder="equipe@franca.sp.gov.br" />
+            </Field>
             <Field label="Secretaria">
               <Select name="secretariaId" defaultValue={editing?.secretariaId ?? ''}>
                 <option value="">Sem secretaria</option>
@@ -808,6 +856,102 @@ function EquipesPanel({
                         Reativar
                       </Button>
                     )}
+                  </div>
+                }
+              />
+            ))}
+          </RecordList>
+        </FormSection>
+      </FormGrid>
+    </div>
+  );
+}
+
+function TiposChamadoPanel({
+  tipos,
+  mutate,
+}: {
+  tipos: AdminTipoChamado[];
+  mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState<AdminTipoChamado | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      nome: String(form.get('nome')),
+      descricao: String(form.get('descricao') || ''),
+      slaBaixaDias: Number(form.get('slaBaixaDias')),
+      slaMediaDias: Number(form.get('slaMediaDias')),
+      slaAltaDias: Number(form.get('slaAltaDias')),
+      slaUrgenteDias: Number(form.get('slaUrgenteDias')),
+      ativo: editing?.ativo ?? true,
+    };
+    const ok = await mutate(
+      () => saveAdminTipoChamado(payload, editing?.id),
+      editing ? 'Tipo de chamado atualizado.' : 'Tipo de chamado cadastrado.',
+    );
+    if (ok) {
+      setEditing(null);
+      event.currentTarget.reset();
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <DataTable>
+        <DataTableHead>
+          <DataTableHeaderCell>Nome</DataTableHeaderCell>
+          <DataTableHeaderCell>SLA Baixa/Média/Alta</DataTableHeaderCell>
+          <DataTableHeaderCell>Status</DataTableHeaderCell>
+        </DataTableHead>
+        <DataTableBody>
+          {tipos.map((tipo) => (
+            <DataTableRow key={tipo.id}>
+              <DataTableCell>{tipo.nome}</DataTableCell>
+              <DataTableCell mono>{tipo.slaBaixaDias}/{tipo.slaMediaDias}/{tipo.slaAltaDias}d</DataTableCell>
+              <DataTableCell>
+                <Badge variant={tipo.ativo ? 'success' : 'muted'}>{tipo.ativo ? 'Ativo' : 'Inativo'}</Badge>
+              </DataTableCell>
+            </DataTableRow>
+          ))}
+        </DataTableBody>
+      </DataTable>
+
+      <FormGrid>
+        <FormSection title={editing ? 'Editar tipo de chamado' : 'Novo tipo de chamado'}>
+          <form key={editing?.id ?? 'new-tipo'} onSubmit={submit} className="space-y-4">
+            <Field label="Nome"><Input name="nome" required defaultValue={editing?.nome} /></Field>
+            <Field label="Descrição"><Input name="descricao" defaultValue={editing?.descricao ?? ''} /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="SLA Baixa (dias)"><Input name="slaBaixaDias" type="number" min={1} required defaultValue={editing?.slaBaixaDias ?? 30} /></Field>
+              <Field label="SLA Média (dias)"><Input name="slaMediaDias" type="number" min={1} required defaultValue={editing?.slaMediaDias ?? 15} /></Field>
+              <Field label="SLA Alta (dias)"><Input name="slaAltaDias" type="number" min={1} required defaultValue={editing?.slaAltaDias ?? 7} /></Field>
+              <Field label="SLA Urgente (dias)"><Input name="slaUrgenteDias" type="number" min={1} required defaultValue={editing?.slaUrgenteDias ?? 3} /></Field>
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit" variant="filled" className="flex-1">{editing ? 'Salvar' : 'Cadastrar'}</Button>
+              {editing ? (
+                <Button type="button" variant="text" onClick={() => setEditing(null)}>Cancelar</Button>
+              ) : null}
+            </div>
+          </form>
+        </FormSection>
+        <FormSection title="Registros">
+          <RecordList empty="Nenhum tipo cadastrado.">
+            {tipos.map((tipo) => (
+              <RecordItem
+                key={tipo.id}
+                title={tipo.nome}
+                subtitle={tipo.descricao ?? 'Sem descrição'}
+                active={tipo.ativo}
+                actions={
+                  <div className="flex gap-2">
+                    <Button variant="text" size="sm" onClick={() => setEditing(tipo)}>Editar</Button>
+                    <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminTipoChamado(tipo.id), 'Tipo excluído.')}>
+                      Excluir
+                    </Button>
                   </div>
                 }
               />

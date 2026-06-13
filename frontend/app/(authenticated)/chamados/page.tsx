@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
+import { ChamadoHistoricoForm } from '@/components/chamados/chamado-historico-form';
 import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
 import { AuthenticatedImage } from '@/components/ui/authenticated-image';
 import { PageShell } from '@/components/layout/page-shell';
@@ -30,7 +31,7 @@ import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
-import { getChamado, listChamadoEquipes, listChamados, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus } from '@/lib/api';
+import { getChamado, listChamadoEquipes, listChamados, listTiposChamadoOpcoes, notificarChamadoEquipe, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { chamadoLocalLabel } from '@/lib/chamado-geo';
 import { toInputDate } from '@/lib/cronograma';
@@ -42,7 +43,7 @@ import {
   previstaExecucaoInfo,
   prioridadeVariant,
 } from '@/lib/chamado-status';
-import { ChamadoDetalhe, ChamadoOrigem, ChamadoResumo, ChamadoStatus, EquipeOpcao } from '@/lib/types';
+import { ChamadoDetalhe, ChamadoOrigem, ChamadoResumo, ChamadoStatus, EquipeOpcao, TipoChamadoOpcao } from '@/lib/types';
 
 type StatusFilter = 'TODOS' | ChamadoStatus;
 type PrioridadeFilter = 'TODAS' | string;
@@ -88,6 +89,7 @@ function ChamadosPageContent() {
   const [hasMoreChamados, setHasMoreChamados] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [equipes, setEquipes] = useState<EquipeOpcao[]>([]);
+  const [tiposChamado, setTiposChamado] = useState<TipoChamadoOpcao[]>([]);
   const [detail, setDetail] = useState<ChamadoDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -114,6 +116,9 @@ function ChamadosPageContent() {
     listChamadoEquipes()
       .then(setEquipes)
       .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar equipes.'));
+    listTiposChamadoOpcoes()
+      .then(setTiposChamado)
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -420,7 +425,7 @@ function ChamadosPageContent() {
 
         {view === 'triagem' && !loading ? (
           <div className="grid min-h-0 flex-1 gap-3.5 xl:grid-cols-[minmax(320px,388px)_1fr]">
-            <section className="flex min-h-[420px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] xl:min-h-[520px]">
+            <section className="flex max-h-[min(360px,42vh)] min-h-[220px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] xl:max-h-none xl:min-h-[520px]">
               <div className="shrink-0 border-b border-[var(--line-2)] p-3.5">
                 <div className="relative">
                   <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
@@ -521,11 +526,16 @@ function ChamadosPageContent() {
                 resumo={selected}
                 detail={detail?.id === selected?.id ? detail : null}
                 equipes={equipes}
+                tiposChamado={tiposChamado}
                 loading={detailLoading && !!selected}
                 busy={busyId === selected?.id}
                 onTransition={transition}
                 onAssignTeam={assignTeam}
                 onSavePlanejamento={savePlanejamento}
+                onRefreshDetail={() => {
+                  if (!selected?.id) return;
+                  getChamado(selected.id).then(setDetail).catch(() => undefined);
+                }}
               />
             </section>
           </div>
@@ -539,15 +549,18 @@ function ChamadoDetailPanel({
   resumo,
   detail,
   equipes,
+  tiposChamado,
   loading,
   busy,
   onTransition,
   onAssignTeam,
   onSavePlanejamento,
+  onRefreshDetail,
 }: {
   resumo: ChamadoResumo | null;
   detail: ChamadoDetalhe | null;
   equipes: EquipeOpcao[];
+  tiposChamado: TipoChamadoOpcao[];
   loading: boolean;
   busy: boolean;
   onTransition: (
@@ -559,7 +572,9 @@ function ChamadoDetailPanel({
   ) => void;
   onAssignTeam: (id: string, codigo: string, equipeId: string, responsavelId: string, motivo?: string) => void;
   onSavePlanejamento: (id: string, codigo: string, previstaExecucaoEm: string | null, equipeId?: string | null) => void;
+  onRefreshDetail: () => void;
 }) {
+  const snackbar = useSnackbar();
   const [pendingStatus, setPendingStatus] = useState<ChamadoStatus>('ABERTO');
   const [motivo, setMotivo] = useState('');
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
@@ -568,6 +583,7 @@ function ChamadoDetailPanel({
   const [pendingResponsavelId, setPendingResponsavelId] = useState('');
   const [atribuicaoMotivo, setAtribuicaoMotivo] = useState('');
   const [pendingPrevista, setPendingPrevista] = useState('');
+  const [pendingTipoId, setPendingTipoId] = useState('');
 
   useEffect(() => {
     if (!resumo) return;
@@ -579,7 +595,8 @@ function ChamadoDetailPanel({
     setPendingResponsavelId(resumo.responsavel?.id ?? '');
     setAtribuicaoMotivo('');
     setPendingPrevista(resumo.previstaExecucaoEm ? resumo.previstaExecucaoEm.slice(0, 10) : '');
-  }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo, resumo?.equipe?.id, resumo?.responsavel?.id, resumo?.previstaExecucaoEm]);
+    setPendingTipoId(resumo.tipoChamado?.id ?? '');
+  }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo, resumo?.equipe?.id, resumo?.responsavel?.id, resumo?.previstaExecucaoEm, resumo?.tipoChamado?.id]);
 
   if (!resumo) {
     return (
@@ -793,6 +810,55 @@ function ChamadoDetailPanel({
             >
               Salvar equipe
             </Button>
+            <Button
+              variant="outlined"
+              size="sm"
+              disabled={busy || !resumo.equipe?.id}
+              onClick={() => {
+                void notificarChamadoEquipe(resumo.id)
+                  .then((result) =>
+                    snackbar.show(
+                      result.delivered ? 'Equipe notificada por e-mail.' : 'Notificação registrada (e-mail em modo log).',
+                      result.delivered ? 'success' : 'warning',
+                    ),
+                  )
+                  .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao notificar equipe.', 'error'));
+              }}
+            >
+              Notificar equipe
+            </Button>
+          </div>
+
+          <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
+            <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Tipo do chamado (triagem)</p>
+            <Select
+              value={pendingTipoId}
+              onChange={(event) => setPendingTipoId(event.target.value)}
+              className="h-9 w-full text-xs"
+              disabled={busy}
+            >
+              <option value="">Sem tipo</option>
+              {tiposChamado.map((tipo) => (
+                <option key={tipo.id} value={tipo.id}>
+                  {tipo.nome}
+                </option>
+              ))}
+            </Select>
+            <Button
+              variant="outlined"
+              size="sm"
+              disabled={busy || pendingTipoId === (resumo.tipoChamado?.id ?? '')}
+              onClick={() => {
+                void updateChamadoTriagem(resumo.id, { tipoChamadoId: pendingTipoId || null })
+                  .then(() => {
+                    snackbar.show('Tipo e SLA atualizados.', 'success');
+                    onRefreshDetail();
+                  })
+                  .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao salvar tipo.', 'error'));
+              }}
+            >
+              Salvar tipo / recalcular SLA
+            </Button>
           </div>
 
           <dl className="grid gap-3 sm:grid-cols-2">
@@ -845,7 +911,10 @@ function ChamadoDetailPanel({
           ) : null}
 
           <div>
-            <p className="mb-3 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Linha do tempo</p>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Linha do tempo</p>
+              <ChamadoHistoricoForm chamadoId={resumo.id} disabled={busy} onSaved={onRefreshDetail} />
+            </div>
             {loading ? <LoadingState label="Carregando timeline..." /> : <ChamadoTimeline steps={timeline} />}
           </div>
 

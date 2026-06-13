@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, UsersRound } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Map as MapIcon, UsersRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
+import { ChamadosProgramacaoMap } from '@/components/chamados/chamados-programacao-map';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { listChamadosProgramacao, updateChamadoPlanejamento } from '@/lib/api';
@@ -16,6 +18,9 @@ import { cn } from '@/lib/cn';
 import { ChamadoProgramacaoResponse, ChamadoResumo, EquipeOpcao } from '@/lib/types';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const WEEKDAYS_FULL = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+
+type ViewMode = 'mensal' | 'semanal';
 
 function chamadoTitulo(chamado: Pick<ChamadoResumo, 'titulo' | 'descricao'>) {
   return chamado.titulo?.trim() || chamado.descricao;
@@ -39,6 +44,14 @@ export function ChamadosProgramacaoPanel({
   const snackbar = useSnackbar();
   const requestSeq = useRef(0);
   const [month, setMonth] = useState(() => new Date());
+  const [viewMode, setViewMode] = useState<ViewMode>('mensal');
+  const [weekStart, setWeekStart] = useState(() => {
+    const today = new Date();
+    const day = today.getDay();
+    const start = new Date(today);
+    start.setDate(today.getDate() - day);
+    return start;
+  });
   const [equipeFilter, setEquipeFilter] = useState('');
   const [selectedDate, setSelectedDate] = useState<string | null>(() => toInputDate(new Date()));
   const [data, setData] = useState<ChamadoProgramacaoResponse | null>(null);
@@ -50,7 +63,15 @@ export function ChamadosProgramacaoPanel({
   const [formDate, setFormDate] = useState('');
   const [equipeDraft, setEquipeDraft] = useState<Record<string, string>>({});
 
-  const bounds = useMemo(() => monthBounds(month), [month]);
+  const bounds = useMemo(() => {
+    if (viewMode === 'semanal') {
+      const start = new Date(weekStart);
+      const end = new Date(weekStart);
+      end.setDate(end.getDate() + 6);
+      return { start, end };
+    }
+    return monthBounds(month);
+  }, [month, viewMode, weekStart]);
   const minDate = toInputDate(new Date());
 
   const load = useCallback(async () => {
@@ -147,6 +168,15 @@ export function ChamadosProgramacaoPanel({
     }
   }
 
+  const weekDays = useMemo(() => {
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = new Date(weekStart);
+      date.setDate(weekStart.getDate() + index);
+      const key = toInputDate(date);
+      return { date, key, chamados: eventosPorDia.get(key) ?? [] };
+    });
+  }, [weekStart, eventosPorDia]);
+
   const cells = buildCalendarCells(month);
   const monthLabel = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const pendentesLabel = data?.pendentesTruncados
@@ -156,6 +186,14 @@ export function ChamadosProgramacaoPanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-wrap gap-2">
+          <Chip active={viewMode === 'mensal'} onClick={() => setViewMode('mensal')}>
+            Mensal
+          </Chip>
+          <Chip active={viewMode === 'semanal'} onClick={() => setViewMode('semanal')}>
+            Semanal
+          </Chip>
+        </div>
         <div className="min-w-[220px] flex-1">
           <label htmlFor="prog-equipe" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
             Filtrar por equipe
@@ -184,9 +222,25 @@ export function ChamadosProgramacaoPanel({
       {loading ? <LoadingState label="Carregando programação..." /> : null}
 
       {!loading ? (
+        <>
+          <Card elevation={1}>
+            <CardContent className="p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <MapIcon className="h-4 w-4 text-[var(--brand)]" />
+                <h3 className="text-[14px] font-semibold text-[var(--ink)]">Mapa da programação</h3>
+              </div>
+              <ChamadosProgramacaoMap
+                programados={(data?.porDia ?? []).flatMap((dia) => dia.chamados)}
+                pendentes={data?.pendentes ?? []}
+              />
+            </CardContent>
+          </Card>
+
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
           <Card elevation={1}>
             <CardContent className="p-4">
+              {viewMode === 'mensal' ? (
+              <>
               <div className="mb-4 flex items-center justify-between gap-3">
                 <button
                   type="button"
@@ -264,6 +318,58 @@ export function ChamadosProgramacaoPanel({
                   );
                 })}
               </div>
+              </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setWeekStart((value) => {
+                          const next = new Date(value);
+                          next.setDate(next.getDate() - 7);
+                          return next;
+                        })
+                      }
+                      className="inline-flex items-center gap-1 rounded-[var(--r-sm)] px-2 py-1.5 text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--surface-2)]"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Semana anterior
+                    </button>
+                    <h2 className="text-[15px] font-bold text-[var(--ink)]">Visão semanal</h2>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setWeekStart((value) => {
+                          const next = new Date(value);
+                          next.setDate(next.getDate() + 7);
+                          return next;
+                        })
+                      }
+                      className="inline-flex items-center gap-1 rounded-[var(--r-sm)] px-2 py-1.5 text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--surface-2)]"
+                    >
+                      Próxima semana
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {weekDays.map((day) => (
+                    <div key={day.key} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
+                      <p className="text-[13px] font-semibold text-[var(--ink)]">{WEEKDAYS_FULL[day.date.getDay()]}</p>
+                      {day.chamados.length === 0 ? (
+                        <p className="mt-1 text-[12px] text-[var(--ink-3)]">Nenhum chamado programado</p>
+                      ) : (
+                        <ul className="mt-2 space-y-1">
+                          {day.chamados.map((chamado) => (
+                            <li key={chamado.id} className="text-[12px] text-[var(--ink-2)]">
+                              · {chamado.codigo} — {chamadoTitulo(chamado).slice(0, 60)}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -413,6 +519,7 @@ export function ChamadosProgramacaoPanel({
             </Card>
           </div>
         </div>
+        </>
       ) : null}
     </div>
   );

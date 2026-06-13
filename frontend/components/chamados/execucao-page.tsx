@@ -15,7 +15,8 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { chamadoToMapPoint } from '@/lib/chamado-geo';
-import { listChamadosEmExecucao, listEquipesExecucao } from '@/lib/api';
+import { downloadOrdensServicoLote, listChamadosEmExecucao, listEquipesExecucao } from '@/lib/api';
+import { toInputDate } from '@/lib/cronograma';
 import { ChamadosEmExecucaoGrupo, EquipeOpcaoResumo } from '@/lib/types';
 
 export function ExecucaoPage() {
@@ -38,11 +39,22 @@ function ExecucaoPageContent() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [mobilePanel, setMobilePanel] = useState<'mapa' | 'lista'>('mapa');
+  const [filtroHoje, setFiltroHoje] = useState(false);
+  const [filtroInicio, setFiltroInicio] = useState('');
+  const [filtroFim, setFiltroFim] = useState('');
+  const [exportando, setExportando] = useState(false);
 
   function load() {
     setLoading(true);
     setError(null);
-    Promise.all([listChamadosEmExecucao(), listEquipesExecucao()])
+    Promise.all([
+      listChamadosEmExecucao({
+        hoje: filtroHoje || undefined,
+        programacaoFrom: !filtroHoje && filtroInicio ? filtroInicio : undefined,
+        programacaoTo: !filtroHoje && filtroFim ? filtroFim : undefined,
+      }),
+      listEquipesExecucao(),
+    ])
       .then(([execData, equipesData]) => {
         setGrupos(execData.grupos);
         setEquipesVisiveis(equipesData);
@@ -60,7 +72,7 @@ function ExecucaoPageContent() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [filtroHoje, filtroInicio, filtroFim]);
 
   const temSemEquipe = useMemo(
     () => grupos.some((grupo) => !grupo.equipe && grupo.chamados.length > 0),
@@ -185,6 +197,51 @@ function ExecucaoPageContent() {
               </Chip>
             </div>
 
+            <div className="mb-3 flex flex-wrap items-end gap-2">
+              <Chip active={filtroHoje} onClick={() => setFiltroHoje((value) => !value)}>
+                Hoje
+              </Chip>
+              <input
+                type="date"
+                value={filtroInicio}
+                onChange={(event) => {
+                  setFiltroInicio(event.target.value);
+                  setFiltroHoje(false);
+                }}
+                className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[12px]"
+              />
+              <input
+                type="date"
+                value={filtroFim}
+                onChange={(event) => {
+                  setFiltroFim(event.target.value);
+                  setFiltroHoje(false);
+                }}
+                className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[12px]"
+              />
+              {canGerenciar ? (
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  disabled={exportando || chamados.length === 0}
+                  onClick={() => {
+                    setExportando(true);
+                    void downloadOrdensServicoLote({
+                      ids: chamados.map((item) => item.id),
+                      hoje: filtroHoje || undefined,
+                      programacaoFrom: !filtroHoje && filtroInicio ? filtroInicio : undefined,
+                      programacaoTo: !filtroHoje && filtroFim ? filtroFim : undefined,
+                      equipeId: equipeFilter ?? undefined,
+                    })
+                      .catch(() => undefined)
+                      .finally(() => setExportando(false));
+                  }}
+                >
+                  Emitir ordens de serviço
+                </Button>
+              ) : null}
+            </div>
+
             {mostrarFiltroEquipes ? (
               <div className="mb-3 flex flex-wrap gap-2">
                 {equipesVisiveis.length > 1 ? (
@@ -211,7 +268,7 @@ function ExecucaoPageContent() {
 
             <div className="grid shrink-0 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-stretch">
               <section
-                className={`cco-list-panel flex max-h-[min(460px,calc(100dvh-300px))] min-h-[260px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] ${mobilePanel === 'lista' ? 'flex' : 'hidden xl:flex'}`}
+                className={`cco-list-panel flex max-h-[min(360px,calc(100dvh-300px))] min-h-[220px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] xl:max-h-[min(460px,calc(100dvh-300px))] ${mobilePanel === 'lista' ? 'flex' : 'hidden xl:flex'}`}
               >
                 <div className="filters shrink-0 border-b border-[var(--line-2)] px-3.5 py-3">
                   <div className="mb-2 flex items-center gap-2">

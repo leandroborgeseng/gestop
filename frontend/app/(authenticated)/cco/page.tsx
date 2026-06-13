@@ -229,7 +229,7 @@ function CcoPageContent() {
       ) : null}
 
       <div className="grid shrink-0 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-start">
-        <div className="cco-list-panel flex max-h-[min(460px,calc(100dvh-300px))] min-h-[260px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+        <div className="cco-list-panel flex max-h-[min(1840px,calc(100dvh-120px))] min-h-[260px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
           <div className="filters shrink-0 space-y-2 border-b border-[var(--line-2)] bg-[var(--surface)] px-3.5 py-3">
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 shrink-0 text-[var(--brand)]" />

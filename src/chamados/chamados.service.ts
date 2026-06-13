@@ -16,9 +16,25 @@ import {
   resolveSecretariaScopeId,
 } from '../auth/secretaria-scope';
 import { IntegracoesService } from '../integracoes/integracoes.service';
+import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
-import { CreateChamadoDto, PublicCreateChamadoDto, UpdateChamadoStatusDto, UpdateChamadoAtribuicaoDto, UpdateChamadoPlanejamentoDto, ChamadoExecucaoCheckinDto, ChamadoExecucaoConcluirDto, ChamadoExecucaoEvidenciaDto } from './chamados.dto';
+import {
+  CreateChamadoDto,
+  PublicCreateChamadoDto,
+  UpdateChamadoStatusDto,
+  UpdateChamadoAtribuicaoDto,
+  UpdateChamadoPlanejamentoDto,
+  UpdateChamadoTriagemDto,
+  RegistrarChamadoHistoricoDto,
+  EmitirOrdensServicoDto,
+  ChamadoExecucaoCheckinDto,
+  ChamadoExecucaoConcluirDto,
+  ChamadoExecucaoEvidenciaDto,
+} from './chamados.dto';
+import { buildOrdensServicoLotePdf } from './chamados-os-pdf';
+import { sendChamadoEquipeNotificacao } from './chamados-notificacao';
+import { buildPlanejamentoAlteracoes, calcularPrazoSla, formatDateBr } from './chamados-sla';
 import {
   assertValidChamadoTransition,
   buildChamadoCode,
@@ -43,6 +59,7 @@ export class ChamadosService {
     @Inject(forwardRef(() => IntegracoesService))
     private readonly integracoesService: IntegracoesService,
     private readonly storageService: StorageService,
+    private readonly emailService: EmailService,
   ) {}
 
   async listChamados(params: { limit?: number; offset?: number } | undefined, user: JwtPayload) {
@@ -70,13 +87,19 @@ export class ChamadosService {
     };
   }
 
-  async listEmExecucaoPorEquipe(user: JwtPayload) {
+  async listEmExecucaoPorEquipe(
+    user: JwtPayload,
+    filters?: { programacaoFrom?: string; programacaoTo?: string; hoje?: boolean },
+  ) {
     const canGerenciar = user.permissoes.includes('chamados.gerenciar');
     const onlyExecutor = !canGerenciar && user.permissoes.includes('chamados.executar');
+
+    const programacaoFilter = this.buildProgramacaoDateFilter(filters);
 
     const chamados = await this.prisma.chamado.findMany({
       where: {
         status: ChamadoStatus.EM_EXECUCAO,
+        ...programacaoFilter,
         ...(onlyExecutor
           ? { equipe: { membros: { some: { usuarioId: user.sub } } } }
           : resolveChamadoSecretariaFilter(user)),
@@ -260,7 +283,14 @@ export class ChamadosService {
       orderBy: { createdAt: 'asc' },
       include: { alteradoPor: { select: { id: true, nome: true } } },
     });
-    return { ...this.serializeChamado(chamado), historico };
+    return { ...this.serializeChamado(chamado), historico: await this.enrichHistorico(historico) };
+  }
+
+  async listTiposChamadoAtivos() {
+    return this.prisma.tipoChamado.findMany({
+      where: { ativo: true },
+      orderBy: { nome: 'asc' },
+    });
   }
 
   async getChamadoParaExecucao(id: string, user: JwtPayload) {
@@ -877,6 +907,11 @@ export class ChamadosService {
       }
     }
 
+    let prioridade = before.prioridade;
+    if (dto.prioridade !== undefined) {
+      prioridade = dto.prioridade;
+    }
+
     const scheduling = dto.previstaExecucaoEm !== undefined && previstaExecucaoEm !== null;
     if (scheduling && !equipeId) {
       throw new BadRequestException('Informe a equipe ao programar a execução.');
@@ -891,15 +926,32 @@ export class ChamadosService {
       (before.previstaExecucaoEm?.toISOString() ?? null) === (previstaExecucaoEm?.toISOString() ?? null);
     const equipeIgual = (before.equipeId ?? null) === (equipeId ?? null);
     const responsavelIgual = (before.responsavelId ?? null) === (responsavelId ?? null);
+    const prioridadeIgual = before.prioridade === prioridade;
 
-    if (previstaIgual && equipeIgual && responsavelIgual) {
+    if (previstaIgual && equipeIgual && responsavelIgual && prioridadeIgual) {
       return this.serializeChamado(before);
     }
+
+    const [equipeAnterior, equipeNova] = await Promise.all([
+      before.equipeId
+        ? this.prisma.equipe.findUnique({ where: { id: before.equipeId }, select: { nome: true } })
+        : Promise.resolve(null),
+      equipeId ? this.prisma.equipe.findUnique({ where: { id: equipeId }, select: { nome: true } }) : Promise.resolve(null),
+    ]);
+
+    const alteracoes = buildPlanejamentoAlteracoes({
+      equipeAnterior,
+      equipeNova,
+      previstaAnterior: before.previstaExecucaoEm,
+      previstaNova: previstaExecucaoEm,
+      prioridadeAnterior: prioridadeIgual ? null : before.prioridade,
+      prioridadeNova: prioridadeIgual ? null : prioridade,
+    });
 
     const chamado = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.chamado.update({
         where: { id },
-        data: { previstaExecucaoEm, equipeId, responsavelId },
+        data: { previstaExecucaoEm, equipeId, responsavelId, prioridade },
         include: this.includeRelations(),
       });
 
@@ -912,9 +964,11 @@ export class ChamadosService {
           motivo: 'Programação de execução atualizada.',
           alteradoPorId: user.sub,
           metadata: {
+            tipo: 'programacao_update',
             previstaExecucaoEm: previstaExecucaoEm?.toISOString() ?? null,
             equipeId,
             equipeAnteriorId: before.equipeId,
+            alteracoes,
           },
         },
       });
@@ -934,6 +988,246 @@ export class ChamadosService {
     });
 
     return this.serializeChamado(chamado);
+  }
+
+  async updateTriagem(id: string, dto: UpdateChamadoTriagemDto, user: JwtPayload) {
+    const before = await this.getChamadoOrThrow(id);
+    assertChamadoSecretariaAccess(user, before);
+
+    const tipoChamadoId =
+      dto.tipoChamadoId === undefined
+        ? before.tipoChamadoId
+        : dto.tipoChamadoId?.trim()
+          ? dto.tipoChamadoId.trim()
+          : null;
+
+    const prioridade = dto.prioridade ?? before.prioridade;
+
+    if (tipoChamadoId) {
+      const tipo = await this.prisma.tipoChamado.findFirst({ where: { id: tipoChamadoId, ativo: true } });
+      if (!tipo) throw new BadRequestException('Tipo de chamado não encontrado ou inativo.');
+    }
+
+    let prazoEm = before.prazoEm;
+    if (tipoChamadoId) {
+      const tipo = await this.prisma.tipoChamado.findUniqueOrThrow({ where: { id: tipoChamadoId } });
+      prazoEm = calcularPrazoSla(before.createdAt, prioridade, tipo);
+    }
+
+    if (
+      (before.tipoChamadoId ?? null) === (tipoChamadoId ?? null) &&
+      before.prioridade === prioridade &&
+      (before.prazoEm?.toISOString() ?? null) === (prazoEm?.toISOString() ?? null)
+    ) {
+      return this.serializeChamado(before);
+    }
+
+    const chamado = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.chamado.update({
+        where: { id },
+        data: { tipoChamadoId, prioridade, prazoEm },
+        include: this.includeRelations(),
+      });
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          valorAntigo: JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue,
+          valorNovo: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
+        },
+      });
+
+      return updated;
+    });
+
+    return this.serializeChamado(chamado);
+  }
+
+  async registrarHistorico(id: string, dto: RegistrarChamadoHistoricoDto, user: JwtPayload) {
+    const chamado = await this.getChamadoOrThrow(id);
+    assertChamadoSecretariaAccess(user, chamado);
+
+    const anexosInput = dto.anexos ?? [];
+    const evidenciaIds: string[] = [];
+    const storedKeys: string[] = [];
+
+    try {
+      for (const anexo of anexosInput) {
+        const stored = await this.storageService.persistEvidenceUrl(anexo.dataUrl.trim(), anexo.mimeType);
+        storedKeys.push(stored.storageKey);
+        const isImage = (stored.mimeType ?? anexo.mimeType ?? '').startsWith('image/');
+        const evidencia = await this.prisma.evidencia.create({
+          data: {
+            chamadoId: id,
+            tipo: isImage ? EvidenciaTipo.FOTO : EvidenciaTipo.DOCUMENTO,
+            url: stored.url,
+            storageKey: stored.storageKey,
+            mimeType: stored.mimeType,
+            tamanhoBytes: stored.tamanhoBytes,
+            checksum: stored.checksum,
+            capturadaEm: new Date(),
+            enviadaEm: new Date(),
+            metadata: {
+              origem: 'historico_manual',
+              ...(anexo.nome?.trim() ? { nome: anexo.nome.trim() } : {}),
+            },
+          },
+        });
+        evidenciaIds.push(evidencia.id);
+      }
+
+      await this.prisma.historicoStatus.create({
+        data: {
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          statusAnterior: chamado.status,
+          statusNovo: chamado.status,
+          motivo: 'Atualização de histórico',
+          alteradoPorId: user.sub,
+          metadata: {
+            tipo: 'HISTORY_UPDATE',
+            descricao: dto.descricao.trim(),
+            evidenciaIds,
+          },
+        },
+      });
+
+      return this.getChamado(id, user);
+    } catch (error) {
+      if (storedKeys.length > 0) {
+        await this.storageService.deleteStoredObjects(storedKeys);
+      }
+      throw error;
+    }
+  }
+
+  async notificarEquipe(id: string, user: JwtPayload) {
+    const chamado = await this.getChamadoOrThrow(id);
+    assertChamadoSecretariaAccess(user, chamado);
+
+    if (!chamado.equipeId) {
+      throw new BadRequestException('Chamado sem equipe atribuída.');
+    }
+
+    const equipe = await this.prisma.equipe.findUnique({
+      where: { id: chamado.equipeId },
+      include: {
+        membros: { include: { usuario: { select: { email: true, ativo: true } } } },
+      },
+    });
+
+    if (!equipe) throw new BadRequestException('Equipe não encontrada.');
+
+    const secretaria = await this.prisma.secretaria.findUnique({
+      where: { id: chamado.secretariaId },
+      select: { responsavelEmail: true },
+    });
+
+    const to = [
+      equipe.emailEquipe,
+      ...equipe.membros.filter((m) => m.usuario.ativo).map((m) => m.usuario.email),
+    ].filter(Boolean) as string[];
+
+    if (to.length === 0) {
+      throw new BadRequestException('Equipe sem e-mail configurado ou membros com e-mail.');
+    }
+
+    const baseUrl =
+      process.env.APP_PUBLIC_URL?.trim() ??
+      process.env.STORAGE_PUBLIC_URL_BASE?.trim()?.replace(/\/api-gestop$/, '') ??
+      '';
+    const link = baseUrl ? `${baseUrl}/chamados?id=${chamado.id}` : `/chamados?id=${chamado.id}`;
+
+    const endereco =
+      chamado.unidade?.endereco ??
+      ([chamado.enderecoTexto, chamado.enderecoBairro].filter(Boolean).join(' · ') || 'Endereço não informado');
+
+    const fotos = [chamado.fotoUrl].filter(Boolean) as string[];
+
+    const result = await sendChamadoEquipeNotificacao(this.emailService, {
+      to,
+      cc: secretaria?.responsavelEmail ? [secretaria.responsavelEmail] : undefined,
+      chamado: {
+        codigo: chamado.codigo,
+        descricao: chamado.descricao,
+        endereco,
+        prazoSla: formatDateBr(chamado.prazoEm),
+        link,
+        fotos,
+      },
+    });
+
+    await this.prisma.logAuditoria.create({
+      data: {
+        usuarioId: user.sub,
+        acao: AuditAction.UPDATE,
+        entidadeTipo: 'Chamado',
+        entidadeId: id,
+        valorNovo: {
+          acao: 'notificar_equipe',
+          delivered: result.delivered,
+          driver: 'driver' in result ? result.driver : undefined,
+        },
+      },
+    });
+
+    return result;
+  }
+
+  async exportOrdensServicoLote(dto: EmitirOrdensServicoDto, user: JwtPayload) {
+    const where: Prisma.ChamadoWhereInput = {
+      ...resolveChamadoSecretariaFilter(user),
+      status: { notIn: [ChamadoStatus.CONCLUIDO, ChamadoStatus.CANCELADO] },
+    };
+
+    if (dto.ids?.length) {
+      where.id = { in: dto.ids };
+    }
+
+    if (dto.equipeId === 'sem-equipe') {
+      where.equipeId = null;
+    } else if (dto.equipeId?.trim()) {
+      where.equipeId = dto.equipeId.trim();
+    }
+
+    const programacaoFilter = this.buildProgramacaoDateFilter({
+      programacaoFrom: dto.programacaoFrom,
+      programacaoTo: dto.programacaoTo,
+      hoje: dto.hoje === true,
+    });
+    Object.assign(where, programacaoFilter);
+
+    const chamados = await this.prisma.chamado.findMany({
+      where,
+      orderBy: [{ previstaExecucaoEm: 'asc' }, { prioridade: 'desc' }, { createdAt: 'asc' }],
+      include: {
+        unidade: { select: { endereco: true, bairro: true } },
+        equipe: { select: { nome: true } },
+        tipoChamado: { select: { nome: true } },
+      },
+    });
+
+    if (chamados.length === 0) {
+      throw new BadRequestException('Nenhum chamado encontrado para emissão de OS.');
+    }
+
+    return buildOrdensServicoLotePdf(
+      chamados.map((item) => ({
+        codigo: item.codigo,
+        tipo: item.tipoChamado?.nome ?? null,
+        prioridade: item.prioridade,
+        descricao: item.descricao,
+        endereco:
+          item.unidade?.endereco ??
+          ([item.enderecoTexto, item.enderecoBairro].filter(Boolean).join(' · ') || '—'),
+        equipe: item.equipe?.nome ?? null,
+        prazoSla: item.prazoEm?.toISOString() ?? null,
+        fotoUrl: item.fotoUrl,
+      })),
+    );
   }
 
   async generateForNaoConformidade(naoConformidadeId: string, user: JwtPayload) {
@@ -1164,6 +1458,7 @@ export class ChamadosService {
       },
       responsavel: { select: { id: true, nome: true } },
       equipe: { select: { id: true, nome: true } },
+      tipoChamado: { select: { id: true, nome: true } },
       registradoPor: { select: { id: true, nome: true } },
       naoConformidade: {
         select: {
@@ -1312,6 +1607,80 @@ export class ChamadosService {
           ? String((evidencia.metadata as { descricao?: string }).descricao ?? '')
           : null,
     };
+  }
+
+  private async enrichHistorico(
+    historico: Array<{
+      id: string;
+      statusAnterior: string | null;
+      statusNovo: string;
+      motivo: string | null;
+      metadata: unknown;
+      createdAt: Date;
+      alteradoPor: { id: string; nome: string } | null;
+    }>,
+  ) {
+    const evidenciaIds = historico.flatMap((entry) => {
+      const metadata = entry.metadata as { evidenciaIds?: string[] } | null;
+      return metadata?.evidenciaIds ?? [];
+    });
+
+    const evidencias =
+      evidenciaIds.length > 0
+        ? await this.prisma.evidencia.findMany({
+            where: { id: { in: evidenciaIds } },
+          })
+        : [];
+
+    const evidenciaMap = new Map(evidencias.map((item) => [item.id, this.serializeEvidencia(item)]));
+
+    return historico.map((entry) => {
+      const metadata = (entry.metadata ?? {}) as Record<string, unknown>;
+      const ids = Array.isArray(metadata.evidenciaIds) ? (metadata.evidenciaIds as string[]) : [];
+      return {
+        id: entry.id,
+        statusAnterior: entry.statusAnterior,
+        statusNovo: entry.statusNovo,
+        motivo: entry.motivo,
+        metadata,
+        createdAt: entry.createdAt.toISOString(),
+        alteradoPor: entry.alteradoPor,
+        anexos: ids.map((id) => evidenciaMap.get(id)).filter(Boolean),
+      };
+    });
+  }
+
+  private buildProgramacaoDateFilter(filters?: {
+    programacaoFrom?: string;
+    programacaoTo?: string;
+    hoje?: boolean;
+  }): Prisma.ChamadoWhereInput {
+    if (!filters?.hoje && !filters?.programacaoFrom && !filters?.programacaoTo) {
+      return {};
+    }
+
+    if (filters.hoje) {
+      const key = todayDateKey();
+      const from = parseDateKey(key);
+      const to = new Date(`${key}T23:59:59.999Z`);
+      return { previstaExecucaoEm: { gte: from, lte: to } };
+    }
+
+    const from = filters.programacaoFrom?.trim() ? parseDateKey(filters.programacaoFrom.trim()) : undefined;
+    const toKey = filters.programacaoTo?.trim();
+    const to = toKey ? new Date(`${toKey}T23:59:59.999Z`) : undefined;
+
+    if (from && to) {
+      return { previstaExecucaoEm: { gte: from, lte: to } };
+    }
+    if (from) {
+      return { previstaExecucaoEm: { gte: from } };
+    }
+    if (to) {
+      return { previstaExecucaoEm: { lte: to } };
+    }
+
+    return {};
   }
 
   private async ensureEquipeAtiva(equipeId: string) {

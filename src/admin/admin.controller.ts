@@ -5,7 +5,7 @@ import { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequirePermissions } from '../auth/permissions';
 import { AdminService } from './admin.service';
-import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto } from './admin.dto';
+import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto } from './admin.dto';
 
 @UseGuards(AuthGuard, PermissionsGuard)
 @Controller('admin')
@@ -112,5 +112,29 @@ export class AdminController {
   @Delete('equipes/:id')
   deleteEquipe(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.adminService.deleteEquipe(id, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Get('tipos-chamado')
+  listTiposChamado() {
+    return this.adminService.listTiposChamado();
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Post('tipos-chamado')
+  createTipoChamado(@Body() body: TipoChamadoDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.createTipoChamado(body, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Put('tipos-chamado/:id')
+  updateTipoChamado(@Param('id') id: string, @Body() body: TipoChamadoDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.updateTipoChamado(id, body, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Delete('tipos-chamado/:id')
+  deleteTipoChamado(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.adminService.deleteTipoChamado(id, user);
   }
 }

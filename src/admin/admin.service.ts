@@ -4,7 +4,7 @@ import { JwtPayload } from '../auth/jwt';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH_NEW } from '../auth/password-policy';
 import { hashPassword } from '../auth/password';
 import { PrismaService } from '../prisma/prisma.service';
-import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto } from './admin.dto';
+import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto } from './admin.dto';
 import { ensureGeoCoordinates, normalizeEmail, normalizeSigla } from './admin.rules';
 
 @Injectable()
@@ -182,6 +182,8 @@ export class AdminService {
         secretariaId: dto.secretariaId || null,
         nome: dto.nome.trim(),
         descricao: dto.descricao?.trim(),
+        tipo: dto.tipo ?? 'PROPRIA',
+        emailEquipe: normalizeEmail(dto.emailEquipe),
         ativo: dto.ativo ?? true,
         membros: {
           create: dto.usuarioIds.map((usuarioId) => ({
@@ -209,6 +211,8 @@ export class AdminService {
           secretariaId: dto.secretariaId || null,
           nome: dto.nome.trim(),
           descricao: dto.descricao?.trim() ?? null,
+          tipo: dto.tipo ?? before.tipo,
+          emailEquipe: normalizeEmail(dto.emailEquipe),
           ativo: dto.ativo ?? true,
           membros: {
             create: dto.usuarioIds.map((usuarioId) => ({
@@ -234,6 +238,60 @@ export class AdminService {
 
     await this.audit(user, AuditAction.DELETE, 'Equipe', id, before, equipe);
     return equipe;
+  }
+
+  listTiposChamado() {
+    return this.prisma.tipoChamado.findMany({
+      orderBy: { nome: 'asc' },
+    });
+  }
+
+  async createTipoChamado(dto: TipoChamadoDto, user: JwtPayload) {
+    const tipo = await this.prisma.tipoChamado.create({
+      data: {
+        nome: dto.nome.trim(),
+        descricao: dto.descricao?.trim(),
+        slaBaixaDias: dto.slaBaixaDias,
+        slaMediaDias: dto.slaMediaDias,
+        slaAltaDias: dto.slaAltaDias,
+        slaUrgenteDias: dto.slaUrgenteDias,
+        ativo: dto.ativo ?? true,
+      },
+    });
+
+    await this.audit(user, AuditAction.CREATE, 'TipoChamado', tipo.id, null, tipo);
+    return tipo;
+  }
+
+  async updateTipoChamado(id: string, dto: TipoChamadoDto, user: JwtPayload) {
+    const before = await this.getTipoChamadoOrThrow(id);
+    const tipo = await this.prisma.tipoChamado.update({
+      where: { id },
+      data: {
+        nome: dto.nome.trim(),
+        descricao: dto.descricao?.trim() ?? null,
+        slaBaixaDias: dto.slaBaixaDias,
+        slaMediaDias: dto.slaMediaDias,
+        slaAltaDias: dto.slaAltaDias,
+        slaUrgenteDias: dto.slaUrgenteDias,
+        ativo: dto.ativo ?? true,
+      },
+    });
+
+    await this.audit(user, AuditAction.UPDATE, 'TipoChamado', id, before, tipo);
+    return tipo;
+  }
+
+  async deleteTipoChamado(id: string, user: JwtPayload) {
+    const before = await this.getTipoChamadoOrThrow(id);
+    const emUso = await this.prisma.chamado.count({ where: { tipoChamadoId: id } });
+    if (emUso > 0) {
+      throw new BadRequestException('Tipo de chamado em uso. Inative em vez de excluir.');
+    }
+
+    await this.prisma.tipoChamado.delete({ where: { id } });
+    await this.audit(user, AuditAction.DELETE, 'TipoChamado', id, before, null);
+    return { ok: true };
   }
 
   listPerfis() {
@@ -357,6 +415,12 @@ export class AdminService {
   private getEquipeOrThrow(id: string) {
     return this.prisma.equipe.findUniqueOrThrow({ where: { id }, include: this.equipeInclude() }).catch(() => {
       throw new NotFoundException('Equipe nao encontrada');
+    });
+  }
+
+  private getTipoChamadoOrThrow(id: string) {
+    return this.prisma.tipoChamado.findUniqueOrThrow({ where: { id } }).catch(() => {
+      throw new NotFoundException('Tipo de chamado nao encontrado');
     });
   }
 

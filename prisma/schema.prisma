@@ -122,6 +122,11 @@ enum ChamadoModoLocalizacao {
   ENDERECO
 }
 
+enum EquipeTipo {
+  PROPRIA
+  TERCEIRIZADA
+}
+
 enum AuditAction {
   CREATE
   UPDATE
@@ -324,14 +329,33 @@ model PerfilPermissao {
   @@id([perfilId, permissaoId])
 }
 
+model TipoChamado {
+  id             String   @id @default(uuid())
+  nome           String   @unique
+  descricao      String?
+  slaBaixaDias   Int      @default(30)
+  slaMediaDias   Int      @default(15)
+  slaAltaDias    Int      @default(7)
+  slaUrgenteDias Int      @default(3)
+  ativo          Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  chamados Chamado[]
+
+  @@index([ativo])
+}
+
 model Equipe {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   secretariaId String?
   nome         String
   descricao    String?
-  ativo        Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  tipo         EquipeTipo @default(PROPRIA)
+  emailEquipe  String?
+  ativo        Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   secretaria Secretaria?     @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
   membros    EquipeUsuario[]
@@ -601,6 +625,7 @@ model Chamado {
   longitude           Decimal?               @db.Decimal(10, 7)
   responsavelId       String?
   equipeId            String?
+  tipoChamadoId       String?
   registradoPorId     String?
   prazoEm             DateTime?
   previstaExecucaoEm  DateTime?
@@ -617,10 +642,12 @@ model Chamado {
   naoConformidade NaoConformidade? @relation(fields: [naoConformidadeId], references: [id], onDelete: SetNull)
   responsavel     Usuario?         @relation("ChamadoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   equipe          Equipe?          @relation(fields: [equipeId], references: [id], onDelete: SetNull)
+  tipoChamado     TipoChamado?     @relation(fields: [tipoChamadoId], references: [id], onDelete: SetNull)
   registradoPor   Usuario?         @relation("ChamadoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
   evidencias      Evidencia[]
 
   @@index([secretariaId])
+  @@index([tipoChamadoId])
   @@index([unidadeId])
   @@index([status])
   @@index([origem])

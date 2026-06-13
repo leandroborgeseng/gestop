@@ -201,6 +201,8 @@ export type AdminEquipe = {
   id: string;
   nome: string;
   descricao?: string | null;
+  tipo?: 'PROPRIA' | 'TERCEIRIZADA';
+  emailEquipe?: string | null;
   ativo: boolean;
   secretariaId?: string | null;
   secretaria?: SecretariaOption | null;
@@ -208,6 +210,22 @@ export type AdminEquipe = {
     usuario: { id: string; nome: string; email: string; ativo: boolean };
   }>;
   _count?: { chamados: number };
+};
+
+export type AdminTipoChamado = {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  slaBaixaDias: number;
+  slaMediaDias: number;
+  slaAltaDias: number;
+  slaUrgenteDias: number;
+  ativo: boolean;
+};
+
+export type TipoChamadoOpcao = {
+  id: string;
+  nome: string;
 };
 
 export type EquipeOpcaoResumo = {
@@ -522,6 +540,7 @@ export type ChamadoResumo = {
   } | null;
   responsavel?: { id: string; nome: string } | null;
   equipe?: { id: string; nome: string } | null;
+  tipoChamado?: { id: string; nome: string } | null;
   naoConformidade?: ChamadoNaoConformidade | null;
   registradoPor?: { id: string; nome: string } | null;
 };
@@ -532,8 +551,10 @@ export type ChamadoDetalhe = ChamadoResumo & {
     statusAnterior?: string | null;
     statusNovo: string;
     motivo?: string | null;
+    metadata?: Record<string, unknown> | null;
     createdAt: string;
     alteradoPor?: { id: string; nome: string } | null;
+    anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null }>;
   }>;
 };
 

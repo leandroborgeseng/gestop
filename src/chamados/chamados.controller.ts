@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Post, Put, Query, StreamableFile, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -13,6 +13,9 @@ import {
   UpdateChamadoStatusDto,
   UpdateChamadoAtribuicaoDto,
   UpdateChamadoPlanejamentoDto,
+  UpdateChamadoTriagemDto,
+  RegistrarChamadoHistoricoDto,
+  EmitirOrdensServicoDto,
 } from './chamados.dto';
 import { ChamadosService } from './chamados.service';
 
@@ -20,6 +23,21 @@ import { ChamadosService } from './chamados.service';
 @Controller('chamados')
 export class ChamadosController {
   constructor(private readonly chamadosService: ChamadosService) {}
+
+  @RequirePermissions('chamados.gerenciar')
+  @Get('tipos/opcoes')
+  listTiposChamado() {
+    return this.chamadosService.listTiposChamadoAtivos();
+  }
+
+  @RequirePermissions('chamados.gerenciar')
+  @Post('ordens-servico/lote.pdf')
+  @Header('Content-Type', 'application/pdf')
+  @Header('Content-Disposition', 'attachment; filename="ordens-servico-lote.pdf"')
+  async exportOrdensServicoLote(@Body() body: EmitirOrdensServicoDto, @CurrentUser() user: JwtPayload) {
+    const pdf = await this.chamadosService.exportOrdensServicoLote(body, user);
+    return new StreamableFile(pdf);
+  }
 
   @RequirePermissions('chamados.gerenciar')
   @Get('programacao')
@@ -46,8 +64,17 @@ export class ChamadosController {
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
   @Get('em-execucao')
-  listEmExecucaoPorEquipe(@CurrentUser() user: JwtPayload) {
-    return this.chamadosService.listEmExecucaoPorEquipe(user);
+  listEmExecucaoPorEquipe(
+    @CurrentUser() user: JwtPayload,
+    @Query('programacaoFrom') programacaoFrom?: string,
+    @Query('programacaoTo') programacaoTo?: string,
+    @Query('hoje') hoje?: string,
+  ) {
+    return this.chamadosService.listEmExecucaoPorEquipe(user, {
+      programacaoFrom,
+      programacaoTo,
+      hoje: hoje === 'true' || hoje === '1',
+    });
   }
 
   @RequirePermissions('chamados.gerenciar')
@@ -142,5 +169,31 @@ export class ChamadosController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.chamadosService.updatePlanejamento(id, body, user);
+  }
+
+  @RequirePermissions('chamados.gerenciar')
+  @Put(':id/triagem')
+  updateTriagem(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: UpdateChamadoTriagemDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.chamadosService.updateTriagem(id, body, user);
+  }
+
+  @RequirePermissions('chamados.gerenciar')
+  @Post(':id/historico')
+  registrarHistorico(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: RegistrarChamadoHistoricoDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.chamadosService.registrarHistorico(id, body, user);
+  }
+
+  @RequirePermissions('chamados.gerenciar')
+  @Post(':id/notificar-equipe')
+  notificarEquipe(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.chamadosService.notificarEquipe(id, user);
   }
 }

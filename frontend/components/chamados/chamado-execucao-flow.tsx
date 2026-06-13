@@ -44,6 +44,15 @@ const STEPS: Array<{ id: Step; label: string }> = [
   { id: 'encerramento', label: 'Encerramento' },
 ];
 
+function openMapsRoute(latitude: number, longitude: number) {
+  const destination = `${latitude},${longitude}`;
+  const isApple = typeof navigator !== 'undefined' && /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent);
+  const url = isApple
+    ? `maps://?daddr=${destination}`
+    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
 function buildRelatorioFinal(impedimento: boolean, motivo: string, relatorio: string) {
   if (!impedimento) return relatorio.trim();
 
@@ -311,6 +320,19 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                   <Building2 className="h-3.5 w-3.5" />
                   {chamadoLocalLabel(detail)}
                 </span>
+                {detail.unidadeExecucao?.latitude != null && detail.unidadeExecucao?.longitude != null ? (
+                  <Button
+                    type="button"
+                    variant="text"
+                    size="sm"
+                    className="h-auto px-0 text-[var(--brand)]"
+                    onClick={() =>
+                      openMapsRoute(detail.unidadeExecucao!.latitude!, detail.unidadeExecucao!.longitude!)
+                    }
+                  >
+                    Obter rota
+                  </Button>
+                ) : null}
                 {detail.equipe ? (
                   <span className="inline-flex items-center gap-1">
                     <Wrench className="h-3.5 w-3.5" />

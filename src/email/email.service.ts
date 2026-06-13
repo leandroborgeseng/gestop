@@ -4,6 +4,7 @@ import type { Transporter } from 'nodemailer';
 
 export type SendEmailInput = {
   to: string | string[];
+  cc?: string | string[];
   subject: string;
   text: string;
   html?: string;
@@ -73,6 +74,7 @@ export class EmailService {
         evento: 'email.transacional',
         payload: {
           to: input.to,
+          cc: input.cc ?? null,
           subject: input.subject,
           text: input.text,
           html: input.html ?? null,
@@ -100,6 +102,7 @@ export class EmailService {
       await transporter.sendMail({
         from: process.env.EMAIL_FROM?.trim(),
         to: input.to,
+        cc: input.cc,
         subject: input.subject,
         text: input.text,
         html: input.html ?? undefined,

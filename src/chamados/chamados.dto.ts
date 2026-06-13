@@ -1,18 +1,6 @@
 import { ChamadoModoLocalizacao, ChamadoOrigem, ChamadoPrioridade, ChamadoStatus, EvidenciaTipo } from '@prisma/client';
 import { Type } from 'class-transformer';
-import {
-  IsBoolean,
-  IsDateString,
-  IsEmail,
-  IsEnum,
-  IsNumber,
-  IsOptional,
-  IsString,
-  IsUUID,
-  MinLength,
-  ValidateIf,
-  ValidateNested,
-} from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, IsUUID, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 
 export class CreateChamadoDto {
   @IsEnum(ChamadoModoLocalizacao)
@@ -138,6 +126,69 @@ export class UpdateChamadoPlanejamentoDto {
   @ValidateIf((_, value) => value !== null && value !== undefined && value !== '')
   @IsUUID()
   equipeId?: string | null;
+
+  @IsOptional()
+  @IsEnum(ChamadoPrioridade)
+  prioridade?: ChamadoPrioridade;
+}
+
+export class UpdateChamadoTriagemDto {
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined && value !== '')
+  @IsUUID()
+  tipoChamadoId?: string | null;
+
+  @IsOptional()
+  @IsEnum(ChamadoPrioridade)
+  prioridade?: ChamadoPrioridade;
+}
+
+class ChamadoHistoricoAnexoDto {
+  @IsString()
+  dataUrl!: string;
+
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
+
+  @IsOptional()
+  @IsString()
+  nome?: string;
+}
+
+export class RegistrarChamadoHistoricoDto {
+  @IsString()
+  @MinLength(3)
+  descricao!: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChamadoHistoricoAnexoDto)
+  anexos?: ChamadoHistoricoAnexoDto[];
+}
+
+export class EmitirOrdensServicoDto {
+  @IsOptional()
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  ids?: string[];
+
+  @IsOptional()
+  @IsString()
+  programacaoFrom?: string;
+
+  @IsOptional()
+  @IsString()
+  programacaoTo?: string;
+
+  @IsOptional()
+  @IsString()
+  equipeId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  hoje?: boolean;
 }
 
 class ChamadoExecucaoGeoDto {

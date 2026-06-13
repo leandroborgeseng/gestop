@@ -5,7 +5,10 @@ import {
   AdminUnidade,
   AdminUsuario,
   AdminEquipe,
+  AdminTipoChamado,
   EquipeOpcao,
+  TipoChamadoOpcao,
+  ChamadosEmExecucaoResponse,
   ChecklistModel,
   ChecklistVersao,
   CronogramaChecagem,
@@ -23,7 +26,6 @@ import {
   ChamadosListResponse,
   ChamadoEvidencia,
   ChamadoExecucaoDetalhe,
-  ChamadosEmExecucaoResponse,
   ChamadoProgramacaoResponse,
   ChamadoProtocoloPublico,
   EquipeOpcaoResumo,
@@ -287,6 +289,22 @@ export function deleteAdminEquipe(id: string) {
   return request<AdminEquipe>(`/admin/equipes/${id}`, { method: 'DELETE' });
 }
 
+export function listAdminTiposChamado() {
+  return request<AdminTipoChamado[]>('/admin/tipos-chamado');
+}
+
+export function saveAdminTipoChamado(payload: Record<string, unknown>, id?: string) {
+  return request<AdminTipoChamado>(`/admin/tipos-chamado${id ? `/${id}` : ''}`, {
+    method: id ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminTipoChamado(id: string) {
+  return request<{ ok: boolean }>(`/admin/tipos-chamado/${id}`, { method: 'DELETE' });
+}
+
 export function getWebmapImportStatus() {
   return request<WebmapImportStatus>('/admin/importacao/webmap/status');
 }
@@ -503,8 +521,13 @@ export function listChamados(params?: { limit?: number; offset?: number }) {
   return request<ChamadosListResponse>(`/chamados${query ? `?${query}` : ''}`);
 }
 
-export function listChamadosEmExecucao() {
-  return request<ChamadosEmExecucaoResponse>('/chamados/em-execucao');
+export function listChamadosEmExecucao(params?: { programacaoFrom?: string; programacaoTo?: string; hoje?: boolean }) {
+  const query = new URLSearchParams();
+  if (params?.programacaoFrom) query.set('programacaoFrom', params.programacaoFrom);
+  if (params?.programacaoTo) query.set('programacaoTo', params.programacaoTo);
+  if (params?.hoje) query.set('hoje', 'true');
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return request<ChamadosEmExecucaoResponse>(`/chamados/em-execucao${suffix}`);
 }
 
 export function createChamado(payload: {
@@ -572,13 +595,76 @@ export function listChamadosProgramacao(params: { from: string; to: string; equi
 
 export function updateChamadoPlanejamento(
   id: string,
-  payload: { previstaExecucaoEm?: string | null; equipeId?: string | null },
+  payload: { previstaExecucaoEm?: string | null; equipeId?: string | null; prioridade?: string },
 ) {
   return request<ChamadoResumo>(`/chamados/${id}/planejamento`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+export function updateChamadoTriagem(
+  id: string,
+  payload: { tipoChamadoId?: string | null; prioridade?: string },
+) {
+  return request<ChamadoResumo>(`/chamados/${id}/triagem`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function registrarChamadoHistorico(
+  id: string,
+  payload: {
+    descricao: string;
+    anexos?: Array<{ dataUrl: string; mimeType?: string; nome?: string }>;
+  },
+) {
+  return request<ChamadoDetalhe>(`/chamados/${id}/historico`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function notificarChamadoEquipe(id: string) {
+  return request<{ delivered: boolean; driver: string; detail?: string }>(`/chamados/${id}/notificar-equipe`, {
+    method: 'POST',
+  });
+}
+
+export function listTiposChamadoOpcoes() {
+  return request<TipoChamadoOpcao[]>('/chamados/tipos/opcoes');
+}
+
+export async function downloadOrdensServicoLote(payload: {
+  ids?: string[];
+  programacaoFrom?: string;
+  programacaoTo?: string;
+  equipeId?: string;
+  hoje?: boolean;
+}) {
+  const token = getStoredAuth()?.accessToken;
+  const response = await fetch(`${API_BASE_URL}/chamados/ordens-servico/lote.pdf`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error('Falha ao gerar PDF de ordens de serviço.');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'ordens-servico-lote.pdf';
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export function getChamadoExecucao(id: string) {
