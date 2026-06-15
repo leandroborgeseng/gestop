@@ -35,7 +35,7 @@ import {
 } from './chamados.dto';
 import { buildOrdensServicoLotePdf } from './chamados-os-pdf';
 import { sendChamadoEquipeNotificacao } from './chamados-notificacao';
-import { buildPlanejamentoAlteracoes, calcularPrazoSla, formatDateBr } from './chamados-sla';
+import { buildPlanejamentoAlteracoes, buildTriagemAlteracoes, calcularPrazoSla, formatDateBr } from './chamados-sla';
 import {
   assertValidChamadoTransition,
   buildChamadoCode,
@@ -1029,11 +1029,44 @@ export class ChamadosService {
       return this.serializeChamado(before);
     }
 
+    const tipoNovoRecord = tipoChamadoId
+      ? await this.prisma.tipoChamado.findUnique({ where: { id: tipoChamadoId }, select: { nome: true } })
+      : null;
+
+    const alteracoes = buildTriagemAlteracoes({
+      tipoAnterior: before.tipoChamado,
+      tipoNovo: tipoNovoRecord,
+      prioridadeAnterior: before.prioridade,
+      prioridadeNova: prioridade,
+      prazoAnterior: before.prazoEm,
+      prazoNovo: prazoEm,
+    });
+
     const chamado = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.chamado.update({
         where: { id },
         data: { tipoChamadoId, prioridade, prazoEm },
         include: this.includeRelations(),
+      });
+
+      await tx.historicoStatus.create({
+        data: {
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          statusAnterior: before.status,
+          statusNovo: before.status,
+          motivo: 'Triagem atualizada.',
+          alteradoPorId: user.sub,
+          metadata: {
+            tipo: 'triagem_update',
+            tipoChamadoId,
+            tipoChamadoAnteriorId: before.tipoChamadoId,
+            prioridade,
+            prioridadeAnterior: before.prioridade,
+            prazoEm: prazoEm?.toISOString() ?? null,
+            alteracoes,
+          },
+        },
       });
 
       await tx.logAuditoria.create({

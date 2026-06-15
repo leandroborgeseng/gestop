@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
@@ -80,6 +80,8 @@ export function AbrirChamadoForm({
   const [addressSearching, setAddressSearching] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
   const [pinUpdating, setPinUpdating] = useState(false);
+  const [reverseGeocodingPin, setReverseGeocodingPin] = useState(false);
+  const reverseGeocodePinTimerRef = useRef<number | null>(null);
   const [fotoDataUrl, setFotoDataUrl] = useState<string | null>(null);
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [fotoGeo, setFotoGeo] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -201,6 +203,37 @@ export function AbrirChamadoForm({
     } finally {
       setGeoLoading(false);
     }
+  }
+
+  async function applyAddressFromCoords(lat: number, lng: number) {
+    setReverseGeocodingPin(true);
+    try {
+      const parsed = await reverseGeocodeAddress(lat, lng);
+      if (parsed) {
+        setLogradouro(parsed.logradouro);
+        setNumero(parsed.numero);
+        setComplemento(parsed.complemento);
+        setBairro(parsed.bairro);
+        setCidade(parsed.cidade || 'Franca');
+        setAddressQuery(composeEnderecoTexto(parsed));
+      }
+    } catch {
+      // Mantém coordenadas mesmo se o reverse geocode falhar.
+    } finally {
+      setReverseGeocodingPin(false);
+    }
+  }
+
+  function handlePinChange(coords: { latitude: number; longitude: number }) {
+    setLatitude(coords.latitude);
+    setLongitude(coords.longitude);
+
+    if (reverseGeocodePinTimerRef.current) {
+      window.clearTimeout(reverseGeocodePinTimerRef.current);
+    }
+    reverseGeocodePinTimerRef.current = window.setTimeout(() => {
+      void applyAddressFromCoords(coords.latitude, coords.longitude);
+    }, 450);
   }
 
   async function handleUpdatePinFromAddress() {
@@ -479,6 +512,7 @@ export function AbrirChamadoForm({
           {latitude != null && longitude != null ? (
             <p className="mono text-[12px] text-[var(--ink-3)]">
               Pin: {latitude.toFixed(6)}, {longitude.toFixed(6)}
+              {reverseGeocodingPin ? ' · Buscando endereço do pin...' : ''}
             </p>
           ) : (
             <p className="text-[12px] text-[var(--warn)]">Defina o pin no mapa ou use os botões acima.</p>
@@ -487,11 +521,11 @@ export function AbrirChamadoForm({
           <ChamadoLocationMapPicker
             latitude={latitude}
             longitude={longitude}
-            onChange={({ latitude: lat, longitude: lng }) => {
-              setLatitude(lat);
-              setLongitude(lng);
-            }}
+            onChange={handlePinChange}
           />
+          <p className="text-[11px] text-[var(--ink-3)]">
+            Ao mover o pin, logradouro, número, bairro e cidade são preenchidos automaticamente conforme a localização.
+          </p>
         </div>
       ) : null}
 

@@ -92,3 +92,47 @@ export function buildPlanejamentoAlteracoes(input: {
 
   return alteracoes;
 }
+
+export function buildTriagemAlteracoes(input: {
+  tipoAnterior?: { nome: string } | null;
+  tipoNovo?: { nome: string } | null;
+  prioridadeAnterior?: string | null;
+  prioridadeNova?: string | null;
+  prazoAnterior?: Date | null;
+  prazoNovo?: Date | null;
+}): PlanejamentoAlteracao[] {
+  const alteracoes: PlanejamentoAlteracao[] = [];
+
+  const tipoAnterior = input.tipoAnterior?.nome ?? 'Sem tipo';
+  const tipoNovo = input.tipoNovo?.nome ?? 'Sem tipo';
+  if (tipoAnterior !== tipoNovo) {
+    alteracoes.push({
+      campo: 'tipoChamado',
+      label: 'Tipo de chamado',
+      de: tipoAnterior,
+      para: tipoNovo,
+    });
+  }
+
+  if (input.prioridadeAnterior && input.prioridadeNova && input.prioridadeAnterior !== input.prioridadeNova) {
+    alteracoes.push({
+      campo: 'prioridade',
+      label: 'Prioridade',
+      de: prioridadeLabel(input.prioridadeAnterior),
+      para: prioridadeLabel(input.prioridadeNova),
+    });
+  }
+
+  const prazoAnterior = formatDateBr(input.prazoAnterior);
+  const prazoNovo = formatDateBr(input.prazoNovo);
+  if (prazoAnterior !== prazoNovo) {
+    alteracoes.push({
+      campo: 'prazoEm',
+      label: 'Prazo SLA',
+      de: prazoAnterior,
+      para: prazoNovo,
+    });
+  }
+
+  return alteracoes;
+}

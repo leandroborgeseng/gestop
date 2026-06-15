@@ -182,6 +182,27 @@ export function buildChamadoTimelineFromHistorico(
       };
     }
 
+    if (tipo === 'triagem_update' || entry.motivo === 'Triagem atualizada.') {
+      const alteracoes = Array.isArray(metadata.alteracoes)
+        ? (metadata.alteracoes as Array<{ campo: string; label: string; de: string; para: string }>)
+        : [];
+      return {
+        id: entry.id,
+        title: 'Triagem atualizada',
+        date: formatTimelineDate(entry.createdAt),
+        sub: entry.alteradoPor?.nome,
+        done: true,
+        active: false,
+        expand: alteracoes.length
+          ? {
+              alteracoes,
+              usuario: entry.alteradoPor?.nome,
+              dataHora: formatTimelineDate(entry.createdAt),
+            }
+          : undefined,
+      };
+    }
+
     const assignmentOnly = entry.statusAnterior && entry.statusAnterior === entry.statusNovo;
     const title = assignmentOnly
       ? 'Atribuição atualizada'

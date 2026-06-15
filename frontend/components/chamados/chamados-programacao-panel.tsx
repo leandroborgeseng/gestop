@@ -177,6 +177,15 @@ export function ChamadosProgramacaoPanel({
     });
   }, [weekStart, eventosPorDia]);
 
+  const weekRangeLabel = useMemo(() => {
+    if (weekDays.length === 0) return '';
+    return `${weekDays[0].date.toLocaleDateString('pt-BR')} – ${weekDays[6].date.toLocaleDateString('pt-BR')}`;
+  }, [weekDays]);
+
+  function formatWeeklyDayLabel(date: Date) {
+    return `${WEEKDAYS_FULL[date.getDay()]} - ${date.toLocaleDateString('pt-BR')}`;
+  }
+
   const cells = buildCalendarCells(month);
   const monthLabel = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const pendentesLabel = data?.pendentesTruncados
@@ -336,7 +345,9 @@ export function ChamadosProgramacaoPanel({
                       <ChevronLeft className="h-4 w-4" />
                       Semana anterior
                     </button>
-                    <h2 className="text-[15px] font-bold text-[var(--ink)]">Visão semanal</h2>
+                    <h2 className="text-[15px] font-bold text-[var(--ink)]">
+                      Visão semanal{weekRangeLabel ? ` · ${weekRangeLabel}` : ''}
+                    </h2>
                     <button
                       type="button"
                       onClick={() =>
@@ -354,7 +365,7 @@ export function ChamadosProgramacaoPanel({
                   </div>
                   {weekDays.map((day) => (
                     <div key={day.key} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
-                      <p className="text-[13px] font-semibold text-[var(--ink)]">{WEEKDAYS_FULL[day.date.getDay()]}</p>
+                      <p className="text-[13px] font-semibold text-[var(--ink)]">{formatWeeklyDayLabel(day.date)}</p>
                       {day.chamados.length === 0 ? (
                         <p className="mt-1 text-[12px] text-[var(--ink-3)]">Nenhum chamado programado</p>
                       ) : (

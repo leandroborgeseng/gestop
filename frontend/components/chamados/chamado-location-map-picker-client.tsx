@@ -5,6 +5,7 @@ import L from 'leaflet';
 import {
   CARTO_ATTRIBUTION,
   CARTO_SUBDOMAINS,
+  CARTO_VOYAGER_LABELS,
   CARTO_VOYAGER_NO_LABELS,
   FRANCA_BOUNDS,
   FRANCA_CENTER,
@@ -56,6 +57,13 @@ export function ChamadoLocationMapPickerClient({
       attribution: CARTO_ATTRIBUTION,
       subdomains: CARTO_SUBDOMAINS,
       maxZoom: 19,
+    }).addTo(map);
+
+    L.tileLayer(CARTO_VOYAGER_LABELS, {
+      attribution: CARTO_ATTRIBUTION,
+      subdomains: CARTO_SUBDOMAINS,
+      maxZoom: 19,
+      pane: 'overlayPane',
     }).addTo(map);
 
     const marker = L.marker([initialLat, initialLng], { draggable: true }).addTo(map);

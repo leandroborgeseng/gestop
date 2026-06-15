@@ -393,8 +393,8 @@ export function OperationalMapClient({
 
     if (basemap === 'street') {
       if (map.hasLayer(satellite)) map.removeLayer(satellite);
-      if (map.hasLayer(labels)) map.removeLayer(labels);
       if (!map.hasLayer(street)) street.addTo(map);
+      if (!map.hasLayer(labels)) labels.addTo(map);
     } else {
       if (map.hasLayer(street)) map.removeLayer(street);
       if (!map.hasLayer(satellite)) satellite.addTo(map);

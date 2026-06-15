@@ -49,6 +49,8 @@ type StatusFilter = 'TODOS' | ChamadoStatus;
 type PrioridadeFilter = 'TODAS' | string;
 type ChamadosView = 'triagem' | 'programacao';
 
+const TRIAGEM_PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
+
 const CHAMADOS_PAGE_SIZE = 50;
 
 const STATUS_CHIPS: Array<{ value: StatusFilter; label: string }> = [
@@ -584,6 +586,7 @@ function ChamadoDetailPanel({
   const [atribuicaoMotivo, setAtribuicaoMotivo] = useState('');
   const [pendingPrevista, setPendingPrevista] = useState('');
   const [pendingTipoId, setPendingTipoId] = useState('');
+  const [pendingPrioridadeTriagem, setPendingPrioridadeTriagem] = useState<string>('MEDIA');
 
   useEffect(() => {
     if (!resumo) return;
@@ -596,7 +599,8 @@ function ChamadoDetailPanel({
     setAtribuicaoMotivo('');
     setPendingPrevista(resumo.previstaExecucaoEm ? resumo.previstaExecucaoEm.slice(0, 10) : '');
     setPendingTipoId(resumo.tipoChamado?.id ?? '');
-  }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo, resumo?.equipe?.id, resumo?.responsavel?.id, resumo?.previstaExecucaoEm, resumo?.tipoChamado?.id]);
+    setPendingPrioridadeTriagem(resumo.prioridade);
+  }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo, resumo?.equipe?.id, resumo?.responsavel?.id, resumo?.previstaExecucaoEm, resumo?.tipoChamado?.id, resumo?.prioridade]);
 
   if (!resumo) {
     return (
@@ -626,6 +630,8 @@ function ChamadoDetailPanel({
   const atribuicaoChanged =
     pendingEquipeAtribuicaoId !== (resumo.equipe?.id ?? '') ||
     pendingResponsavelId !== (resumo.responsavel?.id ?? '');
+  const triagemChanged =
+    pendingTipoId !== (resumo.tipoChamado?.id ?? '') || pendingPrioridadeTriagem !== resumo.prioridade;
   const selectedEquipe = equipes.find((equipe) => equipe.id === pendingEquipeAtribuicaoId);
   const membrosEquipe = selectedEquipe?.membros.map((item) => item.usuario).filter((usuario) => usuario.ativo) ?? [];
   const timeline = detail?.historico?.length
@@ -830,34 +836,63 @@ function ChamadoDetailPanel({
           </div>
 
           <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
-            <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Tipo do chamado (triagem)</p>
-            <Select
-              value={pendingTipoId}
-              onChange={(event) => setPendingTipoId(event.target.value)}
-              className="h-9 w-full text-xs"
-              disabled={busy}
-            >
-              <option value="">Sem tipo</option>
-              {tiposChamado.map((tipo) => (
-                <option key={tipo.id} value={tipo.id}>
-                  {tipo.nome}
-                </option>
-              ))}
-            </Select>
+            <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Triagem</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="chamado-tipo-triagem" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Tipo do chamado
+                </label>
+                <Select
+                  id="chamado-tipo-triagem"
+                  value={pendingTipoId}
+                  onChange={(event) => setPendingTipoId(event.target.value)}
+                  className="h-9 w-full text-xs"
+                  disabled={busy}
+                >
+                  <option value="">Sem tipo</option>
+                  {tiposChamado.map((tipo) => (
+                    <option key={tipo.id} value={tipo.id}>
+                      {tipo.nome}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label htmlFor="chamado-prioridade-triagem" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Prioridade
+                </label>
+                <Select
+                  id="chamado-prioridade-triagem"
+                  value={pendingPrioridadeTriagem}
+                  onChange={(event) => setPendingPrioridadeTriagem(event.target.value)}
+                  className="h-9 w-full text-xs"
+                  disabled={busy}
+                >
+                  {TRIAGEM_PRIORIDADES.map((item) => (
+                    <option key={item} value={item}>
+                      {item.charAt(0) + item.slice(1).toLowerCase()}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
             <Button
               variant="outlined"
               size="sm"
-              disabled={busy || pendingTipoId === (resumo.tipoChamado?.id ?? '')}
+              disabled={busy || !triagemChanged}
               onClick={() => {
-                void updateChamadoTriagem(resumo.id, { tipoChamadoId: pendingTipoId || null })
+                void updateChamadoTriagem(resumo.id, {
+                  tipoChamadoId: pendingTipoId || null,
+                  prioridade: pendingPrioridadeTriagem as (typeof TRIAGEM_PRIORIDADES)[number],
+                })
                   .then(() => {
-                    snackbar.show('Tipo e SLA atualizados.', 'success');
+                    snackbar.show('Triagem atualizada e registrada na linha do tempo.', 'success');
                     onRefreshDetail();
                   })
-                  .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao salvar tipo.', 'error'));
+                  .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao salvar triagem.', 'error'));
               }}
             >
-              Salvar tipo / recalcular SLA
+              Salvar triagem / recalcular SLA
             </Button>
           </div>
 
