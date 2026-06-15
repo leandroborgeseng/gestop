@@ -126,7 +126,10 @@ export const NAV_GROUPS: NavGroup[] = [
   { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
 ];
 
-const MAX_BOTTOM_SLOTS = 4;
+const MAX_BOTTOM_SLOTS = 5;
+
+/** Ordem fixa dos atalhos na barra inferior mobile (Execução sempre visível quando permitido). */
+const MOBILE_PRIMARY_ORDER = ['cco', 'mobile', 'chamados', 'execucao', 'dashboard'] as const;
 
 export function getVisibleNavItems(permissions: string[]) {
   return NAV_ITEMS.filter((item) => {
@@ -154,8 +157,11 @@ export function getMobileNav(permissions: string[]) {
     return { primary: visible, secondary: [], hasMore: false };
   }
 
-  const primaryCandidates = visible.filter((item) => item.mobilePrimary);
-  const primary = (primaryCandidates.length > 0 ? primaryCandidates : visible).slice(0, MAX_BOTTOM_SLOTS - 1);
+  const visibleById = new Map(visible.map((item) => [item.id, item]));
+  const orderedPrimary = MOBILE_PRIMARY_ORDER.map((id) => visibleById.get(id)).filter(Boolean) as NavItem[];
+  const fallbackPrimary = visible.filter((item) => item.mobilePrimary);
+  const primaryPool = orderedPrimary.length > 0 ? orderedPrimary : fallbackPrimary.length > 0 ? fallbackPrimary : visible;
+  const primary = primaryPool.slice(0, MAX_BOTTOM_SLOTS - 1);
   const primaryIds = new Set(primary.map((item) => item.id));
   const secondary = visible.filter((item) => !primaryIds.has(item.id));
 

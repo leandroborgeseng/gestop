@@ -362,23 +362,28 @@ export function MobileBottomNav({
                 href={item.href}
                 prefetch
                 className={cn(
-                  'relative flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-[var(--r-md)] px-1 text-xs font-medium',
-                  active ? 'text-[var(--brand)]' : 'text-[var(--ink-3)]',
+                  'relative flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-[var(--r-md)] px-1 text-xs font-medium transition-colors',
+                  active ? 'font-semibold text-[var(--brand-hover)]' : 'text-[var(--ink-3)]',
                 )}
                 aria-current={active ? 'page' : undefined}
               >
                 {active ? (
-                  <span className="pointer-events-none absolute inset-x-3 top-1 h-8 rounded-full bg-[var(--brand-soft)]" aria-hidden />
+                  <span
+                    className="pointer-events-none absolute inset-x-1.5 inset-y-1 rounded-[var(--r-md)] bg-[var(--brand-soft)]"
+                    aria-hidden
+                  />
                 ) : null}
                 <span className="relative z-[1]">
-                  <Icon className="h-6 w-6" />
+                  <Icon className="h-6 w-6" strokeWidth={active ? 2.2 : 1.9} />
                   {badge != null && badge > 0 ? (
                     <span className="mono absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[var(--warn)] px-1 text-[9px] font-bold text-white">
                       {badge > 9 ? '9+' : badge}
                     </span>
                   ) : null}
                 </span>
-                <span className="relative z-[1] max-w-full truncate">{item.shortLabel ?? item.label}</span>
+                <span className={cn('relative z-[1] max-w-full truncate', active && 'text-[var(--brand-hover)]')}>
+                  {item.shortLabel ?? item.label}
+                </span>
               </Link>
             );
           })}
@@ -388,13 +393,19 @@ export function MobileBottomNav({
               type="button"
               onClick={() => onMoreOpen(true)}
               className={cn(
-                'relative flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-[var(--r-md)] px-1 text-xs font-medium',
-                moreOpen ? 'text-[var(--brand)]' : 'text-[var(--ink-3)]',
+                'relative flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-[var(--r-md)] px-1 text-xs font-medium transition-colors',
+                moreOpen ? 'font-semibold text-[var(--brand-hover)]' : 'text-[var(--ink-3)]',
               )}
               aria-label="Abrir mais opções"
             >
-              <MoreIcon className="relative z-[1] h-6 w-6" />
-              <span className="relative z-[1]">Mais</span>
+              {moreOpen ? (
+                <span
+                  className="pointer-events-none absolute inset-x-1.5 inset-y-1 rounded-[var(--r-md)] bg-[var(--brand-soft)]"
+                  aria-hidden
+                />
+              ) : null}
+              <MoreIcon className="relative z-[1] h-6 w-6" strokeWidth={moreOpen ? 2.2 : 1.9} />
+              <span className={cn('relative z-[1]', moreOpen && 'text-[var(--brand-hover)]')}>Mais</span>
             </button>
           ) : null}
         </div>
