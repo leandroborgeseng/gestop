@@ -50,19 +50,19 @@ function drawOsBlock(doc: InstanceType<typeof PDFDocument>, chamado: OsPdfChamad
   cursorY += 10;
   doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(chamado.descricao.slice(0, 280), left + 10, cursorY, {
     width: width - 20,
-    height: 36,
+    height: 30,
   });
-  cursorY += 40;
+  cursorY += 34;
 
   doc.font('Helvetica-Bold').fontSize(8).text('Endereço', left + 10, cursorY);
   cursorY += 10;
   doc.font('Helvetica').fontSize(8).text(chamado.endereco.slice(0, 120), left + 10, cursorY, { width: width - 20 });
 
-  const manualY = y + height - 72;
+  const manualY = y + height - 100;
   doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Situação', left + 10, manualY);
   doc.font('Helvetica').fontSize(8).text('( ) Executado     ( ) Não executado', left + 10, manualY + 12);
   doc.font('Helvetica-Bold').text('Motivo / observações', left + 10, manualY + 28);
-  doc.rect(left + 10, manualY + 40, width - 20, 22).stroke(BORDER);
+  doc.rect(left + 10, manualY + 42, width - 20, 50).stroke(BORDER);
 }
 
 export function buildOrdensServicoLotePdf(chamados: OsPdfChamado[]): Promise<Buffer> {

@@ -43,6 +43,7 @@ export function ChamadosProgramacaoPanel({
 }) {
   const snackbar = useSnackbar();
   const requestSeq = useRef(0);
+  const agendarFormRef = useRef<HTMLDivElement | null>(null);
   const [month, setMonth] = useState(() => new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('mensal');
   const [weekStart, setWeekStart] = useState(() => {
@@ -112,6 +113,122 @@ export function ChamadosProgramacaoPanel({
   }, [data]);
 
   const chamadosDoDia = selectedDate ? (eventosPorDia.get(selectedDate) ?? []) : [];
+
+  const allChamadosMapa = useMemo(() => {
+    const map = new Map<string, ChamadoResumo>();
+    for (const chamado of (data?.porDia ?? []).flatMap((dia) => dia.chamados)) {
+      map.set(chamado.id, chamado);
+    }
+    for (const chamado of data?.pendentes ?? []) {
+      map.set(chamado.id, chamado);
+    }
+    return map;
+  }, [data]);
+
+  function handleProgramarFromMap(chamadoId: string) {
+    const chamado = allChamadosMapa.get(chamadoId);
+    if (!chamado) return;
+
+    const dateKey = chamado.previstaExecucaoEm?.slice(0, 10) ?? selectedDate ?? minDate;
+    setFormChamadoId(chamado.id);
+    setFormDate(dateKey);
+    setSelectedDate(dateKey);
+    setFormEquipeId(chamado.equipe?.id ?? '');
+
+    window.requestAnimationFrame(() => {
+      agendarFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    snackbar.show(`${chamado.codigo}: preencha data e equipe para programar.`, 'success');
+  }
+
+  function renderChamadosDoDiaList(options?: { showEmpty?: boolean }) {
+    if (!selectedDate) {
+      return <p className="text-[12px] text-[var(--ink-3)]">Selecione um dia para ver os chamados.</p>;
+    }
+
+    if (chamadosDoDia.length === 0) {
+      return options?.showEmpty ? (
+        <EmptyState
+          title="Nenhum chamado neste dia"
+          description="Use o formulário abaixo para agendar chamados pendentes."
+        />
+      ) : (
+        <p className="text-[12px] text-[var(--ink-3)]">Nenhum chamado programado neste dia.</p>
+      );
+    }
+
+    return (
+      <ul className="space-y-2">
+        {chamadosDoDia.map((chamado) => {
+          const currentEquipeId = chamado.equipe?.id ?? '';
+          const draftEquipeId = equipeDraft[chamado.id] ?? currentEquipeId;
+          const equipeChanged = draftEquipeId !== currentEquipeId;
+
+          return (
+            <li
+              key={chamado.id}
+              className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{chamado.codigo}</p>
+                  <p className="mt-0.5 line-clamp-2 text-[13px] font-semibold text-[var(--ink)]">
+                    {chamadoTitulo(chamado)}
+                  </p>
+                  <p className="mt-1 truncate text-[11px] text-[var(--ink-3)]">{chamadoLocalLabel(chamado)}</p>
+                </div>
+                <Badge variant={prioridadeVariant(chamado.prioridade)}>{chamado.prioridade}</Badge>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--ink-3)]">
+                <UsersRound className="h-3.5 w-3.5" />
+                {chamado.equipe?.nome ?? 'Sem equipe'}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Select
+                  value={draftEquipeId}
+                  onChange={(event) =>
+                    setEquipeDraft((current) => ({ ...current, [chamado.id]: event.target.value }))
+                  }
+                  className="h-8 min-w-[140px] flex-1 text-xs"
+                  disabled={busyId === chamado.id}
+                >
+                  <option value="">Sem equipe</option>
+                  {equipes.map((equipe) => (
+                    <option key={equipe.id} value={equipe.id}>
+                      {equipe.nome}
+                    </option>
+                  ))}
+                </Select>
+                <Button
+                  variant="outlined"
+                  size="sm"
+                  disabled={busyId === chamado.id || !equipeChanged}
+                  onClick={() =>
+                    void saveProgramacao(
+                      chamado.id,
+                      chamado.codigo,
+                      chamado.previstaExecucaoEm ?? null,
+                      draftEquipeId || null,
+                    )
+                  }
+                >
+                  Salvar equipe
+                </Button>
+                <Button
+                  variant="text"
+                  size="sm"
+                  disabled={busyId === chamado.id}
+                  onClick={() => void saveProgramacao(chamado.id, chamado.codigo, null, undefined)}
+                >
+                  Remover data
+                </Button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
 
   async function saveProgramacao(
     chamadoId: string,
@@ -241,6 +358,8 @@ export function ChamadosProgramacaoPanel({
               <ChamadosProgramacaoMap
                 programados={(data?.porDia ?? []).flatMap((dia) => dia.chamados)}
                 pendentes={data?.pendentes ?? []}
+                selectedId={formChamadoId || null}
+                onSelect={handleProgramarFromMap}
               />
             </CardContent>
           </Card>
@@ -363,22 +482,52 @@ export function ChamadosProgramacaoPanel({
                       <ChevronRight className="h-4 w-4" />
                     </button>
                   </div>
-                  {weekDays.map((day) => (
-                    <div key={day.key} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
-                      <p className="text-[13px] font-semibold text-[var(--ink)]">{formatWeeklyDayLabel(day.date)}</p>
-                      {day.chamados.length === 0 ? (
-                        <p className="mt-1 text-[12px] text-[var(--ink-3)]">Nenhum chamado programado</p>
-                      ) : (
-                        <ul className="mt-2 space-y-1">
-                          {day.chamados.map((chamado) => (
-                            <li key={chamado.id} className="text-[12px] text-[var(--ink-2)]">
-                              · {chamado.codigo} — {chamadoTitulo(chamado).slice(0, 60)}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                  {weekDays.map((day) => {
+                    const isSelected = selectedDate === day.key;
+                    return (
+                      <button
+                        key={day.key}
+                        type="button"
+                        onClick={() => setSelectedDate(day.key)}
+                        className={cn(
+                          'w-full rounded-[var(--r-md)] border p-3 text-left transition-colors',
+                          isSelected
+                            ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
+                            : 'border-[var(--line)] bg-[var(--surface-2)] hover:bg-[var(--surface)]',
+                        )}
+                      >
+                        <p className="text-[13px] font-semibold text-[var(--ink)]">{formatWeeklyDayLabel(day.date)}</p>
+                        {day.chamados.length === 0 ? (
+                          <p className="mt-1 text-[12px] text-[var(--ink-3)]">Nenhum chamado programado</p>
+                        ) : (
+                          <ul className="mt-2 space-y-1">
+                            {day.chamados.map((chamado) => (
+                              <li key={chamado.id} className="text-[12px] text-[var(--ink-2)]">
+                                · {chamado.codigo} — {chamadoTitulo(chamado).slice(0, 60)}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </button>
+                    );
+                  })}
+
+                  {selectedDate && weekDays.some((day) => day.key === selectedDate) ? (
+                    <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] p-4">
+                      <h3 className="text-[14px] font-semibold text-[var(--ink)]">
+                        {new Date(`${selectedDate}T12:00:00`).toLocaleDateString('pt-BR', {
+                          weekday: 'long',
+                          day: '2-digit',
+                          month: 'long',
+                          year: 'numeric',
+                        })}
+                      </h3>
+                      <p className="mt-1 text-[12px] text-[var(--ink-3)]">
+                        Detalhamento dos chamados programados para o dia selecionado.
+                      </p>
+                      <div className="mt-3">{renderChamadosDoDiaList()}</div>
                     </div>
-                  ))}
+                  ) : null}
                 </div>
               )}
             </CardContent>
@@ -400,85 +549,11 @@ export function ChamadosProgramacaoPanel({
                   Chamados programados para execução nesta data.
                 </p>
 
-                {selectedDate && chamadosDoDia.length === 0 ? (
-                  <EmptyState
-                    title="Nenhum chamado neste dia"
-                    description="Use o formulário abaixo para agendar chamados pendentes."
-                  />
-                ) : null}
-
-                <ul className="mt-3 space-y-2">
-                  {chamadosDoDia.map((chamado) => {
-                    const currentEquipeId = chamado.equipe?.id ?? '';
-                    const draftEquipeId = equipeDraft[chamado.id] ?? currentEquipeId;
-                    const equipeChanged = draftEquipeId !== currentEquipeId;
-
-                    return (
-                      <li
-                        key={chamado.id}
-                        className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3"
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{chamado.codigo}</p>
-                            <p className="mt-0.5 line-clamp-2 text-[13px] font-semibold text-[var(--ink)]">
-                              {chamadoTitulo(chamado)}
-                            </p>
-                            <p className="mt-1 truncate text-[11px] text-[var(--ink-3)]">{chamadoLocalLabel(chamado)}</p>
-                          </div>
-                          <Badge variant={prioridadeVariant(chamado.prioridade)}>{chamado.prioridade}</Badge>
-                        </div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-[var(--ink-3)]">
-                          <UsersRound className="h-3.5 w-3.5" />
-                          {chamado.equipe?.nome ?? 'Sem equipe'}
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Select
-                            value={draftEquipeId}
-                            onChange={(event) =>
-                              setEquipeDraft((current) => ({ ...current, [chamado.id]: event.target.value }))
-                            }
-                            className="h-8 min-w-[140px] flex-1 text-xs"
-                            disabled={busyId === chamado.id}
-                          >
-                            <option value="">Sem equipe</option>
-                            {equipes.map((equipe) => (
-                              <option key={equipe.id} value={equipe.id}>
-                                {equipe.nome}
-                              </option>
-                            ))}
-                          </Select>
-                          <Button
-                            variant="outlined"
-                            size="sm"
-                            disabled={busyId === chamado.id || !equipeChanged}
-                            onClick={() =>
-                              void saveProgramacao(
-                                chamado.id,
-                                chamado.codigo,
-                                chamado.previstaExecucaoEm ?? null,
-                                draftEquipeId || null,
-                              )
-                            }
-                          >
-                            Salvar equipe
-                          </Button>
-                          <Button
-                            variant="text"
-                            size="sm"
-                            disabled={busyId === chamado.id}
-                            onClick={() => void saveProgramacao(chamado.id, chamado.codigo, null, undefined)}
-                          >
-                            Remover data
-                          </Button>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="mt-3">{renderChamadosDoDiaList({ showEmpty: true })}</div>
               </CardContent>
             </Card>
 
+            <div ref={agendarFormRef}>
             <Card elevation={1}>
               <CardContent className="space-y-3 p-4">
                 <h3 className="text-[14px] font-semibold text-[var(--ink)]">Agendar chamado</h3>
@@ -528,6 +603,7 @@ export function ChamadosProgramacaoPanel({
                 </Button>
               </CardContent>
             </Card>
+            </div>
           </div>
         </div>
         </>

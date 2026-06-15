@@ -22,12 +22,14 @@ export function ChamadosExecucaoMap({
   hoveredId = null,
   onSelect,
   onHover,
+  popupActionLabel,
 }: {
   pontos: ChamadoMapPoint[];
   selectedId?: string | null;
   hoveredId?: string | null;
   onSelect?: (id: string) => void;
   onHover?: (id: string | null) => void;
+  popupActionLabel?: string;
 }) {
   return (
     <ChamadosExecucaoMapClient
@@ -36,6 +38,7 @@ export function ChamadosExecucaoMap({
       hoveredId={hoveredId}
       onSelect={onSelect}
       onHover={onHover}
+      popupActionLabel={popupActionLabel}
     />
   );
 }

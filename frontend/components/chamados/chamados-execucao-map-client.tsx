@@ -51,14 +51,14 @@ function createChamadoIcon(emphasis: 'normal' | 'hover' | 'selected') {
   });
 }
 
-function buildPopupHtml(point: ChamadoMapPoint) {
+function buildPopupHtml(point: ChamadoMapPoint, actionLabel: string) {
   return `
     <div style="min-width:220px;font-family:system-ui,sans-serif;">
       <strong style="display:block;font-size:13px;color:#0066cc;">${escapeHtml(point.codigo)}</strong>
       <span style="display:block;margin-top:4px;font-size:13px;color:#0f1b2d;font-weight:600;">${escapeHtml(point.titulo)}</span>
       <span style="display:block;margin-top:4px;font-size:12px;color:#647389;">${escapeHtml(point.unidadeNome)}</span>
       <button type="button" data-chamado-id="${point.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
-        Executar chamado →
+        ${escapeHtml(actionLabel)}
       </button>
     </div>
   `;
@@ -75,12 +75,14 @@ export function ChamadosExecucaoMapClient({
   hoveredId = null,
   onSelect,
   onHover,
+  popupActionLabel = 'Executar chamado →',
 }: {
   pontos: ChamadoMapPoint[];
   selectedId?: string | null;
   hoveredId?: string | null;
   onSelect?: (id: string) => void;
   onHover?: (id: string | null) => void;
+  popupActionLabel?: string;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -92,6 +94,7 @@ export function ChamadosExecucaoMapClient({
   const markerByIdRef = useRef<Map<string, L.Marker>>(new Map());
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
+  const popupActionLabelRef = useRef(popupActionLabel);
   const [containerReady, setContainerReady] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [basemap, setBasemap] = useState<MapBasemap>('street');
@@ -101,6 +104,7 @@ export function ChamadosExecucaoMapClient({
 
   onSelectRef.current = onSelect;
   onHoverRef.current = onHover;
+  popupActionLabelRef.current = popupActionLabel;
 
   useEffect(() => {
     const node = containerRef.current;
@@ -209,7 +213,9 @@ export function ChamadosExecucaoMapClient({
     markerByIdRef.current.clear();
 
     located.forEach(({ ponto, latLng }) => {
-      const marker = L.marker(latLng, { icon: createChamadoIcon('normal') }).bindPopup(buildPopupHtml(ponto));
+      const marker = L.marker(latLng, { icon: createChamadoIcon('normal') }).bindPopup(
+        buildPopupHtml(ponto, popupActionLabelRef.current),
+      );
       marker.on('click', () => onSelectRef.current?.(ponto.id));
       marker.on('mouseover', () => onHoverRef.current?.(ponto.id));
       marker.on('mouseout', () => onHoverRef.current?.(null));
@@ -229,7 +235,7 @@ export function ChamadosExecucaoMapClient({
     } else {
       map.setView([FRANCA_CENTER.lat, FRANCA_CENTER.lng], FRANCA_DEFAULT_ZOOM, { animate: false });
     }
-  }, [located, mapReady]);
+  }, [located, mapReady, popupActionLabel]);
 
   useEffect(() => {
     markerByIdRef.current.forEach((marker, id) => {

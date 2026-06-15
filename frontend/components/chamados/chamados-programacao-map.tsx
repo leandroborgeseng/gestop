@@ -59,6 +59,7 @@ export function ChamadosProgramacaoMap({
         hoveredId={null}
         onSelect={(id) => onSelect?.(id)}
         onHover={() => undefined}
+        popupActionLabel="Programar chamado →"
       />
     </div>
   );
