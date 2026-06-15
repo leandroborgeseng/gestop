@@ -19,6 +19,7 @@ import { IntegracoesService } from '../integracoes/integracoes.service';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { extractStorageKeyFromUrl, resolveStoragePublicUrl } from '../storage/storage-url';
 import {
   CreateChamadoDto,
   PublicCreateChamadoDto,
@@ -619,10 +620,12 @@ export class ChamadosService {
       throw new ForbiddenException('Nao e permitido abrir chamado fora da sua secretaria.');
     }
 
+    let fotoStorageKey: string | undefined;
     let fotoUrl: string | undefined;
     let fotoMimeType: string | undefined;
     if (dto.fotoDataUrl?.trim()) {
       const stored = await this.storageService.persistEvidenceUrl(dto.fotoDataUrl.trim());
+      fotoStorageKey = stored.storageKey;
       fotoUrl = stored.url;
       fotoMimeType = stored.mimeType;
     }
@@ -646,6 +649,7 @@ export class ChamadosService {
           latitude: location.latitude,
           longitude: location.longitude,
           fotoUrl,
+          fotoStorageKey,
           fotoMimeType,
           registradoPorId: user.sub,
         },
@@ -676,10 +680,12 @@ export class ChamadosService {
     });
     if (!unidade) throw new NotFoundException('QR Code invalido ou proprio inativo.');
 
+    let fotoStorageKey: string | undefined;
     let fotoUrl: string | undefined;
     let fotoMimeType: string | undefined;
     if (dto.fotoDataUrl?.trim()) {
       const stored = await this.storageService.persistEvidenceUrl(dto.fotoDataUrl.trim());
+      fotoStorageKey = stored.storageKey;
       fotoUrl = stored.url;
       fotoMimeType = stored.mimeType;
     }
@@ -699,6 +705,7 @@ export class ChamadosService {
           latitude: unidade.latitude,
           longitude: unidade.longitude,
           fotoUrl,
+          fotoStorageKey,
           fotoMimeType,
         },
         include: this.includeRelations(),
@@ -1137,7 +1144,7 @@ export class ChamadosService {
 
     const baseUrl =
       process.env.APP_PUBLIC_URL?.trim() ??
-      process.env.STORAGE_PUBLIC_URL_BASE?.trim()?.replace(/\/api-gestop$/, '') ??
+      process.env.STORAGE_PUBLIC_URL_BASE?.trim()?.replace(/\/api-(gestop|sigma)$/, '') ??
       '';
     const link = baseUrl ? `${baseUrl}/chamados?id=${chamado.id}` : `/chamados?id=${chamado.id}`;
 
@@ -1145,7 +1152,8 @@ export class ChamadosService {
       chamado.unidade?.endereco ??
       ([chamado.enderecoTexto, chamado.enderecoBairro].filter(Boolean).join(' · ') || 'Endereço não informado');
 
-    const fotos = [chamado.fotoUrl].filter(Boolean) as string[];
+    const serialized = this.serializeChamado(chamado);
+    const fotos = [serialized.fotoUrl].filter(Boolean) as string[];
 
     const result = await sendChamadoEquipeNotificacao(this.emailService, {
       to,
@@ -1215,18 +1223,21 @@ export class ChamadosService {
     }
 
     return buildOrdensServicoLotePdf(
-      chamados.map((item) => ({
-        codigo: item.codigo,
-        tipo: item.tipoChamado?.nome ?? null,
-        prioridade: item.prioridade,
-        descricao: item.descricao,
-        endereco:
-          item.unidade?.endereco ??
-          ([item.enderecoTexto, item.enderecoBairro].filter(Boolean).join(' · ') || '—'),
-        equipe: item.equipe?.nome ?? null,
-        prazoSla: item.prazoEm?.toISOString() ?? null,
-        fotoUrl: item.fotoUrl,
-      })),
+      chamados.map((item) => {
+        const serialized = this.serializeChamado(item);
+        return {
+          codigo: item.codigo,
+          tipo: item.tipoChamado?.nome ?? null,
+          prioridade: item.prioridade,
+          descricao: item.descricao,
+          endereco:
+            item.unidade?.endereco ??
+            ([item.enderecoTexto, item.enderecoBairro].filter(Boolean).join(' · ') || '—'),
+          equipe: item.equipe?.nome ?? null,
+          prazoSla: item.prazoEm?.toISOString() ?? null,
+          fotoUrl: serialized.fotoUrl,
+        };
+      }),
     );
   }
 
@@ -1558,16 +1569,18 @@ export class ChamadosService {
   }
 
   private serializeChamado<T extends {
+    fotoUrl?: string | null;
+    fotoStorageKey?: string | null;
     latitude?: unknown;
     longitude?: unknown;
-    unidade?: {
-      latitude?: unknown;
-      longitude?: unknown;
-      raioValidacaoMetros?: number;
-    } | null;
+    unidade?: Record<string, unknown> | null;
   }>(chamado: T) {
+    const fotoStorageKey =
+      chamado.fotoStorageKey ?? extractStorageKeyFromUrl(chamado.fotoUrl ?? null);
+
     return {
       ...chamado,
+      fotoUrl: resolveStoragePublicUrl(fotoStorageKey, chamado.fotoUrl ?? null),
       latitude: chamado.latitude != null ? Number(chamado.latitude) : null,
       longitude: chamado.longitude != null ? Number(chamado.longitude) : null,
       unidade: chamado.unidade
@@ -1584,6 +1597,7 @@ export class ChamadosService {
     id: string;
     tipo: EvidenciaTipo;
     url: string;
+    storageKey?: string | null;
     mimeType: string | null;
     tamanhoBytes: number | null;
     latitude: unknown;
@@ -1592,10 +1606,12 @@ export class ChamadosService {
     capturadaEm: Date;
     metadata: unknown;
   }) {
+    const storageKey = evidencia.storageKey ?? extractStorageKeyFromUrl(evidencia.url);
+
     return {
       id: evidencia.id,
       tipo: evidencia.tipo,
-      url: evidencia.url,
+      url: resolveStoragePublicUrl(storageKey, evidencia.url) ?? evidencia.url,
       mimeType: evidencia.mimeType,
       tamanhoBytes: evidencia.tamanhoBytes,
       latitude: evidencia.latitude != null ? Number(evidencia.latitude) : null,

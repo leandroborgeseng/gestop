@@ -32,7 +32,7 @@ async function bootstrap() {
 
   const storageHealth = await inspectStorageHealth();
   console.log(
-    `[SIGMA:api] Storage ${storageHealth.status}: driver=${storageHealth.driver} dir=${'localDir' in storageHealth ? storageHealth.localDir : 'n/a'}`,
+    `[SIGMA:api] Storage ${storageHealth.status}: driver=${storageHealth.driver} dir=${'localDir' in storageHealth ? storageHealth.localDir : 'n/a'}${'storedFileCount' in storageHealth && storageHealth.storedFileCount != null ? ` files=${storageHealth.storedFileCount}` : ''}`,
   );
   if ('persistentHint' in storageHealth && storageHealth.persistentHint) {
     console.warn(`[SIGMA:api] ${storageHealth.persistentHint}`);

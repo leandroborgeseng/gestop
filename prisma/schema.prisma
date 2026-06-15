@@ -633,6 +633,7 @@ model Chamado {
   encerradoEm         DateTime?
   impedimentoMotivo   String?
   fotoUrl             String?
+  fotoStorageKey      String?
   fotoMimeType        String?
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt

@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { formatEvidenceLimitMb, resolveMaxEvidenceBytes } from './storage.constants';
+import { buildStoragePublicUrl } from './storage-url';
+import { resolveStorageLocalDir } from './storage.health';
 
 export type StoredObject = {
   url: string;
@@ -49,7 +51,7 @@ export class StorageService {
         return;
       }
 
-      const root = process.env.STORAGE_LOCAL_DIR?.trim() || join(process.cwd(), 'storage');
+      const root = resolveStorageLocalDir();
       await unlink(join(root, normalizedKey));
     } catch (error) {
       this.logger.warn(
@@ -93,14 +95,14 @@ export class StorageService {
       };
     }
 
-    const root = process.env.STORAGE_LOCAL_DIR?.trim() || join(process.cwd(), 'storage');
+    const root = resolveStorageLocalDir();
     const absolutePath = join(root, storageKey);
     await mkdir(dirname(absolutePath), { recursive: true });
     await writeFile(absolutePath, buffer);
 
     const publicBase = process.env.STORAGE_PUBLIC_URL_BASE?.trim() || `http://localhost:${process.env.PORT ?? 3001}`;
     return {
-      url: `${publicBase.replace(/\/$/, '')}/storage/${storageKey}`,
+      url: buildStoragePublicUrl(storageKey) ?? `${publicBase.replace(/\/$/, '')}/storage/${storageKey}`,
       storageKey,
       mimeType,
       tamanhoBytes: buffer.length,
@@ -180,13 +182,4 @@ function buildPublicUrl(storageKey: string) {
     throw new BadRequestException('S3_PUBLIC_URL_BASE nao configurado.');
   }
   return `${base.replace(/\/$/, '')}/${storageKey}`;
-}
-
-function extractStorageKeyFromUrl(url: string) {
-  try {
-    const parsed = new URL(url);
-    return parsed.pathname.replace(/^\//, '');
-  } catch {
-    return url;
-  }
 }

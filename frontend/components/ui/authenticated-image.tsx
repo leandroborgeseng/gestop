@@ -7,10 +7,14 @@ function resolveStorageApiPath(url: string) {
   const marker = '/storage/';
   const index = url.indexOf(marker);
   if (index >= 0) {
-    return `${API_PROXY_PREFIX}/storage/${url.slice(index + marker.length)}`;
+    const key = url.slice(index + marker.length).replace(/^\/+/, '');
+    return `${API_PROXY_PREFIX}/storage/${key}`;
   }
   if (url.startsWith('storage/')) {
     return `${API_PROXY_PREFIX}/${url}`;
+  }
+  if (url.startsWith('evidencias/')) {
+    return `${API_PROXY_PREFIX}/storage/${url}`;
   }
   return null;
 }

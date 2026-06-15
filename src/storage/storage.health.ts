@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { isProductionEnv } from '../config/env';
@@ -61,6 +61,16 @@ export async function inspectStorageHealth() {
   }
 
   const persistentHint = describeStoragePersistenceRisk(localDir);
+  let storedFileCount: number | null = null;
+
+  if (writable && readable) {
+    try {
+      storedFileCount = await countStoredEvidenceFiles(localDir);
+    } catch {
+      storedFileCount = null;
+    }
+  }
+
   const status =
     !writable || !readable || errors.length > 0
       ? ('error' as const)
@@ -75,7 +85,35 @@ export async function inspectStorageHealth() {
     writable,
     readable,
     publicUrlBase: process.env.STORAGE_PUBLIC_URL_BASE?.trim() ?? null,
+    storedFileCount,
     persistentHint,
     errors: errors.length > 0 ? errors : undefined,
   };
+}
+
+async function countStoredEvidenceFiles(root: string): Promise<number> {
+  const evidenciasDir = join(root, 'evidencias');
+  let total = 0;
+
+  async function walk(dir: string) {
+    let entries;
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+      } else if (entry.isFile() && !entry.name.startsWith('.')) {
+        const info = await stat(fullPath);
+        if (info.isFile()) total += 1;
+      }
+    }
+  }
+
+  await walk(evidenciasDir);
+  return total;
 }
