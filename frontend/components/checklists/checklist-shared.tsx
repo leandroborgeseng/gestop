@@ -69,10 +69,14 @@ export function CreateChecklistForm({
   secretarias,
   onSubmit,
   onCancel,
+  formId = 'create-checklist-form',
+  hideActions = false,
 }: {
   secretarias: AdminSecretaria[];
   onSubmit: (payload: Record<string, unknown>) => void;
   onCancel?: () => void;
+  formId?: string;
+  hideActions?: boolean;
 }) {
   const [escopo, setEscopo] = useState<ChecklistEscopo>('UNIDADE_TIPO');
   const [formError, setFormError] = useState<string | null>(null);
@@ -110,7 +114,7 @@ export function CreateChecklistForm({
   const showUnidadeTipo = escopo === 'UNIDADE_TIPO';
 
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form id={formId} onSubmit={submit} className="space-y-4">
       <Field label="Nome">
         <Input name="nome" required />
       </Field>
@@ -160,17 +164,19 @@ export function CreateChecklistForm({
         unidades daquele tipo (ex.: Escola, UBS, Praça).
       </p>
       {formError ? <p className="md-body-md text-red-700">{formError}</p> : null}
-      <div className="flex flex-wrap gap-2 pt-2">
-        <Button type="submit" variant="filled" className="flex-1">
-          <Plus className="h-4 w-4" />
-          Criar checklist
-        </Button>
-        {onCancel ? (
-          <Button type="button" variant="text" onClick={onCancel}>
-            Cancelar
+      {hideActions ? null : (
+        <div className="flex flex-wrap gap-2 pt-2">
+          <Button type="submit" variant="filled" className="flex-1">
+            <Plus className="h-4 w-4" />
+            Criar checklist
           </Button>
-        ) : null}
-      </div>
+          {onCancel ? (
+            <Button type="button" variant="text" onClick={onCancel}>
+              Cancelar
+            </Button>
+          ) : null}
+        </div>
+      )}
     </form>
   );
 }

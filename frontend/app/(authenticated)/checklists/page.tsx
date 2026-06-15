@@ -178,11 +178,27 @@ export default function ChecklistsPage() {
               </div>
             )}
 
-            <Sheet open={createOpen} onClose={() => setCreateOpen(false)} title="Novo checklist">
+            <Sheet
+              open={createOpen}
+              onClose={() => setCreateOpen(false)}
+              title="Novo checklist"
+              footer={
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" form="create-checklist-form" variant="filled" size="md" className="min-h-11 flex-1 gap-1.5">
+                    <Plus className="h-4 w-4" />
+                    Criar checklist
+                  </Button>
+                  <Button type="button" variant="text" size="md" className="min-h-11" onClick={() => setCreateOpen(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              }
+            >
               <CreateChecklistForm
                 secretarias={secretarias}
                 onSubmit={(payload) => void handleCreate(payload)}
                 onCancel={() => setCreateOpen(false)}
+                hideActions
               />
             </Sheet>
           </>
