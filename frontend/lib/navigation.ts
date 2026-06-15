@@ -126,10 +126,8 @@ export const NAV_GROUPS: NavGroup[] = [
   { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
 ];
 
-const MAX_BOTTOM_SLOTS = 5;
-
-/** Ordem fixa dos atalhos na barra inferior mobile (Execução sempre visível quando permitido). */
-const MOBILE_PRIMARY_ORDER = ['cco', 'mobile', 'chamados', 'execucao', 'dashboard'] as const;
+/** Atalhos fixos na barra inferior mobile — Execução sempre incluído quando permitido. */
+const MOBILE_BAR_CORE = ['cco', 'mobile', 'chamados', 'execucao'] as const;
 
 export function getVisibleNavItems(permissions: string[]) {
   return NAV_ITEMS.filter((item) => {
@@ -152,16 +150,14 @@ export function getGroupedNavItems(permissions: string[]) {
 
 export function getMobileNav(permissions: string[]) {
   const visible = getVisibleNavItems(permissions);
+  const visibleById = new Map(visible.map((item) => [item.id, item]));
 
-  if (visible.length <= MAX_BOTTOM_SLOTS) {
-    return { primary: visible, secondary: [], hasMore: false };
+  const primary = MOBILE_BAR_CORE.map((id) => visibleById.get(id)).filter(Boolean) as NavItem[];
+
+  if (visible.length <= primary.length) {
+    return { primary, secondary: [], hasMore: false };
   }
 
-  const visibleById = new Map(visible.map((item) => [item.id, item]));
-  const orderedPrimary = MOBILE_PRIMARY_ORDER.map((id) => visibleById.get(id)).filter(Boolean) as NavItem[];
-  const fallbackPrimary = visible.filter((item) => item.mobilePrimary);
-  const primaryPool = orderedPrimary.length > 0 ? orderedPrimary : fallbackPrimary.length > 0 ? fallbackPrimary : visible;
-  const primary = primaryPool.slice(0, MAX_BOTTOM_SLOTS - 1);
   const primaryIds = new Set(primary.map((item) => item.id));
   const secondary = visible.filter((item) => !primaryIds.has(item.id));
 

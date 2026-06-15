@@ -348,7 +348,7 @@ export function MobileBottomNav({
         aria-label="Navegação mobile"
       >
         <div
-          className="grid gap-0.5"
+          className="grid items-stretch gap-1"
           style={{ gridTemplateColumns: `repeat(${Math.max(slotCount, 1)}, minmax(0, 1fr))` }}
         >
           {primary.map((item) => {
@@ -362,14 +362,14 @@ export function MobileBottomNav({
                 href={item.href}
                 prefetch
                 className={cn(
-                  'relative flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-[var(--r-md)] px-1 text-xs font-medium transition-colors',
+                  'relative flex h-full min-h-[4.5rem] w-full flex-col items-center justify-center gap-1 rounded-[var(--r-md)] px-1 py-1.5 text-xs font-medium transition-colors',
                   active ? 'font-semibold text-[var(--brand-hover)]' : 'text-[var(--ink-3)]',
                 )}
                 aria-current={active ? 'page' : undefined}
               >
                 {active ? (
                   <span
-                    className="pointer-events-none absolute inset-x-1.5 inset-y-1 rounded-[var(--r-md)] bg-[var(--brand-soft)]"
+                    className="pointer-events-none absolute inset-0 rounded-[var(--r-md)] bg-[var(--brand-soft)]"
                     aria-hidden
                   />
                 ) : null}
@@ -393,14 +393,14 @@ export function MobileBottomNav({
               type="button"
               onClick={() => onMoreOpen(true)}
               className={cn(
-                'relative flex min-h-[4.5rem] flex-col items-center justify-center gap-1 rounded-[var(--r-md)] px-1 text-xs font-medium transition-colors',
+                'relative flex h-full min-h-[4.5rem] w-full flex-col items-center justify-center gap-1 rounded-[var(--r-md)] px-1 py-1.5 text-xs font-medium transition-colors',
                 moreOpen ? 'font-semibold text-[var(--brand-hover)]' : 'text-[var(--ink-3)]',
               )}
               aria-label="Abrir mais opções"
             >
               {moreOpen ? (
                 <span
-                  className="pointer-events-none absolute inset-x-1.5 inset-y-1 rounded-[var(--r-md)] bg-[var(--brand-soft)]"
+                  className="pointer-events-none absolute inset-0 rounded-[var(--r-md)] bg-[var(--brand-soft)]"
                   aria-hidden
                 />
               ) : null}

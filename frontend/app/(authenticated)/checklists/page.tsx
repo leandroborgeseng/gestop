@@ -14,7 +14,6 @@ import { TipBanner } from '@/components/help/tip-banner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Fab } from '@/components/ui/fab';
 import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
@@ -94,6 +93,12 @@ export default function ChecklistsPage() {
         title="Checklists"
         description="Modelos versionados aplicados pelos agentes em vistoria. Publique versões sem quebrar histórico."
         backHref="/cco"
+        action={
+          <Button variant="filled" size="md" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Criar
+          </Button>
+        }
       >
         <TipBanner id="checklists-versionamento">
           Selecione um modelo para ver itens publicados. Use &quot;Abrir editor&quot; para rascunho, publicação e histórico de versões.
@@ -172,11 +177,6 @@ export default function ChecklistsPage() {
                 </section>
               </div>
             )}
-
-            <Fab extended aria-label="Criar checklist" onClick={() => setCreateOpen(true)}>
-              <Plus className="h-6 w-6" />
-              Criar
-            </Fab>
 
             <Sheet open={createOpen} onClose={() => setCreateOpen(false)} title="Novo checklist">
               <CreateChecklistForm
