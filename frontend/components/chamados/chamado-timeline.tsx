@@ -79,6 +79,12 @@ export function ChamadoTimeline({ steps }: { steps: ChamadoTimelineStep[] }) {
                       <p>Para: {item.para}</p>
                     </div>
                   ))}
+                  {step.expand.detalhes?.map((item) => (
+                    <div key={item.label}>
+                      <p className="font-semibold text-[var(--ink)]">{item.label}</p>
+                      <p className="whitespace-pre-wrap">{item.value}</p>
+                    </div>
+                  ))}
                   {step.expand.anexos && step.expand.anexos.length > 0 ? (
                     <div className="space-y-2">
                       <p className="inline-flex items-center gap-1 font-semibold text-[var(--ink)]">

@@ -97,6 +97,7 @@ export type ChamadoTimelineStep = {
   expand?: {
     descricao?: string;
     alteracoes?: Array<{ campo: string; label: string; de: string; para: string }>;
+    detalhes?: Array<{ label: string; value: string }>;
     anexos?: Array<{ id: string; url: string; mimeType?: string | null; nome?: string | null }>;
     usuario?: string;
     dataHora?: string;
@@ -116,6 +117,65 @@ export type ChamadoHistoricoEntry = {
 
 function formatTimelineDate(value?: string | null) {
   return value ? new Date(value).toLocaleString('pt-BR') : '—';
+}
+
+function mapHistoricoAnexos(entry: ChamadoHistoricoEntry) {
+  return (entry.anexos ?? []).map((item) => ({
+    id: item.id,
+    url: item.url,
+    mimeType: item.mimeType,
+    nome: item.descricao,
+  }));
+}
+
+function buildExecucaoConclusaoStep(
+  entry: ChamadoHistoricoEntry,
+  metadata: Record<string, unknown>,
+  isLast: boolean,
+  currentStatus: string,
+): ChamadoTimelineStep {
+  const impedimento = entry.statusNovo === 'IMPEDIDO' || metadata.impedimento === true;
+  const relatorio =
+    typeof metadata.relatorio === 'string' && metadata.relatorio.trim()
+      ? metadata.relatorio.trim()
+      : impedimento && entry.motivo?.startsWith('Execução impedida:')
+        ? entry.motivo.replace(/^Execução impedida:\s*/, '').trim()
+        : entry.motivo?.trim() || '';
+  const distanciaMetros = typeof metadata.distanciaMetros === 'number' ? metadata.distanciaMetros : null;
+  const evidenciasCount = typeof metadata.evidenciasCount === 'number' ? metadata.evidenciasCount : null;
+  const anexos = mapHistoricoAnexos(entry);
+  const detalhes: Array<{ label: string; value: string }> = [];
+
+  if (impedimento && typeof metadata.impedimentoMotivo === 'string' && metadata.impedimentoMotivo.trim()) {
+    detalhes.push({ label: 'Motivo do impedimento', value: metadata.impedimentoMotivo.trim() });
+  }
+  if (distanciaMetros != null) {
+    detalhes.push({ label: 'Distância do check-out', value: `${Math.round(distanciaMetros)} m do ponto` });
+  }
+  if (evidenciasCount != null) {
+    detalhes.push({ label: 'Evidências registradas', value: `${evidenciasCount} foto(s)` });
+  }
+
+  const expandContent = {
+    descricao: relatorio || undefined,
+    detalhes: detalhes.length ? detalhes : undefined,
+    anexos: anexos.length ? anexos : undefined,
+    usuario: entry.alteradoPor?.nome,
+    dataHora: formatTimelineDate(entry.createdAt),
+  };
+  const hasExpand = Boolean(
+    expandContent.descricao || expandContent.detalhes?.length || expandContent.anexos?.length,
+  );
+
+  return {
+    id: entry.id,
+    title: impedimento ? 'Execução impedida em campo' : 'Execução concluída em campo',
+    date: formatTimelineDate(entry.createdAt),
+    sub: entry.alteradoPor?.nome,
+    done: true,
+    active: isLast && entry.statusNovo === currentStatus,
+    expand: hasExpand ? expandContent : undefined,
+  };
 }
 
 export function buildChamadoTimelineFromHistorico(
@@ -149,12 +209,7 @@ export function buildChamadoTimelineFromHistorico(
         active: false,
         expand: {
           descricao: typeof metadata.descricao === 'string' ? metadata.descricao : undefined,
-          anexos: (entry.anexos ?? []).map((item) => ({
-            id: item.id,
-            url: item.url,
-            mimeType: item.mimeType,
-            nome: item.descricao,
-          })),
+          anexos: mapHistoricoAnexos(entry),
           usuario: entry.alteradoPor?.nome,
           dataHora: formatTimelineDate(entry.createdAt),
         },
@@ -201,6 +256,26 @@ export function buildChamadoTimelineFromHistorico(
             }
           : undefined,
       };
+    }
+
+    if (tipo === 'execucao_conclusao') {
+      return buildExecucaoConclusaoStep(entry, metadata, isLast, currentStatus);
+    }
+
+    if (
+      entry.statusNovo === 'CONCLUIDO' &&
+      entry.motivo === 'Execução concluída em campo.' &&
+      typeof metadata.relatorio === 'string'
+    ) {
+      return buildExecucaoConclusaoStep(entry, metadata, isLast, currentStatus);
+    }
+
+    if (
+      entry.statusNovo === 'IMPEDIDO' &&
+      entry.motivo?.startsWith('Execução impedida:') &&
+      typeof metadata.relatorio === 'string'
+    ) {
+      return buildExecucaoConclusaoStep(entry, metadata, isLast, currentStatus);
     }
 
     const assignmentOnly = entry.statusAnterior && entry.statusAnterior === entry.statusNovo;

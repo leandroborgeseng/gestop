@@ -284,7 +284,7 @@ export class ChamadosService {
       orderBy: { createdAt: 'asc' },
       include: { alteradoPor: { select: { id: true, nome: true } } },
     });
-    return { ...this.serializeChamado(chamado), historico: await this.enrichHistorico(historico) };
+    return { ...this.serializeChamado(chamado), historico: await this.enrichHistorico(historico, id) };
   }
 
   async listTiposChamadoAtivos() {
@@ -451,7 +451,8 @@ export class ChamadosService {
       throw new BadRequestException('Confirme a conclusão com uma nova leitura de GPS no local.');
     }
 
-    const evidenciasCount = await this.countEvidenciasExecucaoCampo(id);
+    const evidenciasExecucao = await this.listEvidenciasExecucaoCampo(id);
+    const evidenciasCount = evidenciasExecucao.length;
     if (!dto.impedimento && evidenciasCount < 1) {
       throw new BadRequestException('Registre ao menos uma evidência fotográfica da execução em campo.');
     }
@@ -492,6 +493,8 @@ export class ChamadosService {
           metadata: {
             tipo: 'execucao_conclusao',
             relatorio: dto.relatorio.trim(),
+            impedimento: Boolean(dto.impedimento),
+            impedimentoMotivo: dto.impedimento ? dto.impedimentoMotivo?.trim() ?? null : null,
             checkin: {
               latitude: dto.checkin.latitude,
               longitude: dto.checkin.longitude,
@@ -499,6 +502,7 @@ export class ChamadosService {
             },
             distanciaMetros: checkinValidation.result.distanceMeters,
             evidenciasCount,
+            evidenciaIds: evidenciasExecucao.map((item) => item.id),
           },
         },
       });
@@ -1589,8 +1593,8 @@ export class ChamadosService {
     return Math.abs(a.latitude - b.latitude) < epsilon && Math.abs(a.longitude - b.longitude) < epsilon;
   }
 
-  private async countEvidenciasExecucaoCampo(chamadoId: string) {
-    return this.prisma.evidencia.count({
+  private async listEvidenciasExecucaoCampo(chamadoId: string) {
+    return this.prisma.evidencia.findMany({
       where: {
         chamadoId,
         metadata: {
@@ -1598,6 +1602,8 @@ export class ChamadosService {
           equals: 'execucao_campo',
         },
       },
+      orderBy: { capturadaEm: 'asc' },
+      select: { id: true },
     });
   }
 
@@ -1668,24 +1674,52 @@ export class ChamadosService {
       createdAt: Date;
       alteradoPor: { id: string; nome: string } | null;
     }>,
+    entidadeId?: string,
   ) {
     const evidenciaIds = historico.flatMap((entry) => {
       const metadata = entry.metadata as { evidenciaIds?: string[] } | null;
       return metadata?.evidenciaIds ?? [];
     });
 
-    const evidencias =
+    const needsLegacyExecucaoEvidencias =
+      Boolean(entidadeId) &&
+      historico.some((entry) => {
+        const metadata = entry.metadata as { tipo?: string; evidenciaIds?: string[] } | null;
+        return metadata?.tipo === 'execucao_conclusao' && !(metadata.evidenciaIds?.length ?? 0);
+      });
+
+    const [evidencias, legacyExecucaoEvidencias] = await Promise.all([
       evidenciaIds.length > 0
-        ? await this.prisma.evidencia.findMany({
+        ? this.prisma.evidencia.findMany({
             where: { id: { in: evidenciaIds } },
           })
-        : [];
+        : Promise.resolve([]),
+      needsLegacyExecucaoEvidencias && entidadeId
+        ? this.prisma.evidencia.findMany({
+            where: {
+              chamadoId: entidadeId,
+              metadata: {
+                path: ['origem'],
+                equals: 'execucao_campo',
+              },
+            },
+            orderBy: { capturadaEm: 'asc' },
+          })
+        : Promise.resolve([]),
+    ]);
 
     const evidenciaMap = new Map(evidencias.map((item) => [item.id, this.serializeEvidencia(item)]));
+    const legacyExecucaoAnexos = legacyExecucaoEvidencias.map((item) => this.serializeEvidencia(item));
 
     return historico.map((entry) => {
       const metadata = (entry.metadata ?? {}) as Record<string, unknown>;
       const ids = Array.isArray(metadata.evidenciaIds) ? (metadata.evidenciaIds as string[]) : [];
+      const anexosFromIds = ids.map((id) => evidenciaMap.get(id)).filter(Boolean);
+      const anexos =
+        metadata.tipo === 'execucao_conclusao' && anexosFromIds.length === 0
+          ? legacyExecucaoAnexos
+          : anexosFromIds;
+
       return {
         id: entry.id,
         statusAnterior: entry.statusAnterior,
@@ -1694,7 +1728,7 @@ export class ChamadosService {
         metadata,
         createdAt: entry.createdAt.toISOString(),
         alteradoPor: entry.alteradoPor,
-        anexos: ids.map((id) => evidenciaMap.get(id)).filter(Boolean),
+        anexos,
       };
     });
   }
