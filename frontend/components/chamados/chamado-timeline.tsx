@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Check, FileText, Paperclip } from 'lucide-react';
+import { ChevronDown, ChevronRight, Check, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { AuthenticatedImage } from '@/components/ui/authenticated-image';
+import { AuthenticatedStorageLink } from '@/components/ui/authenticated-storage-link';
 import { ChamadoTimelineStep } from '@/lib/chamado-status';
 
 export function ChamadoTimeline({ steps }: { steps: ChamadoTimelineStep[] }) {
@@ -60,9 +61,9 @@ export function ChamadoTimeline({ steps }: { steps: ChamadoTimelineStep[] }) {
                     {step.title}
                   </span>
                 )}
-                {!canExpand ? <span className="mono text-[11px] text-[var(--ink-3)]">{step.date}</span> : null}
+                <span className="mono text-[11px] text-[var(--ink-3)]">{step.date}</span>
               </div>
-              {step.sub && !canExpand ? <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{step.sub}</p> : null}
+              {step.sub ? <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{step.sub}</p> : null}
 
               {canExpand && isExpanded && step.expand ? (
                 <div className="mt-2 space-y-2 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-[12px] text-[var(--ink-2)]">
@@ -101,16 +102,11 @@ export function ChamadoTimeline({ steps }: { steps: ChamadoTimelineStep[] }) {
                             className="max-h-40 w-full rounded-[var(--r-sm)] object-cover"
                           />
                         ) : (
-                          <a
+                          <AuthenticatedStorageLink
                             key={anexo.id}
                             href={anexo.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[var(--brand)] hover:underline"
-                          >
-                            <FileText className="h-3.5 w-3.5" />
-                            {anexo.nome ?? 'Arquivo anexo'}
-                          </a>
+                            label={anexo.nome ?? 'Arquivo anexo'}
+                          />
                         );
                       })}
                     </div>

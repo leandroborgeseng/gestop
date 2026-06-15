@@ -19,16 +19,19 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import {
   createChecklistVersion,
   deactivateChecklist,
+  listAdminSecretarias,
   listChecklists,
   publishChecklistVersion,
+  saveChecklist,
   updateChecklistVersion,
 } from '@/lib/api';
-import { ChecklistModel } from '@/lib/types';
+import { AdminSecretaria, ChecklistModel } from '@/lib/types';
 import { formatChecklistVinculo } from '@/lib/unidade-tipo';
 
 export default function ChecklistDetalhePage() {
   const params = useParams<{ id: string }>();
   const [checklist, setChecklist] = useState<ChecklistModel | null>(null);
+  const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -50,8 +53,9 @@ export default function ChecklistDetalhePage() {
     setLoading(true);
     setError(null);
     try {
-      const checklists = await listChecklists();
+      const [checklists, nextSecretarias] = await Promise.all([listChecklists(), listAdminSecretarias()]);
       const found = checklists.find((item) => item.id === params.id) ?? null;
+      setSecretarias(nextSecretarias);
       if (!found) {
         setChecklist(null);
         setError('Checklist não encontrado.');
@@ -114,8 +118,12 @@ export default function ChecklistDetalhePage() {
           <div className="space-y-6">
             <ChecklistHeader
               checklist={checklist}
+              secretarias={secretarias}
               onNewVersion={() => mutate(() => createChecklistVersion(checklist.id), 'Nova versão em rascunho criada.')}
               onDeactivate={() => mutate(() => deactivateChecklist(checklist.id), 'Checklist inativado.')}
+              onUpdateBinding={(payload) =>
+                mutate(() => saveChecklist(payload, checklist.id), 'Vínculo do checklist atualizado.')
+              }
             />
 
             {published ? (

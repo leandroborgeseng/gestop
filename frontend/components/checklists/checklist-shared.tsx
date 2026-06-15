@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { ClipboardList, GitBranch, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,6 +8,7 @@ import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { Sheet } from '@/components/ui/sheet';
 import {
   CHECKLIST_ESCOPO_LABELS,
   formatChecklistVinculo,
@@ -63,6 +64,7 @@ export const tiposUnidade: UnidadeTipo[] = [
 ];
 
 export type ItemDraft = {
+  draftKey: string;
   ordem: number;
   codigo: string;
   titulo: string;
@@ -83,6 +85,82 @@ export function getDraftVersion(versoes: ChecklistVersao[]) {
 
 export function getArchivedVersions(versoes: ChecklistVersao[]) {
   return [...versoes.filter((version) => version.status === 'ARQUIVADA')].sort((a, b) => b.versao - a.versao);
+}
+
+export const CHECKLIST_ESCOPO_ORDER: ChecklistEscopo[] = ['UNIDADE_TIPO', 'SECRETARIA', 'GLOBAL', 'UNIDADE'];
+
+function createDraftKey() {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `draft-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function ChecklistBindingFields({
+  escopo,
+  onEscopoChange,
+  secretarias,
+  defaultSecretariaId = '',
+  defaultUnidadeTipo = '',
+}: {
+  escopo: ChecklistEscopo;
+  onEscopoChange: (escopo: ChecklistEscopo) => void;
+  secretarias: AdminSecretaria[];
+  defaultSecretariaId?: string;
+  defaultUnidadeTipo?: string;
+}) {
+  const showSecretaria = escopo === 'SECRETARIA' || escopo === 'UNIDADE_TIPO';
+  const showUnidadeTipo = escopo === 'UNIDADE_TIPO';
+
+  return (
+    <>
+      <Field label="Como vincular este checklist?">
+        <Select
+          name="escopo"
+          required
+          value={escopo}
+          onChange={(event) => onEscopoChange(event.target.value as ChecklistEscopo)}
+        >
+          {CHECKLIST_ESCOPO_ORDER.map((value) => (
+            <option key={value} value={value}>
+              {CHECKLIST_ESCOPO_LABELS[value]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      {showUnidadeTipo ? (
+        <Field
+          label="Vincular ao tipo do próprio"
+          hint="O checklist será aplicado automaticamente a todos os próprios deste tipo (ex.: Escola, UBS, Praça)."
+        >
+          <Select name="unidadeTipo" required defaultValue={defaultUnidadeTipo}>
+            <option value="">Selecione o tipo do próprio</option>
+            {tiposUnidade.map((tipo) => (
+              <option key={tipo} value={tipo}>
+                {UNIDADE_TIPO_LABELS[tipo]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
+      {showSecretaria ? (
+        <Field label={escopo === 'UNIDADE_TIPO' ? 'Secretaria (opcional)' : 'Secretaria'}>
+          <Select name="secretariaId" defaultValue={defaultSecretariaId} required={escopo === 'SECRETARIA'}>
+            <option value="">{escopo === 'UNIDADE_TIPO' ? 'Todas as secretarias deste tipo' : 'Selecione'}</option>
+            {secretarias.map((secretaria) => (
+              <option key={secretaria.id} value={secretaria.id}>
+                {secretaria.sigla} — {secretaria.nome}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      ) : null}
+      {escopo === 'UNIDADE_TIPO' ? (
+        <p className="md-body-md rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] px-4 py-3 text-[var(--md-on-surface-variant)]">
+          Checklists vinculados ao <strong>tipo do próprio</strong> aparecem no app Vistoria para unidades daquele tipo.
+        </p>
+      ) : null}
+    </>
+  );
 }
 
 export function CreateChecklistForm({
@@ -130,9 +208,6 @@ export function CreateChecklistForm({
     setEscopo('UNIDADE_TIPO');
   }
 
-  const showSecretaria = escopo === 'SECRETARIA' || escopo === 'UNIDADE_TIPO';
-  const showUnidadeTipo = escopo === 'UNIDADE_TIPO';
-
   return (
     <form id={formId} onSubmit={submit} className="space-y-4">
       <Field label="Nome">
@@ -141,48 +216,7 @@ export function CreateChecklistForm({
       <Field label="Descrição">
         <Input name="descricao" />
       </Field>
-      <Field label="Vinculação">
-        <Select
-          name="escopo"
-          required
-          value={escopo}
-          onChange={(event) => setEscopo(event.target.value as ChecklistEscopo)}
-        >
-          {(Object.keys(CHECKLIST_ESCOPO_LABELS) as ChecklistEscopo[]).map((value) => (
-            <option key={value} value={value}>
-              {CHECKLIST_ESCOPO_LABELS[value]}
-            </option>
-          ))}
-        </Select>
-      </Field>
-      {showSecretaria ? (
-        <Field label={escopo === 'UNIDADE_TIPO' ? 'Secretaria (opcional)' : 'Secretaria'}>
-          <Select name="secretariaId" defaultValue="" required={escopo === 'SECRETARIA'}>
-            <option value="">{escopo === 'UNIDADE_TIPO' ? 'Todas as secretarias deste tipo' : 'Selecione'}</option>
-            {secretarias.map((secretaria) => (
-              <option key={secretaria.id} value={secretaria.id}>
-                {secretaria.sigla} — {secretaria.nome}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      ) : null}
-      {showUnidadeTipo ? (
-        <Field label="Tipo de próprio">
-          <Select name="unidadeTipo" required defaultValue="">
-            <option value="">Selecione o tipo</option>
-            {tiposUnidade.map((tipo) => (
-              <option key={tipo} value={tipo}>
-                {UNIDADE_TIPO_LABELS[tipo]}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      ) : null}
-      <p className="md-body-md rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] px-4 py-3 text-[var(--md-on-surface-variant)]">
-        Checklists com escopo <strong>por tipo de próprio</strong> aparecem automaticamente no app Vistoria para
-        unidades daquele tipo (ex.: Escola, UBS, Praça).
-      </p>
+      <ChecklistBindingFields escopo={escopo} onEscopoChange={setEscopo} secretarias={secretarias} />
       {formError ? <p className="md-body-md text-red-700">{formError}</p> : null}
       {hideActions ? null : (
         <div className="flex flex-wrap gap-2 pt-2">
@@ -234,36 +268,105 @@ export function ChecklistModelCard({ checklist, onClick }: { checklist: Checklis
 
 export function ChecklistHeader({
   checklist,
+  secretarias,
   onNewVersion,
   onDeactivate,
+  onUpdateBinding,
 }: {
   checklist: ChecklistModel;
+  secretarias: AdminSecretaria[];
   onNewVersion: () => void;
   onDeactivate: () => void;
+  onUpdateBinding: (payload: Record<string, unknown>) => void;
 }) {
+  const [editOpen, setEditOpen] = useState(false);
+  const [escopo, setEscopo] = useState<ChecklistEscopo>(checklist.escopo);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (editOpen) {
+      setEscopo(checklist.escopo);
+      setFormError(null);
+    }
+  }, [editOpen, checklist.escopo]);
+
+  function submitBinding(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFormError(null);
+    const form = new FormData(event.currentTarget);
+    const selectedEscopo = String(form.get('escopo')) as ChecklistEscopo;
+    const unidadeTipo = String(form.get('unidadeTipo') || '');
+
+    if (selectedEscopo === 'UNIDADE_TIPO' && !unidadeTipo) {
+      setFormError('Selecione o tipo de próprio para vincular o checklist.');
+      return;
+    }
+
+    if (selectedEscopo === 'SECRETARIA' && !String(form.get('secretariaId') || '')) {
+      setFormError('Selecione a secretaria para vincular o checklist.');
+      return;
+    }
+
+    onUpdateBinding({
+      nome: checklist.nome,
+      descricao: checklist.descricao ?? '',
+      escopo: selectedEscopo,
+      secretariaId: String(form.get('secretariaId') || ''),
+      unidadeTipo: unidadeTipo || undefined,
+      ativo: checklist.ativo,
+    });
+    setEditOpen(false);
+  }
+
   return (
-    <Card elevation={1}>
-      <CardContent className="flex flex-wrap items-start justify-between gap-4 p-5">
-        <div>
-          <Chip variant={checklist.ativo ? 'brand' : 'default'} className="gap-1.5">
-            <ClipboardList className="h-3.5 w-3.5" />
-            {checklist.ativo ? 'Ativo' : 'Inativo'}
-          </Chip>
-          <h2 className="md-headline-md mt-3 text-[var(--md-on-surface)]">{checklist.nome}</h2>
-          <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
-            {checklist.descricao || 'Sem descrição'} · {formatChecklistVinculo(checklist)}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="tonal" size="sm" onClick={onNewVersion}>
-            Nova versão
-          </Button>
-          <Button variant="text" size="sm" className="text-red-700" onClick={onDeactivate}>
-            Inativar
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <>
+      <Card elevation={1}>
+        <CardContent className="flex flex-wrap items-start justify-between gap-4 p-5">
+          <div>
+            <Chip variant={checklist.ativo ? 'brand' : 'default'} className="gap-1.5">
+              <ClipboardList className="h-3.5 w-3.5" />
+              {checklist.ativo ? 'Ativo' : 'Inativo'}
+            </Chip>
+            <h2 className="md-headline-md mt-3 text-[var(--md-on-surface)]">{checklist.nome}</h2>
+            <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
+              {checklist.descricao || 'Sem descrição'} · {formatChecklistVinculo(checklist)}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="tonal" size="sm" onClick={() => setEditOpen(true)}>
+              Editar vínculo
+            </Button>
+            <Button variant="tonal" size="sm" onClick={onNewVersion}>
+              Nova versão
+            </Button>
+            <Button variant="text" size="sm" className="text-red-700" onClick={onDeactivate}>
+              Inativar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      <Sheet open={editOpen} onClose={() => setEditOpen(false)} title="Vínculo do checklist">
+        <form onSubmit={submitBinding} className="space-y-4">
+          <ChecklistBindingFields
+            key={`${checklist.id}-${checklist.unidadeTipo ?? ''}-${checklist.secretariaId ?? ''}`}
+            escopo={escopo}
+            onEscopoChange={setEscopo}
+            secretarias={secretarias}
+            defaultSecretariaId={checklist.secretariaId ?? ''}
+            defaultUnidadeTipo={checklist.unidadeTipo ?? ''}
+          />
+          {formError ? <p className="md-body-md text-red-700">{formError}</p> : null}
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button type="submit" variant="filled" className="flex-1">
+              Salvar vínculo
+            </Button>
+            <Button type="button" variant="text" onClick={() => setEditOpen(false)}>
+              Cancelar
+            </Button>
+          </div>
+        </form>
+      </Sheet>
+    </>
   );
 }
 
@@ -370,12 +473,13 @@ export function VersionEditor({
   onPublish,
 }: {
   version: ChecklistVersao;
-  onSave: (items: ItemDraft[]) => void;
-  onPublish: (items: ItemDraft[]) => void;
+  onSave: (items: Array<Omit<ItemDraft, 'draftKey'>>) => void;
+  onPublish: (items: Array<Omit<ItemDraft, 'draftKey'>>) => void;
 }) {
   const [items, setItems] = useState<ItemDraft[]>(
     version.itens.length
       ? version.itens.map((item) => ({
+          draftKey: item.id,
           ordem: item.ordem,
           codigo: item.codigo,
           titulo: item.titulo,
@@ -390,18 +494,22 @@ export function VersionEditor({
   const [editorError, setEditorError] = useState<string | null>(null);
 
   function prepareItems() {
-    return items.map((item) => ({
+    return items.map(({ draftKey: _draftKey, ...item }) => ({
       ...item,
       opcoes: serializeItemOpcoes(item.tipo, item.opcoes),
     }));
   }
 
-  function validateItems(prepared: ItemDraft[]) {
+  function validateItems(prepared: Array<Omit<ItemDraft, 'draftKey'>>) {
+    const codes = new Set<string>();
     for (const item of prepared) {
       const opcoesError = validateItemOpcoes(item.tipo, item.opcoes, item.titulo, item.codigo);
       if (opcoesError) return opcoesError;
       if (!item.titulo.trim()) return `Item #${item.ordem}: informe o título.`;
       if (!item.codigo.trim()) return `Item #${item.ordem}: informe o código.`;
+      const normalizedCode = item.codigo.trim().toUpperCase();
+      if (codes.has(normalizedCode)) return `Código duplicado na versão: ${item.codigo}`;
+      codes.add(normalizedCode);
     }
     return null;
   }
@@ -450,7 +558,7 @@ export function VersionEditor({
       <CardContent className="space-y-3 pt-0">
         {editorError ? <p className="md-body-md text-red-700">{editorError}</p> : null}
         {items.map((item, index) => (
-          <div key={index} className="space-y-3 rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4">
+          <div key={item.draftKey} className="space-y-3 rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4">
             <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
               <Field label="Ordem">
                 <Input
@@ -625,6 +733,7 @@ function TextoOpcoesEditor({
 
 function emptyItem(ordem: number): ItemDraft {
   return {
+    draftKey: createDraftKey(),
     ordem,
     codigo: `ITEM-${ordem}`,
     titulo: '',

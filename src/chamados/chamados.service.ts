@@ -1691,7 +1691,10 @@ export class ChamadosService {
     const [evidencias, legacyExecucaoEvidencias] = await Promise.all([
       evidenciaIds.length > 0
         ? this.prisma.evidencia.findMany({
-            where: { id: { in: evidenciaIds } },
+            where: {
+              id: { in: evidenciaIds },
+              ...(entidadeId ? { chamadoId: entidadeId } : {}),
+            },
           })
         : Promise.resolve([]),
       needsLegacyExecucaoEvidencias && entidadeId
@@ -1710,13 +1713,21 @@ export class ChamadosService {
 
     const evidenciaMap = new Map(evidencias.map((item) => [item.id, this.serializeEvidencia(item)]));
     const legacyExecucaoAnexos = legacyExecucaoEvidencias.map((item) => this.serializeEvidencia(item));
+    const legacyExecucaoTargetId = [...historico]
+      .reverse()
+      .find((entry) => {
+        const metadata = entry.metadata as { tipo?: string; evidenciaIds?: string[] } | null;
+        return metadata?.tipo === 'execucao_conclusao' && !(metadata.evidenciaIds?.length ?? 0);
+      })?.id;
 
     return historico.map((entry) => {
       const metadata = (entry.metadata ?? {}) as Record<string, unknown>;
       const ids = Array.isArray(metadata.evidenciaIds) ? (metadata.evidenciaIds as string[]) : [];
       const anexosFromIds = ids.map((id) => evidenciaMap.get(id)).filter(Boolean);
       const anexos =
-        metadata.tipo === 'execucao_conclusao' && anexosFromIds.length === 0
+        metadata.tipo === 'execucao_conclusao' &&
+        anexosFromIds.length === 0 &&
+        entry.id === legacyExecucaoTargetId
           ? legacyExecucaoAnexos
           : anexosFromIds;
 

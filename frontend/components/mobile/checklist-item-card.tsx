@@ -35,9 +35,9 @@ export function ChecklistItemCard({
 }) {
   const current = value ?? { conformidade: 'CONFORME', comentario: '' };
   const multiplaEscolha = parseMultiplaEscolhaOpcoes(item.opcoes);
+  const opcoesVisiveis = multiplaEscolha.opcoes.map((opcao) => opcao.trim()).filter(Boolean);
   const textoOpcoes = parseTextoOpcoes(item.opcoes);
   const needsEvidence =
-    item.exigeEvidencia ||
     item.tipo === 'FOTO' ||
     item.tipo === 'ASSINATURA' ||
     (current.conformidade === 'NAO_CONFORME' && item.exigeEvidencia);
@@ -96,9 +96,9 @@ export function ChecklistItemCard({
               {item.tipo === 'MULTIPLA_ESCOLHA' ? (
                 multiplaEscolha.modoExibicao === 'LISTA' ? (
                   <div className="flex flex-wrap gap-2">
-                    {multiplaEscolha.opcoes.map((opcao) => (
+                    {opcoesVisiveis.map((opcao, optionIndex) => (
                       <Chip
-                        key={opcao}
+                        key={`${opcao}-${optionIndex}`}
                         active={current.valorTexto === opcao}
                         onClick={() => onChange({ valorTexto: opcao })}
                       >
@@ -112,7 +112,7 @@ export function ChecklistItemCard({
                     onChange={(e) => onChange({ valorTexto: e.target.value })}
                   >
                     <option value="">Selecione</option>
-                    {multiplaEscolha.opcoes.map((opcao) => (
+                    {opcoesVisiveis.map((opcao) => (
                       <option key={opcao} value={opcao}>
                         {opcao}
                       </option>

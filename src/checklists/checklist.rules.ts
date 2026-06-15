@@ -1,5 +1,6 @@
 import { ChecklistVersaoStatus, ChecklistEscopo } from '@prisma/client';
-import { ChecklistDto } from './checklists.dto';
+import { ChecklistDto, ChecklistVersionDto } from './checklists.dto';
+import { assertValidChecklistVersionItems, normalizeChecklistItemOpcoes } from './checklist-item.rules';
 
 export function canEditChecklistVersion(status: ChecklistVersaoStatus) {
   return status === ChecklistVersaoStatus.RASCUNHO;
@@ -58,3 +59,9 @@ export function normalizeChecklistBinding(dto: ChecklistDto): ChecklistDto {
       return base;
   }
 }
+
+export function assertValidChecklistVersion(dto: ChecklistVersionDto) {
+  assertValidChecklistVersionItems(dto.itens);
+}
+
+export { normalizeChecklistItemOpcoes };

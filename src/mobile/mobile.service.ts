@@ -19,7 +19,8 @@ import { CronogramaService } from '../cronograma/cronograma.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { MobileSyncFiscalizacaoDto } from './mobile.dto';
-import { validateMobileCheckin, validateMobileResponse } from './mobile.rules';
+import { validateMobileCheckin } from './mobile.rules';
+import { validateChecklistResponses } from '../domain/checklist-response.rules';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 
 @Injectable()
@@ -160,21 +161,27 @@ export class MobileService {
     }
 
     const itemById = new Map(checklistVersao.itens.map((item) => [item.id, item]));
-    for (const resposta of dto.respostas) {
-      const item = itemById.get(resposta.itemId);
-      if (!item) throw new BadRequestException('Item de checklist invalido');
-
-      const validation = validateMobileResponse({
+    const responsesValidation = validateChecklistResponses(
+      checklistVersao.itens.map((item) => ({
+        id: item.id,
+        titulo: item.titulo,
+        tipo: item.tipo,
+        obrigatorio: item.obrigatorio,
+        exigeEvidencia: item.exigeEvidencia,
+        opcoes: item.opcoes,
+      })),
+      dto.respostas.map((resposta) => ({
+        itemId: resposta.itemId,
         conformidade: resposta.conformidade,
-        itemExigeEvidencia: item.exigeEvidencia,
-        evidenciasCount: resposta.evidencias.length,
+        valorTexto: resposta.valorTexto,
         comentario: resposta.comentario,
-      });
+        evidenciasCount: resposta.evidencias.length,
+      })),
+    );
 
-      if (!validation.valid) {
-        await this.createSyncFailure(dto, user, validation.reasons.join('; '));
-        throw new BadRequestException(validation.reasons.join('; '));
-      }
+    if (!responsesValidation.valid) {
+      await this.createSyncFailure(dto, user, responsesValidation.reasons.join('; '));
+      throw new BadRequestException(responsesValidation.reasons.join('; '));
     }
 
     const respostasPreparadas = await Promise.all(

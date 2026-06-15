@@ -142,18 +142,21 @@ function buildExecucaoConclusaoStep(
         ? entry.motivo.replace(/^Execução impedida:\s*/, '').trim()
         : entry.motivo?.trim() || '';
   const distanciaMetros = typeof metadata.distanciaMetros === 'number' ? metadata.distanciaMetros : null;
-  const evidenciasCount = typeof metadata.evidenciasCount === 'number' ? metadata.evidenciasCount : null;
   const anexos = mapHistoricoAnexos(entry);
   const detalhes: Array<{ label: string; value: string }> = [];
+  const motivoImpedimento =
+    typeof metadata.impedimentoMotivo === 'string' ? metadata.impedimentoMotivo.trim() : '';
 
-  if (impedimento && typeof metadata.impedimentoMotivo === 'string' && metadata.impedimentoMotivo.trim()) {
-    detalhes.push({ label: 'Motivo do impedimento', value: metadata.impedimentoMotivo.trim() });
+  if (impedimento && motivoImpedimento && !relatorio.includes(motivoImpedimento)) {
+    detalhes.push({ label: 'Motivo do impedimento', value: motivoImpedimento });
   }
   if (distanciaMetros != null) {
     detalhes.push({ label: 'Distância do check-out', value: `${Math.round(distanciaMetros)} m do ponto` });
   }
-  if (evidenciasCount != null) {
-    detalhes.push({ label: 'Evidências registradas', value: `${evidenciasCount} foto(s)` });
+  if (anexos.length > 0) {
+    detalhes.push({ label: 'Evidências registradas', value: `${anexos.length} foto(s)` });
+  } else if (typeof metadata.evidenciasCount === 'number' && metadata.evidenciasCount > 0) {
+    detalhes.push({ label: 'Evidências registradas', value: `${metadata.evidenciasCount} foto(s)` });
   }
 
   const expandContent = {
@@ -264,17 +267,12 @@ export function buildChamadoTimelineFromHistorico(
 
     if (
       entry.statusNovo === 'CONCLUIDO' &&
-      entry.motivo === 'Execução concluída em campo.' &&
-      typeof metadata.relatorio === 'string'
+      entry.motivo === 'Execução concluída em campo.'
     ) {
       return buildExecucaoConclusaoStep(entry, metadata, isLast, currentStatus);
     }
 
-    if (
-      entry.statusNovo === 'IMPEDIDO' &&
-      entry.motivo?.startsWith('Execução impedida:') &&
-      typeof metadata.relatorio === 'string'
-    ) {
+    if (entry.statusNovo === 'IMPEDIDO' && entry.motivo?.startsWith('Execução impedida:')) {
       return buildExecucaoConclusaoStep(entry, metadata, isLast, currentStatus);
     }
 
@@ -295,56 +293,4 @@ export function buildChamadoTimelineFromHistorico(
       active: isLast && entry.statusNovo === currentStatus,
     };
   });
-}
-
-export function buildChamadoTimeline(
-  status: string,
-  abertoEm: string,
-  prazoEm: string | null | undefined,
-  concluidoEm: string | null | undefined,
-  responsavel?: string | null,
-  prioridade?: string,
-  origem?: string,
-): ChamadoTimelineStep[] {
-  const doneFrom = (step: string) => {
-    const order = ['ABERTO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'IMPEDIDO', 'CONCLUIDO'];
-    const current = status === 'CANCELADO' ? 'ABERTO' : status;
-    return order.indexOf(current) >= order.indexOf(step);
-  };
-
-  const formatDate = (value?: string | null) =>
-    value ? new Date(value).toLocaleDateString('pt-BR') : '—';
-
-  const atendimentoTitle = status === 'IMPEDIDO' ? 'Impedido' : 'Em atendimento';
-  const atendimentoActive = status === 'EM_ATENDIMENTO' || status === 'IMPEDIDO';
-
-  return [
-    {
-      title: 'Aberto',
-      date: formatDate(abertoEm),
-      sub: origem,
-      done: doneFrom('ABERTO'),
-      active: status === 'ABERTO',
-    },
-    {
-      title: 'Triagem',
-      date: formatDate(abertoEm),
-      sub: prioridade ? `Prioridade ${prioridade}` : undefined,
-      done: doneFrom('EM_TRIAGEM'),
-      active: status === 'EM_TRIAGEM',
-    },
-    {
-      title: atendimentoTitle,
-      date: '—',
-      sub: responsavel ?? 'Aguardando responsável',
-      done: doneFrom('EM_ATENDIMENTO') || status === 'IMPEDIDO',
-      active: atendimentoActive,
-    },
-    {
-      title: 'Concluído',
-      date: formatDate(concluidoEm ?? (status === 'CONCLUIDO' ? prazoEm : null)),
-      done: status === 'CONCLUIDO',
-      active: false,
-    },
-  ];
 }

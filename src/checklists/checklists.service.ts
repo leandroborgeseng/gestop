@@ -3,7 +3,7 @@ import { AuditAction, ChecklistEscopo, ChecklistVersaoStatus, Prisma } from '@pr
 import { JwtPayload } from '../auth/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChecklistDto, ChecklistVersionDto } from './checklists.dto';
-import { assertDraftEditable, nextChecklistVersion, normalizeChecklistBinding, normalizeItemCode, validateChecklistEscopo } from './checklist.rules';
+import { assertDraftEditable, assertValidChecklistVersion, nextChecklistVersion, normalizeChecklistBinding, normalizeChecklistItemOpcoes, normalizeItemCode, validateChecklistEscopo } from './checklist.rules';
 
 @Injectable()
 export class ChecklistsService {
@@ -159,6 +159,17 @@ export class ChecklistsService {
       throw new BadRequestException(error instanceof Error ? error.message : 'Versao bloqueada');
     }
 
+    try {
+      assertValidChecklistVersion(dto);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Itens invalidos');
+    }
+
+    const normalizedItens = dto.itens.map((item) => ({
+      ...item,
+      opcoes: normalizeChecklistItemOpcoes(item.tipo, item.opcoes),
+    }));
+
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.checklistItem.deleteMany({ where: { checklistVersaoId: versionId } });
       await tx.checklistVersao.update({
@@ -166,7 +177,7 @@ export class ChecklistsService {
         data: {
           estrutura: dto.estrutura ?? {},
           itens: {
-            create: dto.itens.map((item) => ({
+            create: normalizedItens.map((item) => ({
               ordem: item.ordem,
               codigo: normalizeItemCode(item.codigo),
               titulo: item.titulo.trim(),
@@ -207,6 +218,12 @@ export class ChecklistsService {
 
     if (version.itens.length === 0) {
       throw new BadRequestException('Nao e possivel publicar checklist sem itens');
+    }
+
+    try {
+      assertValidChecklistVersion({ estrutura: version.estrutura, itens: version.itens });
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Itens invalidos');
     }
 
     const published = await this.prisma.$transaction(async (tx) => {

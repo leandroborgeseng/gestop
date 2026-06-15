@@ -1,23 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { API_PROXY_PREFIX, getStoredAuth } from '@/lib/api';
-
-function resolveStorageApiPath(url: string) {
-  const marker = '/storage/';
-  const index = url.indexOf(marker);
-  if (index >= 0) {
-    const key = url.slice(index + marker.length).replace(/^\/+/, '');
-    return `${API_PROXY_PREFIX}/storage/${key}`;
-  }
-  if (url.startsWith('storage/')) {
-    return `${API_PROXY_PREFIX}/${url}`;
-  }
-  if (url.startsWith('evidencias/')) {
-    return `${API_PROXY_PREFIX}/storage/${url}`;
-  }
-  return null;
-}
+import { fetchAuthenticatedStorageBlob, resolveStorageApiPath } from '@/lib/storage-url';
 
 export function AuthenticatedImage({
   src,
@@ -36,24 +20,14 @@ export function AuthenticatedImage({
     let createdUrl: string | null = null;
 
     async function load() {
-      const apiPath = resolveStorageApiPath(src);
-      if (!apiPath) {
+      if (!resolveStorageApiPath(src)) {
         if (active) setObjectUrl(src);
         return;
       }
 
-      const auth = getStoredAuth();
-      if (!auth?.accessToken) {
-        if (active) setFailed(true);
-        return;
-      }
-
       try {
-        const response = await fetch(apiPath, {
-          headers: { Authorization: `Bearer ${auth.accessToken}` },
-        });
-        if (!response.ok) throw new Error('Falha ao carregar imagem');
-        const blob = await response.blob();
+        const blob = await fetchAuthenticatedStorageBlob(src);
+        if (!blob) throw new Error('Falha ao carregar imagem');
         createdUrl = URL.createObjectURL(blob);
         if (active) setObjectUrl(createdUrl);
       } catch {
