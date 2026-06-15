@@ -26,6 +26,7 @@ import { filterChecklistsForUnidade } from '@/lib/checklist-matching';
 import { migrateLegacyQueueIfNeeded, readMobileQueue, writeMobileQueue } from '@/lib/mobile-queue';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { getMobileFieldPackage, syncMobileInspection } from '@/lib/api';
+import { useEffectiveOnline } from '@/lib/use-effective-online';
 import { registerServiceWorker, requestNotificationPermission, showLocalNotification } from '@/lib/pwa';
 import { PwaInstallBanner } from '@/components/mobile/pwa-install-banner';
 import { MobileFieldPackage, MobileQueuedInspection } from '@/lib/types';
@@ -37,7 +38,7 @@ export default function MobilePage() {
   const snackbar = useSnackbar();
   const [fieldPackage, setFieldPackage] = useState<MobileFieldPackage | null>(null);
   const [queue, setQueue] = useState<MobileQueuedInspection[]>([]);
-  const [online, setOnline] = useState(true);
+  const { online, browserOnline, refreshConnectivity } = useEffectiveOnline();
   const [unidadeId, setUnidadeId] = useState('');
   const [checklistId, setChecklistId] = useState('');
   const [responses, setResponses] = useState<Record<string, ResponseDraft>>({});
@@ -94,22 +95,9 @@ export default function MobilePage() {
   }, []);
 
   useEffect(() => {
-    setOnline(navigator.onLine);
-    function handleOnline() {
-      setOnline(true);
-      if (queueRef.current.length > 0) void syncQueue();
-    }
-    function handleOffline() {
-      setOnline(false);
-    }
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [syncQueue]);
+    if (!online || queueRef.current.length === 0) return;
+    void syncQueue();
+  }, [online, syncQueue]);
 
   const selectedChecklist = useMemo(
     () => fieldPackage?.checklists.find((checklist) => checklist.id === checklistId) ?? null,
@@ -242,12 +230,12 @@ export default function MobilePage() {
         description="Preencha a vistoria com GPS real. Online, o envio é imediato; offline, salve na fila para sincronizar depois."
         backHref="/cco"
       >
-        <div className="mx-auto max-w-2xl space-y-4 pb-36">
+        <div className="mx-auto max-w-2xl space-y-4 pb-32">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1">
               <PwaInstallBanner />
             </div>
-            <ConnectionPill online={online} />
+            <ConnectionPill online={online} browserOnline={browserOnline} onRefresh={() => void refreshConnectivity()} />
           </div>
 
           <TipBanner id="mobile-offline-queue">
@@ -378,34 +366,7 @@ export default function MobilePage() {
               </Card>
 
               {selectedVersion ? (
-                online ? (
-                  <div className="sticky bottom-[calc(5.75rem+env(safe-area-inset-bottom)+1rem)] z-20 flex justify-center pb-2 lg:bottom-6">
-                    <Button
-                      variant="filled"
-                      size="lg"
-                      disabled={saving}
-                      onClick={() => void submitInspection()}
-                      className="min-h-14 gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)]"
-                    >
-                      {saving ? <RefreshCcw className="h-5 w-5 animate-spin" /> : <CloudUpload className="h-5 w-5" />}
-                      {saving ? 'Enviando...' : 'Enviar vistoria'}
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="sticky bottom-[calc(5.75rem+env(safe-area-inset-bottom)+1rem)] z-20 flex justify-center pb-2 lg:bottom-6">
-                    <Button
-                      variant="filled"
-                      size="lg"
-                      disabled={saving}
-                      onClick={() => void submitInspection()}
-                      aria-label="Salvar na fila offline"
-                      className="min-h-14 gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)]"
-                    >
-                      {saving ? <RefreshCcw className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-                      {saving ? 'Salvando...' : 'Salvar offline'}
-                    </Button>
-                  </div>
-                )
+                <MobileInspectionFooter online={online} saving={saving} onSubmit={() => void submitInspection()} />
               ) : null}
 
               {queue.length > 0 && online ? (
@@ -441,11 +402,65 @@ function getDeviceId() {
   return deviceId;
 }
 
-function ConnectionPill({ online }: { online: boolean }) {
+function MobileInspectionFooter({
+  online,
+  saving,
+  onSubmit,
+}: {
+  online: boolean;
+  saving: boolean;
+  onSubmit: () => void;
+}) {
   return (
-    <span
+    <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-30 border-t border-[var(--line-2)] bg-[var(--surface)]/95 px-4 py-3 shadow-[var(--sh-md)] backdrop-blur-sm lg:bottom-0">
+      <div className="mx-auto flex w-full max-w-2xl justify-center">
+        {online ? (
+          <Button
+            variant="filled"
+            size="lg"
+            disabled={saving}
+            onClick={onSubmit}
+            className="min-h-14 w-full max-w-sm gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)] sm:w-auto"
+          >
+            {saving ? <RefreshCcw className="h-5 w-5 animate-spin" /> : <CloudUpload className="h-5 w-5" />}
+            {saving ? 'Enviando vistoria...' : 'Concluir vistoria'}
+          </Button>
+        ) : (
+          <Button
+            variant="filled"
+            size="lg"
+            disabled={saving}
+            onClick={onSubmit}
+            aria-label="Salvar na fila offline"
+            className="min-h-14 w-full max-w-sm gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)] sm:w-auto"
+          >
+            {saving ? <RefreshCcw className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+            {saving ? 'Salvando...' : 'Salvar offline'}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ConnectionPill({
+  online,
+  browserOnline,
+  onRefresh,
+}: {
+  online: boolean;
+  browserOnline: boolean;
+  onRefresh: () => void;
+}) {
+  const label = online ? 'Online' : browserOnline ? 'Sem servidor' : 'Offline';
+
+  return (
+    <button
+      type="button"
+      onClick={onRefresh}
+      title="Atualizar status da conexão"
       className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 rounded-[var(--r-pill)] border px-3 py-1.5 text-[12px] font-semibold',
+        'inline-flex shrink-0 items-center gap-1.5 rounded-[var(--r-pill)] border px-3 py-1.5 text-[12px] font-semibold transition-colors',
         online
           ? 'border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok)]'
           : 'border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn)]',
@@ -453,8 +468,8 @@ function ConnectionPill({ online }: { online: boolean }) {
     >
       <span className={cn('h-2 w-2 rounded-full', online ? 'bg-[var(--ok)]' : 'bg-[var(--warn)]')} />
       {online ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
-      {online ? 'Online' : 'Offline'}
-    </span>
+      {label}
+    </button>
   );
 }
 
