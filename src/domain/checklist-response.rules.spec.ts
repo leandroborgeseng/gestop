@@ -46,13 +46,13 @@ describe('checklist-response.rules', () => {
     const likert = {
       ...item,
       tipo: ChecklistItemTipo.ESCALA_LIKERT,
-      opcoes: { opcoes: ['Péssimo', 'Ruim', 'Bom', 'Ótimo'] },
+      opcoes: { niveis: ['PESSIMO', 'RUIM', 'REGULAR', 'BOM', 'OTIMO'] },
     };
 
     const result = validateChecklistItemResponse(likert, {
       itemId: 'item-1',
       conformidade: ConformidadeStatus.CONFORME,
-      valorTexto: 'Inválido',
+      valorTexto: 'INVALIDO',
       comentario: '',
       evidenciasCount: 0,
     });

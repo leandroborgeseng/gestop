@@ -11,6 +11,30 @@ export type ChecklistMultiplaEscolhaOpcoes = {
   modoExibicao: ChecklistMultiplaEscolhaModo;
 };
 
+export {
+  LIKERT_CATEGORIA_LABELS,
+  LIKERT_CATEGORIA_TONE,
+  LIKERT_CATALOGO,
+  LIKERT_NIVEIS_ORDEM,
+  LIKERT_NIVEIS_PADRAO,
+  inferConformidadeFromLikert,
+  parseLikertConfig,
+  resolveLikertNivel,
+  serializeLikertOpcoes,
+  validateLikertOpcoes,
+  type ChecklistLikertOpcoes,
+  type LikertCategoria,
+  type LikertNivelDef,
+  type LikertNivelId,
+} from '@/lib/likert-scale';
+
+import {
+  LIKERT_NIVEIS_PADRAO,
+  parseLikertConfig,
+  serializeLikertOpcoes,
+  validateLikertOpcoes,
+} from '@/lib/likert-scale';
+
 export const TEXTO_FORMATO_LABELS: Record<ChecklistTextoFormato, string> = {
   CURTO: 'Texto curto (uma linha)',
   LONGO: 'Texto longo (várias linhas, expansível)',
@@ -21,38 +45,14 @@ export const MULTIPLA_ESCOLHA_MODO_LABELS: Record<ChecklistMultiplaEscolhaModo, 
   LISTA: 'Todas as opções na tela',
 };
 
-export const LIKERT_ESCALA_PADRAO = ['Péssimo', 'Ruim', 'Bom', 'Ótimo'] as const;
-
-export type ChecklistLikertOpcoes = {
-  opcoes: string[];
-};
-
-export const LIKERT_TONE_CLASSES = [
-  'border-[var(--danger-bd)] bg-[var(--danger-soft)] text-[var(--danger)]',
-  'border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn)]',
-  'border-[color-mix(in_srgb,var(--ok)_35%,var(--surface))] bg-[var(--ok-bg)] text-[var(--ok)]',
-  'border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok)]',
-] as const;
-
-export function parseLikertOpcoes(opcoes: unknown): ChecklistLikertOpcoes {
-  if (Array.isArray(opcoes)) {
-    const values = opcoes.map(String).map((value) => value.trim()).filter(Boolean);
-    return { opcoes: values.length >= 2 ? values : [...LIKERT_ESCALA_PADRAO] };
-  }
-
-  if (opcoes && typeof opcoes === 'object' && Array.isArray((opcoes as ChecklistLikertOpcoes).opcoes)) {
-    const values = (opcoes as ChecklistLikertOpcoes).opcoes.map(String).map((value) => value.trim()).filter(Boolean);
-    return { opcoes: values.length >= 2 ? values : [...LIKERT_ESCALA_PADRAO] };
-  }
-
-  return { opcoes: [...LIKERT_ESCALA_PADRAO] };
-}
-
-export function inferConformidadeFromLikert(opcoes: string[], valor: string): 'CONFORME' | 'NAO_CONFORME' {
-  const index = opcoes.indexOf(valor);
-  if (index < 0) return 'CONFORME';
-  const threshold = Math.ceil(opcoes.length / 2);
-  return index < threshold ? 'NAO_CONFORME' : 'CONFORME';
+/** @deprecated Use parseLikertConfig */
+export function parseLikertOpcoes(opcoes: unknown) {
+  const config = parseLikertConfig(opcoes);
+  return {
+    opcoes: config.niveis.map((nivel) => nivel.label),
+    niveis: config.niveis,
+    opcoesConfig: config.opcoes,
+  };
 }
 
 export function defaultOpcoesForTipo(tipo: string): unknown {
@@ -60,7 +60,7 @@ export function defaultOpcoesForTipo(tipo: string): unknown {
     return { opcoes: ['', ''], modoExibicao: 'SELECT' satisfies ChecklistMultiplaEscolhaModo };
   }
   if (tipo === 'ESCALA_LIKERT') {
-    return { opcoes: [...LIKERT_ESCALA_PADRAO] };
+    return { niveis: [...LIKERT_NIVEIS_PADRAO] };
   }
   if (tipo === 'TEXTO') {
     return { formato: 'CURTO' satisfies ChecklistTextoFormato };
@@ -112,8 +112,7 @@ export function serializeItemOpcoes(tipo: string, opcoes: unknown): unknown {
   }
 
   if (tipo === 'ESCALA_LIKERT') {
-    const config = parseLikertOpcoes(opcoes);
-    return { opcoes: config.opcoes.map((value) => value.trim()).filter(Boolean) };
+    return serializeLikertOpcoes(opcoes);
   }
 
   return undefined;
@@ -132,8 +131,8 @@ export function formatOpcoesResumo(tipo: string, opcoes: unknown): string | null
   }
 
   if (tipo === 'ESCALA_LIKERT') {
-    const config = parseLikertOpcoes(opcoes);
-    return `Escala Likert · ${config.opcoes.join(' → ')}`;
+    const config = parseLikertConfig(opcoes);
+    return `Escala Likert · ${config.niveis.map((nivel) => `${nivel.label} (${nivel.pontuacao})`).join(' → ')}`;
   }
 
   return null;
@@ -151,13 +150,7 @@ export function validateItemOpcoes(tipo: string, opcoes: unknown, titulo: string
   }
 
   if (tipo === 'ESCALA_LIKERT') {
-    const raw =
-      opcoes && typeof opcoes === 'object' && Array.isArray((opcoes as ChecklistLikertOpcoes).opcoes)
-        ? (opcoes as ChecklistLikertOpcoes).opcoes.map(String).map((value) => value.trim()).filter(Boolean)
-        : parseLikertOpcoes(opcoes).opcoes;
-    if (raw.length < 2) {
-      return `Item "${label}": cadastre ao menos 2 níveis na escala Likert.`;
-    }
+    return validateLikertOpcoes(opcoes, label);
   }
 
   return null;

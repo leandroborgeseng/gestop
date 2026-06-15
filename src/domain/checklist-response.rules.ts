@@ -1,5 +1,6 @@
 import { ChecklistItemTipo, ConformidadeStatus } from '@prisma/client';
 import { getLikertValues, getMultiplaEscolhaValues } from '../checklists/checklist-item.rules';
+import { resolveLikertNivel } from './likert-scale';
 import { validateNonConformityEvidence } from './rules';
 
 export type ChecklistItemForValidation = {
@@ -57,7 +58,8 @@ export function validateChecklistItemResponse(
   if (item.tipo === ChecklistItemTipo.ESCALA_LIKERT) {
     const opcoes = getLikertValues(item.opcoes);
     const valor = response.valorTexto?.trim() ?? '';
-    if (valor && !opcoes.includes(valor)) {
+    const nivel = resolveLikertNivel(valor);
+    if (valor && (!nivel || !opcoes.includes(nivel.id))) {
       reasons.push(`Resposta invalida para o item: ${item.titulo}.`);
     }
   }

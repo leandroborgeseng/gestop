@@ -1,4 +1,10 @@
 import { ChecklistItemTipo } from '@prisma/client';
+import {
+  getLikertNivelIds,
+  parseLikertConfig,
+  serializeLikertOpcoes,
+  validateLikertOpcoes,
+} from '../domain/likert-scale';
 import { ChecklistItemDto } from './checklists.dto';
 import { normalizeItemCode } from './checklist.rules';
 
@@ -10,26 +16,6 @@ type MultiplaEscolhaOpcoes = {
 type TextoOpcoes = {
   formato: 'CURTO' | 'LONGO';
 };
-
-const LIKERT_ESCALA_PADRAO = ['Péssimo', 'Ruim', 'Bom', 'Ótimo'];
-
-type LikertOpcoes = {
-  opcoes: string[];
-};
-
-function parseLikertOpcoes(opcoes: unknown): LikertOpcoes {
-  if (Array.isArray(opcoes)) {
-    const values = opcoes.map(String).map((value) => value.trim()).filter(Boolean);
-    return { opcoes: values.length >= 2 ? values : [...LIKERT_ESCALA_PADRAO] };
-  }
-
-  if (opcoes && typeof opcoes === 'object' && Array.isArray((opcoes as LikertOpcoes).opcoes)) {
-    const values = (opcoes as LikertOpcoes).opcoes.map(String).map((value) => value.trim()).filter(Boolean);
-    return { opcoes: values.length >= 2 ? values : [...LIKERT_ESCALA_PADRAO] };
-  }
-
-  return { opcoes: [...LIKERT_ESCALA_PADRAO] };
-}
 
 function parseMultiplaEscolhaOpcoes(opcoes: unknown): MultiplaEscolhaOpcoes {
   if (Array.isArray(opcoes)) {
@@ -73,8 +59,7 @@ export function normalizeChecklistItemOpcoes(tipo: ChecklistItemTipo, opcoes: un
   }
 
   if (tipo === ChecklistItemTipo.ESCALA_LIKERT) {
-    const config = parseLikertOpcoes(opcoes);
-    return { opcoes: config.opcoes };
+    return serializeLikertOpcoes(opcoes);
   }
 
   return undefined;
@@ -96,13 +81,7 @@ export function validateChecklistItemOpcoes(
   }
 
   if (tipo === ChecklistItemTipo.ESCALA_LIKERT) {
-    const raw =
-      opcoes && typeof opcoes === 'object' && Array.isArray((opcoes as LikertOpcoes).opcoes)
-        ? (opcoes as LikertOpcoes).opcoes.map(String).map((value) => value.trim()).filter(Boolean)
-        : parseLikertOpcoes(opcoes).opcoes;
-    if (raw.length < 2) {
-      return `Item "${label}": cadastre ao menos 2 niveis na escala Likert.`;
-    }
+    return validateLikertOpcoes(opcoes, label);
   }
 
   return null;
@@ -142,5 +121,7 @@ export function getMultiplaEscolhaValues(opcoes: unknown): string[] {
 }
 
 export function getLikertValues(opcoes: unknown): string[] {
-  return parseLikertOpcoes(opcoes).opcoes;
+  return getLikertNivelIds(opcoes);
 }
+
+export { parseLikertConfig };

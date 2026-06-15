@@ -466,6 +466,7 @@ export type MobileQueuedInspection = {
     conformidade: 'CONFORME' | 'NAO_CONFORME' | 'NAO_APLICAVEL';
     valorBooleano?: boolean;
     valorTexto?: string;
+    valorNumero?: number;
     comentario?: string;
     evidencias: Array<{
       tipo: 'FOTO';

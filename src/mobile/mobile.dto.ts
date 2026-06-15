@@ -61,6 +61,10 @@ class MobileRespostaDto {
   valorTexto?: string;
 
   @IsOptional()
+  @IsNumber()
+  valorNumero?: number;
+
+  @IsOptional()
   @IsString()
   comentario?: string;
 

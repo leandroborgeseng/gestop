@@ -22,14 +22,14 @@ describe('checklist-item.rules', () => {
 
   it('normaliza escala Likert padrao', () => {
     expect(normalizeChecklistItemOpcoes(ChecklistItemTipo.ESCALA_LIKERT, undefined)).toEqual({
-      opcoes: ['Péssimo', 'Ruim', 'Bom', 'Ótimo'],
+      niveis: ['PESSIMO', 'RUIM', 'REGULAR', 'BOM', 'OTIMO'],
     });
   });
 
   it('rejeita escala Likert com menos de 2 niveis', () => {
     expect(
-      validateChecklistItemOpcoes(ChecklistItemTipo.ESCALA_LIKERT, { opcoes: ['Ruim'] }, 'Estado', 'E1'),
-    ).toContain('2 niveis');
+      validateChecklistItemOpcoes(ChecklistItemTipo.ESCALA_LIKERT, { niveis: ['PESSIMO'] }, 'Estado', 'E1'),
+    ).toContain('2');
   });
 
   it('rejeita codigos duplicados na versao', () => {

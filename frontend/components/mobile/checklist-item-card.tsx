@@ -6,10 +6,11 @@ import { LikertScale } from '@/components/checklists/likert-scale';
 import { ChecklistItem } from '@/lib/types';
 import {
   inferConformidadeFromLikert,
-  parseLikertOpcoes,
-  parseMultiplaEscolhaOpcoes,
-  parseTextoOpcoes,
-} from '@/lib/checklist-item-opcoes';
+  LIKERT_CATEGORIA_LABELS,
+  parseLikertConfig,
+  resolveLikertNivel,
+} from '@/lib/likert-scale';
+import { parseMultiplaEscolhaOpcoes, parseTextoOpcoes } from '@/lib/checklist-item-opcoes';
 import { Card, CardContent } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
@@ -20,6 +21,7 @@ export type ResponseDraft = {
   conformidade: 'CONFORME' | 'NAO_CONFORME' | 'NAO_APLICAVEL';
   comentario: string;
   valorTexto?: string;
+  valorNumero?: number;
   evidenceDataUrl?: string;
   evidenceMimeType?: string;
   evidenceSize?: number;
@@ -39,7 +41,8 @@ export function ChecklistItemCard({
   const current = value ?? { conformidade: 'CONFORME', comentario: '' };
   const multiplaEscolha = parseMultiplaEscolhaOpcoes(item.opcoes);
   const opcoesVisiveis = multiplaEscolha.opcoes.map((opcao) => opcao.trim()).filter(Boolean);
-  const likertOpcoes = parseLikertOpcoes(item.opcoes);
+  const likertConfig = parseLikertConfig(item.opcoes);
+  const selectedLikert = resolveLikertNivel(current.valorTexto);
   const textoOpcoes = parseTextoOpcoes(item.opcoes);
   const needsEvidence =
     item.tipo === 'FOTO' ||
@@ -68,23 +71,25 @@ export function ChecklistItemCard({
           <>
             <Field label="Avaliação">
               <LikertScale
-                opcoes={likertOpcoes.opcoes}
+                opcoes={likertConfig.opcoes}
                 value={current.valorTexto}
-                onChange={(valor) =>
+                onChange={(nivel) =>
                   onChange({
-                    valorTexto: valor,
-                    conformidade: inferConformidadeFromLikert(likertOpcoes.opcoes, valor),
+                    valorTexto: nivel.id,
+                    valorNumero: nivel.pontuacao,
+                    conformidade: inferConformidadeFromLikert(nivel),
                   })
                 }
               />
             </Field>
-            {current.valorTexto ? (
+            {selectedLikert ? (
               <p className="text-[13px] text-[var(--md-on-surface-variant)]">
-                Registrado como{' '}
+                Pontuação <strong className="text-[var(--md-on-surface)]">{selectedLikert.pontuacao}/10</strong> ·{' '}
+                categoria <strong className="text-[var(--md-on-surface)]">{LIKERT_CATEGORIA_LABELS[selectedLikert.categoria]}</strong>{' '}
+                · registrado como{' '}
                 <strong className="text-[var(--md-on-surface)]">
                   {current.conformidade === 'NAO_CONFORME' ? 'não conforme' : 'conforme'}
-                </strong>{' '}
-                com base na escala.
+                </strong>
               </p>
             ) : null}
           </>
@@ -196,7 +201,10 @@ export function validateItemResponse(item: ChecklistItem, response?: ResponseDra
   if (!response) return `Preencha o item obrigatório: ${item.titulo}.`;
 
   const needsValue = ['TEXTO', 'NUMERO', 'DATA', 'MULTIPLA_ESCOLHA', 'ESCALA_LIKERT'].includes(item.tipo);
-  if (needsValue && !response.valorTexto?.trim()) {
+  if (needsValue && item.tipo === 'ESCALA_LIKERT' && !resolveLikertNivel(response.valorTexto)) {
+    return `Selecione um nível na escala: ${item.titulo}.`;
+  }
+  if (needsValue && item.tipo !== 'ESCALA_LIKERT' && !response.valorTexto?.trim()) {
     return `Informe a resposta do item: ${item.titulo}.`;
   }
 
@@ -228,7 +236,8 @@ export function buildRespostaPayload(
     itemId: item.id,
     conformidade: response.conformidade,
     valorBooleano: item.tipo === 'BOOLEANO' ? response.conformidade === 'CONFORME' : undefined,
-    valorTexto: response.valorTexto,
+    valorTexto: item.tipo === 'ESCALA_LIKERT' ? response.valorTexto : response.valorTexto,
+    valorNumero: item.tipo === 'ESCALA_LIKERT' ? response.valorNumero : undefined,
     comentario: response.comentario,
     evidencias: response.evidenceDataUrl
       ? [

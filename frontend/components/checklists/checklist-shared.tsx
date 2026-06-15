@@ -28,14 +28,18 @@ import { LikertScale } from '@/components/checklists/likert-scale';
 import {
   defaultOpcoesForTipo,
   formatOpcoesResumo,
-  LIKERT_ESCALA_PADRAO,
+  LIKERT_CATEGORIA_LABELS,
+  LIKERT_CATALOGO,
+  LIKERT_NIVEIS_ORDEM,
+  LIKERT_NIVEIS_PADRAO,
   MULTIPLA_ESCOLHA_MODO_LABELS,
-  parseLikertOpcoes,
+  parseLikertConfig,
   parseMultiplaEscolhaOpcoes,
   parseTextoOpcoes,
   serializeItemOpcoes,
   TEXTO_FORMATO_LABELS,
   validateItemOpcoes,
+  type LikertNivelId,
 } from '@/lib/checklist-item-opcoes';
 
 export const TIPO_ITEM_LABEL: Record<ChecklistItemTipo, string> = {
@@ -721,44 +725,62 @@ function LikertOpcoesEditor({
   opcoes: unknown;
   onChange: (opcoes: unknown) => void;
 }) {
-  const config = parseLikertOpcoes(opcoes);
+  const config = parseLikertConfig(opcoes);
+  const selected = new Set(config.opcoes.niveis);
 
-  function updateOpcoes(nextOpcoes: string[]) {
-    onChange({ opcoes: nextOpcoes });
+  function toggleNivel(id: LikertNivelId, checked: boolean) {
+    const next = new Set(selected);
+    if (checked) next.add(id);
+    else next.delete(id);
+    onChange({ niveis: LIKERT_NIVEIS_ORDEM.filter((nivelId) => next.has(nivelId)) });
   }
 
   return (
     <div className="space-y-3 border-t border-[var(--md-outline-variant)] pt-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="md-title-sm text-[var(--md-on-surface)]">Escala Likert</p>
-        <Button
-          type="button"
-          variant="text"
-          size="sm"
-          onClick={() => updateOpcoes([...LIKERT_ESCALA_PADRAO])}
-        >
-          Restaurar padrão
+        <p className="md-title-sm text-[var(--md-on-surface)]">Escala Likert fixa</p>
+        <Button type="button" variant="text" size="sm" onClick={() => onChange({ niveis: [...LIKERT_NIVEIS_PADRAO] })}>
+          Selecionar todos
         </Button>
       </div>
       <p className="text-[13px] text-[var(--md-on-surface-variant)]">
-        Do pior ao melhor: Péssimo → Ruim → Bom → Ótimo. Ajuste os rótulos se necessário.
+        Níveis padronizados com pontuação de 0 a 10 (5 = neutro). Escolha quais aparecem na vistoria.
       </p>
       <LikertScale opcoes={config.opcoes} preview />
-      <div className="space-y-2">
-        {config.opcoes.map((opcao, optionIndex) => (
-          <Field key={optionIndex} label={`Nível ${optionIndex + 1}`}>
-            <Input
-              value={opcao}
-              placeholder={LIKERT_ESCALA_PADRAO[optionIndex] ?? `Nível ${optionIndex + 1}`}
-              onChange={(e) => {
-                const next = [...config.opcoes];
-                next[optionIndex] = e.target.value;
-                updateOpcoes(next);
-              }}
-            />
-          </Field>
-        ))}
+      <div className="overflow-hidden rounded-[var(--md-shape-md)] border border-[var(--line-2)]">
+        <table className="w-full text-left text-[13px]">
+          <thead className="bg-[var(--surface-2)] text-[11px] font-bold uppercase tracking-wide text-[var(--ink-3)]">
+            <tr>
+              <th className="px-3 py-2">Usar</th>
+              <th className="px-3 py-2">Nível</th>
+              <th className="px-3 py-2">Categoria</th>
+              <th className="px-3 py-2">Pontuação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {LIKERT_NIVEIS_ORDEM.map((id) => {
+              const nivel = LIKERT_CATALOGO[id];
+              return (
+                <tr key={id} className="border-t border-[var(--line-2)]">
+                  <td className="px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(id)}
+                      onChange={(event) => toggleNivel(id, event.target.checked)}
+                    />
+                  </td>
+                  <td className="px-3 py-2 font-semibold text-[var(--ink)]">{nivel.label}</td>
+                  <td className="px-3 py-2 text-[var(--ink-2)]">{LIKERT_CATEGORIA_LABELS[nivel.categoria]}</td>
+                  <td className="px-3 py-2 font-mono text-[var(--ink-2)]">{nivel.pontuacao}/10</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
+      {selected.size < 2 ? (
+        <p className="text-[13px] text-[var(--danger)]">Selecione ao menos 2 níveis para publicar o item.</p>
+      ) : null}
     </div>
   );
 }

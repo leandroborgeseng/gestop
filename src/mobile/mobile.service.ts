@@ -221,6 +221,7 @@ export class MobileService {
             conformidade: resposta.conformidade,
             valorBooleano: resposta.valorBooleano,
             valorTexto: resposta.valorTexto,
+            valorNumero: resposta.valorNumero,
             comentario: resposta.comentario,
           },
         });
