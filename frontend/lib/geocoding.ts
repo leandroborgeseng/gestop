@@ -31,19 +31,93 @@ type NominatimAddress = {
   suburb?: string;
   neighbourhood?: string;
   quarter?: string;
+  city_district?: string;
+  district?: string;
   city?: string;
   town?: string;
   municipality?: string;
   village?: string;
 };
 
-function parseNominatimAddress(address?: NominatimAddress): Partial<ParsedAddress> {
+const MICRO_AREA_PATTERN = /^(vila|jardim|parque|residencial|conjunto|loteamento|chácara|chacara)\b/i;
+const ROAD_SEGMENT_PATTERN =
+  /^(rua|avenida|av\.|travessa|rodovia|alameda|praça|praca|estrada|\d+)/i;
+
+function normalizeDistrict(value: string) {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function extractDistrictsFromDisplayName(displayName: string) {
+  const parts = displayName.split(',').map((part) => part.trim());
+  const francaIndex = parts.findIndex((part) => /^franca(\s|-|,|$)/i.test(part));
+  if (francaIndex < 0) return [] as string[];
+
+  return parts
+    .slice(0, francaIndex)
+    .map(normalizeDistrict)
+    .filter((part) => part.length > 0 && !ROAD_SEGMENT_PATTERN.test(part));
+}
+
+export function collectDistrictCandidates(address?: NominatimAddress, displayName?: string) {
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+
+  function push(value?: string) {
+    const normalized = value ? normalizeDistrict(value) : '';
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(normalized);
+  }
+
+  push(address?.suburb);
+  push(address?.city_district);
+  push(address?.district);
+
+  for (const district of extractDistrictsFromDisplayName(displayName ?? '')) {
+    push(district);
+  }
+
+  return candidates;
+}
+
+export function pickBairro(candidates: string[]) {
+  if (candidates.length === 0) return '';
+
+  const nonMicro = candidates.filter((candidate) => !MICRO_AREA_PATTERN.test(candidate));
+  if (nonMicro.length > 0) return nonMicro[0];
+
+  return candidates[0];
+}
+
+export function formatGeocodeLabel(parsed: Partial<ParsedAddress>, fallbackDisplayName?: string) {
+  const logradouro = parsed.logradouro?.trim() ?? '';
+  const numero = parsed.numero?.trim() ?? '';
+  const bairro = parsed.bairro?.trim() ?? '';
+  const cidade = parsed.cidade?.trim() || 'Franca';
+  const street = [logradouro, numero].filter(Boolean).join(', ');
+
+  if (street && bairro) return `${street}, ${bairro}, ${cidade}`;
+  if (street) return `${street}, ${cidade}`;
+  if (bairro) return `${bairro}, ${cidade}`;
+
+  return fallbackDisplayName?.split(',').slice(0, 3).join(', ').trim() ?? '';
+}
+
+function parseNominatimAddress(address?: NominatimAddress, displayName?: string): Partial<ParsedAddress> {
   if (!address) return {};
+
+  const candidates = collectDistrictCandidates(address, displayName);
+  const bairro =
+    pickBairro(candidates) ||
+    normalizeDistrict(address.neighbourhood ?? '') ||
+    normalizeDistrict(address.quarter ?? '');
 
   return {
     logradouro: address.road ?? address.pedestrian ?? address.footway ?? '',
     numero: address.house_number ?? '',
-    bairro: address.suburb ?? address.neighbourhood ?? address.quarter ?? '',
+    bairro,
     cidade: address.city ?? address.town ?? address.municipality ?? address.village ?? 'Franca',
   };
 }
@@ -102,9 +176,9 @@ export async function searchAddresses(query: string, limit = 6): Promise<Geocodi
   }>;
 
   return items.map((item) => {
-    const parsed = parseNominatimAddress(item.address);
+    const parsed = parseNominatimAddress(item.address, item.display_name);
     return {
-      label: item.display_name.split(',').slice(0, 4).join(', '),
+      label: formatGeocodeLabel(parsed, item.display_name),
       latitude: Number(item.lat),
       longitude: Number(item.lon),
       bairro: parsed.bairro ?? null,
@@ -129,8 +203,8 @@ export async function reverseGeocodeAddress(latitude: number, longitude: number)
 
   if (!response.ok) return null;
 
-  const item = (await response.json()) as { address?: NominatimAddress };
-  const parsed = parseNominatimAddress(item.address);
+  const item = (await response.json()) as { display_name?: string; address?: NominatimAddress };
+  const parsed = parseNominatimAddress(item.address, item.display_name);
 
   return {
     logradouro: parsed.logradouro ?? '',

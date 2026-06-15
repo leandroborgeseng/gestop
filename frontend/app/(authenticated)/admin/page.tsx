@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, ClipboardList, Download, MapPin, Shield, UserRound, UsersRound } from 'lucide-react';
+import { Building2, ClipboardList, Download, MapPin, Search, Shield, UserRound, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
 import { PageShell } from '@/components/layout/page-shell';
@@ -288,6 +288,27 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
 }
 
 function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSecretaria[]; unidades: AdminUnidade[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
+  const [search, setSearch] = useState('');
+
+  const filteredUnidades = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return unidades;
+
+    return unidades.filter((unidade) =>
+      [
+        unidade.nome,
+        unidade.codigoPatrimonial,
+        unidade.endereco,
+        unidade.bairro,
+        unidade.secretaria.sigla,
+        unidade.secretaria.nome,
+        formatUnidadeTipo(unidade.tipo),
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [search, unidades]);
+
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -316,82 +337,103 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
 
   return (
     <div className="space-y-6">
-      <DataTable>
-        <DataTableHead>
-          <DataTableHeaderCell>Código</DataTableHeaderCell>
-          <DataTableHeaderCell>Unidade</DataTableHeaderCell>
-          <DataTableHeaderCell>Tipo</DataTableHeaderCell>
-          <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
-          <DataTableHeaderCell>Status</DataTableHeaderCell>
-        </DataTableHead>
-        <DataTableBody>
-          {unidades.slice(0, 50).map((unidade) => (
-            <DataTableRow key={unidade.id}>
-              <DataTableCell mono>{unidade.codigoPatrimonial}</DataTableCell>
-              <DataTableCell>{unidade.nome}</DataTableCell>
-              <DataTableCell>{formatUnidadeTipo(unidade.tipo)}</DataTableCell>
-              <DataTableCell mono>{unidade.secretaria.sigla}</DataTableCell>
-              <DataTableCell>
-                <Badge variant={unidade.ativo ? 'success' : 'muted'}>{unidade.ativo ? 'Ativo' : 'Inativo'}</Badge>
-              </DataTableCell>
-            </DataTableRow>
-          ))}
-        </DataTableBody>
-      </DataTable>
-      {unidades.length > 50 ? (
-        <p className="text-[12px] text-[var(--ink-3)]">Exibindo 50 de {unidades.length} registros na tabela. Use a lista abaixo para gerenciar todos.</p>
-      ) : null}
+      <Field label="Buscar próprio" hint="Nome, código patrimonial, endereço, bairro ou secretaria.">
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Ex.: PMF-ESC, Cidade Nova, UBS..."
+            className="pl-9"
+          />
+        </div>
+      </Field>
 
       <FormGrid>
-      <FormSection title="Novo próprio">
-        <form onSubmit={submit} className="space-y-4">
-          <Field label="Secretaria">
-            <Select name="secretariaId" required>
-              {secretarias.map((s) => (
-                <option key={s.id} value={s.id}>{s.sigla} — {s.nome}</option>
+        <FormSection title="Novo próprio">
+          <form onSubmit={submit} className="space-y-4">
+            <Field label="Secretaria">
+              <Select name="secretariaId" required>
+                {secretarias.map((s) => (
+                  <option key={s.id} value={s.id}>{s.sigla} — {s.nome}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Código patrimonial"><Input name="codigoPatrimonial" required /></Field>
+            <Field label="Nome"><Input name="nome" required /></Field>
+            <Field label="Tipo">
+              <Select name="tipo" required>
+                {tipos.map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {formatUnidadeTipo(tipo)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Endereço"><Input name="endereco" required /></Field>
+            <Field label="Bairro"><Input name="bairro" /></Field>
+            <Field label="CEP"><Input name="cep" /></Field>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Latitude"><Input name="latitude" type="number" step="0.000001" required /></Field>
+              <Field label="Longitude"><Input name="longitude" type="number" step="0.000001" required /></Field>
+              <Field label="Raio (m)"><Input name="raioValidacaoMetros" type="number" defaultValue="200" /></Field>
+            </div>
+            <Button type="submit" variant="filled" className="w-full">Cadastrar próprio</Button>
+          </form>
+        </FormSection>
+
+        <FormSection title={`Registros (${filteredUnidades.length})`}>
+          <div className="max-h-[min(480px,55vh)] overflow-y-auto overscroll-contain pr-1">
+            <RecordList empty={search.trim() ? 'Nenhum próprio encontrado para a busca.' : 'Nenhum próprio cadastrado.'}>
+              {filteredUnidades.map((unidade) => (
+                <RecordItem
+                  key={unidade.id}
+                  title={unidade.nome}
+                  subtitle={`${unidade.codigoPatrimonial} · ${unidade.secretaria.sigla} · ${formatUnidadeTipo(unidade.tipo)} · ${unidade.bairro ?? 'sem bairro'}`}
+                  active={unidade.ativo}
+                  actions={
+                    <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
+                      Inativar
+                    </Button>
+                  }
+                />
               ))}
-            </Select>
-          </Field>
-          <Field label="Código patrimonial"><Input name="codigoPatrimonial" required /></Field>
-          <Field label="Nome"><Input name="nome" required /></Field>
-          <Field label="Tipo">
-            <Select name="tipo" required>
-              {tipos.map((tipo) => (
-                <option key={tipo} value={tipo}>
-                  {formatUnidadeTipo(tipo)}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Endereço"><Input name="endereco" required /></Field>
-          <Field label="Bairro"><Input name="bairro" /></Field>
-          <Field label="CEP"><Input name="cep" /></Field>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="Latitude"><Input name="latitude" type="number" step="0.000001" required /></Field>
-            <Field label="Longitude"><Input name="longitude" type="number" step="0.000001" required /></Field>
-            <Field label="Raio (m)"><Input name="raioValidacaoMetros" type="number" defaultValue="200" /></Field>
+            </RecordList>
           </div>
-          <Button type="submit" variant="filled" className="w-full">Cadastrar próprio</Button>
-        </form>
-      </FormSection>
-      <FormSection title="Registros">
-        <RecordList empty="Nenhum próprio cadastrado.">
-          {unidades.map((unidade) => (
-            <RecordItem
-              key={unidade.id}
-              title={unidade.nome}
-              subtitle={`${unidade.codigoPatrimonial} · ${unidade.secretaria.sigla} · ${formatUnidadeTipo(unidade.tipo)} · ${unidade.bairro ?? 'sem bairro'}`}
-              active={unidade.ativo}
-              actions={
-                <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
-                  Inativar
-                </Button>
-              }
-            />
-          ))}
-        </RecordList>
-      </FormSection>
-    </FormGrid>
+        </FormSection>
+      </FormGrid>
+
+      <div className="overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]">
+        <div className="max-h-[min(320px,40vh)] overflow-auto">
+          <DataTable>
+            <DataTableHead>
+              <DataTableHeaderCell>Código</DataTableHeaderCell>
+              <DataTableHeaderCell>Unidade</DataTableHeaderCell>
+              <DataTableHeaderCell>Tipo</DataTableHeaderCell>
+              <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
+              <DataTableHeaderCell>Status</DataTableHeaderCell>
+            </DataTableHead>
+            <DataTableBody>
+              {filteredUnidades.map((unidade) => (
+                <DataTableRow key={unidade.id}>
+                  <DataTableCell mono>{unidade.codigoPatrimonial}</DataTableCell>
+                  <DataTableCell>{unidade.nome}</DataTableCell>
+                  <DataTableCell>{formatUnidadeTipo(unidade.tipo)}</DataTableCell>
+                  <DataTableCell mono>{unidade.secretaria.sigla}</DataTableCell>
+                  <DataTableCell>
+                    <Badge variant={unidade.ativo ? 'success' : 'muted'}>{unidade.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                  </DataTableCell>
+                </DataTableRow>
+              ))}
+            </DataTableBody>
+          </DataTable>
+        </div>
+        {filteredUnidades.length === 0 ? (
+          <p className="border-t border-[var(--line)] px-4 py-6 text-center text-[12px] text-[var(--ink-3)]">
+            Nenhum registro para exibir.
+          </p>
+        ) : null}
+      </div>
     </div>
   );
 }

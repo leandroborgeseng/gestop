@@ -29,7 +29,15 @@ export function FormGrid({ children, className }: { children: React.ReactNode; c
   );
 }
 
-export function RecordList({ children, empty }: { children: React.ReactNode; empty?: string }) {
+export function RecordList({
+  children,
+  empty,
+  className,
+}: {
+  children: React.ReactNode;
+  empty?: string;
+  className?: string;
+}) {
   const items = Children.toArray(children);
 
   if (items.length === 0) {
@@ -40,7 +48,7 @@ export function RecordList({ children, empty }: { children: React.ReactNode; emp
     );
   }
 
-  return <div className="space-y-2">{children}</div>;
+  return <div className={cn('space-y-2', className)}>{children}</div>;
 }
 
 export function RecordItem({
