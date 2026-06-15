@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildTriagemAlteracoes } from './chamados-sla';
+import { buildAtribuicaoAlteracoes, buildTriagemAlteracoes } from './chamados-sla';
 
 describe('buildTriagemAlteracoes', () => {
   it('registra alteração de tipo, prioridade e prazo SLA', () => {
@@ -30,5 +30,34 @@ describe('buildTriagemAlteracoes', () => {
     });
 
     expect(alteracoes).toEqual([]);
+  });
+});
+
+describe('buildAtribuicaoAlteracoes', () => {
+  it('registra equipe e responsável na linha do tempo', () => {
+    const alteracoes = buildAtribuicaoAlteracoes({
+      equipeAnterior: { nome: 'Equipe A' },
+      equipeNova: { nome: 'Equipe B' },
+      responsavelAnterior: { nome: 'João Silva' },
+      responsavelNovo: { nome: 'Maria Souza' },
+    });
+
+    expect(alteracoes).toEqual([
+      { campo: 'equipe', label: 'Equipe', de: 'Equipe A', para: 'Equipe B' },
+      { campo: 'responsavel', label: 'Responsável', de: 'João Silva', para: 'Maria Souza' },
+    ]);
+  });
+
+  it('registra apenas responsável quando a equipe não muda', () => {
+    const alteracoes = buildAtribuicaoAlteracoes({
+      equipeAnterior: { nome: 'Equipe A' },
+      equipeNova: { nome: 'Equipe A' },
+      responsavelAnterior: null,
+      responsavelNovo: { nome: 'Maria Souza' },
+    });
+
+    expect(alteracoes).toEqual([
+      { campo: 'responsavel', label: 'Responsável', de: 'Sem responsável', para: 'Maria Souza' },
+    ]);
   });
 });

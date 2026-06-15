@@ -21,7 +21,7 @@ import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
 import { ChamadoHistoricoForm } from '@/components/chamados/chamado-historico-form';
 import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
-import { AuthenticatedImage } from '@/components/ui/authenticated-image';
+import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Badge } from '@/components/ui/badge';
@@ -920,8 +920,13 @@ function ChamadoDetailPanel({
           {resumo.fotoUrl ? (
             <div>
               <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Foto anexada</p>
-              <div className="mt-2 overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]">
-                <AuthenticatedImage src={resumo.fotoUrl} alt="Foto do chamado" className="max-h-56 w-full object-cover" />
+              <div className="mt-2">
+                <ZoomableAuthenticatedImage
+                  src={resumo.fotoUrl}
+                  alt="Foto do chamado"
+                  className="max-h-56 w-full object-cover"
+                  previewClassName="max-h-[88vh] object-contain"
+                />
               </div>
             </div>
           ) : null}

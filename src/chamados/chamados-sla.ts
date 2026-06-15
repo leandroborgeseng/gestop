@@ -93,6 +93,34 @@ export function buildPlanejamentoAlteracoes(input: {
   return alteracoes;
 }
 
+export function buildAtribuicaoAlteracoes(input: {
+  equipeAnterior?: { nome: string } | null;
+  equipeNova?: { nome: string } | null;
+  responsavelAnterior?: { nome: string } | null;
+  responsavelNovo?: { nome: string } | null;
+}): PlanejamentoAlteracao[] {
+  const alteracoes: PlanejamentoAlteracao[] = [];
+
+  const equipeAnterior = input.equipeAnterior?.nome ?? 'Sem equipe';
+  const equipeNova = input.equipeNova?.nome ?? 'Sem equipe';
+  if (equipeAnterior !== equipeNova) {
+    alteracoes.push({ campo: 'equipe', label: 'Equipe', de: equipeAnterior, para: equipeNova });
+  }
+
+  const responsavelAnterior = input.responsavelAnterior?.nome ?? 'Sem responsável';
+  const responsavelNovo = input.responsavelNovo?.nome ?? 'Sem responsável';
+  if (responsavelAnterior !== responsavelNovo) {
+    alteracoes.push({
+      campo: 'responsavel',
+      label: 'Responsável',
+      de: responsavelAnterior,
+      para: responsavelNovo,
+    });
+  }
+
+  return alteracoes;
+}
+
 export function buildTriagemAlteracoes(input: {
   tipoAnterior?: { nome: string } | null;
   tipoNovo?: { nome: string } | null;

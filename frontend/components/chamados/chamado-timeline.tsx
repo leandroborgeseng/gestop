@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight, Check, Paperclip } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { AuthenticatedImage } from '@/components/ui/authenticated-image';
+import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { AuthenticatedStorageLink } from '@/components/ui/authenticated-storage-link';
 import { ChamadoTimelineStep } from '@/lib/chamado-status';
 
@@ -95,11 +96,12 @@ export function ChamadoTimeline({ steps }: { steps: ChamadoTimelineStep[] }) {
                       {step.expand.anexos.map((anexo) => {
                         const isImage = (anexo.mimeType ?? '').startsWith('image/');
                         return isImage ? (
-                          <AuthenticatedImage
+                          <ZoomableAuthenticatedImage
                             key={anexo.id}
                             src={anexo.url}
                             alt={anexo.nome ?? 'Anexo'}
-                            className="max-h-40 w-full rounded-[var(--r-sm)] object-cover"
+                            className="max-h-40 w-full object-cover"
+                            previewClassName="max-h-[88vh] object-contain"
                           />
                         ) : (
                           <AuthenticatedStorageLink

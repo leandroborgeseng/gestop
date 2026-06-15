@@ -35,7 +35,13 @@ import {
 } from './chamados.dto';
 import { buildOrdensServicoLotePdf } from './chamados-os-pdf';
 import { sendChamadoEquipeNotificacao } from './chamados-notificacao';
-import { buildPlanejamentoAlteracoes, buildTriagemAlteracoes, calcularPrazoSla, formatDateBr } from './chamados-sla';
+import {
+  buildAtribuicaoAlteracoes,
+  buildPlanejamentoAlteracoes,
+  buildTriagemAlteracoes,
+  calcularPrazoSla,
+  formatDateBr,
+} from './chamados-sla';
 import {
   assertValidChamadoTransition,
   buildChamadoCode,
@@ -843,6 +849,28 @@ export class ChamadosService {
       return this.serializeChamado(before);
     }
 
+    const [equipeAnterior, equipeNova, responsavelAnterior, responsavelNovo] = await Promise.all([
+      before.equipeId
+        ? this.prisma.equipe.findUnique({ where: { id: before.equipeId }, select: { nome: true } })
+        : Promise.resolve(null),
+      equipeId
+        ? this.prisma.equipe.findUnique({ where: { id: equipeId }, select: { nome: true } })
+        : Promise.resolve(null),
+      before.responsavelId
+        ? this.prisma.usuario.findUnique({ where: { id: before.responsavelId }, select: { nome: true } })
+        : Promise.resolve(null),
+      responsavelId
+        ? this.prisma.usuario.findUnique({ where: { id: responsavelId }, select: { nome: true } })
+        : Promise.resolve(null),
+    ]);
+
+    const alteracoes = buildAtribuicaoAlteracoes({
+      equipeAnterior,
+      equipeNova,
+      responsavelAnterior,
+      responsavelNovo,
+    });
+
     const chamado = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.chamado.update({
         where: { id },
@@ -859,10 +887,12 @@ export class ChamadosService {
           motivo: dto.motivo ?? 'Atribuição de equipe/responsável atualizada.',
           alteradoPorId: user.sub,
           metadata: {
+            tipo: 'atribuicao_update',
             equipeId,
             responsavelId,
             equipeAnteriorId: before.equipeId,
             responsavelAnteriorId: before.responsavelId,
+            alteracoes,
           },
         },
       });

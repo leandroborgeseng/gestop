@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { AuthenticatedImage } from '@/components/ui/authenticated-image';
+import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -627,7 +628,12 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
             <CardTitle className="text-[15px]">Foto original do chamado</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <AuthenticatedImage src={detail.fotoUrl} alt="Foto do chamado" className="max-h-64 w-full rounded-[var(--r-md)] object-cover" />
+            <ZoomableAuthenticatedImage
+              src={detail.fotoUrl}
+              alt="Foto do chamado"
+              className="max-h-64 w-full object-cover"
+              previewClassName="max-h-[88vh] object-contain"
+            />
           </CardContent>
         </Card>
       ) : null}

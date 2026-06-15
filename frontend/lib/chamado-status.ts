@@ -261,6 +261,28 @@ export function buildChamadoTimelineFromHistorico(
       };
     }
 
+    if (tipo === 'atribuicao_update' || entry.motivo === 'Atribuição de equipe/responsável atualizada.') {
+      const alteracoes = Array.isArray(metadata.alteracoes)
+        ? (metadata.alteracoes as Array<{ campo: string; label: string; de: string; para: string }>)
+        : [];
+      const responsavelAlteracao = alteracoes.find((item) => item.campo === 'responsavel');
+      return {
+        id: entry.id,
+        title: 'Atribuição atualizada',
+        date: formatTimelineDate(entry.createdAt),
+        sub: [entry.alteradoPor?.nome, responsavelAlteracao?.para].filter(Boolean).join(' · '),
+        done: true,
+        active: false,
+        expand: alteracoes.length
+          ? {
+              alteracoes,
+              usuario: entry.alteradoPor?.nome,
+              dataHora: formatTimelineDate(entry.createdAt),
+            }
+          : undefined,
+      };
+    }
+
     if (tipo === 'execucao_conclusao') {
       return buildExecucaoConclusaoStep(entry, metadata, isLast, currentStatus);
     }
@@ -277,6 +299,24 @@ export function buildChamadoTimelineFromHistorico(
     }
 
     const assignmentOnly = entry.statusAnterior && entry.statusAnterior === entry.statusNovo;
+    if (assignmentOnly && Array.isArray(metadata.alteracoes) && metadata.alteracoes.length > 0) {
+      const alteracoes = metadata.alteracoes as Array<{ campo: string; label: string; de: string; para: string }>;
+      const responsavelAlteracao = alteracoes.find((item) => item.campo === 'responsavel');
+      return {
+        id: entry.id,
+        title: 'Atribuição atualizada',
+        date: formatTimelineDate(entry.createdAt),
+        sub: [entry.alteradoPor?.nome, responsavelAlteracao?.para].filter(Boolean).join(' · '),
+        done: true,
+        active: false,
+        expand: {
+          alteracoes,
+          usuario: entry.alteradoPor?.nome,
+          dataHora: formatTimelineDate(entry.createdAt),
+        },
+      };
+    }
+
     const title = assignmentOnly
       ? 'Atribuição atualizada'
       : entry.statusAnterior
