@@ -1,0 +1,1 @@
+ALTER TYPE "ChecklistItemTipo" ADD VALUE 'ESCALA_LIKERT';

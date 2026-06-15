@@ -11,6 +11,26 @@ type TextoOpcoes = {
   formato: 'CURTO' | 'LONGO';
 };
 
+const LIKERT_ESCALA_PADRAO = ['Péssimo', 'Ruim', 'Bom', 'Ótimo'];
+
+type LikertOpcoes = {
+  opcoes: string[];
+};
+
+function parseLikertOpcoes(opcoes: unknown): LikertOpcoes {
+  if (Array.isArray(opcoes)) {
+    const values = opcoes.map(String).map((value) => value.trim()).filter(Boolean);
+    return { opcoes: values.length >= 2 ? values : [...LIKERT_ESCALA_PADRAO] };
+  }
+
+  if (opcoes && typeof opcoes === 'object' && Array.isArray((opcoes as LikertOpcoes).opcoes)) {
+    const values = (opcoes as LikertOpcoes).opcoes.map(String).map((value) => value.trim()).filter(Boolean);
+    return { opcoes: values.length >= 2 ? values : [...LIKERT_ESCALA_PADRAO] };
+  }
+
+  return { opcoes: [...LIKERT_ESCALA_PADRAO] };
+}
+
 function parseMultiplaEscolhaOpcoes(opcoes: unknown): MultiplaEscolhaOpcoes {
   if (Array.isArray(opcoes)) {
     const values = opcoes.map(String).map((value) => value.trim()).filter(Boolean);
@@ -52,6 +72,11 @@ export function normalizeChecklistItemOpcoes(tipo: ChecklistItemTipo, opcoes: un
     return parseTextoOpcoes(opcoes);
   }
 
+  if (tipo === ChecklistItemTipo.ESCALA_LIKERT) {
+    const config = parseLikertOpcoes(opcoes);
+    return { opcoes: config.opcoes };
+  }
+
   return undefined;
 }
 
@@ -67,6 +92,16 @@ export function validateChecklistItemOpcoes(
     const config = parseMultiplaEscolhaOpcoes(opcoes);
     if (config.opcoes.length < 2) {
       return `Item "${label}": cadastre ao menos 2 opcoes de multipla escolha.`;
+    }
+  }
+
+  if (tipo === ChecklistItemTipo.ESCALA_LIKERT) {
+    const raw =
+      opcoes && typeof opcoes === 'object' && Array.isArray((opcoes as LikertOpcoes).opcoes)
+        ? (opcoes as LikertOpcoes).opcoes.map(String).map((value) => value.trim()).filter(Boolean)
+        : parseLikertOpcoes(opcoes).opcoes;
+    if (raw.length < 2) {
+      return `Item "${label}": cadastre ao menos 2 niveis na escala Likert.`;
     }
   }
 
@@ -104,4 +139,8 @@ export function assertValidChecklistVersionItems(itens: ChecklistItemDto[]) {
 
 export function getMultiplaEscolhaValues(opcoes: unknown): string[] {
   return parseMultiplaEscolhaOpcoes(opcoes).opcoes;
+}
+
+export function getLikertValues(opcoes: unknown): string[] {
+  return parseLikertOpcoes(opcoes).opcoes;
 }

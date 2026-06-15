@@ -20,6 +20,18 @@ describe('checklist-item.rules', () => {
     ).toContain('2 opcoes');
   });
 
+  it('normaliza escala Likert padrao', () => {
+    expect(normalizeChecklistItemOpcoes(ChecklistItemTipo.ESCALA_LIKERT, undefined)).toEqual({
+      opcoes: ['Péssimo', 'Ruim', 'Bom', 'Ótimo'],
+    });
+  });
+
+  it('rejeita escala Likert com menos de 2 niveis', () => {
+    expect(
+      validateChecklistItemOpcoes(ChecklistItemTipo.ESCALA_LIKERT, { opcoes: ['Ruim'] }, 'Estado', 'E1'),
+    ).toContain('2 niveis');
+  });
+
   it('rejeita codigos duplicados na versao', () => {
     expect(() =>
       assertValidChecklistVersionItems([

@@ -2,8 +2,11 @@
 
 import { ChangeEvent } from 'react';
 import { Camera } from 'lucide-react';
+import { LikertScale } from '@/components/checklists/likert-scale';
 import { ChecklistItem } from '@/lib/types';
 import {
+  inferConformidadeFromLikert,
+  parseLikertOpcoes,
   parseMultiplaEscolhaOpcoes,
   parseTextoOpcoes,
 } from '@/lib/checklist-item-opcoes';
@@ -36,6 +39,7 @@ export function ChecklistItemCard({
   const current = value ?? { conformidade: 'CONFORME', comentario: '' };
   const multiplaEscolha = parseMultiplaEscolhaOpcoes(item.opcoes);
   const opcoesVisiveis = multiplaEscolha.opcoes.map((opcao) => opcao.trim()).filter(Boolean);
+  const likertOpcoes = parseLikertOpcoes(item.opcoes);
   const textoOpcoes = parseTextoOpcoes(item.opcoes);
   const needsEvidence =
     item.tipo === 'FOTO' ||
@@ -60,6 +64,30 @@ export function ChecklistItemCard({
             <option value="NAO_CONFORME">Não conforme</option>
             <option value="NAO_APLICAVEL">Não aplicável</option>
           </Select>
+        ) : item.tipo === 'ESCALA_LIKERT' ? (
+          <>
+            <Field label="Avaliação">
+              <LikertScale
+                opcoes={likertOpcoes.opcoes}
+                value={current.valorTexto}
+                onChange={(valor) =>
+                  onChange({
+                    valorTexto: valor,
+                    conformidade: inferConformidadeFromLikert(likertOpcoes.opcoes, valor),
+                  })
+                }
+              />
+            </Field>
+            {current.valorTexto ? (
+              <p className="text-[13px] text-[var(--md-on-surface-variant)]">
+                Registrado como{' '}
+                <strong className="text-[var(--md-on-surface)]">
+                  {current.conformidade === 'NAO_CONFORME' ? 'não conforme' : 'conforme'}
+                </strong>{' '}
+                com base na escala.
+              </p>
+            ) : null}
+          </>
         ) : (
           <>
             <Field label="Resposta">
@@ -167,7 +195,7 @@ export function validateItemResponse(item: ChecklistItem, response?: ResponseDra
   if (!item.obrigatorio) return null;
   if (!response) return `Preencha o item obrigatório: ${item.titulo}.`;
 
-  const needsValue = ['TEXTO', 'NUMERO', 'DATA', 'MULTIPLA_ESCOLHA'].includes(item.tipo);
+  const needsValue = ['TEXTO', 'NUMERO', 'DATA', 'MULTIPLA_ESCOLHA', 'ESCALA_LIKERT'].includes(item.tipo);
   if (needsValue && !response.valorTexto?.trim()) {
     return `Informe a resposta do item: ${item.titulo}.`;
   }

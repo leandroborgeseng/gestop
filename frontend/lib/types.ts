@@ -396,7 +396,7 @@ export type WebmapSyncAllResult = {
 
 export type ChecklistEscopo = 'GLOBAL' | 'SECRETARIA' | 'UNIDADE_TIPO' | 'UNIDADE';
 export type ChecklistVersaoStatus = 'RASCUNHO' | 'PUBLICADA' | 'ARQUIVADA';
-export type ChecklistItemTipo = 'TEXTO' | 'NUMERO' | 'BOOLEANO' | 'MULTIPLA_ESCOLHA' | 'FOTO' | 'ASSINATURA' | 'DATA';
+export type ChecklistItemTipo = 'TEXTO' | 'NUMERO' | 'BOOLEANO' | 'MULTIPLA_ESCOLHA' | 'ESCALA_LIKERT' | 'FOTO' | 'ASSINATURA' | 'DATA';
 
 export type ChecklistItem = {
   id: string;

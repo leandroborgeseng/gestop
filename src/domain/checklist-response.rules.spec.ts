@@ -42,6 +42,24 @@ describe('checklist-response.rules', () => {
     expect(result.valid).toBe(false);
   });
 
+  it('valida valor de escala Likert', () => {
+    const likert = {
+      ...item,
+      tipo: ChecklistItemTipo.ESCALA_LIKERT,
+      opcoes: { opcoes: ['Péssimo', 'Ruim', 'Bom', 'Ótimo'] },
+    };
+
+    const result = validateChecklistItemResponse(likert, {
+      itemId: 'item-1',
+      conformidade: ConformidadeStatus.CONFORME,
+      valorTexto: 'Inválido',
+      comentario: '',
+      evidenciasCount: 0,
+    });
+
+    expect(result.valid).toBe(false);
+  });
+
   it('exige todos os itens obrigatorios', () => {
     const result = validateChecklistResponses([item], []);
     expect(result.valid).toBe(false);

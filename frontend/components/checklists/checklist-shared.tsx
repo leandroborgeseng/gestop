@@ -24,10 +24,13 @@ import {
   ChecklistVersao,
   UnidadeTipo,
 } from '@/lib/types';
+import { LikertScale } from '@/components/checklists/likert-scale';
 import {
   defaultOpcoesForTipo,
   formatOpcoesResumo,
+  LIKERT_ESCALA_PADRAO,
   MULTIPLA_ESCOLHA_MODO_LABELS,
+  parseLikertOpcoes,
   parseMultiplaEscolhaOpcoes,
   parseTextoOpcoes,
   serializeItemOpcoes,
@@ -40,6 +43,7 @@ export const TIPO_ITEM_LABEL: Record<ChecklistItemTipo, string> = {
   NUMERO: 'Número',
   BOOLEANO: 'Sim/Não',
   MULTIPLA_ESCOLHA: 'Múltipla escolha',
+  ESCALA_LIKERT: 'Escala Likert',
   FOTO: 'Foto',
   ASSINATURA: 'Assinatura',
   DATA: 'Data',
@@ -50,6 +54,7 @@ export const tiposItem: ChecklistItemTipo[] = [
   'NUMERO',
   'BOOLEANO',
   'MULTIPLA_ESCOLHA',
+  'ESCALA_LIKERT',
   'FOTO',
   'ASSINATURA',
   'DATA',
@@ -619,6 +624,12 @@ export function VersionEditor({
                 onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
               />
             ) : null}
+            {item.tipo === 'ESCALA_LIKERT' ? (
+              <LikertOpcoesEditor
+                opcoes={item.opcoes}
+                onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
+              />
+            ) : null}
             {item.tipo === 'TEXTO' ? (
               <TextoOpcoesEditor
                 opcoes={item.opcoes}
@@ -699,6 +710,55 @@ function MultiplaEscolhaEditor({
           ))}
         </Select>
       </Field>
+    </div>
+  );
+}
+
+function LikertOpcoesEditor({
+  opcoes,
+  onChange,
+}: {
+  opcoes: unknown;
+  onChange: (opcoes: unknown) => void;
+}) {
+  const config = parseLikertOpcoes(opcoes);
+
+  function updateOpcoes(nextOpcoes: string[]) {
+    onChange({ opcoes: nextOpcoes });
+  }
+
+  return (
+    <div className="space-y-3 border-t border-[var(--md-outline-variant)] pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="md-title-sm text-[var(--md-on-surface)]">Escala Likert</p>
+        <Button
+          type="button"
+          variant="text"
+          size="sm"
+          onClick={() => updateOpcoes([...LIKERT_ESCALA_PADRAO])}
+        >
+          Restaurar padrão
+        </Button>
+      </div>
+      <p className="text-[13px] text-[var(--md-on-surface-variant)]">
+        Do pior ao melhor: Péssimo → Ruim → Bom → Ótimo. Ajuste os rótulos se necessário.
+      </p>
+      <LikertScale opcoes={config.opcoes} preview />
+      <div className="space-y-2">
+        {config.opcoes.map((opcao, optionIndex) => (
+          <Field key={optionIndex} label={`Nível ${optionIndex + 1}`}>
+            <Input
+              value={opcao}
+              placeholder={LIKERT_ESCALA_PADRAO[optionIndex] ?? `Nível ${optionIndex + 1}`}
+              onChange={(e) => {
+                const next = [...config.opcoes];
+                next[optionIndex] = e.target.value;
+                updateOpcoes(next);
+              }}
+            />
+          </Field>
+        ))}
+      </div>
     </div>
   );
 }

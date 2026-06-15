@@ -28,6 +28,7 @@ const TIPO_LABEL: Record<string, string> = {
   TEXTO: 'Texto',
   NUMERO: 'Número',
   MULTIPLA_ESCOLHA: 'Múltipla',
+  ESCALA_LIKERT: 'Likert',
   ASSINATURA: 'Assinatura',
   DATA: 'Data',
 };
