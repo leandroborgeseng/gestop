@@ -40,6 +40,7 @@ import {
   WebmapSyncAllResult,
   WebmapImportStatus,
 } from './types';
+import { toGeoCheckin } from '@/lib/geolocation';
 import { notifyAuthExpired } from './security';
 
 // Sempre usa proxy interno do Next.js no browser.
@@ -425,10 +426,22 @@ export function getMobileFieldPackage() {
 }
 
 export function syncMobileInspection(payload: MobileQueuedInspection) {
+  const sanitized: MobileQueuedInspection = {
+    ...payload,
+    checkin: toGeoCheckin(payload.checkin),
+    respostas: payload.respostas.map((resposta) => ({
+      ...resposta,
+      evidencias: resposta.evidencias.map((evidencia) => ({
+        ...evidencia,
+        localizacao: toGeoCheckin(evidencia.localizacao),
+      })),
+    })),
+  };
+
   return request<{ status: string; fiscalizacaoId?: string; syncEventId: string }>('/mobile/sync/fiscalizacoes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(sanitized),
   });
 }
 

@@ -232,6 +232,12 @@ export function buildRespostaPayload(
   checkin: { latitude: number; longitude: number; precisaoMetros: number },
   capturedAt: string,
 ) {
+  const localizacao = {
+    latitude: checkin.latitude,
+    longitude: checkin.longitude,
+    precisaoMetros: checkin.precisaoMetros,
+  };
+
   return {
     itemId: item.id,
     conformidade: response.conformidade,
@@ -247,7 +253,7 @@ export function buildRespostaPayload(
             mimeType: response.evidenceMimeType,
             tamanhoBytes: response.evidenceSize,
             capturadaEm: capturedAt,
-            localizacao: checkin,
+            localizacao,
           },
         ]
       : [],

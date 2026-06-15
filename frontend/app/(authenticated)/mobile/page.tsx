@@ -21,7 +21,7 @@ import { Field } from '@/components/ui/field';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
-import { captureCurrentPosition } from '@/lib/geolocation';
+import { captureCurrentPosition, toGeoCheckin } from '@/lib/geolocation';
 import { filterChecklistsForUnidade } from '@/lib/checklist-matching';
 import { migrateLegacyQueueIfNeeded, readMobileQueue, writeMobileQueue } from '@/lib/mobile-queue';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
@@ -170,6 +170,7 @@ export default function MobilePage() {
       throw new Error('GPS indisponível. Ative a localização do dispositivo para registrar a vistoria.');
     }
 
+    const geo = toGeoCheckin(checkin);
     const now = new Date().toISOString();
     return {
       clientEventId: `${getDeviceId()}:${Date.now()}`,
@@ -178,13 +179,9 @@ export default function MobilePage() {
       checklistVersaoId: selectedVersion.id,
       iniciadaEm: now,
       concluidaEm: now,
-      checkin: {
-        latitude: checkin.latitude,
-        longitude: checkin.longitude,
-        precisaoMetros: checkin.precisaoMetros,
-      },
+      checkin: geo,
       respostas: selectedVersion.itens.map((item) =>
-        buildRespostaPayload(item, responses[item.id] ?? { conformidade: 'CONFORME', comentario: '' }, checkin, now),
+        buildRespostaPayload(item, responses[item.id] ?? { conformidade: 'CONFORME', comentario: '' }, geo, now),
       ),
     } satisfies MobileQueuedInspection;
   }

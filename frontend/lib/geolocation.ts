@@ -5,6 +5,16 @@ export type GeoPosition = {
   source: 'gps' | 'fallback';
 };
 
+export type GeoCheckinPayload = Pick<GeoPosition, 'latitude' | 'longitude' | 'precisaoMetros'>;
+
+export function toGeoCheckin(position: GeoCheckinPayload): GeoCheckinPayload {
+  return {
+    latitude: position.latitude,
+    longitude: position.longitude,
+    precisaoMetros: position.precisaoMetros,
+  };
+}
+
 export async function captureCurrentPosition(fallback?: GeoPosition): Promise<GeoPosition> {
   if (typeof window === 'undefined' || !navigator.geolocation) {
     if (fallback) return { ...fallback, source: 'fallback' };
