@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Post, Put, Query, StreamableFile, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, Post, Put, Query, StreamableFile, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -117,6 +117,16 @@ export class ChamadosController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.chamadosService.adicionarEvidenciaExecucao(id, body, user);
+  }
+
+  @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
+  @Delete(':id/execucao/evidencias/:evidenciaId')
+  removeEvidenciaExecucao(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('evidenciaId', ParseUuidPipe) evidenciaId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.chamadosService.removerEvidenciaExecucao(id, evidenciaId, user);
   }
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')

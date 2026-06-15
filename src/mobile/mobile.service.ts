@@ -1,7 +1,6 @@
 import { BadRequestException, forwardRef, Inject, Injectable } from '@nestjs/common';
 import {
   AuditAction,
-  ChecklistEscopo,
   ConformidadeStatus,
   EntidadeSincronizavel,
   EvidenciaTipo,
@@ -20,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { MobileSyncFiscalizacaoDto } from './mobile.dto';
 import { validateMobileCheckin } from './mobile.rules';
+import { buildFieldPackageChecklistWhere } from './field-package';
 import { validateChecklistResponses } from '../domain/checklist-response.rules';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 
@@ -62,16 +62,7 @@ export class MobileService {
         },
       }),
       this.prisma.checklist.findMany({
-        where: {
-          ativo: true,
-          versoes: { some: { status: 'PUBLICADA' } },
-          OR: [
-            { escopo: ChecklistEscopo.GLOBAL },
-            ...(usuario?.secretariaId
-              ? [{ escopo: ChecklistEscopo.SECRETARIA, secretariaId: usuario.secretariaId }]
-              : []),
-          ],
-        },
+        where: buildFieldPackageChecklistWhere(usuario?.secretariaId),
         orderBy: { nome: 'asc' },
         include: {
           versoes: {

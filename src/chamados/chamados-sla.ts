@@ -57,6 +57,8 @@ export type PlanejamentoAlteracao = {
 export function buildPlanejamentoAlteracoes(input: {
   equipeAnterior?: { nome: string } | null;
   equipeNova?: { nome: string } | null;
+  responsavelAnterior?: { nome: string } | null;
+  responsavelNovo?: { nome: string } | null;
   previstaAnterior?: Date | null;
   previstaNova?: Date | null;
   prioridadeAnterior?: string | null;
@@ -68,6 +70,17 @@ export function buildPlanejamentoAlteracoes(input: {
   const equipeNova = input.equipeNova?.nome ?? 'Sem equipe';
   if (equipeAnterior !== equipeNova) {
     alteracoes.push({ campo: 'equipe', label: 'Equipe', de: equipeAnterior, para: equipeNova });
+  }
+
+  const responsavelAnterior = input.responsavelAnterior?.nome ?? 'Sem responsável';
+  const responsavelNovo = input.responsavelNovo?.nome ?? 'Sem responsável';
+  if (responsavelAnterior !== responsavelNovo) {
+    alteracoes.push({
+      campo: 'responsavel',
+      label: 'Responsável',
+      de: responsavelAnterior,
+      para: responsavelNovo,
+    });
   }
 
   const previstaAnterior = formatDateBr(input.previstaAnterior);

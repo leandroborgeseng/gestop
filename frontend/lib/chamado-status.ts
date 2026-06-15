@@ -128,6 +128,23 @@ function mapHistoricoAnexos(entry: ChamadoHistoricoEntry) {
   }));
 }
 
+function timelineSubComResponsavel(
+  alteradoPor: string | undefined,
+  alteracoes: Array<{ campo: string; label: string; de: string; para: string }>,
+) {
+  const responsavelAlteracao = alteracoes.find((item) => item.campo === 'responsavel');
+  const equipeAlteracao = alteracoes.find((item) => item.campo === 'equipe');
+  const destaque = responsavelAlteracao?.para ?? equipeAlteracao?.para;
+  return [alteradoPor, destaque].filter(Boolean).join(' · ');
+}
+
+function isAtribuicaoMotivo(motivo: string | null | undefined) {
+  return (
+    motivo === 'Atribuição de equipe/responsável atualizada.' ||
+    motivo === 'Atribuição de equipe atualizada.'
+  );
+}
+
 function buildExecucaoConclusaoStep(
   entry: ChamadoHistoricoEntry,
   metadata: Record<string, unknown>,
@@ -227,7 +244,7 @@ export function buildChamadoTimelineFromHistorico(
         id: entry.id,
         title: 'Programação de execução atualizada',
         date: formatTimelineDate(entry.createdAt),
-        sub: entry.alteradoPor?.nome,
+        sub: timelineSubComResponsavel(entry.alteradoPor?.nome, alteracoes),
         done: true,
         active: false,
         expand: alteracoes.length
@@ -261,16 +278,15 @@ export function buildChamadoTimelineFromHistorico(
       };
     }
 
-    if (tipo === 'atribuicao_update' || entry.motivo === 'Atribuição de equipe/responsável atualizada.') {
+    if (tipo === 'atribuicao_update' || isAtribuicaoMotivo(entry.motivo)) {
       const alteracoes = Array.isArray(metadata.alteracoes)
         ? (metadata.alteracoes as Array<{ campo: string; label: string; de: string; para: string }>)
         : [];
-      const responsavelAlteracao = alteracoes.find((item) => item.campo === 'responsavel');
       return {
         id: entry.id,
         title: 'Atribuição atualizada',
         date: formatTimelineDate(entry.createdAt),
-        sub: [entry.alteradoPor?.nome, responsavelAlteracao?.para].filter(Boolean).join(' · '),
+        sub: timelineSubComResponsavel(entry.alteradoPor?.nome, alteracoes),
         done: true,
         active: false,
         expand: alteracoes.length
@@ -301,12 +317,11 @@ export function buildChamadoTimelineFromHistorico(
     const assignmentOnly = entry.statusAnterior && entry.statusAnterior === entry.statusNovo;
     if (assignmentOnly && Array.isArray(metadata.alteracoes) && metadata.alteracoes.length > 0) {
       const alteracoes = metadata.alteracoes as Array<{ campo: string; label: string; de: string; para: string }>;
-      const responsavelAlteracao = alteracoes.find((item) => item.campo === 'responsavel');
       return {
         id: entry.id,
         title: 'Atribuição atualizada',
         date: formatTimelineDate(entry.createdAt),
-        sub: [entry.alteradoPor?.nome, responsavelAlteracao?.para].filter(Boolean).join(' · '),
+        sub: timelineSubComResponsavel(entry.alteradoPor?.nome, alteracoes),
         done: true,
         active: false,
         expand: {

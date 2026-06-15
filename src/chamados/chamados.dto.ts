@@ -109,8 +109,9 @@ export class UpdateChamadoAtribuicaoDto {
   equipeId?: string;
 
   @IsOptional()
-  @IsString()
-  responsavelId?: string;
+  @ValidateIf((_, value) => value !== null && value !== undefined && value !== '')
+  @IsUUID()
+  responsavelId?: string | null;
 
   @IsOptional()
   @IsString()

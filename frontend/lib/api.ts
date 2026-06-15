@@ -598,7 +598,7 @@ export function listEquipesExecucao() {
 
 export function updateChamadoAtribuicao(
   id: string,
-  payload: { equipeId?: string; responsavelId?: string; motivo?: string },
+  payload: { equipeId?: string; responsavelId?: string | null; motivo?: string },
 ) {
   return request<ChamadoResumo>(`/chamados/${id}/atribuicao`, {
     method: 'PUT',
@@ -716,6 +716,12 @@ export function addChamadoExecucaoEvidencia(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+  });
+}
+
+export function deleteChamadoExecucaoEvidencia(id: string, evidenciaId: string) {
+  return request<{ ok: true }>(`/chamados/${id}/execucao/evidencias/${evidenciaId}`, {
+    method: 'DELETE',
   });
 }
 

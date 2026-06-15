@@ -29,4 +29,29 @@ describe('buildChamadoTimelineFromHistorico atribuição', () => {
     expect(steps[0]?.sub).toContain('Carlos Mendes');
     expect(steps[0]?.expand?.alteracoes).toHaveLength(2);
   });
+
+  it('reconhece motivo padrão de atribuição de equipe', () => {
+    const steps = buildChamadoTimelineFromHistorico(
+      [
+        {
+          id: 'hist-2',
+          statusAnterior: 'EM_TRIAGEM',
+          statusNovo: 'EM_TRIAGEM',
+          motivo: 'Atribuição de equipe atualizada.',
+          createdAt: '2026-06-15T20:30:00.000Z',
+          alteradoPor: { nome: 'Gestor CCO' },
+          metadata: {
+            tipo: 'atribuicao_update',
+            alteracoes: [
+              { campo: 'responsavel', label: 'Responsável', de: 'Sem responsável', para: 'Ana Paula' },
+            ],
+          },
+        },
+      ],
+      'EM_TRIAGEM',
+      '2026-06-15T17:00:00.000Z',
+    );
+
+    expect(steps[0]?.sub).toContain('Ana Paula');
+  });
 });

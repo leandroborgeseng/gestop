@@ -434,6 +434,45 @@ export class ChamadosService {
     }
   }
 
+  async removerEvidenciaExecucao(id: string, evidenciaId: string, user: JwtPayload) {
+    const chamado = await this.getChamadoOrThrow(id);
+    await this.assertUsuarioPodeExecutarChamado(chamado, user);
+    this.assertChamadoEmExecucao(chamado.status);
+    await this.assertCheckinExecucaoRegistrado(id);
+
+    const evidencia = await this.prisma.evidencia.findFirst({
+      where: { id: evidenciaId, chamadoId: id },
+    });
+    if (!evidencia) {
+      throw new NotFoundException('Evidência não encontrada.');
+    }
+
+    const metadata = evidencia.metadata as { origem?: string } | null;
+    if (metadata?.origem !== 'execucao_campo') {
+      throw new BadRequestException('Esta evidência não pode ser removida durante a execução.');
+    }
+
+    if (evidencia.storageKey) {
+      await this.storageService.deleteStoredObject(evidencia.storageKey);
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.evidencia.delete({ where: { id: evidenciaId } });
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.DELETE,
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          valorAntigo: { evidenciaId, tipo: 'execucao_evidencia' },
+        },
+      });
+    });
+
+    return { ok: true as const };
+  }
+
   async concluirExecucao(id: string, dto: ChamadoExecucaoConcluirDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
     await this.assertUsuarioPodeExecutarChamado(before, user);
@@ -834,7 +873,15 @@ export class ChamadosService {
     const before = await this.getChamadoOrThrow(id);
     assertChamadoSecretariaAccess(user, before);
     const equipeId = dto.equipeId === undefined ? before.equipeId : dto.equipeId || null;
-    let responsavelId = dto.responsavelId === undefined ? before.responsavelId : dto.responsavelId || null;
+    const equipeChanged = dto.equipeId !== undefined && equipeId !== before.equipeId;
+    let responsavelId: string | null;
+    if (dto.responsavelId !== undefined) {
+      responsavelId = dto.responsavelId || null;
+    } else if (equipeChanged) {
+      responsavelId = null;
+    } else {
+      responsavelId = before.responsavelId;
+    }
     if (!equipeId) responsavelId = null;
 
     if (equipeId) {
@@ -973,16 +1020,24 @@ export class ChamadosService {
       return this.serializeChamado(before);
     }
 
-    const [equipeAnterior, equipeNova] = await Promise.all([
+    const [equipeAnterior, equipeNova, responsavelAnterior, responsavelNovo] = await Promise.all([
       before.equipeId
         ? this.prisma.equipe.findUnique({ where: { id: before.equipeId }, select: { nome: true } })
         : Promise.resolve(null),
       equipeId ? this.prisma.equipe.findUnique({ where: { id: equipeId }, select: { nome: true } }) : Promise.resolve(null),
+      before.responsavelId
+        ? this.prisma.usuario.findUnique({ where: { id: before.responsavelId }, select: { nome: true } })
+        : Promise.resolve(null),
+      responsavelId
+        ? this.prisma.usuario.findUnique({ where: { id: responsavelId }, select: { nome: true } })
+        : Promise.resolve(null),
     ]);
 
     const alteracoes = buildPlanejamentoAlteracoes({
       equipeAnterior,
       equipeNova,
+      responsavelAnterior,
+      responsavelNovo,
       previstaAnterior: before.previstaExecucaoEm,
       previstaNova: previstaExecucaoEm,
       prioridadeAnterior: prioridadeIgual ? null : before.prioridade,
@@ -1008,7 +1063,9 @@ export class ChamadosService {
             tipo: 'programacao_update',
             previstaExecucaoEm: previstaExecucaoEm?.toISOString() ?? null,
             equipeId,
+            responsavelId,
             equipeAnteriorId: before.equipeId,
+            responsavelAnteriorId: before.responsavelId,
             alteracoes,
           },
         },

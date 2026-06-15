@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAtribuicaoAlteracoes, buildTriagemAlteracoes } from './chamados-sla';
+import { buildAtribuicaoAlteracoes, buildPlanejamentoAlteracoes, buildTriagemAlteracoes } from './chamados-sla';
 
 describe('buildTriagemAlteracoes', () => {
   it('registra alteração de tipo, prioridade e prazo SLA', () => {
@@ -58,6 +58,22 @@ describe('buildAtribuicaoAlteracoes', () => {
 
     expect(alteracoes).toEqual([
       { campo: 'responsavel', label: 'Responsável', de: 'Sem responsável', para: 'Maria Souza' },
+    ]);
+  });
+});
+
+describe('buildPlanejamentoAlteracoes', () => {
+  it('registra responsável removido ao trocar equipe na programação', () => {
+    const alteracoes = buildPlanejamentoAlteracoes({
+      equipeAnterior: { nome: 'Equipe A' },
+      equipeNova: { nome: 'Equipe B' },
+      responsavelAnterior: { nome: 'João Silva' },
+      responsavelNovo: null,
+    });
+
+    expect(alteracoes).toEqual([
+      { campo: 'equipe', label: 'Equipe', de: 'Equipe A', para: 'Equipe B' },
+      { campo: 'responsavel', label: 'Responsável', de: 'João Silva', para: 'Sem responsável' },
     ]);
   });
 });

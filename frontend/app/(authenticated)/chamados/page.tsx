@@ -261,8 +261,8 @@ function ChamadosPageContent() {
     try {
       await updateChamadoAtribuicao(id, {
         equipeId,
-        responsavelId: responsavelId || undefined,
-        motivo: motivo?.trim() || 'Atribuição de equipe atualizada.',
+        responsavelId: responsavelId || null,
+        motivo: motivo?.trim() || 'Atribuição de equipe/responsável atualizada.',
       });
       await refreshChamadosList();
       if (selectedId === id) {

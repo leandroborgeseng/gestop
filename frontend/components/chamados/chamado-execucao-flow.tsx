@@ -28,6 +28,7 @@ import {
   addChamadoExecucaoEvidencia,
   checkinChamadoExecucao,
   concluirChamadoExecucao,
+  deleteChamadoExecucaoEvidencia,
   getChamadoExecucao,
 } from '@/lib/api';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
@@ -238,6 +239,24 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
       snackbar.show('Evidência anexada.', 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Falha ao anexar evidência.';
+      setError(message);
+      snackbar.show(message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemoveEvidence(evidenciaId: string) {
+    if (!detail || busy) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteChamadoExecucaoEvidencia(chamadoId, evidenciaId);
+      setEvidencias((current) => current.filter((item) => item.id !== evidenciaId));
+      snackbar.show('Foto removida.', 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Falha ao remover evidência.';
       setError(message);
       snackbar.show(message, 'error');
     } finally {
@@ -498,17 +517,30 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                 {evidencias.map((evidencia) => (
-                  <button
+                  <div
                     key={evidencia.id}
-                    type="button"
-                    onClick={() => setPreviewEvidenceUrl(evidencia.url)}
-                    className="overflow-hidden rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)] text-left"
+                    className="relative overflow-hidden rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)]"
                   >
-                    <AuthenticatedImage src={evidencia.url} alt="Evidência da execução" className="aspect-[4/3] w-full object-cover" />
-                    <span className="block px-2 py-1 text-[11px] text-[var(--ink-3)]">
-                      {new Date(evidencia.capturadaEm).toLocaleString('pt-BR')}
-                    </span>
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewEvidenceUrl(evidencia.url)}
+                      className="block w-full text-left"
+                    >
+                      <AuthenticatedImage src={evidencia.url} alt="Evidência da execução" className="aspect-[4/3] w-full object-cover" />
+                      <span className="block px-2 py-1 text-[11px] text-[var(--ink-3)]">
+                        {new Date(evidencia.capturadaEm).toLocaleString('pt-BR')}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Remover foto"
+                      disabled={busy}
+                      onClick={() => void handleRemoveEvidence(evidencia.id)}
+                      className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--ink-2)] shadow-[var(--sh-sm)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-50"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 ))}
                 <label className="flex aspect-[4/3] cursor-pointer flex-col items-center justify-center gap-2 rounded-[var(--r-md)] border border-dashed border-[var(--line)] bg-[var(--surface-2)] text-[13px] font-semibold text-[var(--brand-hover)] hover:bg-[var(--brand-soft)]">
                   <Camera className="h-6 w-6" />
@@ -587,17 +619,30 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
               ) : (
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {evidencias.map((evidencia) => (
-                    <button
+                    <div
                       key={evidencia.id}
-                      type="button"
-                      onClick={() => setPreviewEvidenceUrl(evidencia.url)}
-                      className="group overflow-hidden rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)] text-left transition-shadow hover:shadow-[var(--sh-sm)]"
+                      className="relative overflow-hidden rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)]"
                     >
-                      <AuthenticatedImage src={evidencia.url} alt="Evidência da execução" className="aspect-[4/3] w-full object-cover" />
-                      <span className="block px-2 py-1.5 text-[11px] text-[var(--brand-hover)] group-hover:underline">
-                        Abrir foto · {new Date(evidencia.capturadaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewEvidenceUrl(evidencia.url)}
+                        className="group block w-full text-left transition-shadow hover:shadow-[var(--sh-sm)]"
+                      >
+                        <AuthenticatedImage src={evidencia.url} alt="Evidência da execução" className="aspect-[4/3] w-full object-cover" />
+                        <span className="block px-2 py-1.5 text-[11px] text-[var(--brand-hover)] group-hover:underline">
+                          Abrir foto · {new Date(evidencia.capturadaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Remover foto"
+                        disabled={busy}
+                        onClick={() => void handleRemoveEvidence(evidencia.id)}
+                        className="absolute right-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full border border-[var(--line)] bg-[var(--surface)] text-[var(--ink-2)] shadow-[var(--sh-sm)] hover:bg-[var(--danger-soft)] hover:text-[var(--danger)] disabled:opacity-50"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
                   ))}
                 </div>
               )}
