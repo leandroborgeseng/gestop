@@ -157,13 +157,9 @@ export default function MobilePage() {
     });
   }
 
-  async function saveOffline() {
-    setError(null);
-    setGpsNotice(null);
-
+  async function buildInspectionPayload() {
     if (!selectedUnit || !selectedVersion) {
-      setError('Selecione um próprio e um checklist publicado.');
-      return;
+      throw new Error('Selecione um próprio e um checklist publicado.');
     }
 
     const invalidMessage = selectedVersion.itens
@@ -171,51 +167,67 @@ export default function MobilePage() {
       .find(Boolean);
 
     if (invalidMessage) {
-      setError(invalidMessage);
-      return;
+      throw new Error(invalidMessage);
     }
 
+    const fallback = {
+      latitude: selectedUnit.latitude,
+      longitude: selectedUnit.longitude,
+      precisaoMetros: selectedUnit.raioValidacaoMetros,
+      source: 'fallback' as const,
+    };
+
+    const checkin = await captureCurrentPosition(fallback);
+    if (checkin.source === 'fallback') {
+      throw new Error('GPS indisponível. Ative a localização do dispositivo para registrar a vistoria.');
+    }
+
+    const now = new Date().toISOString();
+    return {
+      clientEventId: `${getDeviceId()}:${Date.now()}`,
+      deviceId: getDeviceId(),
+      unidadeId: selectedUnit.id,
+      checklistVersaoId: selectedVersion.id,
+      iniciadaEm: now,
+      concluidaEm: now,
+      checkin: {
+        latitude: checkin.latitude,
+        longitude: checkin.longitude,
+        precisaoMetros: checkin.precisaoMetros,
+      },
+      respostas: selectedVersion.itens.map((item) =>
+        buildRespostaPayload(item, responses[item.id] ?? { conformidade: 'CONFORME', comentario: '' }, checkin, now),
+      ),
+    } satisfies MobileQueuedInspection;
+  }
+
+  async function submitInspection() {
+    setError(null);
+    setGpsNotice(null);
     setSaving(true);
 
     try {
-      const fallback = {
-        latitude: selectedUnit.latitude,
-        longitude: selectedUnit.longitude,
-        precisaoMetros: selectedUnit.raioValidacaoMetros,
-        source: 'fallback' as const,
-      };
+      const inspection = await buildInspectionPayload();
 
-      const checkin = await captureCurrentPosition(fallback);
-      if (checkin.source === 'fallback') {
-        setError('GPS indisponível. Ative a localização do dispositivo para registrar a vistoria.');
+      if (online) {
+        await syncMobileInspection(inspection);
+        setResponses({});
+        setChecklistId('');
+        snackbar.show('Vistoria registrada com sucesso.', 'success');
+        showLocalNotification('SIGMA Vistoria', 'Vistoria enviada e registrada no sistema.');
         return;
       }
-
-      const now = new Date().toISOString();
-      const inspection: MobileQueuedInspection = {
-        clientEventId: `${getDeviceId()}:${Date.now()}`,
-        deviceId: getDeviceId(),
-        unidadeId: selectedUnit.id,
-        checklistVersaoId: selectedVersion.id,
-        iniciadaEm: now,
-        concluidaEm: now,
-        checkin: {
-          latitude: checkin.latitude,
-          longitude: checkin.longitude,
-          precisaoMetros: checkin.precisaoMetros,
-        },
-        respostas: selectedVersion.itens.map((item) =>
-          buildRespostaPayload(item, responses[item.id] ?? { conformidade: 'CONFORME', comentario: '' }, checkin, now),
-        ),
-      };
 
       const nextQueue = [...queue, inspection];
       setQueue(nextQueue);
       await writeMobileQueue(nextQueue);
       setResponses({});
+      setChecklistId('');
       snackbar.show('Vistoria salva na fila offline.', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao salvar vistoria.');
+      const message = err instanceof Error ? err.message : 'Falha ao salvar vistoria.';
+      setError(message);
+      snackbar.show(message, 'error');
     } finally {
       setSaving(false);
     }
@@ -226,8 +238,8 @@ export default function MobilePage() {
       <PageShell
         kicker="PWA Vistoria"
         icon={Smartphone}
-        title="Vistoria offline"
-        description="Preencha a vistoria com GPS real, salve localmente e sincronize automaticamente ao voltar online."
+        title="Vistoria em campo"
+        description="Preencha a vistoria com GPS real. Online, o envio é imediato; offline, salve na fila para sincronizar depois."
         backHref="/cco"
       >
         <div className="mx-auto max-w-2xl space-y-4 pb-36">
@@ -239,7 +251,9 @@ export default function MobilePage() {
           </div>
 
           <TipBanner id="mobile-offline-queue">
-            Salve vistorias offline quando estiver sem sinal. Elas entram na fila e sincronizam automaticamente ao reconectar.
+            {online
+              ? 'Com conexão ativa, a vistoria é enviada diretamente ao concluir.'
+              : 'Sem sinal? Salve na fila offline — as vistorias sincronizam automaticamente ao reconectar.'}
           </TipBanner>
 
           {error ? <ErrorState message={error} /> : null}
@@ -364,13 +378,37 @@ export default function MobilePage() {
               </Card>
 
               {selectedVersion ? (
-                <Fab extended onClick={() => void saveOffline()} aria-label="Salvar na fila offline" disabled={saving} className="bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)]">
-                  <Save className="h-5 w-5" />
-                  <span>{saving ? 'Salvando...' : 'Salvar offline'}</span>
-                </Fab>
+                online ? (
+                  <div className="sticky bottom-[calc(5.75rem+env(safe-area-inset-bottom)+1rem)] z-20 flex justify-center pb-2 lg:bottom-6">
+                    <Button
+                      variant="filled"
+                      size="lg"
+                      disabled={saving}
+                      onClick={() => void submitInspection()}
+                      className="min-h-14 gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)]"
+                    >
+                      {saving ? <RefreshCcw className="h-5 w-5 animate-spin" /> : <CloudUpload className="h-5 w-5" />}
+                      {saving ? 'Enviando...' : 'Enviar vistoria'}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="sticky bottom-[calc(5.75rem+env(safe-area-inset-bottom)+1rem)] z-20 flex justify-center pb-2 lg:bottom-6">
+                    <Button
+                      variant="filled"
+                      size="lg"
+                      disabled={saving}
+                      onClick={() => void submitInspection()}
+                      aria-label="Salvar na fila offline"
+                      className="min-h-14 gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)]"
+                    >
+                      {saving ? <RefreshCcw className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
+                      {saving ? 'Salvando...' : 'Salvar offline'}
+                    </Button>
+                  </div>
+                )
               ) : null}
 
-              {queue.length > 0 ? (
+              {queue.length > 0 && online ? (
                 <Fab
                   size="icon"
                   onClick={() => void syncQueue()}
@@ -378,7 +416,6 @@ export default function MobilePage() {
                   disabled={syncing || !online}
                   className={cn(
                     'bg-[var(--ink)] text-white hover:bg-[var(--ink-2)]',
-                    selectedVersion && 'bottom-[calc(5.75rem+env(safe-area-inset-bottom)+5.5rem)] lg:bottom-[5.5rem]',
                   )}
                 >
                   {syncing ? <RefreshCcw className="h-5 w-5 animate-spin" /> : <CloudUpload className="h-5 w-5" />}
