@@ -56,7 +56,7 @@ export class ChecklistItemDto {
 
   @IsOptional()
   @IsString()
-  descricao?: string;
+  descricao?: string | null;
 
   @IsEnum(ChecklistItemTipo)
   tipo!: ChecklistItemTipo;
