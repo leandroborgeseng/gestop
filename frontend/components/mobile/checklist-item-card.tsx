@@ -3,6 +3,10 @@
 import { ChangeEvent } from 'react';
 import { Camera } from 'lucide-react';
 import { ChecklistItem } from '@/lib/types';
+import {
+  parseMultiplaEscolhaOpcoes,
+  parseTextoOpcoes,
+} from '@/lib/checklist-item-opcoes';
 import { Card, CardContent } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
@@ -30,7 +34,8 @@ export function ChecklistItemCard({
   onEvidence: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   const current = value ?? { conformidade: 'CONFORME', comentario: '' };
-  const opcoes = parseOpcoes(item.opcoes);
+  const multiplaEscolha = parseMultiplaEscolhaOpcoes(item.opcoes);
+  const textoOpcoes = parseTextoOpcoes(item.opcoes);
   const needsEvidence =
     item.exigeEvidencia ||
     item.tipo === 'FOTO' ||
@@ -59,11 +64,20 @@ export function ChecklistItemCard({
           <>
             <Field label="Resposta">
               {item.tipo === 'TEXTO' ? (
-                <Input
-                  value={current.valorTexto ?? ''}
-                  onChange={(e) => onChange({ valorTexto: e.target.value })}
-                  placeholder="Descreva a verificação"
-                />
+                textoOpcoes.formato === 'LONGO' ? (
+                  <textarea
+                    value={current.valorTexto ?? ''}
+                    onChange={(e) => onChange({ valorTexto: e.target.value })}
+                    placeholder="Descreva a verificação"
+                    className="min-h-28 w-full resize-y rounded-[var(--md-shape-sm)] border border-[var(--md-outline)] bg-[var(--md-surface-container-lowest)] p-4 md-body-md focus:border-[var(--color-brand-primary)] focus:outline-none focus:ring-4 focus:ring-[color-mix(in_srgb,var(--color-brand-primary)_12%,transparent)]"
+                  />
+                ) : (
+                  <Input
+                    value={current.valorTexto ?? ''}
+                    onChange={(e) => onChange({ valorTexto: e.target.value })}
+                    placeholder="Descreva a verificação"
+                  />
+                )
               ) : null}
               {item.tipo === 'NUMERO' ? (
                 <Input
@@ -80,17 +94,31 @@ export function ChecklistItemCard({
                 />
               ) : null}
               {item.tipo === 'MULTIPLA_ESCOLHA' ? (
-                <Select
-                  value={current.valorTexto ?? ''}
-                  onChange={(e) => onChange({ valorTexto: e.target.value })}
-                >
-                  <option value="">Selecione</option>
-                  {opcoes.map((opcao) => (
-                    <option key={opcao} value={opcao}>
-                      {opcao}
-                    </option>
-                  ))}
-                </Select>
+                multiplaEscolha.modoExibicao === 'LISTA' ? (
+                  <div className="flex flex-wrap gap-2">
+                    {multiplaEscolha.opcoes.map((opcao) => (
+                      <Chip
+                        key={opcao}
+                        active={current.valorTexto === opcao}
+                        onClick={() => onChange({ valorTexto: opcao })}
+                      >
+                        {opcao}
+                      </Chip>
+                    ))}
+                  </div>
+                ) : (
+                  <Select
+                    value={current.valorTexto ?? ''}
+                    onChange={(e) => onChange({ valorTexto: e.target.value })}
+                  >
+                    <option value="">Selecione</option>
+                    {multiplaEscolha.opcoes.map((opcao) => (
+                      <option key={opcao} value={opcao}>
+                        {opcao}
+                      </option>
+                    ))}
+                  </Select>
+                )
               ) : null}
               {item.tipo === 'FOTO' || item.tipo === 'ASSINATURA' ? (
                 <p className="md-body-md text-[var(--md-on-surface-variant)]">
@@ -133,15 +161,6 @@ export function ChecklistItemCard({
       </CardContent>
     </Card>
   );
-}
-
-function parseOpcoes(opcoes: unknown): string[] {
-  if (Array.isArray(opcoes)) return opcoes.map(String);
-  if (opcoes && typeof opcoes === 'object' && 'opcoes' in opcoes) {
-    const nested = (opcoes as { opcoes?: unknown }).opcoes;
-    if (Array.isArray(nested)) return nested.map(String);
-  }
-  return [];
 }
 
 export function validateItemResponse(item: ChecklistItem, response?: ResponseDraft) {

@@ -158,7 +158,15 @@ export default function ChecklistDetalhePage() {
                     'Versão em rascunho salva.',
                   )
                 }
-                onPublish={() => mutate(() => publishChecklistVersion(draft.id), 'Versão publicada com sucesso.')}
+                onPublish={(items) =>
+                  mutate(async () => {
+                    await updateChecklistVersion(draft.id, {
+                      estrutura: { atualizadoVia: 'ui' },
+                      itens: items,
+                    });
+                    await publishChecklistVersion(draft.id);
+                  }, 'Versão publicada com sucesso.')
+                }
               />
             ) : (
               <EmptyState

@@ -1,12 +1,11 @@
 'use client';
 
 import { FormEvent, useState } from 'react';
-import { ClipboardList, GitBranch, Plus } from 'lucide-react';
+import { ClipboardList, GitBranch, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
-import { FormSection } from '@/components/ui/form-section';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import {
@@ -24,6 +23,26 @@ import {
   ChecklistVersao,
   UnidadeTipo,
 } from '@/lib/types';
+import {
+  defaultOpcoesForTipo,
+  formatOpcoesResumo,
+  MULTIPLA_ESCOLHA_MODO_LABELS,
+  parseMultiplaEscolhaOpcoes,
+  parseTextoOpcoes,
+  serializeItemOpcoes,
+  TEXTO_FORMATO_LABELS,
+  validateItemOpcoes,
+} from '@/lib/checklist-item-opcoes';
+
+export const TIPO_ITEM_LABEL: Record<ChecklistItemTipo, string> = {
+  TEXTO: 'Texto',
+  NUMERO: 'Número',
+  BOOLEANO: 'Sim/Não',
+  MULTIPLA_ESCOLHA: 'Múltipla escolha',
+  FOTO: 'Foto',
+  ASSINATURA: 'Assinatura',
+  DATA: 'Data',
+};
 
 export const tiposItem: ChecklistItemTipo[] = [
   'TEXTO',
@@ -51,6 +70,7 @@ export type ItemDraft = {
   obrigatorio: boolean;
   geraNaoConformidade: boolean;
   exigeEvidencia: boolean;
+  opcoes?: unknown;
 };
 
 export function getPublishedVersion(versoes: ChecklistVersao[]) {
@@ -278,12 +298,13 @@ export function ItemsReadonlyPanel({
                 <span className="md-label-lg text-[var(--md-on-surface-variant)]">#{item.ordem}</span>
                 <span className="md-title-md text-[var(--md-on-surface)]">{item.titulo}</span>
                 <Chip variant="default">{item.codigo}</Chip>
-                <Chip variant="default">{item.tipo}</Chip>
+                <Chip variant="default">{TIPO_ITEM_LABEL[item.tipo] ?? item.tipo}</Chip>
               </div>
               <p className="md-body-md mt-2 text-[var(--md-on-surface-variant)]">
                 {item.obrigatorio ? 'Obrigatório' : 'Opcional'}
                 {item.geraNaoConformidade ? ' · Gera NC' : ''}
                 {item.exigeEvidencia ? ' · Exige evidência' : ''}
+                {formatOpcoesResumo(item.tipo, item.opcoes) ? ` · ${formatOpcoesResumo(item.tipo, item.opcoes)}` : ''}
               </p>
             </div>
           ))}
@@ -350,7 +371,7 @@ export function VersionEditor({
 }: {
   version: ChecklistVersao;
   onSave: (items: ItemDraft[]) => void;
-  onPublish: () => void;
+  onPublish: (items: ItemDraft[]) => void;
 }) {
   const [items, setItems] = useState<ItemDraft[]>(
     version.itens.length
@@ -362,9 +383,50 @@ export function VersionEditor({
           obrigatorio: item.obrigatorio,
           geraNaoConformidade: item.geraNaoConformidade,
           exigeEvidencia: item.exigeEvidencia,
+          opcoes: item.opcoes ?? defaultOpcoesForTipo(item.tipo),
         }))
       : [emptyItem(1)],
   );
+  const [editorError, setEditorError] = useState<string | null>(null);
+
+  function prepareItems() {
+    return items.map((item) => ({
+      ...item,
+      opcoes: serializeItemOpcoes(item.tipo, item.opcoes),
+    }));
+  }
+
+  function validateItems(prepared: ItemDraft[]) {
+    for (const item of prepared) {
+      const opcoesError = validateItemOpcoes(item.tipo, item.opcoes, item.titulo, item.codigo);
+      if (opcoesError) return opcoesError;
+      if (!item.titulo.trim()) return `Item #${item.ordem}: informe o título.`;
+      if (!item.codigo.trim()) return `Item #${item.ordem}: informe o código.`;
+    }
+    return null;
+  }
+
+  function handleSave() {
+    const prepared = prepareItems();
+    const error = validateItems(prepared);
+    if (error) {
+      setEditorError(error);
+      return;
+    }
+    setEditorError(null);
+    onSave(prepared);
+  }
+
+  function handlePublish() {
+    const prepared = prepareItems();
+    const error = validateItems(prepared);
+    if (error) {
+      setEditorError(error);
+      return;
+    }
+    setEditorError(null);
+    onPublish(prepared);
+  }
 
   return (
     <Card elevation={1}>
@@ -377,76 +439,187 @@ export function VersionEditor({
           <Button variant="tonal" size="sm" onClick={() => setItems((current) => [...current, emptyItem(current.length + 1)])}>
             Adicionar item
           </Button>
-          <Button variant="filled" size="sm" onClick={() => onSave(items)}>
+          <Button variant="filled" size="sm" onClick={handleSave}>
             Salvar rascunho
           </Button>
-          <Button variant="filled" size="sm" className="bg-emerald-700 hover:bg-emerald-800" onClick={onPublish}>
+          <Button variant="filled" size="sm" className="bg-emerald-700 hover:bg-emerald-800" onClick={handlePublish}>
             Publicar
           </Button>
         </div>
       </CardHeader>
       <CardContent className="space-y-3 pt-0">
+        {editorError ? <p className="md-body-md text-red-700">{editorError}</p> : null}
         {items.map((item, index) => (
-          <div
-            key={index}
-            className="grid gap-3 rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4 lg:grid-cols-2 xl:grid-cols-4"
-          >
-            <Field label="Ordem">
-              <Input
-                type="number"
-                value={item.ordem}
-                onChange={(e) => updateItem(items, setItems, index, { ordem: Number(e.target.value) })}
+          <div key={index} className="space-y-3 rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4">
+            <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+              <Field label="Ordem">
+                <Input
+                  type="number"
+                  value={item.ordem}
+                  onChange={(e) => updateItem(items, setItems, index, { ordem: Number(e.target.value) })}
+                />
+              </Field>
+              <Field label="Código">
+                <Input value={item.codigo} onChange={(e) => updateItem(items, setItems, index, { codigo: e.target.value })} />
+              </Field>
+              <Field label="Título" className="lg:col-span-2">
+                <Input value={item.titulo} onChange={(e) => updateItem(items, setItems, index, { titulo: e.target.value })} />
+              </Field>
+              <Field label="Tipo">
+                <Select
+                  value={item.tipo}
+                  onChange={(e) => updateItem(items, setItems, index, { tipo: e.target.value as ChecklistItemTipo })}
+                >
+                  {tiposItem.map((tipo) => (
+                    <option key={tipo} value={tipo}>
+                      {TIPO_ITEM_LABEL[tipo]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <label className="flex min-h-11 items-center gap-2 md-label-lg">
+                <input
+                  type="checkbox"
+                  checked={item.obrigatorio}
+                  onChange={(e) => updateItem(items, setItems, index, { obrigatorio: e.target.checked })}
+                />
+                Obrigatório
+              </label>
+              <label className="flex min-h-11 items-center gap-2 md-label-lg">
+                <input
+                  type="checkbox"
+                  checked={item.geraNaoConformidade}
+                  onChange={(e) => updateItem(items, setItems, index, { geraNaoConformidade: e.target.checked })}
+                />
+                Gera NC
+              </label>
+              <label className="flex min-h-11 items-center gap-2 md-label-lg">
+                <input
+                  type="checkbox"
+                  checked={item.exigeEvidencia}
+                  onChange={(e) => updateItem(items, setItems, index, { exigeEvidencia: e.target.checked })}
+                />
+                Exige evidência
+              </label>
+              <Button variant="text" size="sm" className="text-red-700" onClick={() => setItems((current) => current.filter((_, i) => i !== index))}>
+                Remover
+              </Button>
+            </div>
+            {item.tipo === 'MULTIPLA_ESCOLHA' ? (
+              <MultiplaEscolhaEditor
+                opcoes={item.opcoes}
+                onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
               />
-            </Field>
-            <Field label="Código">
-              <Input value={item.codigo} onChange={(e) => updateItem(items, setItems, index, { codigo: e.target.value })} />
-            </Field>
-            <Field label="Título" className="lg:col-span-2">
-              <Input value={item.titulo} onChange={(e) => updateItem(items, setItems, index, { titulo: e.target.value })} />
-            </Field>
-            <Field label="Tipo">
-              <Select
-                value={item.tipo}
-                onChange={(e) => updateItem(items, setItems, index, { tipo: e.target.value as ChecklistItemTipo })}
-              >
-                {tiposItem.map((tipo) => (
-                  <option key={tipo} value={tipo}>
-                    {tipo}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <label className="flex min-h-11 items-center gap-2 md-label-lg">
-              <input
-                type="checkbox"
-                checked={item.obrigatorio}
-                onChange={(e) => updateItem(items, setItems, index, { obrigatorio: e.target.checked })}
+            ) : null}
+            {item.tipo === 'TEXTO' ? (
+              <TextoOpcoesEditor
+                opcoes={item.opcoes}
+                onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
               />
-              Obrigatório
-            </label>
-            <label className="flex min-h-11 items-center gap-2 md-label-lg">
-              <input
-                type="checkbox"
-                checked={item.geraNaoConformidade}
-                onChange={(e) => updateItem(items, setItems, index, { geraNaoConformidade: e.target.checked })}
-              />
-              Gera NC
-            </label>
-            <label className="flex min-h-11 items-center gap-2 md-label-lg">
-              <input
-                type="checkbox"
-                checked={item.exigeEvidencia}
-                onChange={(e) => updateItem(items, setItems, index, { exigeEvidencia: e.target.checked })}
-              />
-              Exige evidência
-            </label>
-            <Button variant="text" size="sm" className="text-red-700" onClick={() => setItems((current) => current.filter((_, i) => i !== index))}>
-              Remover
-            </Button>
+            ) : null}
           </div>
         ))}
       </CardContent>
     </Card>
+  );
+}
+
+function MultiplaEscolhaEditor({
+  opcoes,
+  onChange,
+}: {
+  opcoes: unknown;
+  onChange: (opcoes: unknown) => void;
+}) {
+  const config = parseMultiplaEscolhaOpcoes(opcoes);
+
+  function updateOpcoes(nextOpcoes: string[]) {
+    onChange({ ...config, opcoes: nextOpcoes });
+  }
+
+  return (
+    <div className="space-y-3 border-t border-[var(--md-outline-variant)] pt-3">
+      <p className="md-title-sm text-[var(--md-on-surface)]">Opções de múltipla escolha</p>
+      <div className="space-y-2">
+        {config.opcoes.map((opcao, optionIndex) => (
+          <div key={optionIndex} className="flex items-end gap-2">
+            <Field label={`Opção ${optionIndex + 1}`} className="min-w-0 flex-1">
+              <Input
+                value={opcao}
+                placeholder={`Digite a opção ${optionIndex + 1}`}
+                onChange={(e) => {
+                  const next = [...config.opcoes];
+                  next[optionIndex] = e.target.value;
+                  updateOpcoes(next);
+                }}
+              />
+            </Field>
+            {config.opcoes.length > 2 ? (
+              <Button
+                type="button"
+                variant="text"
+                size="sm"
+                className="mb-0.5 shrink-0 text-red-700"
+                aria-label={`Remover opção ${optionIndex + 1}`}
+                onClick={() => updateOpcoes(config.opcoes.filter((_, i) => i !== optionIndex))}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+            ) : null}
+          </div>
+        ))}
+      </div>
+      <Button
+        type="button"
+        variant="tonal"
+        size="sm"
+        className="mt-2 gap-1.5"
+        onClick={() => updateOpcoes([...config.opcoes, ''])}
+      >
+        <Plus className="h-4 w-4" />
+        Cadastrar mais opções
+      </Button>
+      <Field label="Modo de exibição" className="mt-3 max-w-md">
+        <Select
+          value={config.modoExibicao}
+          onChange={(e) => onChange({ ...config, modoExibicao: e.target.value })}
+        >
+          {(Object.keys(MULTIPLA_ESCOLHA_MODO_LABELS) as Array<keyof typeof MULTIPLA_ESCOLHA_MODO_LABELS>).map((modo) => (
+            <option key={modo} value={modo}>
+              {MULTIPLA_ESCOLHA_MODO_LABELS[modo]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+    </div>
+  );
+}
+
+function TextoOpcoesEditor({
+  opcoes,
+  onChange,
+}: {
+  opcoes: unknown;
+  onChange: (opcoes: unknown) => void;
+}) {
+  const config = parseTextoOpcoes(opcoes);
+
+  return (
+    <div className="space-y-3 border-t border-[var(--md-outline-variant)] pt-3">
+      <p className="md-title-sm text-[var(--md-on-surface)]">Formato do texto</p>
+      <Field label="Tipo de campo" className="max-w-md">
+        <Select
+          value={config.formato}
+          onChange={(e) => onChange({ formato: e.target.value })}
+        >
+          {(Object.keys(TEXTO_FORMATO_LABELS) as Array<keyof typeof TEXTO_FORMATO_LABELS>).map((formato) => (
+            <option key={formato} value={formato}>
+              {TEXTO_FORMATO_LABELS[formato]}
+            </option>
+          ))}
+        </Select>
+      </Field>
+    </div>
   );
 }
 
@@ -463,5 +636,14 @@ function emptyItem(ordem: number): ItemDraft {
 }
 
 function updateItem(items: ItemDraft[], setItems: (items: ItemDraft[]) => void, index: number, patch: Partial<ItemDraft>) {
-  setItems(items.map((item, itemIndex) => (itemIndex === index ? { ...item, ...patch } : item)));
+  setItems(
+    items.map((item, itemIndex) => {
+      if (itemIndex !== index) return item;
+      const next = { ...item, ...patch };
+      if (patch.tipo && patch.tipo !== item.tipo) {
+        next.opcoes = defaultOpcoesForTipo(patch.tipo);
+      }
+      return next;
+    }),
+  );
 }
