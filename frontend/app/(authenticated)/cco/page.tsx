@@ -36,7 +36,6 @@ const situacaoChips: Array<{ value: UnidadeSituacao | ''; label: string; color: 
   { value: 'OPERACIONAL', label: 'Operacional', color: 'var(--ok)' },
   { value: 'COM_PENDENCIAS', label: 'Pendências', color: 'var(--warn)' },
   { value: 'SEM_LOCALIZACAO', label: 'Sem GPS', color: 'var(--muted)' },
-  { value: 'INATIVA', label: 'Inativa', color: 'var(--off)' },
 ];
 
 export default function CcoPage() {
@@ -143,7 +142,7 @@ function CcoPageContent() {
         id: 'total' as const,
         title: 'Próprios públicos',
         value: resumo?.totalUnidades ?? 0,
-        hint: `${resumo?.unidadesAtivas ?? 0} ativos`,
+        hint: 'ativos',
         icon: Building2,
       },
       {

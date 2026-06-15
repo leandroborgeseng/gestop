@@ -33,7 +33,6 @@ export class OperacionalService {
     const fiscalizacaoWhere = secretariaId ? { secretariaId } : {};
 
     const [
-      totalUnidades,
       unidadesAtivas,
       totalSecretarias,
       fiscalizacoesConcluidas,
@@ -41,7 +40,6 @@ export class OperacionalService {
       chamadosAbertos,
       eventosSyncPendentes,
     ] = await Promise.all([
-      this.prisma.unidadePublica.count({ where: unidadeWhere }),
       this.prisma.unidadePublica.count({ where: { ...unidadeWhere, ativo: true } }),
       secretariaId
         ? this.prisma.secretaria.count({ where: { id: secretariaId, ativo: true } })
@@ -59,7 +57,7 @@ export class OperacionalService {
     ]);
 
     return {
-      totalUnidades,
+      totalUnidades: unidadesAtivas,
       unidadesAtivas,
       totalSecretarias,
       fiscalizacoesConcluidas,
@@ -355,6 +353,7 @@ export class OperacionalService {
     };
 
     return {
+      ...(query.situacao === 'INATIVA' ? { ativo: false } : { ativo: true }),
       ...(query.secretariaId ? { secretariaId: query.secretariaId } : {}),
       ...(query.tipo ? { tipo: query.tipo as UnidadeTipo } : {}),
       ...(query.bairro ? { bairro: { equals: query.bairro, mode: 'insensitive' } } : {}),

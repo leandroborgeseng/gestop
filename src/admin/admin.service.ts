@@ -71,6 +71,7 @@ export class AdminService {
 
   listUnidades() {
     return this.prisma.unidadePublica.findMany({
+      where: { ativo: true },
       orderBy: [{ secretaria: { sigla: 'asc' } }, { nome: 'asc' }],
       include: {
         secretaria: {
