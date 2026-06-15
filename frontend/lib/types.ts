@@ -170,7 +170,29 @@ export type AdminUnidade = {
   longitude: number | string;
   raioValidacaoMetros: number;
   ativo: boolean;
+  metadata?: UnidadeMetadata | null;
   secretaria: SecretariaOption;
+};
+
+export type UnidadeManualOverride = {
+  lockedFields: string[];
+  editedAt: string;
+  editedBy?: string;
+  reason?: string;
+  deactivatedManually?: boolean;
+};
+
+export type UnidadeWebmapSource = {
+  repo?: string;
+  layerFile?: string;
+  group?: string;
+  githubCommitSha?: string;
+  importedAt?: string;
+};
+
+export type UnidadeMetadata = {
+  webmapSource?: UnidadeWebmapSource;
+  manualOverride?: UnidadeManualOverride;
 };
 
 export type AdminPerfil = {
@@ -257,6 +279,34 @@ export type WebmapImportDiff = {
   createdCodigos: string[];
   updatedCodigos: string[];
   deactivatedCodigos: string[];
+  unitChanges?: WebmapUnitChange[];
+  unchangedCount?: number;
+  blockedCount?: number;
+};
+
+export type WebmapUnitChangeAction = 'CREATE' | 'UPDATE' | 'SKIP' | 'DEACTIVATE' | 'UNCHANGED';
+
+export type WebmapFieldChange = {
+  field: string;
+  label: string;
+  before: string | null;
+  after: string | null;
+  willApply: boolean;
+  skipReason?: 'MANUAL_LOCK' | 'NOT_SELECTED' | 'UNCHANGED';
+};
+
+export type WebmapUnitChange = {
+  codigoPatrimonial: string;
+  nome: string;
+  action: WebmapUnitChangeAction;
+  skipReason?: string;
+  changes?: WebmapFieldChange[];
+};
+
+export type WebmapImportSelection = {
+  codigoPatrimonial: string;
+  apply: boolean;
+  fields?: string[];
 };
 
 export type WebmapSkippedUnit = {

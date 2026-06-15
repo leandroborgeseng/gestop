@@ -8,9 +8,9 @@ export function Table({ className, children }: { className?: string; children: R
   );
 }
 
-export function TableHead({ children }: { children: React.ReactNode }) {
+export function TableHead({ className, children }: { className?: string; children: React.ReactNode }) {
   return (
-    <thead className="border-b border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]">
+    <thead className={cn('border-b border-[var(--md-outline-variant)] bg-[var(--md-surface-container-low)]', className)}>
       {children}
     </thead>
   );
@@ -36,8 +36,18 @@ export function TableHeader({ className, children }: { className?: string; child
   );
 }
 
-export function TableCell({ className, children }: { className?: string; children: React.ReactNode }) {
+export function TableCell({
+  className,
+  colSpan,
+  children,
+}: {
+  className?: string;
+  colSpan?: number;
+  children: React.ReactNode;
+}) {
   return (
-    <td className={cn('md-body-md px-4 py-3.5 text-[var(--md-on-surface)]', className)}>{children}</td>
+    <td colSpan={colSpan} className={cn('md-body-md px-4 py-3.5 text-[var(--md-on-surface)]', className)}>
+      {children}
+    </td>
   );
 }

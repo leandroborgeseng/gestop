@@ -69,6 +69,10 @@ export function WebmapImportReport({
             <li>
               Diff: +{result.diff.createdCodigos.length} novas · {result.diff.updatedCodigos.length} alteradas ·{' '}
               {result.diff.deactivatedCodigos.length} desativadas
+              {typeof result.diff.unchangedCount === 'number' ? ` · ${result.diff.unchangedCount} sem mudança` : ''}
+              {typeof result.diff.blockedCount === 'number' && result.diff.blockedCount > 0
+                ? ` · ${result.diff.blockedCount} bloqueadas`
+                : ''}
             </li>
           ) : null}
           <li>

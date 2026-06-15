@@ -14,7 +14,7 @@ import { IntegracoesService } from '../integracoes/integracoes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { importSecretariasFromCsvContent } from '../../prisma/import-secretarias-core';
 import { fetchWebmapGithubStatus, verifyGithubWebhookSignature } from '../../prisma/webmap-github';
-import { runWebmapImport, type WebmapImportResult } from '../../prisma/webmap-import-core';
+import { runWebmapImport, type WebmapImportResult, type WebmapImportSelection } from '../../prisma/webmap-import-core';
 import { persistWebmapImportResult } from '../../prisma/webmap-import-persist';
 import { skippedUnitsToGeoJson } from '../../prisma/webmap-geo';
 import { WEBMAP_LAYER_FILES } from '../../prisma/webmap-layers';
@@ -64,6 +64,10 @@ export class AdminImportService {
     user: JwtPayload | null,
     dryRun = false,
     triggeredBy: WebmapImportResult['triggeredBy'] = 'manual',
+    options: {
+      selections?: WebmapImportSelection[];
+      applyDeactivations?: boolean;
+    } = {},
   ): Promise<WebmapImportResult> {
     const previous = await this.prisma.webmapImport.findFirst({
       where: { dryRun: false },
@@ -73,7 +77,12 @@ export class AdminImportService {
 
     const result = await runWebmapImport(
       this.prisma,
-      { dryRun, deactivateMissing: !dryRun },
+      {
+        dryRun,
+        deactivateMissing: !dryRun,
+        selections: options.selections,
+        applyDeactivations: options.applyDeactivations,
+      },
       triggeredBy,
       previous?.githubCommitSha ?? null,
     );
@@ -85,6 +94,20 @@ export class AdminImportService {
     }
 
     return result;
+  }
+
+  async previewWebmap(): Promise<WebmapImportResult> {
+    return this.syncWebmap(null, true, 'manual');
+  }
+
+  async applyWebmap(
+    user: JwtPayload,
+    body: {
+      selections?: WebmapImportSelection[];
+      applyDeactivations?: boolean;
+    },
+  ): Promise<WebmapImportResult> {
+    return this.syncWebmap(user, false, 'manual', body);
   }
 
   async syncAll(user: JwtPayload, dryRun = false) {

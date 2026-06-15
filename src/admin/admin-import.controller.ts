@@ -11,6 +11,15 @@ type WebmapSyncBody = {
   dryRun?: boolean;
 };
 
+type WebmapApplyBody = {
+  selections?: Array<{
+    codigoPatrimonial: string;
+    apply: boolean;
+    fields?: string[];
+  }>;
+  applyDeactivations?: boolean;
+};
+
 type WebmapSyncAllBody = {
   dryRun?: boolean;
 };
@@ -24,6 +33,18 @@ export class AdminImportController {
   @Get('webmap/status')
   getWebmapStatus() {
     return this.adminImportService.getWebmapStatus();
+  }
+
+  @RequirePermissions('unidades.gerenciar')
+  @Post('webmap/preview')
+  previewWebmap() {
+    return this.adminImportService.previewWebmap();
+  }
+
+  @RequirePermissions('unidades.gerenciar')
+  @Post('webmap/apply')
+  applyWebmap(@Body() body: WebmapApplyBody, @CurrentUser() user: JwtPayload) {
+    return this.adminImportService.applyWebmap(user, body);
   }
 
   @RequirePermissions('unidades.gerenciar')

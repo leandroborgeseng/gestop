@@ -2,8 +2,15 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Database, Download, ExternalLink, RefreshCw } from 'lucide-react';
-import { getWebmapImportStatus, syncWebmapImport, syncWebmapImportAll } from '@/lib/api';
-import { WebmapImportResult, WebmapImportStatus } from '@/lib/types';
+import {
+  applyWebmapImport,
+  getWebmapImportStatus,
+  previewWebmapImport,
+  syncWebmapImport,
+  syncWebmapImportAll,
+} from '@/lib/api';
+import { WebmapImportResult, WebmapImportSelection, WebmapImportStatus } from '@/lib/types';
+import { WebmapImportPreview } from '@/components/admin/webmap-import-preview';
 import { WebmapImportReport } from '@/components/admin/webmap-import-report';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -12,10 +19,12 @@ import { ErrorState, LoadingState } from '@/components/ui-states';
 
 export function ImportacaoPanel({ onSynced }: { onSynced?: () => void }) {
   const [status, setStatus] = useState<WebmapImportStatus | null>(null);
+  const [preview, setPreview] = useState<WebmapImportResult | null>(null);
   const [result, setResult] = useState<WebmapImportResult | null>(null);
   const [lastReport, setLastReport] = useState<WebmapImportResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -57,14 +66,51 @@ export function ImportacaoPanel({ onSynced }: { onSynced?: () => void }) {
     void load();
   }, [load]);
 
+  async function handlePreview() {
+    setSyncing(true);
+    setError(null);
+    setResult(null);
+    setPreview(null);
+    try {
+      const previewResult = await previewWebmapImport();
+      setPreview(previewResult);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao simular importação.');
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  async function handleApply(payload: {
+    selections: WebmapImportSelection[];
+    applyDeactivations: boolean;
+  }) {
+    setApplying(true);
+    setError(null);
+    try {
+      const applyResult = await applyWebmapImport(payload);
+      setResult(applyResult);
+      setPreview(null);
+      await load();
+      onSynced?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao aplicar importação.');
+    } finally {
+      setApplying(false);
+    }
+  }
+
   async function handleSync(dryRun: boolean) {
     setSyncing(true);
     setError(null);
     setResult(null);
+    setPreview(null);
     try {
       const syncResult = await syncWebmapImport(dryRun);
-      setResult(syncResult);
-      if (!dryRun) {
+      if (dryRun) {
+        setPreview(syncResult);
+      } else {
+        setResult(syncResult);
         await load();
         onSynced?.();
       }
@@ -79,10 +125,13 @@ export function ImportacaoPanel({ onSynced }: { onSynced?: () => void }) {
     setSyncing(true);
     setError(null);
     setResult(null);
+    setPreview(null);
     try {
       const syncResult = await syncWebmapImportAll(dryRun);
-      setResult(syncResult.webmap);
-      if (!dryRun) {
+      if (dryRun) {
+        setPreview(syncResult.webmap);
+      } else {
+        setResult(syncResult.webmap);
         await load();
         onSynced?.();
       }
@@ -115,7 +164,7 @@ export function ImportacaoPanel({ onSynced }: { onSynced?: () => void }) {
             <a href={status.repoUrl} target="_blank" rel="noreferrer" className="text-[var(--color-brand-primary)] hover:underline">
               SMMAFRANCA/webmap
             </a>
-            . Auto-descoberta de camadas, desativação de unidades removidas e relatório para correção no QGIS.
+            . Simule antes de aplicar, edite dados errados em Próprios e proteja correções manuais.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -157,23 +206,23 @@ export function ImportacaoPanel({ onSynced }: { onSynced?: () => void }) {
           </dl>
 
           {status.hasUpdates ? (
-            <Alert variant="warning">Há alterações no GitHub desde a última sync.</Alert>
+            <Alert variant="warning">Há alterações no GitHub desde a última sync. Simule antes de aplicar.</Alert>
           ) : status.lastSync ? (
             <Alert variant="success">Banco alinhado com o último commit importado.</Alert>
           ) : null}
 
           <div className="flex flex-wrap gap-3">
-            <Button variant="filled" disabled={syncing} onClick={() => void handleSyncAll(false)}>
-              <Database className="h-4 w-4" />
-              {syncing ? 'Importando...' : 'Secretarias + Webmap'}
-            </Button>
-            <Button variant="tonal" disabled={syncing} onClick={() => void handleSync(false)}>
-              <Download className="h-4 w-4" />
-              Só Webmap
-            </Button>
-            <Button variant="tonal" disabled={syncing} onClick={() => void handleSync(true)}>
+            <Button variant="filled" disabled={syncing || applying} onClick={() => void handlePreview()}>
               <RefreshCw className="h-4 w-4" />
-              Simular (dry-run)
+              {syncing ? 'Simulando...' : 'Simular importação'}
+            </Button>
+            <Button variant="tonal" disabled={syncing || applying} onClick={() => void handleSyncAll(false)}>
+              <Database className="h-4 w-4" />
+              {syncing ? 'Importando...' : 'Aplicar tudo (Secretarias + Webmap)'}
+            </Button>
+            <Button variant="tonal" disabled={syncing || applying} onClick={() => void handleSync(false)}>
+              <Download className="h-4 w-4" />
+              Aplicar tudo (só Webmap)
             </Button>
             <a
               href={status.github.htmlUrl}
@@ -184,15 +233,19 @@ export function ImportacaoPanel({ onSynced }: { onSynced?: () => void }) {
               <ExternalLink className="h-4 w-4" />
               Ver commit
             </a>
-            <Button variant="ghost" disabled={syncing} onClick={() => void load()}>
+            <Button variant="ghost" disabled={syncing || applying} onClick={() => void load()}>
               Atualizar status
             </Button>
           </div>
         </CardContent>
       </Card>
 
+      {preview ? (
+        <WebmapImportPreview result={preview} onApply={handleApply} applying={applying} />
+      ) : null}
+
       {result ? (
-        <WebmapImportReport result={result} title={result.dryRun ? 'Resultado da simulação' : 'Resultado da importação'} />
+        <WebmapImportReport result={result} title={result.dryRun ? 'Resultado da simulação' : 'Resultado da importação aplicada'} />
       ) : lastReport && (lastReport.skipped > 0 || lastReport.rejectedFeatures.length > 0) ? (
         <WebmapImportReport result={lastReport} title="Relatório da última importação" />
       ) : null}

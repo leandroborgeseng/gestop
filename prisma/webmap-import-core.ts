@@ -6,6 +6,16 @@ import { logError, logInfo, logStep, logWarn } from './startup-log';
 import { resolveWebmapLayers, WEBMAP_RAW_BASE, type WebmapLayerConfig } from './webmap-layers';
 import { buildLayerCacheKey, getCachedLayerContent, setCachedLayerContent } from './webmap-layer-cache';
 import { isWithinFrancaMunicipio } from './webmap-geo';
+import {
+  formatFieldValue,
+  getManualOverride,
+  mergeMetadataForImport,
+  valuesEqual,
+  WEBMAP_FIELD_LABELS,
+  WEBMAP_SYNCABLE_SCALAR_FIELDS,
+  type ManualOverride,
+  type WebmapSyncableField,
+} from './webmap-manual-override';
 
 export type GeoFeature = {
   type: 'Feature';
@@ -18,13 +28,41 @@ export type GeoFeatureCollection = {
   features: GeoFeature[];
 };
 
+export type WebmapImportSelection = {
+  codigoPatrimonial: string;
+  apply: boolean;
+  fields?: string[];
+};
+
 export type WebmapImportOptions = {
   dryRun?: boolean;
   localDir?: string | null;
   githubCommitSha?: string | null;
   deactivateMissing?: boolean;
   autoDiscoverLayers?: boolean;
+  selections?: WebmapImportSelection[];
+  applyDeactivations?: boolean;
   logger?: Pick<Console, 'log' | 'warn' | 'error'>;
+};
+
+export type WebmapFieldChangeSkipReason = 'MANUAL_LOCK' | 'NOT_SELECTED' | 'UNCHANGED';
+export type WebmapUnitChangeAction = 'CREATE' | 'UPDATE' | 'SKIP' | 'DEACTIVATE' | 'UNCHANGED';
+
+export type WebmapFieldChange = {
+  field: string;
+  label: string;
+  before: string | null;
+  after: string | null;
+  willApply: boolean;
+  skipReason?: WebmapFieldChangeSkipReason;
+};
+
+export type WebmapUnitChange = {
+  codigoPatrimonial: string;
+  nome: string;
+  action: WebmapUnitChangeAction;
+  skipReason?: string;
+  changes?: WebmapFieldChange[];
 };
 
 export type WebmapSkipReason = 'SECRETARIA_NAO_CADASTRADA' | 'SECRETARIA_NAO_RESOLVIDA';
@@ -61,6 +99,9 @@ export type WebmapImportDiff = {
   createdCodigos: string[];
   updatedCodigos: string[];
   deactivatedCodigos: string[];
+  unitChanges: WebmapUnitChange[];
+  unchangedCount: number;
+  blockedCount: number;
 };
 
 export type WebmapImportResult = {
@@ -211,9 +252,12 @@ export async function runWebmapImport(
   let created = 0;
   let updated = 0;
   let skipped = 0;
+  let unchangedCount = 0;
+  let blockedCount = 0;
   const skippedUnits: WebmapSkippedUnit[] = [];
   const createdCodigos: string[] = [];
   const updatedCodigos: string[] = [];
+  const unitChanges: WebmapUnitChange[] = [];
   const importedCodigos = new Set<string>();
 
   const persistQueue: Array<{ unidade: NormalizedUnidade; secretariaId: string }> = [];
@@ -223,46 +267,100 @@ export async function runWebmapImport(
     if (!secretariaId) {
       skipped += 1;
       skippedUnits.push(buildSkippedUnit(unidade, secretariasCadastradas));
+      unitChanges.push({
+        codigoPatrimonial: unidade.codigoPatrimonial,
+        nome: unidade.nome,
+        action: 'SKIP',
+        skipReason: 'SECRETARIA_NAO_CADASTRADA',
+      });
       continue;
     }
     persistQueue.push({ unidade, secretariaId });
   }
 
-  if (!dryRun) {
-    for (let index = 0; index < persistQueue.length; index += UPSERT_BATCH) {
-      const batch = persistQueue.slice(index, index + UPSERT_BATCH);
-      await Promise.all(
-        batch.map(async ({ unidade, secretariaId }) => {
-          const payload = buildPayload(unidade, secretariaId);
-          const existing = await prisma.unidadePublica.findUnique({
-            where: { codigoPatrimonial: payload.codigoPatrimonial },
-            select: { id: true },
-          });
+  const codigosToFetch = persistQueue.map((item) => item.unidade.codigoPatrimonial);
+  const existingUnits = codigosToFetch.length
+    ? await prisma.unidadePublica.findMany({
+        where: { codigoPatrimonial: { in: codigosToFetch } },
+        select: {
+          id: true,
+          secretariaId: true,
+          codigoPatrimonial: true,
+          nome: true,
+          tipo: true,
+          endereco: true,
+          bairro: true,
+          cep: true,
+          latitude: true,
+          longitude: true,
+          raioValidacaoMetros: true,
+          ativo: true,
+          metadata: true,
+        },
+      })
+    : [];
+  const existingByCodigo = new Map(
+    existingUnits.map((unit) => [unit.codigoPatrimonial, normalizeExistingUnit(unit)]),
+  );
+  const secretariaSiglaById = new Map(secretarias.map((item) => [item.id, item.sigla]));
 
-          if (existing) {
-            await prisma.unidadePublica.update({ where: { id: existing.id }, data: payload });
-            updated += 1;
-            updatedCodigos.push(payload.codigoPatrimonial);
-          } else {
-            await prisma.unidadePublica.create({ data: payload });
-            created += 1;
-            createdCodigos.push(payload.codigoPatrimonial);
-          }
-          importedCodigos.add(payload.codigoPatrimonial);
-        }),
-      );
-    }
-  } else {
-    for (const { unidade } of persistQueue) {
-      importedCodigos.add(unidade.codigoPatrimonial);
-      logInfo('webmap', `[dry-run] ${unidade.codigoPatrimonial} | ${unidade.nome}`);
-    }
+  for (let index = 0; index < persistQueue.length; index += UPSERT_BATCH) {
+    const batch = persistQueue.slice(index, index + UPSERT_BATCH);
+    await Promise.all(
+      batch.map(async ({ unidade, secretariaId }) => {
+        const incoming = buildPayload(unidade, secretariaId);
+        const existing = existingByCodigo.get(incoming.codigoPatrimonial) ?? null;
+        const selection = resolveSelection(options.selections, incoming.codigoPatrimonial);
+        const unitChange = buildUnitChange(
+          incoming,
+          existing,
+          selection,
+          secretariaSiglaById,
+        );
+
+        unitChanges.push(unitChange);
+
+        if (unitChange.action === 'SKIP') {
+          if (unitChange.skipReason?.includes('bloqueado')) blockedCount += 1;
+          return;
+        }
+
+        if (unitChange.action === 'UNCHANGED') {
+          unchangedCount += 1;
+          importedCodigos.add(incoming.codigoPatrimonial);
+          return;
+        }
+
+        if (dryRun) {
+          if (unitChange.action === 'CREATE') created += 1;
+          if (unitChange.action === 'UPDATE') updated += 1;
+          if (unitChange.action === 'CREATE') createdCodigos.push(incoming.codigoPatrimonial);
+          if (unitChange.action === 'UPDATE') updatedCodigos.push(incoming.codigoPatrimonial);
+          importedCodigos.add(incoming.codigoPatrimonial);
+          return;
+        }
+
+        const finalData = buildFinalPersistData(incoming, existing, selection, secretariaSiglaById);
+
+        if (existing) {
+          await prisma.unidadePublica.update({ where: { id: existing.id }, data: finalData });
+          updated += 1;
+          updatedCodigos.push(incoming.codigoPatrimonial);
+        } else {
+          await prisma.unidadePublica.create({ data: finalData as Prisma.UnidadePublicaCreateInput });
+          created += 1;
+          createdCodigos.push(incoming.codigoPatrimonial);
+        }
+        importedCodigos.add(incoming.codigoPatrimonial);
+      }),
+    );
   }
 
   const deactivatedUnits: Array<{ codigoPatrimonial: string; nome: string }> = [];
   const deactivatedCodigos: string[] = [];
 
-  if (!dryRun && deactivateMissing) {
+  const shouldProcessDeactivations = dryRun || deactivateMissing;
+  if (shouldProcessDeactivations) {
     const webmapUnits = await prisma.unidadePublica.findMany({
       where: {
         ativo: true,
@@ -273,6 +371,53 @@ export async function runWebmapImport(
 
     for (const unit of webmapUnits) {
       if (importedCodigos.has(unit.codigoPatrimonial)) continue;
+
+      const override = getManualOverride(unit.metadata);
+      if (override?.deactivatedManually) {
+        unitChanges.push({
+          codigoPatrimonial: unit.codigoPatrimonial,
+          nome: unit.nome,
+          action: 'SKIP',
+          skipReason: 'Desativação manual — não será desativado pela sync',
+        });
+        blockedCount += 1;
+        continue;
+      }
+
+      const deactivationSelection = resolveSelection(options.selections, unit.codigoPatrimonial);
+      const applyDeactivation =
+        options.applyDeactivations ??
+        (options.selections ? deactivationSelection?.apply !== false : true);
+
+      unitChanges.push({
+        codigoPatrimonial: unit.codigoPatrimonial,
+        nome: unit.nome,
+        action: 'DEACTIVATE',
+        changes: [
+          {
+            field: 'ativo',
+            label: WEBMAP_FIELD_LABELS.ativo,
+            before: 'Ativo',
+            after: 'Inativo',
+            willApply: applyDeactivation,
+            skipReason: applyDeactivation ? undefined : 'NOT_SELECTED',
+          },
+        ],
+      });
+
+      if (!applyDeactivation) {
+        blockedCount += 1;
+        continue;
+      }
+
+      if (dryRun) {
+        deactivatedUnits.push({ codigoPatrimonial: unit.codigoPatrimonial, nome: unit.nome });
+        deactivatedCodigos.push(unit.codigoPatrimonial);
+        continue;
+      }
+
+      if (!deactivateMissing) continue;
+
       await prisma.unidadePublica.update({
         where: { id: unit.id },
         data: {
@@ -321,6 +466,9 @@ export async function runWebmapImport(
       createdCodigos,
       updatedCodigos,
       deactivatedCodigos,
+      unitChanges,
+      unchangedCount,
+      blockedCount,
     },
     github,
   };
@@ -348,6 +496,230 @@ function buildPayload(unidade: NormalizedUnidade, secretariaId: string) {
     ativo: true,
     metadata: unidade.metadata as Prisma.InputJsonValue,
   };
+}
+
+type ExistingUnidade = {
+  id: string;
+  secretariaId: string;
+  codigoPatrimonial: string;
+  nome: string;
+  tipo: UnidadeTipo;
+  endereco: string;
+  bairro: string | null;
+  cep: string | null;
+  latitude: number;
+  longitude: number;
+  raioValidacaoMetros: number;
+  ativo: boolean;
+  metadata: Prisma.JsonValue;
+};
+
+type IncomingPayload = ReturnType<typeof buildPayload>;
+
+function resolveSelection(selections: WebmapImportSelection[] | undefined, codigo: string) {
+  return selections?.find((item) => item.codigoPatrimonial === codigo);
+}
+
+function getLockedFields(metadata: Prisma.JsonValue | null | undefined): Set<WebmapSyncableField> {
+  const override = getManualOverride(metadata);
+  return new Set(override?.lockedFields ?? []);
+}
+
+function isFieldSelected(
+  field: WebmapSyncableField,
+  selection: WebmapImportSelection | undefined,
+): boolean {
+  if (!selection?.fields?.length) return true;
+  return selection.fields.includes(field);
+}
+
+function buildFieldChanges(
+  incoming: IncomingPayload,
+  existing: ExistingUnidade | null,
+  lockedFields: Set<WebmapSyncableField>,
+  selection: WebmapImportSelection | undefined,
+  secretariaSiglaById: Map<string, string>,
+): WebmapFieldChange[] {
+  const changes: WebmapFieldChange[] = [];
+
+  for (const field of WEBMAP_SYNCABLE_SCALAR_FIELDS) {
+    const beforeValue = existing ? existing[field] : null;
+    let afterValue = incoming[field];
+    const manualOverride = existing ? getManualOverride(existing.metadata) : null;
+
+    if (field === 'ativo' && manualOverride?.deactivatedManually) {
+      afterValue = false;
+    }
+
+    const changed = existing ? !valuesEqual(field, beforeValue, afterValue) : true;
+    const isLocked = existing ? lockedFields.has(field) : false;
+    const userApproved = selection?.apply !== false;
+    const fieldSelected = isFieldSelected(field, selection);
+    const willApply = !existing
+      ? userApproved
+      : changed && !isLocked && userApproved && fieldSelected;
+
+    let skipReason: WebmapFieldChangeSkipReason | undefined;
+    if (!changed) skipReason = 'UNCHANGED';
+    else if (isLocked) skipReason = 'MANUAL_LOCK';
+    else if (!userApproved || !fieldSelected) skipReason = 'NOT_SELECTED';
+
+    if (!existing && !userApproved) {
+      continue;
+    }
+
+    changes.push({
+      field,
+      label: WEBMAP_FIELD_LABELS[field],
+      before: existing ? formatFieldValue(field, beforeValue, secretariaSiglaById) : null,
+      after: formatFieldValue(field, afterValue, secretariaSiglaById),
+      willApply: existing ? willApply : userApproved,
+      skipReason: willApply ? undefined : skipReason,
+    });
+  }
+
+  return changes;
+}
+
+function buildUnitChange(
+  incoming: IncomingPayload,
+  existing: ExistingUnidade | null,
+  selection: WebmapImportSelection | undefined,
+  secretariaSiglaById: Map<string, string>,
+): WebmapUnitChange {
+  const lockedFields = getLockedFields(existing?.metadata);
+  const manualOverride = getManualOverride(existing?.metadata);
+
+  if (manualOverride?.deactivatedManually && existing) {
+    return {
+      codigoPatrimonial: incoming.codigoPatrimonial,
+      nome: incoming.nome,
+      action: 'SKIP',
+      skipReason: 'Próprio desativado manualmente — sync bloqueada',
+    };
+  }
+
+  if (!existing) {
+    if (selection?.apply === false) {
+      return {
+        codigoPatrimonial: incoming.codigoPatrimonial,
+        nome: incoming.nome,
+        action: 'SKIP',
+        skipReason: 'Criação não selecionada no preview',
+      };
+    }
+
+    return {
+      codigoPatrimonial: incoming.codigoPatrimonial,
+      nome: incoming.nome,
+      action: 'CREATE',
+      changes: buildFieldChanges(incoming, null, lockedFields, selection, secretariaSiglaById),
+    };
+  }
+
+  const changes = buildFieldChanges(incoming, existing, lockedFields, selection, secretariaSiglaById);
+  const applicableChanges = changes.filter((change) => change.willApply);
+
+  if (selection?.apply === false) {
+    return {
+      codigoPatrimonial: incoming.codigoPatrimonial,
+      nome: incoming.nome,
+      action: 'SKIP',
+      skipReason: 'Atualização não selecionada no preview',
+      changes,
+    };
+  }
+
+  if (applicableChanges.length === 0) {
+    const hasLockedDiff = changes.some((change) => change.skipReason === 'MANUAL_LOCK' && change.before !== change.after);
+    if (metadataNeedsUpdate(existing, incoming)) {
+      return {
+        codigoPatrimonial: incoming.codigoPatrimonial,
+        nome: incoming.nome,
+        action: 'UPDATE',
+        changes,
+      };
+    }
+    return {
+      codigoPatrimonial: incoming.codigoPatrimonial,
+      nome: incoming.nome,
+      action: 'UNCHANGED',
+      skipReason: hasLockedDiff ? 'Alterações bloqueadas por edição manual' : undefined,
+      changes,
+    };
+  }
+
+  return {
+    codigoPatrimonial: incoming.codigoPatrimonial,
+    nome: incoming.nome,
+    action: 'UPDATE',
+    changes,
+  };
+}
+
+function buildFinalPersistData(
+  incoming: IncomingPayload,
+  existing: ExistingUnidade | null,
+  selection: WebmapImportSelection | undefined,
+  secretariaSiglaById: Map<string, string>,
+): Prisma.UnidadePublicaUpdateInput | Prisma.UnidadePublicaCreateInput {
+  if (!existing) {
+    return incoming;
+  }
+
+  const lockedFields = getLockedFields(existing.metadata);
+  const changes = buildFieldChanges(incoming, existing, lockedFields, selection, secretariaSiglaById);
+  const data: Prisma.UnidadePublicaUpdateInput = {
+    metadata: mergeMetadataForImport(existing.metadata, incoming.metadata as Record<string, unknown>),
+  };
+
+  for (const change of changes) {
+    if (!change.willApply) continue;
+    const field = change.field as WebmapSyncableField;
+    (data as Record<string, unknown>)[field] = incoming[field];
+  }
+
+  const manualOverride = getManualOverride(existing.metadata);
+  if (manualOverride?.deactivatedManually) {
+    data.ativo = false;
+  }
+
+  return data;
+}
+
+function normalizeExistingUnit(unit: {
+  id: string;
+  secretariaId: string;
+  codigoPatrimonial: string;
+  nome: string;
+  tipo: UnidadeTipo;
+  endereco: string;
+  bairro: string | null;
+  cep: string | null;
+  latitude: Prisma.Decimal | number;
+  longitude: Prisma.Decimal | number;
+  raioValidacaoMetros: number;
+  ativo: boolean;
+  metadata: Prisma.JsonValue;
+}): ExistingUnidade {
+  return {
+    ...unit,
+    latitude: Number(unit.latitude),
+    longitude: Number(unit.longitude),
+  };
+}
+
+function metadataNeedsUpdate(existing: ExistingUnidade, incoming: IncomingPayload): boolean {
+  const incomingSource = (incoming.metadata as Record<string, unknown>)?.webmapSource as
+    | Record<string, unknown>
+    | undefined;
+  const existingSource = (existing.metadata as Record<string, unknown>)?.webmapSource as
+    | Record<string, unknown>
+    | undefined;
+  return (
+    incomingSource?.githubCommitSha !== existingSource?.githubCommitSha ||
+    incomingSource?.layerFile !== existingSource?.layerFile
+  );
 }
 
 async function loadLayerContent(file: string, localDir: string | null, commitSha: string) {

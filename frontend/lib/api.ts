@@ -36,6 +36,7 @@ import {
   UnidadeFiltroOpcoes,
   UnidadeOperacional,
   WebmapImportResult,
+  WebmapImportSelection,
   WebmapSyncAllResult,
   WebmapImportStatus,
 } from './types';
@@ -314,6 +315,25 @@ export function syncWebmapImport(dryRun = false) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ dryRun }),
+  });
+}
+
+export function previewWebmapImport() {
+  return request<WebmapImportResult>('/admin/importacao/webmap/preview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+}
+
+export function applyWebmapImport(payload: {
+  selections?: WebmapImportSelection[];
+  applyDeactivations?: boolean;
+}) {
+  return request<WebmapImportResult>('/admin/importacao/webmap/apply', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
 }
 

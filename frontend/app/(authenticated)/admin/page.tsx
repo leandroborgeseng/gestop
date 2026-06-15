@@ -13,6 +13,7 @@ import { Field } from '@/components/ui/field';
 import { FormGrid, FormSection, RecordItem, RecordList } from '@/components/ui/form-section';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import { Sheet } from '@/components/ui/sheet';
 import { Tabs } from '@/components/ui/tabs';
 import {
   DataTable,
@@ -44,6 +45,7 @@ import {
 } from '@/lib/api';
 import { AdminEquipe, AdminPerfil, AdminSecretaria, AdminTipoChamado, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
+import { formatUnidadeOrigem, getLockedFields, getUnidadeMetadata, isQgisImported } from '@/lib/unidade-metadata';
 
 type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'tipos-chamado' | 'importacao';
 
@@ -289,6 +291,7 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
 
 function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSecretaria[]; unidades: AdminUnidade[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
   const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState<AdminUnidade | null>(null);
 
   const filteredUnidades = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -309,7 +312,7 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
     );
   }, [search, unidades]);
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const ok = await mutate(
@@ -335,6 +338,40 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
     if (ok) event.currentTarget.reset();
   }
 
+  async function submitEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editing) return;
+
+    const form = new FormData(event.currentTarget);
+    const ok = await mutate(
+      () => {
+        const latitude = parseCoordinate(form.get('latitude'));
+        const longitude = parseCoordinate(form.get('longitude'));
+        return saveAdminUnidade(
+          {
+            secretariaId: String(form.get('secretariaId')),
+            codigoPatrimonial: String(form.get('codigoPatrimonial')),
+            nome: String(form.get('nome')),
+            tipo: String(form.get('tipo')),
+            endereco: String(form.get('endereco')),
+            bairro: String(form.get('bairro') || ''),
+            cep: String(form.get('cep') || ''),
+            latitude,
+            longitude,
+            raioValidacaoMetros: Number(form.get('raioValidacaoMetros') || 200),
+            ativo: editing.ativo,
+          },
+          editing.id,
+        );
+      },
+      'Próprio atualizado. Campos alterados ficam protegidos na próxima sync QGIS.',
+    );
+    if (ok) setEditing(null);
+  }
+
+  const editingMetadata = editing ? getUnidadeMetadata(editing) : null;
+  const editingLockedFields = editing ? getLockedFields(editing) : [];
+
   return (
     <div className="space-y-6">
       <Field label="Buscar próprio" hint="Nome, código patrimonial, endereço, bairro ou secretaria.">
@@ -351,7 +388,7 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
 
       <FormGrid>
         <FormSection title="Novo próprio">
-          <form onSubmit={submit} className="space-y-4">
+          <form onSubmit={submitCreate} className="space-y-4">
             <Field label="Secretaria">
               <Select name="secretariaId" required>
                 {secretarias.map((s) => (
@@ -392,9 +429,19 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
                   subtitle={`${unidade.codigoPatrimonial} · ${unidade.secretaria.sigla} · ${formatUnidadeTipo(unidade.tipo)} · ${unidade.bairro ?? 'sem bairro'}`}
                   active={unidade.ativo}
                   actions={
-                    <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
-                      Inativar
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={isQgisImported(unidade) ? 'info' : 'muted'}>
+                        {formatUnidadeOrigem(unidade)}
+                      </Badge>
+                      <Button variant="text" size="sm" onClick={() => setEditing(unidade)}>
+                        Editar
+                      </Button>
+                      {unidade.ativo ? (
+                        <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
+                          Inativar
+                        </Button>
+                      ) : null}
+                    </div>
                   }
                 />
               ))}
@@ -409,6 +456,7 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
             <DataTableHead>
               <DataTableHeaderCell>Código</DataTableHeaderCell>
               <DataTableHeaderCell>Unidade</DataTableHeaderCell>
+              <DataTableHeaderCell>Origem</DataTableHeaderCell>
               <DataTableHeaderCell>Tipo</DataTableHeaderCell>
               <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
               <DataTableHeaderCell>Status</DataTableHeaderCell>
@@ -418,6 +466,11 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
                 <DataTableRow key={unidade.id}>
                   <DataTableCell mono>{unidade.codigoPatrimonial}</DataTableCell>
                   <DataTableCell>{unidade.nome}</DataTableCell>
+                  <DataTableCell>
+                    <Badge variant={isQgisImported(unidade) ? 'info' : 'muted'}>
+                      {formatUnidadeOrigem(unidade)}
+                    </Badge>
+                  </DataTableCell>
                   <DataTableCell>{formatUnidadeTipo(unidade.tipo)}</DataTableCell>
                   <DataTableCell mono>{unidade.secretaria.sigla}</DataTableCell>
                   <DataTableCell>
@@ -434,6 +487,88 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
           </p>
         ) : null}
       </div>
+
+      <Sheet
+        open={Boolean(editing)}
+        onClose={() => setEditing(null)}
+        title={editing ? `Editar — ${editing.nome}` : 'Editar próprio'}
+        footer={
+          editing ? (
+            <div className="flex gap-2">
+              <Button type="submit" form="edit-unidade-form" variant="filled" className="flex-1">
+                Salvar alterações
+              </Button>
+              <Button type="button" variant="text" onClick={() => setEditing(null)}>
+                Cancelar
+              </Button>
+            </div>
+          ) : null
+        }
+      >
+        {editing ? (
+          <form id="edit-unidade-form" onSubmit={submitEdit} className="space-y-4">
+            {isQgisImported(editing) ? (
+              <Alert variant="info">
+                Importado do QGIS
+                {editingMetadata?.webmapSource?.layerFile ? ` · camada ${editingMetadata.webmapSource.layerFile}` : ''}
+                {editingMetadata?.webmapSource?.githubCommitSha
+                  ? ` · commit ${editingMetadata.webmapSource.githubCommitSha.slice(0, 7)}`
+                  : ''}
+                . Campos editados não serão sobrescritos na próxima sync.
+              </Alert>
+            ) : null}
+
+            {editingLockedFields.length > 0 ? (
+              <p className="text-xs text-[var(--ink-3)]">
+                Campos protegidos: {editingLockedFields.join(', ')}
+              </p>
+            ) : null}
+
+            <Field label="Secretaria">
+              <Select name="secretariaId" defaultValue={editing.secretariaId} required>
+                {secretarias.map((s) => (
+                  <option key={s.id} value={s.id}>{s.sigla} — {s.nome}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Código patrimonial">
+              <Input name="codigoPatrimonial" defaultValue={editing.codigoPatrimonial} required />
+            </Field>
+            <Field label="Nome">
+              <Input name="nome" defaultValue={editing.nome} required />
+            </Field>
+            <Field label="Tipo">
+              <Select name="tipo" defaultValue={editing.tipo} required>
+                {tipos.map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {formatUnidadeTipo(tipo)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Endereço">
+              <Input name="endereco" defaultValue={editing.endereco} required />
+            </Field>
+            <Field label="Bairro">
+              <Input name="bairro" defaultValue={editing.bairro ?? ''} />
+            </Field>
+            <Field label="CEP">
+              <Input name="cep" defaultValue={editing.cep ?? ''} />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Latitude">
+                <Input name="latitude" type="number" step="0.000001" defaultValue={String(editing.latitude)} required />
+              </Field>
+              <Field label="Longitude">
+                <Input name="longitude" type="number" step="0.000001" defaultValue={String(editing.longitude)} required />
+              </Field>
+              <Field label="Raio (m)">
+                <Input name="raioValidacaoMetros" type="number" defaultValue={String(editing.raioValidacaoMetros)} />
+              </Field>
+            </div>
+          </form>
+        ) : null}
+      </Sheet>
     </div>
   );
 }

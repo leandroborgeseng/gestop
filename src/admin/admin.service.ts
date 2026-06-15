@@ -3,7 +3,14 @@ import { AuditAction, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH_NEW } from '../auth/password-policy';
 import { hashPassword } from '../auth/password';
+import { resolveAuditUsuarioId } from '../audit/audit.util';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  buildManualOverrideOnEdit,
+  getManualOverride,
+  isWebmapImported,
+  mergeMetadataWithManualOverride,
+} from '../../prisma/webmap-manual-override';
 import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto } from './admin.dto';
 import { ensureGeoCoordinates, normalizeEmail, normalizeSigla } from './admin.rules';
 
@@ -99,21 +106,41 @@ export class AdminService {
   async updateUnidade(id: string, dto: UnidadeDto, user: JwtPayload) {
     ensureCoordinatesOrThrow(dto.latitude, dto.longitude);
     const before = await this.getUnidadeOrThrow(id);
+    const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
+    const beforeMetadata = (before.metadata as Record<string, unknown> | null) ?? {};
+    const shouldTrackOverride = isWebmapImported(beforeMetadata) || Boolean(getManualOverride(beforeMetadata));
+
+    const updateData: Prisma.UnidadePublicaUpdateInput = {
+      secretaria: { connect: { id: dto.secretariaId } },
+      codigoPatrimonial: dto.codigoPatrimonial.trim().toUpperCase(),
+      nome: dto.nome.trim(),
+      tipo: dto.tipo,
+      endereco: dto.endereco.trim(),
+      bairro: dto.bairro?.trim() ?? null,
+      cep: dto.cep?.trim() ?? null,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      raioValidacaoMetros: dto.raioValidacaoMetros ?? 200,
+      ativo: dto.ativo ?? true,
+    };
+
+    if (shouldTrackOverride) {
+      const manualOverride = buildManualOverrideOnEdit(
+        {
+          ...before,
+          latitude: Number(before.latitude),
+          longitude: Number(before.longitude),
+        },
+        dto,
+        beforeMetadata,
+        usuarioId ?? 'sistema',
+      );
+      updateData.metadata = mergeMetadataWithManualOverride(beforeMetadata, manualOverride);
+    }
+
     const unidade = await this.prisma.unidadePublica.update({
       where: { id },
-      data: {
-        secretariaId: dto.secretariaId,
-        codigoPatrimonial: dto.codigoPatrimonial.trim().toUpperCase(),
-        nome: dto.nome.trim(),
-        tipo: dto.tipo,
-        endereco: dto.endereco.trim(),
-        bairro: dto.bairro?.trim() ?? null,
-        cep: dto.cep?.trim() ?? null,
-        latitude: dto.latitude,
-        longitude: dto.longitude,
-        raioValidacaoMetros: dto.raioValidacaoMetros ?? 200,
-        ativo: dto.ativo ?? true,
-      },
+      data: updateData,
     });
 
     await this.audit(user, AuditAction.UPDATE, 'UnidadePublica', id, before, unidade);
@@ -122,9 +149,25 @@ export class AdminService {
 
   async deleteUnidade(id: string, user: JwtPayload) {
     const before = await this.getUnidadeOrThrow(id);
+    const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
+    const beforeMetadata = (before.metadata as Record<string, unknown> | null) ?? {};
+
+    const updateData: Prisma.UnidadePublicaUpdateInput = { ativo: false };
+
+    if (isWebmapImported(beforeMetadata) || getManualOverride(beforeMetadata)) {
+      const previous = getManualOverride(beforeMetadata);
+      updateData.metadata = mergeMetadataWithManualOverride(beforeMetadata, {
+        lockedFields: previous?.lockedFields ?? [],
+        editedAt: new Date().toISOString(),
+        editedBy: usuarioId ?? 'sistema',
+        reason: previous?.reason ?? 'Inativação manual pós-importação QGIS',
+        deactivatedManually: true,
+      });
+    }
+
     const unidade = await this.prisma.unidadePublica.update({
       where: { id },
-      data: { ativo: false },
+      data: updateData,
     });
 
     await this.audit(user, AuditAction.DELETE, 'UnidadePublica', id, before, unidade);
