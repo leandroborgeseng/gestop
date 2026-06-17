@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
-import { downloadRelatorioCsv, downloadRelatorioPdf, getSecretarias } from '@/lib/api';
+import { downloadRelatorioCsv, downloadRelatorioPdf, downloadRelatorioXlsx, getSecretarias } from '@/lib/api';
 import { SecretariaOption } from '@/lib/types';
 
 type RelatorioTipo = 'unidades' | 'chamados' | 'fiscalizacoes';
@@ -53,13 +53,14 @@ export default function RelatoriosPage() {
     return params;
   }
 
-  async function exportar(tipo: RelatorioTipo, formato: 'csv' | 'pdf') {
+  async function exportar(tipo: RelatorioTipo, formato: 'csv' | 'pdf' | 'xlsx') {
     setLoading(`${tipo}-${formato}`);
     setError(null);
     try {
       const params = buildParams();
       if (formato === 'csv') await downloadRelatorioCsv(tipo, params);
-      else await downloadRelatorioPdf(tipo, params);
+      else if (formato === 'pdf') await downloadRelatorioPdf(tipo, params);
+      else await downloadRelatorioXlsx('chamados', params);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao exportar relatório.');
     } finally {
@@ -73,7 +74,7 @@ export default function RelatoriosPage() {
         kicker="Inteligência operacional"
         icon={FileSpreadsheet}
         title="Relatórios"
-        description="Exportações por tipo e período — CSV para análise, PDF para registro oficial."
+        description="Exportações por tipo e período — CSV e Excel para análise, PDF para registro oficial."
         backHref="/dashboard"
       >
         <TipBanner id="relatorios-export">
@@ -136,6 +137,18 @@ export default function RelatoriosPage() {
                         <FileText className="h-4 w-4" />
                         {loading === `${item.tipo}-pdf` ? 'Gerando...' : 'PDF'}
                       </Button>
+                      {item.tipo === 'chamados' ? (
+                        <Button
+                          variant="outlined"
+                          size="sm"
+                          className="gap-2"
+                          disabled={loading === `${item.tipo}-xlsx`}
+                          onClick={() => exportar(item.tipo, 'xlsx')}
+                        >
+                          <FileSpreadsheet className="h-4 w-4" />
+                          {loading === `${item.tipo}-xlsx` ? 'Exportando...' : 'Excel (XLSX)'}
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
                 </CardContent>

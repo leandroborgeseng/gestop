@@ -4,6 +4,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { RelatorioFiltroDto } from './relatorios.dto';
 import { buildCsv, formatIsoDate } from './relatorios.csv';
 import { buildTablePdf } from './relatorios.pdf';
+import { CHAMADOS_EXPORT_HEADERS, mapChamadosExportRows } from './relatorios.chamados-export';
+import { formatCoordenada, loadExecucaoCoordenadas } from './relatorios.execucao-coords';
+import { buildXlsx } from './relatorios.xlsx';
 
 function chamadoUnidadeCodigo(item: { unidade: { codigoPatrimonial: string } | null }) {
   return item.unidade?.codigoPatrimonial ?? '';
@@ -41,6 +44,19 @@ export class RelatoriosService {
         responsavel: { select: { nome: true } },
       },
     });
+  }
+
+  private async exportChamadosComExecucao(filtro: RelatorioFiltroDto) {
+    const items = await this.exportChamados(filtro);
+    const coordenadas = await loadExecucaoCoordenadas(
+      this.prisma,
+      items.map((item) => item.id),
+    );
+
+    return items.map((item) => ({
+      ...item,
+      execucao: coordenadas.get(item.id) ?? null,
+    }));
   }
 
   exportOrdensServico(filtro: RelatorioFiltroDto) {
@@ -112,41 +128,14 @@ export class RelatoriosService {
   }
 
   chamadosCsv(filtro: RelatorioFiltroDto) {
-    return this.exportChamados(filtro).then((items) =>
-      buildCsv(
-        [
-          'codigo',
-          'status',
-          'origem',
-          'prioridade',
-          'secretaria_sigla',
-          'unidade_codigo',
-          'unidade_nome',
-          'titulo',
-          'descricao',
-          'responsavel',
-          'prazo_em',
-          'concluido_em',
-          'criado_em',
-          'encerrado_em',
-        ],
-        items.map((item) => [
-          item.codigo,
-          item.status,
-          item.origem,
-          item.prioridade,
-          item.secretaria.sigla,
-          chamadoUnidadeCodigo(item),
-          chamadoUnidadeNome(item),
-          item.titulo ?? '',
-          item.descricao,
-          item.responsavel?.nome ?? '',
-          formatIsoDate(item.prazoEm),
-          formatIsoDate(item.concluidoEm),
-          formatIsoDate(item.createdAt),
-          formatIsoDate(item.encerradoEm),
-        ]),
-      ),
+    return this.exportChamadosComExecucao(filtro).then((items) =>
+      buildCsv([...CHAMADOS_EXPORT_HEADERS], mapChamadosExportRows(items)),
+    );
+  }
+
+  chamadosXlsx(filtro: RelatorioFiltroDto) {
+    return this.exportChamadosComExecucao(filtro).then((items) =>
+      buildXlsx('Chamados', [...CHAMADOS_EXPORT_HEADERS], mapChamadosExportRows(items)),
     );
   }
 
@@ -240,19 +229,33 @@ export class RelatoriosService {
   }
 
   chamadosPdf(filtro: RelatorioFiltroDto) {
-    return this.exportChamados(filtro).then((items) =>
+    return this.exportChamadosComExecucao(filtro).then((items) =>
       buildTablePdf({
         title: 'SIGMA — Chamados',
-        headers: ['Codigo', 'Status', 'Origem', 'Prioridade', 'Secretaria', 'Unidade', 'Titulo', 'Prazo'],
+        headers: [
+          'Codigo',
+          'Status',
+          'Prioridade',
+          'Secretaria',
+          'Unidade',
+          'Titulo',
+          'Responsavel',
+          'Prazo',
+          'Exec. Lat',
+          'Exec. Long',
+        ],
+        columnWeights: [0.09, 0.09, 0.08, 0.07, 0.14, 0.2, 0.1, 0.08, 0.075, 0.075],
         rows: items.map((item) => [
           item.codigo,
           item.status,
-          item.origem,
           item.prioridade,
           item.secretaria.sigla,
           chamadoUnidadeNome(item),
-          item.titulo ?? item.descricao.slice(0, 60),
+          item.titulo ?? item.descricao,
+          item.responsavel?.nome ?? '',
           formatIsoDate(item.prazoEm),
+          formatCoordenada(item.execucao?.latitude),
+          formatCoordenada(item.execucao?.longitude),
         ]),
       }),
     );

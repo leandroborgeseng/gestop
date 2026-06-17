@@ -57,6 +57,15 @@ export class RelatoriosController {
     });
   }
 
+  @Get('export/chamados.xlsx')
+  async exportChamadosXlsx(@Query() filtro: RelatorioFiltroDto) {
+    const buffer = await this.relatoriosService.chamadosXlsx(filtro);
+    return new StreamableFile(buffer, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="sigma-chamados.xlsx"',
+    });
+  }
+
   @Get('export/ordens-servico.pdf')
   async exportOrdensServicoPdf(@Query() filtro: RelatorioFiltroDto) {
     const buffer = await this.relatoriosService.ordensServicoPdf(filtro);

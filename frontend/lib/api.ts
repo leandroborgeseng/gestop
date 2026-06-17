@@ -790,7 +790,7 @@ export function getAlertasOperacionais() {
 }
 
 async function downloadRelatorio(
-  formato: 'csv' | 'pdf',
+  formato: 'csv' | 'pdf' | 'xlsx',
   tipo: 'unidades' | 'chamados' | 'fiscalizacoes',
   params: Record<string, string> = {},
 ) {
@@ -845,6 +845,13 @@ export function downloadRelatorioPdf(
   params: Record<string, string> = {},
 ) {
   return downloadRelatorio('pdf', tipo, params);
+}
+
+export function downloadRelatorioXlsx(
+  tipo: 'chamados',
+  params: Record<string, string> = {},
+) {
+  return downloadRelatorio('xlsx', tipo, params);
 }
 
 export function getVapidPublicKey() {
