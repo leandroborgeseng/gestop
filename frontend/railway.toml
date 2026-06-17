@@ -1,5 +1,6 @@
 # Servico Frontend (Next.js) — Root Directory = frontend/
-# O proxy /api-sigma usa BACKEND_INTERNAL_URL para falar com o NestJS na rede privada.
+# O proxy /api-gestop usa BACKEND_INTERNAL_URL para falar com o NestJS na rede privada.
+# Use ${{gestop.PORT}} (porta real do container), nao BACKEND_LISTEN_PORT.
 
 [build]
 builder = "NIXPACKS"
@@ -11,5 +12,5 @@ restartPolicyMaxRetries = 10
 
 [env]
 NODE_ENV = "production"
-# Servico backend no Railway deve se chamar "gestop" (ajuste o prefixo se renomeou)
-BACKEND_INTERNAL_URL = "http://${{gestop.RAILWAY_PRIVATE_DOMAIN}}:${{gestop.BACKEND_LISTEN_PORT}}"
+# Servico backend no Railway deve se chamar "gestop"
+BACKEND_INTERNAL_URL = "http://${{gestop.RAILWAY_PRIVATE_DOMAIN}}:${{gestop.PORT}}"

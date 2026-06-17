@@ -1,6 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { resolveBackendUrl } from '@/lib/backend-url';
 
+const PROXY_RETRY_ATTEMPTS = 3;
+const PROXY_RETRY_DELAY_MS = 400;
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchBackend(targetUrl: string, init: RequestInit) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= PROXY_RETRY_ATTEMPTS; attempt++) {
+    try {
+      return await fetch(targetUrl, init);
+    } catch (error) {
+      lastError = error;
+      if (attempt < PROXY_RETRY_ATTEMPTS) {
+        console.warn(
+          `[SIGMA:proxy] Tentativa ${attempt}/${PROXY_RETRY_ATTEMPTS} falhou (${targetUrl}): ${
+            error instanceof Error ? error.message : 'erro desconhecido'
+          }`,
+        );
+        await sleep(PROXY_RETRY_DELAY_MS * attempt);
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 export async function proxyToBackend(request: NextRequest, pathSegments: string[]) {
   const backendUrl = resolveBackendUrl();
   const path = pathSegments.join('/');
@@ -32,7 +61,7 @@ export async function proxyToBackend(request: NextRequest, pathSegments: string[
     if (process.env.NODE_ENV !== 'production') {
       console.log(`[SIGMA:proxy] ${request.method} ${targetUrl}`);
     }
-    const response = await fetch(targetUrl, init);
+    const response = await fetchBackend(targetUrl, init);
     const responseContentType = response.headers.get('content-type') ?? 'application/json';
     const isText =
       responseContentType.startsWith('text/') ||

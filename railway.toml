@@ -21,5 +21,5 @@ restartPolicyMaxRetries = 10
 NODE_ENV = "production"
 SYNC_REPLAY_INTERVAL_MS = "1800000"
 STORAGE_DRIVER = "local"
-# Referenciavel pelo frontend: ${{gestop.BACKEND_LISTEN_PORT}}
+# Referenciavel pelo frontend: ${{gestop.PORT}} (porta injetada pelo Railway)
 BACKEND_LISTEN_PORT = "8080"
