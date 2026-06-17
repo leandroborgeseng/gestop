@@ -60,7 +60,7 @@ export default function RelatoriosPage() {
       const params = buildParams();
       if (formato === 'csv') await downloadRelatorioCsv(tipo, params);
       else if (formato === 'pdf') await downloadRelatorioPdf(tipo, params);
-      else await downloadRelatorioXlsx('chamados', params);
+      else await downloadRelatorioXlsx(tipo, params);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao exportar relatório.');
     } finally {
@@ -137,18 +137,16 @@ export default function RelatoriosPage() {
                         <FileText className="h-4 w-4" />
                         {loading === `${item.tipo}-pdf` ? 'Gerando...' : 'PDF'}
                       </Button>
-                      {item.tipo === 'chamados' ? (
-                        <Button
-                          variant="outlined"
-                          size="sm"
-                          className="gap-2"
-                          disabled={loading === `${item.tipo}-xlsx`}
-                          onClick={() => exportar(item.tipo, 'xlsx')}
-                        >
-                          <FileSpreadsheet className="h-4 w-4" />
-                          {loading === `${item.tipo}-xlsx` ? 'Exportando...' : 'Excel (XLSX)'}
-                        </Button>
-                      ) : null}
+                      <Button
+                        variant="outlined"
+                        size="sm"
+                        className="gap-2"
+                        disabled={loading === `${item.tipo}-xlsx`}
+                        onClick={() => exportar(item.tipo, 'xlsx')}
+                      >
+                        <FileSpreadsheet className="h-4 w-4" />
+                        {loading === `${item.tipo}-xlsx` ? 'Exportando...' : 'Excel (XLSX)'}
+                      </Button>
                     </div>
                   </div>
                 </CardContent>

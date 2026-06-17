@@ -2,6 +2,7 @@ import { Controller, Get, Header, Query, StreamableFile, UseGuards } from '@nest
 import { AuthGuard } from '../auth/auth.guard';
 import { RequirePermissions } from '../auth/permissions';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { streamXlsx } from './relatorios.binary';
 import { RelatorioFiltroDto } from './relatorios.dto';
 import { RelatoriosService } from './relatorios.service';
 
@@ -45,6 +46,7 @@ export class RelatoriosController {
     return new StreamableFile(buffer, {
       type: 'application/pdf',
       disposition: 'attachment; filename="sigma-unidades.pdf"',
+      length: buffer.length,
     });
   }
 
@@ -54,16 +56,26 @@ export class RelatoriosController {
     return new StreamableFile(buffer, {
       type: 'application/pdf',
       disposition: 'attachment; filename="sigma-chamados.pdf"',
+      length: buffer.length,
     });
   }
 
   @Get('export/chamados.xlsx')
   async exportChamadosXlsx(@Query() filtro: RelatorioFiltroDto) {
     const buffer = await this.relatoriosService.chamadosXlsx(filtro);
-    return new StreamableFile(buffer, {
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      disposition: 'attachment; filename="sigma-chamados.xlsx"',
-    });
+    return streamXlsx(buffer, 'sigma-chamados.xlsx');
+  }
+
+  @Get('export/unidades.xlsx')
+  async exportUnidadesXlsx(@Query('secretariaId') secretariaId?: string) {
+    const buffer = await this.relatoriosService.unidadesXlsx(secretariaId);
+    return streamXlsx(buffer, 'sigma-unidades.xlsx');
+  }
+
+  @Get('export/fiscalizacoes.xlsx')
+  async exportFiscalizacoesXlsx(@Query() filtro: RelatorioFiltroDto) {
+    const buffer = await this.relatoriosService.fiscalizacoesXlsx(filtro);
+    return streamXlsx(buffer, 'sigma-fiscalizacoes.xlsx');
   }
 
   @Get('export/ordens-servico.pdf')
@@ -72,6 +84,7 @@ export class RelatoriosController {
     return new StreamableFile(buffer, {
       type: 'application/pdf',
       disposition: 'attachment; filename="sigma-ordens-servico.pdf"',
+      length: buffer.length,
     });
   }
 
@@ -81,6 +94,7 @@ export class RelatoriosController {
     return new StreamableFile(buffer, {
       type: 'application/pdf',
       disposition: 'attachment; filename="sigma-fiscalizacoes.pdf"',
+      length: buffer.length,
     });
   }
 }

@@ -1,5 +1,13 @@
 import ExcelJS from 'exceljs';
 
+function normalizeCellValue(value: unknown): string | number | boolean | Date | null {
+  if (value == null) return '';
+  if (typeof value === 'number' || typeof value === 'boolean') return value;
+  if (value instanceof Date) return value;
+  if (typeof value === 'object') return String(value);
+  return String(value);
+}
+
 export async function buildXlsx(
   sheetName: string,
   headers: string[],
@@ -9,12 +17,14 @@ export async function buildXlsx(
   workbook.creator = 'SIGMA';
   workbook.created = new Date();
 
-  const sheet = workbook.addWorksheet(sheetName);
-  sheet.addRow(headers);
+  const safeSheetName = sheetName.replace(/[\\/*?:[\]]/g, ' ').slice(0, 31) || 'Dados';
+  const sheet = workbook.addWorksheet(safeSheetName);
+
+  sheet.addRow(headers.map(normalizeCellValue));
   sheet.getRow(1).font = { bold: true };
 
   for (const row of rows) {
-    sheet.addRow(row);
+    sheet.addRow(row.map(normalizeCellValue));
   }
 
   sheet.columns.forEach((column) => {
@@ -28,6 +38,14 @@ export async function buildXlsx(
     column.width = maxWidth;
   });
 
-  const buffer = await workbook.xlsx.writeBuffer();
-  return Buffer.from(buffer);
+  const data = await workbook.xlsx.writeBuffer();
+  if (Buffer.isBuffer(data)) {
+    return data;
+  }
+
+  return Buffer.from(new Uint8Array(data as ArrayBuffer));
+}
+
+export function isXlsxBuffer(buffer: Buffer) {
+  return buffer.length >= 2 && buffer[0] === 0x50 && buffer[1] === 0x4b;
 }

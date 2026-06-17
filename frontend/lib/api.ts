@@ -821,7 +821,33 @@ async function downloadRelatorio(
     throw new Error(await readApiError(response, 'Falha ao exportar relatorio.'));
   }
 
-  const blob = await response.blob();
+  const arrayBuffer = await response.arrayBuffer();
+  if (formato === 'xlsx') {
+    const bytes = new Uint8Array(arrayBuffer);
+    if (bytes.length < 2 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+      const text = new TextDecoder().decode(arrayBuffer.slice(0, 500)).trim();
+      let message = 'Arquivo Excel inválido ou corrompido. Verifique se o backend foi atualizado.';
+      if (text.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(text) as { message?: string };
+          if (parsed.message) message = parsed.message;
+        } catch {
+          // mantém mensagem padrão
+        }
+      }
+      throw new Error(message);
+    }
+  }
+
+  const mimeTypes: Record<'csv' | 'pdf' | 'xlsx', string> = {
+    csv: 'text/csv;charset=utf-8',
+    pdf: 'application/pdf',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  };
+
+  const blob = new Blob([arrayBuffer], {
+    type: response.headers.get('content-type') ?? mimeTypes[formato],
+  });
   const filename =
     response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] ??
     `sigma-${tipo}.${formato}`;
@@ -848,7 +874,7 @@ export function downloadRelatorioPdf(
 }
 
 export function downloadRelatorioXlsx(
-  tipo: 'chamados',
+  tipo: 'unidades' | 'chamados' | 'fiscalizacoes',
   params: Record<string, string> = {},
 ) {
   return downloadRelatorio('xlsx', tipo, params);

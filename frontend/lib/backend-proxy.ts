@@ -4,6 +4,33 @@ import { resolveBackendUrl } from '@/lib/backend-url';
 const PROXY_RETRY_ATTEMPTS = 3;
 const PROXY_RETRY_DELAY_MS = 400;
 
+function isBinaryExportPath(path: string) {
+  return /\.(xlsx|pdf)$/i.test(path);
+}
+
+function isSpreadsheetContentType(contentType: string) {
+  const normalized = contentType.toLowerCase();
+  return (
+    normalized.includes('spreadsheetml') ||
+    normalized.includes('application/vnd.ms-excel') ||
+    normalized.includes('application/octet-stream')
+  );
+}
+
+function shouldProxyAsText(path: string, contentType: string) {
+  if (isBinaryExportPath(path)) return false;
+  if (isSpreadsheetContentType(contentType)) return false;
+  if (contentType.toLowerCase().includes('application/pdf')) return false;
+
+  return (
+    contentType.startsWith('text/') ||
+    contentType.includes('json') ||
+    contentType.includes('javascript') ||
+    contentType.includes('xml') ||
+    contentType.includes('svg')
+  );
+}
+
 async function sleep(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -63,15 +90,20 @@ export async function proxyToBackend(request: NextRequest, pathSegments: string[
     }
     const response = await fetchBackend(targetUrl, init);
     const responseContentType = response.headers.get('content-type') ?? 'application/json';
-    const isText =
-      responseContentType.startsWith('text/') ||
-      responseContentType.includes('json') ||
-      responseContentType.includes('javascript') ||
-      responseContentType.includes('xml') ||
-      responseContentType.includes('svg');
+    const isText = shouldProxyAsText(path, responseContentType);
     const body = isText ? await response.text() : await response.arrayBuffer();
 
-    const responseHeaders = new Headers({ 'content-type': responseContentType });
+    const responseHeaders = new Headers();
+    if (isBinaryExportPath(path) && !response.headers.get('content-type')) {
+      responseHeaders.set(
+        'content-type',
+        path.toLowerCase().endsWith('.xlsx')
+          ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          : 'application/pdf',
+      );
+    } else {
+      responseHeaders.set('content-type', responseContentType);
+    }
     const contentDisposition = response.headers.get('content-disposition');
     if (contentDisposition) {
       responseHeaders.set('content-disposition', contentDisposition);

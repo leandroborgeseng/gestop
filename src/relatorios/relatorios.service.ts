@@ -5,7 +5,9 @@ import { RelatorioFiltroDto } from './relatorios.dto';
 import { buildCsv, formatIsoDate } from './relatorios.csv';
 import { buildTablePdf } from './relatorios.pdf';
 import { CHAMADOS_EXPORT_HEADERS, mapChamadosExportRows } from './relatorios.chamados-export';
+import { FISCALIZACOES_EXPORT_HEADERS, mapFiscalizacoesExportRows } from './relatorios.fiscalizacoes-export';
 import { formatCoordenada, loadExecucaoCoordenadas } from './relatorios.execucao-coords';
+import { UNIDADES_EXPORT_HEADERS, mapUnidadesExportRows } from './relatorios.unidades-export';
 import { buildXlsx } from './relatorios.xlsx';
 
 function chamadoUnidadeCodigo(item: { unidade: { codigoPatrimonial: string } | null }) {
@@ -89,41 +91,25 @@ export class RelatoriosService {
           },
         },
         agente: { select: { nome: true } },
+        checklistVersao: {
+          select: {
+            versao: true,
+            checklist: { select: { nome: true } },
+          },
+        },
       },
     });
   }
 
   unidadesCsv(secretariaId?: string) {
-    const rows = this.exportUnidades(secretariaId);
-    return rows.then((items) =>
-      buildCsv(
-        [
-          'secretaria_sigla',
-          'codigo_patrimonial',
-          'nome',
-          'tipo',
-          'endereco',
-          'bairro',
-          'cep',
-          'latitude',
-          'longitude',
-          'raio_validacao_metros',
-          'ativo',
-        ],
-        items.map((item) => [
-          item.secretaria.sigla,
-          item.codigoPatrimonial,
-          item.nome,
-          item.tipo,
-          item.endereco,
-          item.bairro,
-          item.cep,
-          item.latitude,
-          item.longitude,
-          item.raioValidacaoMetros,
-          item.ativo,
-        ]),
-      ),
+    return this.exportUnidades(secretariaId).then((items) =>
+      buildCsv([...UNIDADES_EXPORT_HEADERS], mapUnidadesExportRows(items)),
+    );
+  }
+
+  unidadesXlsx(secretariaId?: string) {
+    return this.exportUnidades(secretariaId).then((items) =>
+      buildXlsx('Proprios publicos', [...UNIDADES_EXPORT_HEADERS], mapUnidadesExportRows(items)),
     );
   }
 
@@ -180,34 +166,13 @@ export class RelatoriosService {
 
   fiscalizacoesCsv(filtro: RelatorioFiltroDto) {
     return this.exportFiscalizacoes(filtro).then((items) =>
-      buildCsv(
-        [
-          'id',
-          'status',
-          'origem',
-          'secretaria_sigla',
-          'unidade_codigo',
-          'unidade_nome',
-          'agente',
-          'iniciada_em',
-          'concluida_em',
-          'dentro_raio',
-          'distancia_metros',
-        ],
-        items.map((item) => [
-          item.id,
-          item.status,
-          item.origem,
-          item.unidade.secretaria.sigla,
-          item.unidade.codigoPatrimonial,
-          item.unidade.nome,
-          item.agente.nome,
-          formatIsoDate(item.iniciadaEm),
-          formatIsoDate(item.concluidaEm),
-          item.dentroRaioPermitido,
-          item.distanciaCheckinMetros,
-        ]),
-      ),
+      buildCsv([...FISCALIZACOES_EXPORT_HEADERS], mapFiscalizacoesExportRows(items)),
+    );
+  }
+
+  fiscalizacoesXlsx(filtro: RelatorioFiltroDto) {
+    return this.exportFiscalizacoes(filtro).then((items) =>
+      buildXlsx('Vistorias', [...FISCALIZACOES_EXPORT_HEADERS], mapFiscalizacoesExportRows(items)),
     );
   }
 
@@ -215,13 +180,17 @@ export class RelatoriosService {
     return this.exportUnidades(secretariaId).then((items) =>
       buildTablePdf({
         title: 'SIGMA — Proprios publicos',
-        headers: ['Secretaria', 'Codigo', 'Nome', 'Tipo', 'Bairro', 'Ativo'],
+        headers: ['Secretaria', 'Codigo', 'Nome', 'Tipo', 'Bairro', 'Endereco', 'Latitude', 'Longitude', 'Ativo'],
+        columnWeights: [0.08, 0.08, 0.16, 0.08, 0.1, 0.22, 0.09, 0.09, 0.05],
         rows: items.map((item) => [
           item.secretaria.sigla,
           item.codigoPatrimonial,
           item.nome,
           item.tipo,
           item.bairro ?? '',
+          item.endereco,
+          formatCoordenada(item.latitude != null ? Number(item.latitude) : null),
+          formatCoordenada(item.longitude != null ? Number(item.longitude) : null),
           item.ativo ? 'Sim' : 'Nao',
         ]),
       }),
@@ -282,15 +251,28 @@ export class RelatoriosService {
   fiscalizacoesPdf(filtro: RelatorioFiltroDto) {
     return this.exportFiscalizacoes(filtro).then((items) =>
       buildTablePdf({
-        title: 'SIGMA — Fiscalizacoes',
-        headers: ['Status', 'Origem', 'Secretaria', 'Unidade', 'Agente', 'Iniciada', 'Dentro raio'],
+        title: 'SIGMA — Vistorias',
+        headers: [
+          'Status',
+          'Secretaria',
+          'Unidade',
+          'Checklist',
+          'Agente',
+          'Iniciada',
+          'Check-in Lat',
+          'Check-in Long',
+          'Dentro raio',
+        ],
+        columnWeights: [0.08, 0.07, 0.14, 0.14, 0.1, 0.1, 0.09, 0.09, 0.07],
         rows: items.map((item) => [
           item.status,
-          item.origem,
           item.unidade.secretaria.sigla,
           item.unidade.nome,
+          item.checklistVersao?.checklist.nome ?? '',
           item.agente.nome,
           formatIsoDate(item.iniciadaEm),
+          formatCoordenada(item.checkinLatitude != null ? Number(item.checkinLatitude) : null),
+          formatCoordenada(item.checkinLongitude != null ? Number(item.checkinLongitude) : null),
           item.dentroRaioPermitido == null ? '' : item.dentroRaioPermitido ? 'Sim' : 'Nao',
         ]),
       }),

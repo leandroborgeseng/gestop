@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { buildXlsx } from './relatorios.xlsx';
+import { buildXlsx, isXlsxBuffer } from './relatorios.xlsx';
 
 describe('relatorios.xlsx', () => {
   it('gera arquivo xlsx com assinatura zip', async () => {
     const buffer = await buildXlsx('Chamados', ['codigo', 'status'], [['CH-2026-000001', 'ABERTO']]);
-    expect(buffer.subarray(0, 2).toString('utf8')).toBe('PK');
+    expect(isXlsxBuffer(buffer)).toBe(true);
     expect(buffer.length).toBeGreaterThan(100);
+  });
+
+  it('normaliza valores decimais do prisma', async () => {
+    const buffer = await buildXlsx(
+      'Proprios',
+      ['latitude'],
+      [[{ toString: () => '-20.538600' }]],
+    );
+    expect(isXlsxBuffer(buffer)).toBe(true);
   });
 });
