@@ -103,6 +103,7 @@ enum ChamadoPrioridade {
 enum ChamadoStatus {
   ABERTO
   EM_TRIAGEM
+  EM_AVALIACAO_TECNICA
   EM_ATENDIMENTO
   EM_EXECUCAO
   IMPEDIDO
@@ -338,6 +339,7 @@ model TipoChamado {
   slaMediaDias   Int      @default(15)
   slaAltaDias    Int      @default(7)
   slaUrgenteDias Int      @default(3)
+  exigeVistoriaPrevia Boolean @default(false)
   ativo          Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

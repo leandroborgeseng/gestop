@@ -130,6 +130,10 @@ export class TipoChamadoDto {
 
   @IsOptional()
   @IsBoolean()
+  exigeVistoriaPrevia?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   ativo?: boolean;
 }
 

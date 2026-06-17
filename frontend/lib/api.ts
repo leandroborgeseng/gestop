@@ -28,6 +28,8 @@ import {
   ChamadoExecucaoDetalhe,
   ChamadoProgramacaoResponse,
   ChamadoProtocoloPublico,
+  FiscalizacaoDetalhe,
+  FiscalizacoesListResponse,
   EquipeOpcaoResumo,
   PublicUnidadeChamado,
   SecretariaOption,
@@ -646,6 +648,35 @@ export function updateChamadoTriagem(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+export function listFiscalizacoes(params?: {
+  secretariaId?: string;
+  unidadeId?: string;
+  agenteId?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const query = new URLSearchParams();
+  if (params?.secretariaId) query.set('secretariaId', params.secretariaId);
+  if (params?.unidadeId) query.set('unidadeId', params.unidadeId);
+  if (params?.agenteId) query.set('agenteId', params.agenteId);
+  if (params?.status) query.set('status', params.status);
+  if (params?.from) query.set('from', params.from);
+  if (params?.to) query.set('to', params.to);
+  if (params?.q) query.set('q', params.q);
+  if (params?.limit != null) query.set('limit', String(params.limit));
+  if (params?.offset != null) query.set('offset', String(params.offset));
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return request<FiscalizacoesListResponse>(`/fiscalizacoes${suffix}`);
+}
+
+export function getFiscalizacao(id: string) {
+  return request<FiscalizacaoDetalhe>(`/fiscalizacoes/${id}`);
 }
 
 export function registrarChamadoHistorico(

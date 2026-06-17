@@ -1593,7 +1593,7 @@ export class ChamadosService {
       },
       responsavel: { select: { id: true, nome: true } },
       equipe: { select: { id: true, nome: true } },
-      tipoChamado: { select: { id: true, nome: true } },
+      tipoChamado: { select: { id: true, nome: true, exigeVistoriaPrevia: true } },
       registradoPor: { select: { id: true, nome: true } },
       naoConformidade: {
         select: {

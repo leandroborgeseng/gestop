@@ -37,6 +37,7 @@ describe('CHAMADO_OPEN_STATUSES', () => {
     expect(CHAMADO_OPEN_STATUSES).toEqual([
       'ABERTO',
       'EM_TRIAGEM',
+      'EM_AVALIACAO_TECNICA',
       'EM_ATENDIMENTO',
       'EM_EXECUCAO',
       'IMPEDIDO',

@@ -16,6 +16,7 @@ import { RelatoriosModule } from './relatorios/relatorios.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
 import { CronogramaModule } from './cronograma/cronograma.module';
 import { EmailModule } from './email/email.module';
+import { FiscalizacoesModule } from './fiscalizacoes/fiscalizacoes.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { StorageModule } from './storage/storage.module';
 import { LgpdModule } from './lgpd/lgpd.module';
@@ -39,6 +40,7 @@ import { LgpdModule } from './lgpd/lgpd.module';
     StorageModule,
     LgpdModule,
     ChamadosModule,
+    FiscalizacoesModule,
     RelatoriosModule,
     NotificacoesModule,
   ],

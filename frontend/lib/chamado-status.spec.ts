@@ -1,5 +1,24 @@
 import { describe, expect, it } from 'vitest';
-import { buildChamadoTimelineFromHistorico } from './chamado-status';
+import { buildChamadoTimelineFromHistorico, prazoInfo } from './chamado-status';
+
+describe('prazoInfo', () => {
+  it('destaca data de vencimento e dias restantes abaixo', () => {
+    const future = new Date();
+    future.setDate(future.getDate() + 5);
+    const info = prazoInfo(future.toISOString(), 'EM_TRIAGEM');
+    expect(info.value).toBe(future.toLocaleDateString('pt-BR'));
+    expect(info.sub).toContain('5 dias de prazo');
+    expect(info.tone).toBe('neutral');
+  });
+
+  it('marca prazo vencido em vermelho', () => {
+    const past = new Date();
+    past.setDate(past.getDate() - 2);
+    const info = prazoInfo(past.toISOString(), 'EM_ATENDIMENTO');
+    expect(info.tone).toBe('danger');
+    expect(info.sub).toContain('atraso');
+  });
+});
 
 describe('buildChamadoTimelineFromHistorico atribuição', () => {
   it('exibe responsável na linha do tempo ao atualizar atribuição', () => {

@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CloudUpload, MapPin, RefreshCcw, Save, Smartphone, Satellite, Wifi, WifiOff } from 'lucide-react';
+import { ClipboardList, CloudUpload, MapPin, RefreshCcw, Save, Smartphone, Satellite, Wifi, WifiOff } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import {
   buildRespostaPayload,
@@ -226,6 +227,14 @@ export default function MobilePage() {
         title="Vistoria em campo"
         description="Preencha a vistoria com GPS real. Online, o envio é imediato; offline, salve na fila para sincronizar depois."
         backHref="/cco"
+        action={
+          <Link href="/vistorias">
+            <Button variant="outlined" size="sm">
+              <ClipboardList className="mr-1.5 h-4 w-4" />
+              Consultar vistorias
+            </Button>
+          </Link>
+        }
       >
         <div className="mx-auto max-w-2xl space-y-4 pb-32">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

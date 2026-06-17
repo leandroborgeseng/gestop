@@ -1063,6 +1063,7 @@ function TiposChamadoPanel({
       slaMediaDias: Number(form.get('slaMediaDias')),
       slaAltaDias: Number(form.get('slaAltaDias')),
       slaUrgenteDias: Number(form.get('slaUrgenteDias')),
+      exigeVistoriaPrevia: form.get('exigeVistoriaPrevia') === 'on',
       ativo: editing?.ativo ?? true,
     };
     const ok = await mutate(
@@ -1081,6 +1082,7 @@ function TiposChamadoPanel({
         <DataTableHead>
           <DataTableHeaderCell>Nome</DataTableHeaderCell>
           <DataTableHeaderCell>SLA Baixa/Média/Alta</DataTableHeaderCell>
+          <DataTableHeaderCell>Vist. prévia</DataTableHeaderCell>
           <DataTableHeaderCell>Status</DataTableHeaderCell>
         </DataTableHead>
         <DataTableBody>
@@ -1088,6 +1090,7 @@ function TiposChamadoPanel({
             <DataTableRow key={tipo.id}>
               <DataTableCell>{tipo.nome}</DataTableCell>
               <DataTableCell mono>{tipo.slaBaixaDias}/{tipo.slaMediaDias}/{tipo.slaAltaDias}d</DataTableCell>
+              <DataTableCell>{tipo.exigeVistoriaPrevia ? 'Sim' : 'Não'}</DataTableCell>
               <DataTableCell>
                 <Badge variant={tipo.ativo ? 'success' : 'muted'}>{tipo.ativo ? 'Ativo' : 'Inativo'}</Badge>
               </DataTableCell>
@@ -1107,6 +1110,15 @@ function TiposChamadoPanel({
               <Field label="SLA Alta (dias)"><Input name="slaAltaDias" type="number" min={1} required defaultValue={editing?.slaAltaDias ?? 7} /></Field>
               <Field label="SLA Urgente (dias)"><Input name="slaUrgenteDias" type="number" min={1} required defaultValue={editing?.slaUrgenteDias ?? 3} /></Field>
             </div>
+            <label className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+              <input
+                type="checkbox"
+                name="exigeVistoriaPrevia"
+                defaultChecked={editing?.exigeVistoriaPrevia ?? false}
+                className="h-4 w-4 rounded border-[var(--line)]"
+              />
+              Exige vistoria prévia
+            </label>
             <div className="flex gap-2">
               <Button type="submit" variant="filled" className="flex-1">{editing ? 'Salvar' : 'Cadastrar'}</Button>
               {editing ? (

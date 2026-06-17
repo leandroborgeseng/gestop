@@ -3,6 +3,7 @@ import {
   BarChart3,
   CalendarDays,
   CirclePlay,
+  ClipboardCheck,
   ClipboardList,
   FileSpreadsheet,
   LayoutGrid,
@@ -51,6 +52,14 @@ export const NAV_ITEMS: NavItem[] = [
     icon: MapPin,
     permission: 'fiscalizacoes.executar',
     mobilePrimary: true,
+  },
+  {
+    id: 'vistorias',
+    label: 'Vistorias realizadas',
+    shortLabel: 'Consulta',
+    href: '/vistorias',
+    icon: ClipboardCheck,
+    permissions: ['fiscalizacoes.executar', 'dashboard.visualizar', 'chamados.gerenciar'],
   },
   {
     id: 'chamados',
@@ -121,7 +130,7 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export const NAV_GROUPS: NavGroup[] = [
-  { title: 'Operação', itemIds: ['cco', 'mobile', 'chamados', 'execucao'] },
+  { title: 'Operação', itemIds: ['cco', 'mobile', 'vistorias', 'chamados', 'execucao'] },
   { title: 'Gestão', itemIds: ['dashboard', 'cronograma', 'relatorios'] },
   { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
 ];
@@ -167,6 +176,14 @@ export function getMobileNav(permissions: string[]) {
 export function isNavActive(pathname: string, href: string) {
   if (href === '/cco') {
     return pathname === '/cco' || pathname.startsWith('/cco/');
+  }
+
+  if (href === '/mobile') {
+    return pathname === '/mobile' || pathname.startsWith('/mobile/');
+  }
+
+  if (href === '/vistorias') {
+    return pathname === '/vistorias' || pathname.startsWith('/vistorias/');
   }
 
   if (href === '/chamados') {

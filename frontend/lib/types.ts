@@ -242,6 +242,7 @@ export type AdminTipoChamado = {
   slaMediaDias: number;
   slaAltaDias: number;
   slaUrgenteDias: number;
+  exigeVistoriaPrevia: boolean;
   ativo: boolean;
 };
 
@@ -486,6 +487,7 @@ export type MobileQueuedInspection = {
 export type ChamadoStatus =
   | 'ABERTO'
   | 'EM_TRIAGEM'
+  | 'EM_AVALIACAO_TECNICA'
   | 'EM_ATENDIMENTO'
   | 'EM_EXECUCAO'
   | 'IMPEDIDO'
@@ -591,7 +593,7 @@ export type ChamadoResumo = {
   } | null;
   responsavel?: { id: string; nome: string } | null;
   equipe?: { id: string; nome: string } | null;
-  tipoChamado?: { id: string; nome: string } | null;
+  tipoChamado?: { id: string; nome: string; exigeVistoriaPrevia?: boolean } | null;
   naoConformidade?: ChamadoNaoConformidade | null;
   registradoPor?: { id: string; nome: string } | null;
 };
@@ -812,4 +814,67 @@ export type CalendarioChecagemResponse = {
     atrasadas: number;
   };
   eventos: CalendarioChecagemEvento[];
+};
+
+export type FiscalizacaoStatus =
+  | 'PLANEJADA'
+  | 'EM_ANDAMENTO'
+  | 'CONCLUIDA'
+  | 'CANCELADA'
+  | 'SINCRONIZACAO_PENDENTE';
+
+export type FiscalizacaoResumo = {
+  id: string;
+  status: FiscalizacaoStatus;
+  origem: string;
+  iniciadaEm: string | null;
+  concluidaEm: string | null;
+  dentroRaioPermitido: boolean | null;
+  distanciaCheckinMetros: number | null;
+  observacoes?: string | null;
+  createdAt: string;
+  secretaria: { id: string; sigla: string; nome: string };
+  unidade: { id: string; nome: string; codigoPatrimonial: string; bairro?: string | null };
+  agente: { id: string; nome: string };
+  checklistVersao: {
+    id: string;
+    versao: number;
+    checklist: { id: string; nome: string };
+  };
+};
+
+export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
+  respostas?: Array<{
+    id: string;
+    conformidade: string | null;
+    valorTexto: string | null;
+    valorNumero: number | null;
+    valorBooleano: boolean | null;
+    comentario: string | null;
+    respondidoEm: string;
+    item: { id: string; codigo: string; titulo: string; tipo: string };
+  }>;
+  evidencias?: Array<{
+    id: string;
+    tipo: string;
+    url: string;
+    mimeType?: string | null;
+    capturadaEm: string;
+    descricao?: string | null;
+  }>;
+  naoConformidades?: Array<{
+    id: string;
+    descricao: string;
+    severidade: string;
+    status: string;
+    item: { codigo: string; titulo: string };
+  }>;
+};
+
+export type FiscalizacoesListResponse = {
+  items: FiscalizacaoResumo[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
 };

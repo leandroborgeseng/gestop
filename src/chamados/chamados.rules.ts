@@ -30,6 +30,7 @@ export function buildDefaultDeadlineFromSeverity(severidade: string) {
 export const CHAMADO_OPEN_STATUSES: ChamadoStatus[] = [
   'ABERTO',
   'EM_TRIAGEM',
+  'EM_AVALIACAO_TECNICA',
   'EM_ATENDIMENTO',
   'EM_EXECUCAO',
   'IMPEDIDO',
@@ -37,11 +38,12 @@ export const CHAMADO_OPEN_STATUSES: ChamadoStatus[] = [
 
 const ALLOWED_CHAMADO_TRANSITIONS: Record<ChamadoStatus, ChamadoStatus[]> = {
   ABERTO: ['EM_TRIAGEM', 'EM_ATENDIMENTO', 'CANCELADO'],
-  EM_TRIAGEM: ['ABERTO', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CANCELADO'],
-  EM_ATENDIMENTO: ['EM_TRIAGEM', 'EM_EXECUCAO', 'IMPEDIDO', 'CONCLUIDO', 'CANCELADO'],
-  EM_EXECUCAO: ['EM_ATENDIMENTO', 'IMPEDIDO', 'CONCLUIDO', 'CANCELADO'],
-  IMPEDIDO: ['EM_TRIAGEM', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CANCELADO'],
-  CONCLUIDO: ['EM_TRIAGEM', 'EM_ATENDIMENTO'],
+  EM_TRIAGEM: ['ABERTO', 'EM_AVALIACAO_TECNICA', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CANCELADO'],
+  EM_AVALIACAO_TECNICA: ['EM_TRIAGEM', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CANCELADO'],
+  EM_ATENDIMENTO: ['EM_TRIAGEM', 'EM_AVALIACAO_TECNICA', 'EM_EXECUCAO', 'IMPEDIDO', 'CONCLUIDO', 'CANCELADO'],
+  EM_EXECUCAO: ['EM_ATENDIMENTO', 'EM_AVALIACAO_TECNICA', 'IMPEDIDO', 'CONCLUIDO', 'CANCELADO'],
+  IMPEDIDO: ['EM_TRIAGEM', 'EM_AVALIACAO_TECNICA', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CANCELADO'],
+  CONCLUIDO: ['EM_TRIAGEM', 'EM_AVALIACAO_TECNICA', 'EM_ATENDIMENTO'],
   CANCELADO: ['ABERTO', 'EM_TRIAGEM'],
 };
 
@@ -119,7 +121,14 @@ export function parseExecucaoCheckinMetadata(metadata: unknown, createdAt: Date 
 }
 
 export function nextChamadoStatusFlow(status: ChamadoStatus): ChamadoStatus | null {
-  const flow: ChamadoStatus[] = ['ABERTO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CONCLUIDO'];
+  const flow: ChamadoStatus[] = [
+    'ABERTO',
+    'EM_TRIAGEM',
+    'EM_AVALIACAO_TECNICA',
+    'EM_ATENDIMENTO',
+    'EM_EXECUCAO',
+    'CONCLUIDO',
+  ];
   const index = flow.indexOf(status);
   if (index === -1 || status === 'IMPEDIDO') return null;
   if (index >= flow.length - 1) return null;

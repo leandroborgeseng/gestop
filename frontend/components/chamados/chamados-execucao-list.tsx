@@ -74,9 +74,17 @@ export function ChamadosExecucaoList({
                 <CalendarDays className="h-3 w-3" />
                 {prevista.label}
               </span>
-              <span className="ch-prazo inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--ink-3)]">
+              <span
+                className={cn(
+                  'ch-prazo inline-flex items-center gap-1 text-[12px] font-semibold',
+                  prazo.tone === 'danger' && 'text-[var(--danger)]',
+                  prazo.tone === 'warning' && 'text-[var(--warn)]',
+                  prazo.tone === 'neutral' && 'text-[var(--ink-3)]',
+                  prazo.tone === 'success' && 'text-[var(--ok)]',
+                )}
+              >
                 <Clock className="h-3 w-3" />
-                {prazo.label}
+                {prazo.value}
               </span>
               {!hasCoords ? (
                 <span className="inline-flex items-center gap-1 text-[11px] text-[var(--warn)]">

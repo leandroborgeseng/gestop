@@ -4,6 +4,7 @@ export const CHAMADO_STATUS_META: Record<
 > = {
   ABERTO: { label: 'Aberto', badge: 'info' },
   EM_TRIAGEM: { label: 'Em triagem', badge: 'warning' },
+  EM_AVALIACAO_TECNICA: { label: 'Em avaliação técnica', badge: 'brand' },
   EM_ATENDIMENTO: { label: 'Em atendimento', badge: 'brand' },
   EM_EXECUCAO: { label: 'Em execução', badge: 'warning' },
   IMPEDIDO: { label: 'Impedido', badge: 'danger' },
@@ -25,7 +26,7 @@ export function nextChamadoStatuses(status: string) {
 }
 
 export function nextChamadoStatusFlow(status: string) {
-  const flow = ['ABERTO', 'EM_TRIAGEM', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CONCLUIDO'];
+  const flow = ['ABERTO', 'EM_TRIAGEM', 'EM_AVALIACAO_TECNICA', 'EM_ATENDIMENTO', 'EM_EXECUCAO', 'CONCLUIDO'];
   const index = flow.indexOf(status);
   if (index === -1 || status === 'IMPEDIDO') return null;
   if (index >= flow.length - 1) return null;
@@ -63,10 +64,24 @@ export function previstaExecucaoInfo(previstaExecucaoEm: string | null | undefin
 
 export function prazoInfo(prazoEm: string | null | undefined, status: string) {
   if (status === 'CONCLUIDO') {
-    return { label: 'Concluído', tone: 'success' as const, days: null };
+    return {
+      label: 'Concluído',
+      value: 'Concluído',
+      sub: undefined,
+      tone: 'success' as const,
+      days: null,
+      date: null,
+    };
   }
   if (!prazoEm) {
-    return { label: 'Sem prazo', tone: 'neutral' as const, days: null };
+    return {
+      label: 'Sem prazo',
+      value: 'Sem prazo',
+      sub: undefined,
+      tone: 'neutral' as const,
+      days: null,
+      date: null,
+    };
   }
 
   const today = new Date();
@@ -74,17 +89,25 @@ export function prazoInfo(prazoEm: string | null | undefined, status: string) {
   const prazo = new Date(prazoEm);
   prazo.setHours(0, 0, 0, 0);
   const days = Math.round((prazo.getTime() - today.getTime()) / 86_400_000);
+  const date = prazo.toLocaleDateString('pt-BR');
 
+  let sub: string;
+  let tone: 'neutral' | 'warning' | 'danger' | 'success';
   if (days < 0) {
-    return { label: 'Vencida', tone: 'danger' as const, days };
+    sub = `${Math.abs(days)} dia${Math.abs(days) > 1 ? 's' : ''} em atraso`;
+    tone = 'danger';
+  } else if (days === 0) {
+    sub = 'Vence hoje';
+    tone = 'danger';
+  } else if (days <= 2) {
+    sub = `${days} dia${days > 1 ? 's' : ''} restante${days > 1 ? 's' : ''}`;
+    tone = 'warning';
+  } else {
+    sub = `${days} dias de prazo`;
+    tone = 'neutral';
   }
-  if (days === 0) {
-    return { label: 'Vence hoje', tone: 'danger' as const, days };
-  }
-  if (days <= 2) {
-    return { label: `${days} dia${days > 1 ? 's' : ''}`, tone: 'warning' as const, days };
-  }
-  return { label: `${days} dias`, tone: 'neutral' as const, days };
+
+  return { label: date, value: date, sub, tone, days, date };
 }
 
 export type ChamadoTimelineStep = {

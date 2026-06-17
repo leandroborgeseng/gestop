@@ -299,6 +299,7 @@ export class AdminService {
         slaMediaDias: dto.slaMediaDias,
         slaAltaDias: dto.slaAltaDias,
         slaUrgenteDias: dto.slaUrgenteDias,
+        exigeVistoriaPrevia: dto.exigeVistoriaPrevia ?? false,
         ativo: dto.ativo ?? true,
       },
     });
@@ -318,6 +319,7 @@ export class AdminService {
         slaMediaDias: dto.slaMediaDias,
         slaAltaDias: dto.slaAltaDias,
         slaUrgenteDias: dto.slaUrgenteDias,
+        exigeVistoriaPrevia: dto.exigeVistoriaPrevia ?? false,
         ativo: dto.ativo ?? true,
       },
     });

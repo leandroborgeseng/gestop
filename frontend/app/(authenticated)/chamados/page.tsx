@@ -337,6 +337,30 @@ function ChamadosPageContent() {
     }
   }
 
+  async function saveTriagem(
+    id: string,
+    codigo: string,
+    payload: { tipoChamadoId: string | null; prioridade: (typeof TRIAGEM_PRIORIDADES)[number] },
+  ) {
+    setBusyId(id);
+    setError(null);
+    try {
+      const updated = await updateChamadoTriagem(id, payload);
+      setChamados((current) => current.map((item) => (item.id === id ? { ...item, ...updated } : item)));
+      if (selectedId === id) {
+        const refreshed = await getChamado(id);
+        setDetail(refreshed);
+      }
+      snackbar.show(`${codigo}: triagem atualizada e SLA recalculado`, 'success');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Falha ao salvar triagem.';
+      setError(message);
+      snackbar.show(message, 'error');
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <RequirePermissions permissions={['chamados.gerenciar']}>
       <PageShell
@@ -497,7 +521,10 @@ function ChamadosPageContent() {
                             )}
                           >
                             <Clock className="h-3 w-3" />
-                            {prazo.label}
+                            <span className="flex flex-col leading-tight">
+                              <span>{prazo.value}</span>
+                              {prazo.sub ? <span className="font-normal opacity-80">{prazo.sub}</span> : null}
+                            </span>
                           </span>
                           <span className="inline-flex items-center gap-1 text-[11px] text-[var(--ink-3)]">
                             <CanalIcon className="h-3 w-3" />
@@ -534,6 +561,7 @@ function ChamadosPageContent() {
                 onTransition={transition}
                 onAssignTeam={assignTeam}
                 onSavePlanejamento={savePlanejamento}
+                onSaveTriagem={saveTriagem}
                 onRefreshDetail={() => {
                   if (!selected?.id) return;
                   getChamado(selected.id).then(setDetail).catch(() => undefined);
@@ -557,6 +585,7 @@ function ChamadoDetailPanel({
   onTransition,
   onAssignTeam,
   onSavePlanejamento,
+  onSaveTriagem,
   onRefreshDetail,
 }: {
   resumo: ChamadoResumo | null;
@@ -574,6 +603,11 @@ function ChamadoDetailPanel({
   ) => void;
   onAssignTeam: (id: string, codigo: string, equipeId: string, responsavelId: string, motivo?: string) => void;
   onSavePlanejamento: (id: string, codigo: string, previstaExecucaoEm: string | null, equipeId?: string | null) => void;
+  onSaveTriagem: (
+    id: string,
+    codigo: string,
+    payload: { tipoChamadoId: string | null; prioridade: (typeof TRIAGEM_PRIORIDADES)[number] },
+  ) => void;
   onRefreshDetail: () => void;
 }) {
   const snackbar = useSnackbar();
@@ -670,12 +704,15 @@ function ChamadoDetailPanel({
               sub={prevista.date ?? undefined}
               tone={prevista.tone === 'brand' ? 'neutral' : prevista.tone}
             />
-            <SummaryCard
-              label="Prazo SLA"
-              value={prazo.label}
-              sub={resumo.prazoEm ? new Date(resumo.prazoEm).toLocaleDateString('pt-BR') : undefined}
-              tone={prazo.tone}
-            />
+            <SummaryCard label="Prazo SLA" value={prazo.value} sub={prazo.sub} tone={prazo.tone} />
+            {resumo.tipoChamado ? (
+              <SummaryCard
+                label="Vistoria prévia"
+                value={resumo.tipoChamado.exigeVistoriaPrevia ? 'Exigida' : 'Não exigida'}
+                sub={resumo.tipoChamado.nome}
+                tone={resumo.tipoChamado.exigeVistoriaPrevia ? 'warning' : 'neutral'}
+              />
+            ) : null}
             <SummaryCard label="Equipe" value={resumo.equipe?.nome ?? 'Não atribuída'} sub={resumo.secretaria.sigla} />
             <SummaryCard
               label="Responsável"
@@ -881,15 +918,10 @@ function ChamadoDetailPanel({
               size="sm"
               disabled={busy || !triagemChanged}
               onClick={() => {
-                void updateChamadoTriagem(resumo.id, {
+                void onSaveTriagem(resumo.id, resumo.codigo, {
                   tipoChamadoId: pendingTipoId || null,
                   prioridade: pendingPrioridadeTriagem as (typeof TRIAGEM_PRIORIDADES)[number],
-                })
-                  .then(() => {
-                    snackbar.show('Triagem atualizada e registrada na linha do tempo.', 'success');
-                    onRefreshDetail();
-                  })
-                  .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao salvar triagem.', 'error'));
+                });
               }}
             >
               Salvar triagem / recalcular SLA
