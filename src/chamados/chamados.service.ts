@@ -36,6 +36,7 @@ import {
   ChamadoExecucaoManualDto,
 } from './chamados.dto';
 import { buildOrdensServicoLotePdf } from './chamados-os-pdf';
+import { buildChamadoDetalhePdf } from './chamados-detail-pdf';
 import { sendChamadoEquipeNotificacao } from './chamados-notificacao';
 import {
   buildAtribuicaoAlteracoes,
@@ -294,6 +295,45 @@ export class ChamadosService {
       include: { alteradoPor: { select: { id: true, nome: true } } },
     });
     return { ...this.serializeChamado(chamado), historico: await this.enrichHistorico(historico, id) };
+  }
+
+  async exportChamadoPdf(id: string, user: JwtPayload) {
+    const detail = await this.getChamado(id, user);
+
+    return buildChamadoDetalhePdf({
+      codigo: detail.codigo,
+      titulo: detail.titulo,
+      descricao: detail.descricao,
+      status: detail.status,
+      prioridade: detail.prioridade,
+      origem: detail.origem,
+      createdAt: detail.createdAt,
+      prazoEm: detail.prazoEm,
+      previstaExecucaoEm: detail.previstaExecucaoEm,
+      concluidoEm: detail.concluidoEm,
+      solicitanteNome: detail.solicitanteNome,
+      solicitanteTelefone: detail.solicitanteTelefone,
+      enderecoTexto: detail.enderecoTexto,
+      enderecoBairro: detail.enderecoBairro,
+      latitude: detail.latitude,
+      longitude: detail.longitude,
+      impedimentoMotivo: detail.impedimentoMotivo,
+      secretaria: detail.secretaria,
+      unidade: detail.unidade,
+      equipe: detail.equipe,
+      responsavel: detail.responsavel,
+      tipoChamado: detail.tipoChamado,
+      registradoPor: detail.registradoPor,
+      naoConformidade: detail.naoConformidade,
+      historico: detail.historico.map((entry) => ({
+        statusAnterior: entry.statusAnterior,
+        statusNovo: entry.statusNovo,
+        motivo: entry.motivo,
+        metadata: (entry.metadata ?? {}) as Record<string, unknown>,
+        createdAt: entry.createdAt,
+        alteradoPor: entry.alteradoPor,
+      })),
+    });
   }
 
   async listTiposChamadoAtivos() {

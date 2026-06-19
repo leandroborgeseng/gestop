@@ -3,6 +3,7 @@
 import { SlidersHorizontal } from 'lucide-react';
 import { UnidadeFilters, UnidadeFiltroOpcoes } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
+import { formatRegiaoUnidade } from '@/lib/regiao-unidade';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
@@ -66,6 +67,16 @@ export function UnidadeFiltersPanel({
             <option value="">Todos</option>
             {(opcoes?.tipos ?? []).map((tipo) => (
               <option key={tipo} value={tipo}>{formatUnidadeTipo(tipo)}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Região">
+          <Select value={filters.regiao ?? ''} onChange={(event) => update('regiao', event.target.value)}>
+            <option value="">Todas</option>
+            {(opcoes?.regioes ?? []).map((regiao) => (
+              <option key={regiao} value={regiao}>
+                {formatRegiaoUnidade(regiao)}
+              </option>
             ))}
           </Select>
         </Field>
@@ -175,6 +186,17 @@ export function UnidadeFiltersPanel({
             {(opcoes?.bairros ?? []).map((bairro) => (
               <option key={bairro} value={bairro}>
                 {bairro}
+              </option>
+            ))}
+          </Select>
+        </Field>
+
+        <Field label="Região">
+          <Select value={filters.regiao ?? ''} onChange={(event) => update('regiao', event.target.value)}>
+            <option value="">Todas</option>
+            {(opcoes?.regioes ?? []).map((regiao) => (
+              <option key={regiao} value={regiao}>
+                {formatRegiaoUnidade(regiao)}
               </option>
             ))}
           </Select>

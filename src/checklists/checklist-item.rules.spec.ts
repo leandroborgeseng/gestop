@@ -43,6 +43,7 @@ describe('checklist-item.rules', () => {
           obrigatorio: true,
           geraNaoConformidade: false,
           exigeEvidencia: false,
+          categoriaVistoriaId: 'cat-1',
         },
         {
           ordem: 2,
@@ -52,6 +53,7 @@ describe('checklist-item.rules', () => {
           obrigatorio: true,
           geraNaoConformidade: false,
           exigeEvidencia: false,
+          categoriaVistoriaId: 'cat-1',
         },
       ]),
     ).toThrow('Codigo duplicado');

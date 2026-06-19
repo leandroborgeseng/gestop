@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 
 import type { NavBadgeKey } from '@/lib/nav-badges';
+import { isMatrixPermissionKey, navItemAllowedByMatrix } from '@/lib/permissions-matrix';
 
 export type NavItem = {
   id: string;
@@ -139,7 +140,16 @@ export const NAV_GROUPS: NavGroup[] = [
 const MOBILE_BAR_CORE = ['cco', 'mobile', 'chamados', 'execucao'] as const;
 
 export function getVisibleNavItems(permissions: string[]) {
+  const usesMatrix = permissions.some(isMatrixPermissionKey);
+
   return NAV_ITEMS.filter((item) => {
+    if (usesMatrix) {
+      const matrixAllowed = navItemAllowedByMatrix(item.id, permissions);
+      if (matrixAllowed !== null) {
+        return matrixAllowed;
+      }
+    }
+
     if (item.permissions?.length) {
       return item.permissions.some((permission) => permissions.includes(permission));
     }

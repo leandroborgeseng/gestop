@@ -130,6 +130,7 @@ export class ChecklistsService {
               obrigatorio: item.obrigatorio,
               geraNaoConformidade: item.geraNaoConformidade,
               exigeEvidencia: item.exigeEvidencia,
+              categoriaVistoriaId: item.categoriaVistoriaId,
               opcoes: item.opcoes ?? Prisma.JsonNull,
               peso: item.peso,
               ativo: item.ativo,
@@ -186,6 +187,7 @@ export class ChecklistsService {
               obrigatorio: item.obrigatorio,
               geraNaoConformidade: item.geraNaoConformidade,
               exigeEvidencia: item.exigeEvidencia,
+              categoriaVistoriaId: item.categoriaVistoriaId,
               opcoes: item.opcoes === undefined ? Prisma.JsonNull : (item.opcoes as Prisma.InputJsonValue),
             })),
           },
@@ -221,7 +223,20 @@ export class ChecklistsService {
     }
 
     try {
-      assertValidChecklistVersion({ estrutura: version.estrutura, itens: version.itens });
+      assertValidChecklistVersion({
+        estrutura: version.estrutura,
+        itens: version.itens.map((item) => ({
+          ordem: item.ordem,
+          codigo: item.codigo,
+          titulo: item.titulo,
+          descricao: item.descricao ?? undefined,
+          tipo: item.tipo,
+          obrigatorio: item.obrigatorio,
+          geraNaoConformidade: item.geraNaoConformidade,
+          exigeEvidencia: item.exigeEvidencia,
+          categoriaVistoriaId: item.categoriaVistoriaId ?? '',
+        })),
+      });
     } catch (error) {
       throw new BadRequestException(error instanceof Error ? error.message : 'Itens invalidos');
     }

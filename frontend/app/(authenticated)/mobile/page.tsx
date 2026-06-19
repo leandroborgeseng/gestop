@@ -27,6 +27,7 @@ import { filterChecklistsForUnidade } from '@/lib/checklist-matching';
 import { migrateLegacyQueueIfNeeded, readMobileQueue, writeMobileQueue } from '@/lib/mobile-queue';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { getMobileFieldPackage, syncMobileInspection } from '@/lib/api';
+import { readCachedFieldPackage, writeCachedFieldPackage } from '@/lib/mobile-field-cache';
 import { useEffectiveOnline } from '@/lib/use-effective-online';
 import { registerServiceWorker, requestNotificationPermission, showLocalNotification } from '@/lib/pwa';
 import { PwaInstallBanner } from '@/components/mobile/pwa-install-banner';
@@ -44,6 +45,8 @@ export default function MobilePage() {
   const [checklistId, setChecklistId] = useState('');
   const [responses, setResponses] = useState<Record<string, ResponseDraft>>({});
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +83,23 @@ export default function MobilePage() {
     setSyncing(false);
   }, [syncing, snackbar]);
 
+  const downloadFieldPackage = useCallback(async (showToast = false) => {
+    setDownloading(true);
+    setError(null);
+    try {
+      const payload = await getMobileFieldPackage();
+      setFieldPackage(payload);
+      await writeCachedFieldPackage(payload);
+      setCachedAt(payload.downloadedAt);
+      if (showToast) snackbar.show('Pacote de vistoria baixado para uso offline.', 'success');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao baixar pacote de vistoria.');
+    } finally {
+      setDownloading(false);
+      setLoading(false);
+    }
+  }, [snackbar]);
+
   useEffect(() => {
     registerServiceWorker();
     requestNotificationPermission().catch(() => undefined);
@@ -89,10 +109,31 @@ export default function MobilePage() {
       .then(setQueue)
       .catch(() => setQueue([]));
 
-    getMobileFieldPackage()
-      .then(setFieldPackage)
-      .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao baixar pacote de vistoria.'))
-      .finally(() => setLoading(false));
+    void (async () => {
+      let cachedPackage: MobileFieldPackage | null = null;
+      try {
+        cachedPackage = await readCachedFieldPackage();
+        if (cachedPackage) {
+          setFieldPackage(cachedPackage);
+          setCachedAt(cachedPackage.downloadedAt);
+        }
+      } catch {
+        // cache opcional
+      }
+
+      try {
+        const payload = await getMobileFieldPackage();
+        setFieldPackage(payload);
+        await writeCachedFieldPackage(payload);
+        setCachedAt(payload.downloadedAt);
+      } catch (err) {
+        if (!cachedPackage) {
+          setError(err instanceof Error ? err.message : 'Falha ao baixar pacote de vistoria.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -228,12 +269,18 @@ export default function MobilePage() {
         description="Preencha a vistoria com GPS real. Online, o envio é imediato; offline, salve na fila para sincronizar depois."
         backHref="/cco"
         action={
-          <Link href="/vistorias">
-            <Button variant="outlined" size="sm">
-              <ClipboardList className="mr-1.5 h-4 w-4" />
-              Consultar vistorias
+          <div className="flex flex-wrap gap-2">
+            <Button variant="tonal" size="sm" disabled={downloading} onClick={() => void downloadFieldPackage(true)}>
+              <RefreshCcw className={cn('mr-1.5 h-4 w-4', downloading && 'animate-spin')} />
+              {downloading ? 'Baixando...' : 'Baixar dados offline'}
             </Button>
-          </Link>
+            <Link href="/vistorias">
+              <Button variant="outlined" size="sm">
+                <ClipboardList className="mr-1.5 h-4 w-4" />
+                Consultar vistorias
+              </Button>
+            </Link>
+          </div>
         }
       >
         <div className="mx-auto max-w-2xl space-y-4 pb-32">
@@ -265,6 +312,11 @@ export default function MobilePage() {
                   <p className="mt-1 text-[18px] font-semibold text-[var(--ink)]">
                     {fieldPackage.unidades.length} próprios no pacote
                   </p>
+                  {cachedAt ? (
+                    <p className="mt-1 text-[11px] text-[var(--ink-3)]">
+                      Cache local: {new Date(cachedAt).toLocaleString('pt-BR')}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="grid grid-cols-3 divide-x divide-[var(--line-2)]">
                   <HeroStat label="Checklists" value={fieldPackage.checklists.length} />

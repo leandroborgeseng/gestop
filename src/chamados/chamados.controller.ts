@@ -152,6 +152,16 @@ export class ChamadosController {
   }
 
   @RequirePermissions('chamados.gerenciar')
+  @Get(':id/pdf')
+  @Header('Content-Type', 'application/pdf')
+  async exportChamadoPdf(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
+    const pdf = await this.chamadosService.exportChamadoPdf(id, user);
+    return new StreamableFile(pdf, {
+      disposition: `attachment; filename="chamado-${id.slice(0, 8)}.pdf"`,
+    });
+  }
+
+  @RequirePermissions('chamados.gerenciar')
   @Get(':id')
   get(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
     return this.chamadosService.getChamado(id, user);

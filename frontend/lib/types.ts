@@ -32,6 +32,7 @@ export type UnidadeOperacional = {
   endereco: string;
   bairro: string | null;
   cep: string | null;
+  regiao?: import('./regiao-unidade').RegiaoUnidade | null;
   latitude: number | null;
   longitude: number | null;
   raioValidacaoMetros: number;
@@ -50,6 +51,18 @@ export type UnidadeOperacional = {
     naoConformidadesAbertas: number;
     chamadosAbertos: number;
   };
+  ultimaVistoriaNota?: VistoriaNotaResumo | null;
+};
+
+export type VistoriaNotaResumo = {
+  notaGeral: number | null;
+  notasPorCategoria: Array<{
+    categoriaId: string;
+    categoriaNome: string;
+    nota: number;
+  }>;
+  fiscalizacaoId?: string;
+  concluidaEm?: string | null;
 };
 
 export type UnidadeDetalhe = UnidadeOperacional & {
@@ -110,14 +123,22 @@ export type UnidadeFilters = {
   situacao?: string;
   pendencias?: string;
   bairro?: string;
+  regiao?: string;
   responsavel?: string;
   responsavelEmail?: string;
+};
+
+export type CategoriaVistoriaOption = {
+  id: string;
+  nome: string;
 };
 
 export type UnidadeFiltroOpcoes = {
   secretarias: SecretariaOption[];
   bairros: string[];
   tipos: UnidadeTipo[];
+  regioes?: import('./regiao-unidade').RegiaoUnidade[];
+  categoriasVistoria?: CategoriaVistoriaOption[];
   responsaveis: Array<{
     nome: string;
     email: string | null;
@@ -166,12 +187,19 @@ export type AdminUnidade = {
   endereco: string;
   bairro?: string | null;
   cep?: string | null;
+  regiao?: import('./regiao-unidade').RegiaoUnidade | null;
   latitude: number | string;
   longitude: number | string;
   raioValidacaoMetros: number;
   ativo: boolean;
   metadata?: UnidadeMetadata | null;
   secretaria: SecretariaOption;
+};
+
+export type AdminCategoriaVistoria = {
+  id: string;
+  nome: string;
+  ativo: boolean;
 };
 
 export type UnidadeManualOverride = {
@@ -199,6 +227,16 @@ export type AdminPerfil = {
   id: string;
   nome: string;
   descricao?: string | null;
+  sistema?: boolean;
+  ativo?: boolean;
+  permissoes?: AdminPermissao[];
+};
+
+export type AdminPermissao = {
+  id: string;
+  codigo: string;
+  descricao?: string | null;
+  modulo: string;
 };
 
 export type AdminUsuario = {
@@ -409,6 +447,7 @@ export type ChecklistItem = {
   obrigatorio: boolean;
   geraNaoConformidade: boolean;
   exigeEvidencia: boolean;
+  categoriaVistoriaId?: string | null;
   opcoes?: unknown;
   ativo: boolean;
 };

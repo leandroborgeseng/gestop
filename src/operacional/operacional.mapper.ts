@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { UnidadeOperacional, UnidadeResumoCounts, UnidadeSituacao } from './operacional.types';
+import { UnidadeOperacional, UnidadeResumoCounts, UnidadeSituacao, UnidadeVistoriaNotaResumo } from './operacional.types';
 
 type DecimalLike = Prisma.Decimal | number | string | null | undefined;
 
@@ -11,6 +11,7 @@ export type UnidadeBaseRecord = {
   endereco: string;
   bairro: string | null;
   cep: string | null;
+  regiao?: UnidadeOperacional['regiao'];
   latitude: DecimalLike;
   longitude: DecimalLike;
   raioValidacaoMetros: number;
@@ -57,6 +58,7 @@ export function deriveUnidadeSituacao(input: {
 export function mapUnidadeOperacional(
   unidade: UnidadeBaseRecord,
   counts: UnidadeResumoCounts,
+  ultimaVistoriaNota?: UnidadeVistoriaNotaResumo | null,
 ): UnidadeOperacional {
   const situacao = deriveUnidadeSituacao({
     ativo: unidade.ativo,
@@ -74,6 +76,7 @@ export function mapUnidadeOperacional(
     endereco: unidade.endereco,
     bairro: unidade.bairro,
     cep: unidade.cep,
+    regiao: unidade.regiao ?? null,
     latitude: decimalToNumber(unidade.latitude),
     longitude: decimalToNumber(unidade.longitude),
     raioValidacaoMetros: unidade.raioValidacaoMetros,
@@ -85,6 +88,7 @@ export function mapUnidadeOperacional(
       chamadosAbertos: counts.chamadosAbertos,
     },
     totais: counts,
+    ultimaVistoriaNota: ultimaVistoriaNota ?? null,
   };
 }
 

@@ -19,6 +19,12 @@ export function useCanGerenciarChamados() {
   return hasChamadosGerenciar(user?.permissoes ?? []);
 }
 
+export function useCanLancarExecucaoManual() {
+  const user = useSessionUser();
+  const permissoes = user?.permissoes ?? [];
+  return permissoes.includes('chamados.gerenciar') || permissoes.includes('chamados.execucao_manual');
+}
+
 export function useIsSecretariaGestor() {
   const user = useSessionUser();
   return Boolean(user?.permissoes.includes('secretaria.gerenciar') && user.secretaria?.id);

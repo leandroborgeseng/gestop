@@ -72,6 +72,9 @@ export class ChecklistItemDto {
 
   @IsOptional()
   opcoes?: unknown;
+
+  @IsString()
+  categoriaVistoriaId!: string;
 }
 
 export class ChecklistVersionDto {

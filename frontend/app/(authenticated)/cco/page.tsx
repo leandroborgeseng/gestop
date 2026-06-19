@@ -14,8 +14,9 @@ import {
   UnidadeTipo,
 } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
+import { formatRegiaoUnidade } from '@/lib/regiao-unidade';
 import { MetricCard } from '@/components/metric-card';
-import { OperationalMap } from '@/components/operational-map';
+import { OperationalMap, CcoMapMode } from '@/components/operational-map';
 import { UnidadeFiltersPanel } from '@/components/unidade-filters';
 import { UnidadeList } from '@/components/unidade-list';
 import { UnidadeDrawer } from '@/components/cco/unidade-drawer';
@@ -63,6 +64,8 @@ function CcoPageContent() {
   const [bootLoading, setBootLoading] = useState(true);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [mapMode, setMapMode] = useState<CcoMapMode>('situacao');
+  const [categoriaFiltroId, setCategoriaFiltroId] = useState('');
 
   const selectedUnidade = useMemo(
     () => unidades.find((item) => item.id === selectedId) ?? null,
@@ -291,6 +294,44 @@ function CcoPageContent() {
               </select>
             </div>
 
+            <div className="grid grid-cols-2 gap-2">
+              <select
+                value={filters.regiao ?? ''}
+                onChange={(event) => setFilters((prev) => ({ ...prev, regiao: event.target.value || undefined }))}
+                className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+              >
+                <option value="">Todas regiões</option>
+                {(opcoesFiltro?.regioes ?? []).map((regiao) => (
+                  <option key={regiao} value={regiao}>
+                    {formatRegiaoUnidade(regiao)}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={mapMode}
+                onChange={(event) => setMapMode(event.target.value as CcoMapMode)}
+                className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+              >
+                <option value="situacao">Mapa: Localização</option>
+                <option value="notas">Mapa: Notas</option>
+              </select>
+            </div>
+
+            {mapMode === 'notas' ? (
+              <select
+                value={categoriaFiltroId}
+                onChange={(event) => setCategoriaFiltroId(event.target.value)}
+                className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+              >
+                <option value="">Nota geral (Likert)</option>
+                {(opcoesFiltro?.categoriasVistoria ?? []).map((categoria) => (
+                  <option key={categoria.id} value={categoria.id}>
+                    Categoria: {categoria.nome}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+
             <button
               type="button"
               onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
@@ -331,6 +372,8 @@ function CcoPageContent() {
           unidades={unidades}
           selectedId={selectedId}
           hoveredId={hoveredId}
+          mapMode={mapMode}
+          categoriaFiltroId={categoriaFiltroId || null}
           onSelect={selectUnidade}
           onHover={handleMapHover}
         />

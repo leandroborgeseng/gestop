@@ -1,11 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
+  FiscalizacaoStatus,
   NaoConformidadeStatus,
   Prisma,
   UnidadeTipo,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { resolveSecretariaScopeId } from '../auth/secretaria-scope';
+import { computeVistoriaNotas } from '../domain/vistoria-nota';
 import { PrismaService } from '../prisma/prisma.service';
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import {
@@ -13,7 +15,7 @@ import {
   mapUnidadeOperacional,
   UnidadeBaseRecord,
 } from './operacional.mapper';
-import { UnidadeListQuery } from './operacional.types';
+import { UnidadeListQuery, UnidadeVistoriaNotaResumo } from './operacional.types';
 
 const NON_CONFORMITY_OPEN_STATUSES: NaoConformidadeStatus[] = [
   NaoConformidadeStatus.ABERTA,
@@ -96,7 +98,7 @@ export class OperacionalService {
 
   async getOpcoesFiltro(user: JwtPayload) {
     const secretariaId = resolveSecretariaScopeId(user);
-    const [secretarias, bairros, tiposRows, responsaveisRows] = await Promise.all([
+    const [secretarias, bairros, tiposRows, responsaveisRows, regioesRows, categoriasVistoria] = await Promise.all([
       this.prisma.secretaria.findMany({
         where: {
           ativo: true,
@@ -127,6 +129,17 @@ export class OperacionalService {
           responsavelEmail: true,
         },
       }),
+      this.prisma.unidadePublica.findMany({
+        where: { ativo: true, regiao: { not: null } },
+        distinct: ['regiao'],
+        orderBy: { regiao: 'asc' },
+        select: { regiao: true },
+      }),
+      this.prisma.categoriaVistoria.findMany({
+        where: { ativo: true },
+        orderBy: { nome: 'asc' },
+        select: { id: true, nome: true },
+      }),
     ]);
 
     const responsaveis = responsaveisRows
@@ -146,6 +159,8 @@ export class OperacionalService {
       secretarias,
       bairros,
       tipos: tiposRows.map((item) => item.tipo),
+      regioes: regioesRows.map((item) => item.regiao).filter((regiao): regiao is NonNullable<typeof regiao> => Boolean(regiao)),
+      categoriasVistoria,
       responsaveis,
       emails,
     };
@@ -166,6 +181,7 @@ export class OperacionalService {
         endereco: true,
         bairro: true,
         cep: true,
+        regiao: true,
         latitude: true,
         longitude: true,
         raioValidacaoMetros: true,
@@ -193,12 +209,18 @@ export class OperacionalService {
       },
     });
 
+    const notasPorUnidade = await this.loadUltimasNotasPorUnidade(unidades.map((unidade) => unidade.id));
+
     const mapped = unidades.map((unidade) =>
-      mapUnidadeOperacional(unidade as UnidadeBaseRecord, {
-        fiscalizacoes: unidade._count.fiscalizacoes,
-        naoConformidadesAbertas: unidade._count.naoConformidades,
-        chamadosAbertos: unidade._count.chamados,
-      }),
+      mapUnidadeOperacional(
+        unidade as UnidadeBaseRecord,
+        {
+          fiscalizacoes: unidade._count.fiscalizacoes,
+          naoConformidadesAbertas: unidade._count.naoConformidades,
+          chamadosAbertos: unidade._count.chamados,
+        },
+        notasPorUnidade.get(unidade.id) ?? null,
+      ),
     );
 
     return applyInMemoryUnidadeFilters(mapped, {
@@ -218,6 +240,7 @@ export class OperacionalService {
         endereco: true,
         bairro: true,
         cep: true,
+        regiao: true,
         latitude: true,
         longitude: true,
         raioValidacaoMetros: true,
@@ -319,11 +342,15 @@ export class OperacionalService {
       throw new NotFoundException('Proprio publico nao encontrado');
     }
 
-    const resumo = mapUnidadeOperacional(unidade as UnidadeBaseRecord, {
-      fiscalizacoes: unidade._count.fiscalizacoes,
-      naoConformidadesAbertas: unidade._count.naoConformidades,
-      chamadosAbertos: unidade._count.chamados,
-    });
+    const resumo = mapUnidadeOperacional(
+      unidade as UnidadeBaseRecord,
+      {
+        fiscalizacoes: unidade._count.fiscalizacoes,
+        naoConformidadesAbertas: unidade._count.naoConformidades,
+        chamadosAbertos: unidade._count.chamados,
+      },
+      (await this.loadUltimasNotasPorUnidade([id])).get(id) ?? null,
+    );
 
     return {
       ...resumo,
@@ -357,6 +384,7 @@ export class OperacionalService {
       ...(query.secretariaId ? { secretariaId: query.secretariaId } : {}),
       ...(query.tipo ? { tipo: query.tipo as UnidadeTipo } : {}),
       ...(query.bairro ? { bairro: { equals: query.bairro, mode: 'insensitive' } } : {}),
+      ...(query.regiao ? { regiao: query.regiao } : {}),
       ...(Object.keys(secretariaFilter).length > 0 ? { secretaria: secretariaFilter } : {}),
       ...(query.search
         ? {
@@ -373,5 +401,47 @@ export class OperacionalService {
           }
         : {}),
     };
+  }
+
+  private async loadUltimasNotasPorUnidade(unidadeIds: string[]) {
+    const map = new Map<string, UnidadeVistoriaNotaResumo>();
+    if (unidadeIds.length === 0) return map;
+
+    const fiscalizacoes = await this.prisma.fiscalizacao.findMany({
+      where: {
+        unidadeId: { in: unidadeIds },
+        status: FiscalizacaoStatus.CONCLUIDA,
+      },
+      orderBy: [{ concluidaEm: 'desc' }, { createdAt: 'desc' }],
+      distinct: ['unidadeId'],
+      select: {
+        id: true,
+        unidadeId: true,
+        concluidaEm: true,
+        respostas: {
+          select: {
+            valorTexto: true,
+            item: {
+              select: {
+                tipo: true,
+                categoriaVistoriaId: true,
+                categoriaVistoria: { select: { id: true, nome: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    for (const fiscalizacao of fiscalizacoes) {
+      const resumo = computeVistoriaNotas(fiscalizacao.respostas);
+      map.set(fiscalizacao.unidadeId, {
+        ...resumo,
+        fiscalizacaoId: fiscalizacao.id,
+        concluidaEm: fiscalizacao.concluidaEm?.toISOString() ?? null,
+      });
+    }
+
+    return map;
   }
 }

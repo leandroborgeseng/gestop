@@ -19,19 +19,21 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import {
   createChecklistVersion,
   deactivateChecklist,
+  listAdminCategoriasVistoria,
   listAdminSecretarias,
   listChecklists,
   publishChecklistVersion,
   saveChecklist,
   updateChecklistVersion,
 } from '@/lib/api';
-import { AdminSecretaria, ChecklistModel } from '@/lib/types';
+import { AdminCategoriaVistoria, AdminSecretaria, ChecklistModel } from '@/lib/types';
 import { formatChecklistVinculo } from '@/lib/unidade-tipo';
 
 export default function ChecklistDetalhePage() {
   const params = useParams<{ id: string }>();
   const [checklist, setChecklist] = useState<ChecklistModel | null>(null);
   const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
+  const [categorias, setCategorias] = useState<AdminCategoriaVistoria[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -53,9 +55,14 @@ export default function ChecklistDetalhePage() {
     setLoading(true);
     setError(null);
     try {
-      const [checklists, nextSecretarias] = await Promise.all([listChecklists(), listAdminSecretarias()]);
+      const [checklists, nextSecretarias, nextCategorias] = await Promise.all([
+        listChecklists(),
+        listAdminSecretarias(),
+        listAdminCategoriasVistoria(),
+      ]);
       const found = checklists.find((item) => item.id === params.id) ?? null;
       setSecretarias(nextSecretarias);
+      setCategorias(nextCategorias);
       if (!found) {
         setChecklist(null);
         setError('Checklist não encontrado.');
@@ -156,6 +163,7 @@ export default function ChecklistDetalhePage() {
             {draft ? (
               <VersionEditor
                 version={draft}
+                categorias={categorias}
                 onSave={(items) =>
                   mutate(
                     () =>

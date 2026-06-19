@@ -6,6 +6,7 @@ import {
   AdminUsuario,
   AdminEquipe,
   AdminTipoChamado,
+  AdminCategoriaVistoria,
   EquipeOpcao,
   TipoChamadoOpcao,
   ChamadosEmExecucaoResponse,
@@ -150,7 +151,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function login(email: string, password: string) {
+export async function login(email: string, password: string, remember = false) {
   let response: Response;
 
   try {
@@ -159,7 +160,7 @@ export async function login(email: string, password: string) {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, remember }),
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'erro de rede';
@@ -180,6 +181,9 @@ export async function login(email: string, password: string) {
     user: data.user,
     expiresAt: Date.now() + data.expiresInSeconds * 1000,
   });
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem('gestop.auth.remember', remember ? '1' : '0');
+  }
 
   return data;
 }
@@ -277,6 +281,44 @@ export function listAdminPerfis() {
   return request<AdminPerfil[]>('/admin/perfis');
 }
 
+export type AdminPerfilConfiguravel = {
+  id: string;
+  nome: string;
+  descricao?: string | null;
+  sistema: boolean;
+  ativo: boolean;
+};
+
+export type AdminPerfilMatrizResponse = {
+  perfil: AdminPerfilConfiguravel;
+  catalogo: import('@/lib/permissions-matrix').PermissionCatalogScreen[];
+  chaves: string[];
+};
+
+export function listAdminPerfisConfiguraveis() {
+  return request<AdminPerfilConfiguravel[]>('/admin/perfis/configuraveis');
+}
+
+export function getAdminPerfilMatriz(id: string) {
+  return request<AdminPerfilMatrizResponse>(`/admin/perfis/${id}/matriz`);
+}
+
+export function saveAdminPerfilMatriz(id: string, chaves: string[]) {
+  return request<AdminPerfilMatrizResponse>(`/admin/perfis/${id}/matriz`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chaves }),
+  });
+}
+
+export function createAdminPerfil(payload: { nome: string; descricao?: string; ativo?: boolean }) {
+  return request<AdminPerfilConfiguravel>('/admin/perfis', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function listAdminEquipes() {
   return request<AdminEquipe[]>('/admin/equipes');
 }
@@ -307,6 +349,22 @@ export function saveAdminTipoChamado(payload: Record<string, unknown>, id?: stri
 
 export function deleteAdminTipoChamado(id: string) {
   return request<{ ok: boolean }>(`/admin/tipos-chamado/${id}`, { method: 'DELETE' });
+}
+
+export function listAdminCategoriasVistoria() {
+  return request<AdminCategoriaVistoria[]>('/admin/categorias-vistoria');
+}
+
+export function saveAdminCategoriaVistoria(payload: Record<string, unknown>, id?: string) {
+  return request<AdminCategoriaVistoria>(`/admin/categorias-vistoria${id ? `/${id}` : ''}`, {
+    method: id ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminCategoriaVistoria(id: string) {
+  return request<{ ok: boolean }>(`/admin/categorias-vistoria/${id}`, { method: 'DELETE' });
 }
 
 export function getWebmapImportStatus() {
@@ -749,6 +807,23 @@ export async function downloadOrdensServicoLote(payload: {
   URL.revokeObjectURL(url);
 }
 
+export async function downloadChamadoPdf(id: string, codigo: string) {
+  const token = getStoredAuth()?.accessToken;
+  const response = await fetch(`${API_BASE_URL}/chamados/${id}/pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error('Falha ao gerar PDF do chamado.');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `chamado-${codigo.replace(/[^a-zA-Z0-9-]/g, '')}.pdf`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export function getChamadoExecucao(id: string) {
   return request<ChamadoExecucaoDetalhe>(`/chamados/${id}/execucao`);
 }
@@ -797,6 +872,22 @@ export function concluirChamadoExecucao(
   },
 ) {
   return request<ChamadoResumo>(`/chamados/${id}/execucao/concluir`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function registrarChamadoExecucaoManual(
+  id: string,
+  payload: {
+    dataExecucao: string;
+    relatorio: string;
+    impedimento?: boolean;
+    impedimentoMotivo?: string;
+  },
+) {
+  return request<ChamadoResumo>(`/chamados/${id}/execucao/manual`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

@@ -40,6 +40,20 @@ export function prioridadeLabel(prioridade: string) {
   return map[prioridade] ?? prioridade;
 }
 
+export function chamadoStatusLabel(status: string) {
+  const map: Record<string, string> = {
+    ABERTO: 'Aberto',
+    EM_TRIAGEM: 'Em triagem',
+    EM_AVALIACAO_TECNICA: 'Em avaliação técnica',
+    EM_ATENDIMENTO: 'Em atendimento',
+    EM_EXECUCAO: 'Em execução',
+    IMPEDIDO: 'Impedido',
+    CONCLUIDO: 'Concluído',
+    CANCELADO: 'Cancelado',
+  };
+  return map[status] ?? status;
+}
+
 export function formatDateBr(value: string | Date | null | undefined) {
   if (!value) return '—';
   const date = value instanceof Date ? value : new Date(value);

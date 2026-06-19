@@ -23,13 +23,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
-import { useCanGerenciarChamados } from '@/components/auth/session-context';
+import { useCanGerenciarChamados, useCanLancarExecucaoManual } from '@/components/auth/session-context';
 import {
   addChamadoExecucaoEvidencia,
   checkinChamadoExecucao,
   concluirChamadoExecucao,
   deleteChamadoExecucaoEvidencia,
   getChamadoExecucao,
+  registrarChamadoExecucaoManual,
 } from '@/lib/api';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import { CHAMADO_STATUS_META, prioridadeVariant } from '@/lib/chamado-status';
@@ -94,6 +95,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   const router = useRouter();
   const snackbar = useSnackbar();
   const canGerenciar = useCanGerenciarChamados();
+  const canLancarManual = useCanLancarExecucaoManual();
   const [detail, setDetail] = useState<ChamadoExecucaoDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -106,6 +108,11 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
   const [evidencias, setEvidencias] = useState<ChamadoEvidencia[]>([]);
   const [previewEvidenceUrl, setPreviewEvidenceUrl] = useState<string | null>(null);
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualDataExecucao, setManualDataExecucao] = useState(() => new Date().toISOString().slice(0, 10));
+  const [manualRelatorio, setManualRelatorio] = useState('');
+  const [manualImpedimento, setManualImpedimento] = useState(false);
+  const [manualImpedimentoMotivo, setManualImpedimentoMotivo] = useState('');
 
   async function load() {
     setLoading(true);
@@ -315,6 +322,51 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
     }
   }
 
+  async function handleLancamentoManual() {
+    if (!detail || busy) return;
+    setError(null);
+
+    if (manualImpedimento && manualImpedimentoMotivo.trim().length < 5) {
+      setError('Informe o motivo do impedimento com ao menos 5 caracteres.');
+      return;
+    }
+    if (manualRelatorio.trim().length < 10) {
+      setError('Descreva a execução com ao menos 10 caracteres.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await registrarChamadoExecucaoManual(chamadoId, {
+        dataExecucao: new Date(`${manualDataExecucao}T12:00:00`).toISOString(),
+        relatorio: manualRelatorio.trim(),
+        impedimento: manualImpedimento,
+        impedimentoMotivo: manualImpedimento ? manualImpedimentoMotivo.trim() : undefined,
+      });
+      snackbar.show(
+        manualImpedimento ? 'Impedimento lançado manualmente.' : 'Execução lançada manualmente.',
+        'success',
+      );
+      if (canGerenciar) {
+        router.push(`/chamados?id=${chamadoId}`);
+      } else {
+        router.push('/execucao');
+      }
+      router.refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Falha no lançamento manual.';
+      setError(message);
+      snackbar.show(message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const manualDisponivel =
+    canLancarManual &&
+    detail &&
+    !['CONCLUIDO', 'CANCELADO'].includes(detail.status);
+
   if (loading) return <LoadingState label="Carregando execução de campo..." />;
   if (error && !detail) return <ErrorState message={error} onRetry={load} />;
   if (!detail || !st) return <ErrorState message="Chamado não encontrado." onRetry={load} />;
@@ -441,6 +493,77 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                 </Button>
               ) : null}
             </div>
+
+            {manualDisponivel ? (
+              <div className="border-t border-[var(--line-2)] pt-4">
+                {!showManualForm ? (
+                  <Button
+                    type="button"
+                    variant="text"
+                    className="h-auto px-0 text-[var(--brand)]"
+                    onClick={() => setShowManualForm(true)}
+                  >
+                    Lançamento manual (sem check-in nem fotos)
+                  </Button>
+                ) : (
+                  <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
+                    <p className="text-[13px] font-semibold text-[var(--ink)]">Lançamento manual</p>
+                    <p className="text-[12px] text-[var(--ink-3)]">
+                      Registra a execução retroativamente, sem GPS nem evidências fotográficas.
+                    </p>
+                    <Field label="Data da execução">
+                      <input
+                        type="date"
+                        value={manualDataExecucao}
+                        onChange={(event) => setManualDataExecucao(event.target.value)}
+                        className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px]"
+                        disabled={busy}
+                      />
+                    </Field>
+                    <Field label="Relatório da execução">
+                      <textarea
+                        value={manualRelatorio}
+                        onChange={(event) => setManualRelatorio(event.target.value)}
+                        rows={4}
+                        placeholder="Descreva o serviço realizado ou o impedimento encontrado…"
+                        className="w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-[13px]"
+                        disabled={busy}
+                      />
+                    </Field>
+                    <label className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={manualImpedimento}
+                        onChange={(event) => setManualImpedimento(event.target.checked)}
+                        className="mt-1"
+                        disabled={busy}
+                      />
+                      <span className="text-[13px] text-[var(--ink-2)]">Registrar como impedimento</span>
+                    </label>
+                    {manualImpedimento ? (
+                      <Field label="Motivo do impedimento">
+                        <textarea
+                          value={manualImpedimentoMotivo}
+                          onChange={(event) => setManualImpedimentoMotivo(event.target.value)}
+                          rows={2}
+                          className="w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-[13px]"
+                          disabled={busy}
+                        />
+                      </Field>
+                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="filled" onClick={() => void handleLancamentoManual()} disabled={busy}>
+                        {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                        Confirmar lançamento
+                      </Button>
+                      <Button type="button" variant="text" onClick={() => setShowManualForm(false)} disabled={busy}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       ) : null}

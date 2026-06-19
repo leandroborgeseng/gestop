@@ -20,8 +20,10 @@ import {
 import { hasPlottableCoordinates, toLatLngTuple } from '@/lib/geo-coordinates';
 import { escapeHtml } from '@/lib/security';
 import { UnidadeOperacional, UnidadeSituacao } from '@/lib/types';
+import { formatNotaBr, notaCorHex, resolveNotaExibicao } from '@/lib/vistoria-nota';
 import { MapViewControls } from '@/components/map/map-view-controls';
 import { situacaoRailColor } from '@/components/status-badge';
+import type { CcoMapMode } from '@/components/operational-map';
 
 const situacaoMarkerColor: Record<UnidadeSituacao, string> = {
   OPERACIONAL: '#15924e',
@@ -36,6 +38,30 @@ function configureLeafletIcons() {
     iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
     iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
     shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  });
+}
+
+function createNotaIcon(nota: number | null, emphasis: 'normal' | 'hover' | 'selected') {
+  const scale = emphasis === 'selected' ? 1.28 : emphasis === 'hover' ? 1.12 : 1;
+  const color = nota == null ? '#8a97a8' : notaCorHex(nota);
+  const label = nota == null ? '—' : formatNotaBr(nota);
+  const ring =
+    emphasis === 'selected'
+      ? `0 0 0 4px color-mix(in srgb, ${color} 28%, transparent), 0 6px 16px rgba(15,27,45,.4)`
+      : '0 3px 8px rgba(15,27,45,.35)';
+
+  return L.divIcon({
+    className: 'sigma-map-marker-nota',
+    html: `<span style="
+      display:grid;place-items:center;width:34px;height:34px;
+      background:${color};border:2px solid #fff;border-radius:9999px;
+      transform:scale(${scale});
+      box-shadow:${ring};
+      transition:transform .14s ease, box-shadow .14s ease;
+      color:#fff;font:700 11px/1 system-ui,sans-serif;
+    ">${label}</span>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 17],
   });
 }
 
@@ -69,16 +95,25 @@ function createReferenceIcon() {
   });
 }
 
-function buildPopupHtml(unidade: UnidadeOperacional) {
+function buildPopupHtml(unidade: UnidadeOperacional, mapMode: CcoMapMode, categoriaFiltroId?: string | null) {
   const nome = escapeHtml(unidade.nome);
   const secretaria = escapeHtml(unidade.secretaria.sigla);
   const bairro = escapeHtml(unidade.bairro ?? 'bairro não informado');
+  const nota =
+    mapMode === 'notas'
+      ? resolveNotaExibicao(unidade.ultimaVistoriaNota, categoriaFiltroId)
+      : null;
+  const notaLine =
+    mapMode === 'notas'
+      ? `<span style="display:block;margin-top:6px;font-size:12px;font-weight:700;color:#0f1b2d;">Nota: ${escapeHtml(formatNotaBr(nota))}</span>`
+      : '';
   return `
     <div style="min-width:220px;font-family:system-ui,sans-serif;">
       <strong style="display:block;font-size:14px;color:#0f1b2d;">${nome}</strong>
       <span style="display:block;margin-top:4px;font-size:12px;color:#647389;">
         ${secretaria} · ${bairro}
       </span>
+      ${notaLine}
       <button type="button" data-unidade-id="${unidade.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
         Ver detalhes →
       </button>
@@ -110,23 +145,50 @@ function fitMapToUnits(map: L.Map, located: Array<{ latLng: L.LatLngTuple }>) {
   );
 }
 
-function locatedFingerprint(unidades: UnidadeOperacional[]) {
+function locatedFingerprint(
+  unidades: UnidadeOperacional[],
+  mapMode: CcoMapMode,
+  categoriaFiltroId?: string | null,
+) {
   return unidades
     .filter((u) => hasPlottableCoordinates(u))
-    .map((u) => `${u.id}:${u.latitude}:${u.longitude}:${u.situacao}`)
+    .map((u) => {
+      const nota =
+        mapMode === 'notas'
+          ? resolveNotaExibicao(u.ultimaVistoriaNota, categoriaFiltroId)
+          : u.situacao;
+      return `${u.id}:${u.latitude}:${u.longitude}:${nota}`;
+    })
     .join('|');
+}
+
+function resolveMarkerIcon(
+  unidade: UnidadeOperacional,
+  mapMode: CcoMapMode,
+  categoriaFiltroId: string | null | undefined,
+  emphasis: 'normal' | 'hover' | 'selected',
+) {
+  if (mapMode === 'notas') {
+    const nota = resolveNotaExibicao(unidade.ultimaVistoriaNota, categoriaFiltroId);
+    return createNotaIcon(nota, emphasis);
+  }
+  return createUnitIcon(situacaoMarkerColor[unidade.situacao], emphasis);
 }
 
 export function OperationalMapClient({
   unidades,
   selectedId = null,
   hoveredId = null,
+  mapMode = 'situacao',
+  categoriaFiltroId = null,
   onSelect,
   onHover,
 }: {
   unidades: UnidadeOperacional[];
   selectedId?: string | null;
   hoveredId?: string | null;
+  mapMode?: CcoMapMode;
+  categoriaFiltroId?: string | null;
   onSelect?: (id: string) => void;
   onHover?: (id: string | null) => void;
 }) {
@@ -161,7 +223,10 @@ export function OperationalMapClient({
     [unidades],
   );
 
-  const locatedKey = useMemo(() => locatedFingerprint(unidades), [unidades]);
+  const locatedKey = useMemo(
+    () => locatedFingerprint(unidades, mapMode, categoriaFiltroId),
+    [unidades, mapMode, categoriaFiltroId],
+  );
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -188,9 +253,9 @@ export function OperationalMapClient({
       const marker = markerByIdRef.current.get(id);
       const unidade = unidadeByIdRef.current.get(id);
       if (!marker || !unidade) return;
-      marker.setIcon(createUnitIcon(situacaoMarkerColor[unidade.situacao], emphasis));
+      marker.setIcon(resolveMarkerIcon(unidade, mapMode, categoriaFiltroId, emphasis));
     },
-    [],
+    [mapMode, categoriaFiltroId],
   );
 
   const markContainerReady = useCallback(() => {
@@ -413,8 +478,8 @@ export function OperationalMapClient({
 
     located.forEach(({ unidade, latLng }) => {
       const marker = L.marker(latLng, {
-        icon: createUnitIcon(situacaoMarkerColor[unidade.situacao], 'normal'),
-      }).bindPopup(buildPopupHtml(unidade));
+        icon: resolveMarkerIcon(unidade, mapMode, categoriaFiltroId, 'normal'),
+      }).bindPopup(buildPopupHtml(unidade, mapMode, categoriaFiltroId));
 
       marker.on('click', () => onSelectRef.current?.(unidade.id));
       marker.on('mouseover', () => onHoverRef.current?.(unidade.id));
@@ -433,7 +498,7 @@ export function OperationalMapClient({
     } else {
       refreshMapSize(map);
     }
-  }, [mapReady, locatedKey, located, scheduleRefit]);
+  }, [mapReady, locatedKey, located, scheduleRefit, mapMode, categoriaFiltroId]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -448,7 +513,14 @@ export function OperationalMapClient({
         map.panTo(marker.getLatLng(), { animate: true });
       }
     }
-  }, [hoveredId, selectedId, updateMarkerEmphasis, mapReady]);
+  }, [hoveredId, selectedId, updateMarkerEmphasis, mapReady, mapMode, categoriaFiltroId]);
+
+  const notaLegend = [
+    { label: '0–2', color: notaCorHex(1) },
+    { label: '3–5', color: notaCorHex(4) },
+    { label: '6–8', color: notaCorHex(7) },
+    { label: '9–10', color: notaCorHex(9.5) },
+  ];
 
   const legendCounts = located.reduce(
     (acc, { unidade }) => {
@@ -487,13 +559,28 @@ export function OperationalMapClient({
 
         <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-[500] min-w-[168px] rounded-[var(--r-md)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-3 shadow-[var(--sh-md)] backdrop-blur-md">
           <div className="mb-1.5 text-[10.5px] font-bold tracking-[0.05em] uppercase text-[var(--ink-3)]">Legenda</div>
-          {(['OPERACIONAL', 'COM_PENDENCIAS', 'INATIVA'] as UnidadeSituacao[]).map((key) => (
-            <div key={key} className="flex items-center gap-2 py-0.5 text-xs text-[var(--ink-2)]">
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: situacaoRailColor(key) }} />
-              <span className="flex-1">{key === 'COM_PENDENCIAS' ? 'Pendências' : key === 'OPERACIONAL' ? 'Operacional' : 'Inativa'}</span>
-              <b className="mono font-semibold text-[var(--ink)]">{legendCounts[key]}</b>
-            </div>
-          ))}
+          {mapMode === 'notas' ? (
+            <>
+              {notaLegend.map((item) => (
+                <div key={item.label} className="flex items-center gap-2 py-0.5 text-xs text-[var(--ink-2)]">
+                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: item.color }} />
+                  <span className="flex-1">Nota {item.label}</span>
+                </div>
+              ))}
+              <div className="mt-1 flex items-center gap-2 py-0.5 text-xs text-[var(--ink-3)]">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#8a97a8]" />
+                <span>Sem vistoria</span>
+              </div>
+            </>
+          ) : (
+            (['OPERACIONAL', 'COM_PENDENCIAS', 'INATIVA'] as UnidadeSituacao[]).map((key) => (
+              <div key={key} className="flex items-center gap-2 py-0.5 text-xs text-[var(--ink-2)]">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: situacaoRailColor(key) }} />
+                <span className="flex-1">{key === 'COM_PENDENCIAS' ? 'Pendências' : key === 'OPERACIONAL' ? 'Operacional' : 'Inativa'}</span>
+                <b className="mono font-semibold text-[var(--ink)]">{legendCounts[key]}</b>
+              </div>
+            ))
+          )}
         </div>
 
         {located.length === 0 ? (

@@ -1,5 +1,6 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import { syncPermissionsCatalog } from '../src/domain/permissions-sync';
 import { hashPassword } from '../src/auth/password';
 import { logInfo, logStep } from './startup-log';
 
@@ -22,6 +23,9 @@ const connectionString =
 
 export async function syncSystemRbac(prisma: PrismaClient) {
   logStep('sync-rbac', 'Sincronizando permissoes e perfis de sistema');
+
+  const catalogTotal = await syncPermissionsCatalog(prisma);
+  logInfo('sync-rbac', `Catalogo de permissoes sincronizado (${catalogTotal} chaves).`);
 
   for (const [chave, descricao, modulo] of NOVAS_PERMISSOES) {
     await prisma.permissao.upsert({

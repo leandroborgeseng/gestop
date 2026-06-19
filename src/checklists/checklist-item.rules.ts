@@ -113,6 +113,10 @@ export function assertValidChecklistVersionItems(itens: ChecklistItemDto[]) {
     if (opcoesError) {
       throw new Error(opcoesError);
     }
+
+    if (!item.categoriaVistoriaId?.trim()) {
+      throw new Error(`Item "${item.titulo.trim() || item.codigo}": selecione a categoria de vistoria.`);
+    }
   }
 }
 

@@ -50,7 +50,7 @@ export class AuthService {
     private readonly emailService: EmailService,
   ) {}
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string, remember?: boolean) {
     if (password.length > PASSWORD_MAX_LENGTH) {
       throw new UnauthorizedException('Credenciais invalidas');
     }
@@ -74,6 +74,8 @@ export class AuthService {
       permissoes,
     };
 
+    const expiresInSeconds = remember ? 60 * 60 * 24 * 30 : 60 * 60 * 8;
+
     const accessToken = signJwt(
       {
         sub: usuario.id,
@@ -83,6 +85,7 @@ export class AuthService {
         permissoes,
       },
       this.getJwtSecret(),
+      expiresInSeconds,
     );
 
     await this.prisma.usuario.update({
@@ -93,7 +96,7 @@ export class AuthService {
     return {
       accessToken,
       tokenType: 'Bearer',
-      expiresInSeconds: 60 * 60 * 8,
+      expiresInSeconds,
       user,
     };
   }

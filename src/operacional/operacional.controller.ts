@@ -1,5 +1,5 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import { UnidadeTipo } from '@prisma/client';
+import { UnidadeTipo, RegiaoUnidade } from '@prisma/client';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -43,6 +43,7 @@ export class OperacionalController {
     @Query('situacao') situacao?: UnidadeSituacao,
     @Query('pendencias') pendencias?: string,
     @Query('bairro') bairro?: string,
+    @Query('regiao') regiao?: RegiaoUnidade,
     @Query('responsavel') responsavel?: string,
     @Query('responsavelEmail') responsavelEmail?: string,
   ) {
@@ -52,6 +53,7 @@ export class OperacionalController {
       tipo,
       situacao,
       bairro: normalizeText(bairro),
+      regiao,
       pendencias: parseOptionalBoolean(pendencias),
       responsavel: normalizeText(responsavel),
       responsavelEmail: normalizeText(responsavelEmail)?.toLowerCase(),

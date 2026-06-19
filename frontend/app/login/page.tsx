@@ -40,6 +40,7 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState(showDemoLogin ? 'admin.gestop@franca.sp.gov.br' : '');
   const [password, setPassword] = useState(showDemoLogin ? 'Gestop@123' : '');
+  const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,7 +68,7 @@ function LoginContent() {
     setError(null);
 
     try {
-      await login(email, password);
+      await login(email, password, remember);
       router.replace('/cco');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha inesperada no login.');
@@ -139,6 +140,16 @@ function LoginContent() {
                   required
                 />
               </Field>
+
+              <label className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(event) => setRemember(event.target.checked)}
+                  className="h-4 w-4 rounded border-[var(--line)]"
+                />
+                Manter conectado neste dispositivo (30 dias)
+              </label>
 
               <Button type="submit" variant="filled" size="lg" className="w-full" disabled={loading}>
                 {loading ? 'Entrando...' : 'Entrar'}

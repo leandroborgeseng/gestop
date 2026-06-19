@@ -3,14 +3,19 @@ import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
-import { RequirePermissions } from '../auth/permissions';
+import { RequireAnyPermissions, RequirePermissions } from '../auth/permissions';
+import { AdminPermissionsService } from './admin-permissions.service';
+import { PerfilCreateDto, PerfilMatrizDto } from './admin-permissions.dto';
 import { AdminService } from './admin.service';
-import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto } from './admin.dto';
+import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto, CategoriaVistoriaDto } from './admin.dto';
 
 @UseGuards(AuthGuard, PermissionsGuard)
 @Controller('admin')
 export class AdminController {
-  constructor(private readonly adminService: AdminService) {}
+  constructor(
+    private readonly adminService: AdminService,
+    private readonly adminPermissionsService: AdminPermissionsService,
+  ) {}
 
   @RequirePermissions('secretarias.gerenciar')
   @Get('secretarias')
@@ -90,6 +95,36 @@ export class AdminController {
     return this.adminService.listPerfis();
   }
 
+  @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
+  @Get('permissoes/catalogo')
+  getPermissoesCatalogo() {
+    return this.adminPermissionsService.getCatalogo();
+  }
+
+  @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
+  @Get('perfis/configuraveis')
+  listPerfisConfiguraveis() {
+    return this.adminPermissionsService.listPerfisConfiguraveis();
+  }
+
+  @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
+  @Get('perfis/:id/matriz')
+  getMatrizPerfil(@Param('id') id: string) {
+    return this.adminPermissionsService.getMatrizPerfil(id);
+  }
+
+  @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
+  @Put('perfis/:id/matriz')
+  saveMatrizPerfil(@Param('id') id: string, @Body() body: PerfilMatrizDto, @CurrentUser() user: JwtPayload) {
+    return this.adminPermissionsService.saveMatrizPerfil(id, body.chaves, user);
+  }
+
+  @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
+  @Post('perfis')
+  createPerfil(@Body() body: PerfilCreateDto) {
+    return this.adminPermissionsService.createPerfil(body);
+  }
+
   @RequirePermissions('usuarios.gerenciar')
   @Get('equipes')
   listEquipes() {
@@ -136,5 +171,29 @@ export class AdminController {
   @Delete('tipos-chamado/:id')
   deleteTipoChamado(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.adminService.deleteTipoChamado(id, user);
+  }
+
+  @RequirePermissions('checklists.gerenciar')
+  @Get('categorias-vistoria')
+  listCategoriasVistoria() {
+    return this.adminService.listCategoriasVistoria();
+  }
+
+  @RequirePermissions('checklists.gerenciar')
+  @Post('categorias-vistoria')
+  createCategoriaVistoria(@Body() body: CategoriaVistoriaDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.createCategoriaVistoria(body, user);
+  }
+
+  @RequirePermissions('checklists.gerenciar')
+  @Put('categorias-vistoria/:id')
+  updateCategoriaVistoria(@Param('id') id: string, @Body() body: CategoriaVistoriaDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.updateCategoriaVistoria(id, body, user);
+  }
+
+  @RequirePermissions('checklists.gerenciar')
+  @Delete('categorias-vistoria/:id')
+  deleteCategoriaVistoria(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.adminService.deleteCategoriaVistoria(id, user);
   }
 }

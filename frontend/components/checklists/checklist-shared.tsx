@@ -17,6 +17,7 @@ import {
 } from '@/lib/unidade-tipo';
 import {
   AdminSecretaria,
+  AdminCategoriaVistoria,
   ChecklistEscopo,
   ChecklistItem,
   ChecklistItemTipo,
@@ -81,6 +82,7 @@ export type ItemDraft = {
   obrigatorio: boolean;
   geraNaoConformidade: boolean;
   exigeEvidencia: boolean;
+  categoriaVistoriaId: string;
   opcoes?: unknown;
 };
 
@@ -478,13 +480,16 @@ export function ArchivedVersionsPanel({
 
 export function VersionEditor({
   version,
+  categorias,
   onSave,
   onPublish,
 }: {
   version: ChecklistVersao;
+  categorias: AdminCategoriaVistoria[];
   onSave: (items: Array<Omit<ItemDraft, 'draftKey'>>) => void;
   onPublish: (items: Array<Omit<ItemDraft, 'draftKey'>>) => void;
 }) {
+  const defaultCategoriaId = categorias.find((item) => item.ativo)?.id ?? categorias[0]?.id ?? '';
   const [items, setItems] = useState<ItemDraft[]>(
     version.itens.length
       ? version.itens.map((item) => ({
@@ -496,9 +501,10 @@ export function VersionEditor({
           obrigatorio: item.obrigatorio,
           geraNaoConformidade: item.geraNaoConformidade,
           exigeEvidencia: item.exigeEvidencia,
+          categoriaVistoriaId: item.categoriaVistoriaId ?? defaultCategoriaId,
           opcoes: item.opcoes ?? defaultOpcoesForTipo(item.tipo),
         }))
-      : [emptyItem(1)],
+      : [emptyItem(1, defaultCategoriaId)],
   );
   const [editorError, setEditorError] = useState<string | null>(null);
 
@@ -516,6 +522,7 @@ export function VersionEditor({
       if (opcoesError) return opcoesError;
       if (!item.titulo.trim()) return `Item #${item.ordem}: informe o título.`;
       if (!item.codigo.trim()) return `Item #${item.ordem}: informe o código.`;
+      if (!item.categoriaVistoriaId?.trim()) return `Item #${item.ordem}: selecione a categoria de vistoria.`;
       const normalizedCode = item.codigo.trim().toUpperCase();
       if (codes.has(normalizedCode)) return `Código duplicado na versão: ${item.codigo}`;
       codes.add(normalizedCode);
@@ -553,7 +560,7 @@ export function VersionEditor({
           <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">Somente rascunhos podem ser editados.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="tonal" size="sm" onClick={() => setItems((current) => [...current, emptyItem(current.length + 1)])}>
+          <Button variant="tonal" size="sm" onClick={() => setItems((current) => [...current, emptyItem(current.length + 1, defaultCategoriaId)])}>
             Adicionar item
           </Button>
           <Button variant="filled" size="sm" onClick={handleSave}>
@@ -590,6 +597,20 @@ export function VersionEditor({
                   {tiposItem.map((tipo) => (
                     <option key={tipo} value={tipo}>
                       {TIPO_ITEM_LABEL[tipo]}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Categoria de vistoria">
+                <Select
+                  value={item.categoriaVistoriaId}
+                  onChange={(e) => updateItem(items, setItems, index, { categoriaVistoriaId: e.target.value })}
+                  required
+                >
+                  <option value="">Selecione</option>
+                  {categorias.filter((categoria) => categoria.ativo).map((categoria) => (
+                    <option key={categoria.id} value={categoria.id}>
+                      {categoria.nome}
                     </option>
                   ))}
                 </Select>
@@ -813,7 +834,7 @@ function TextoOpcoesEditor({
   );
 }
 
-function emptyItem(ordem: number): ItemDraft {
+function emptyItem(ordem: number, categoriaVistoriaId = ''): ItemDraft {
   return {
     draftKey: createDraftKey(),
     ordem,
@@ -823,6 +844,7 @@ function emptyItem(ordem: number): ItemDraft {
     obrigatorio: true,
     geraNaoConformidade: true,
     exigeEvidencia: true,
+    categoriaVistoriaId,
   };
 }
 

@@ -11,7 +11,7 @@ import {
   isWebmapImported,
   mergeMetadataWithManualOverride,
 } from '../../prisma/webmap-manual-override';
-import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto } from './admin.dto';
+import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto, CategoriaVistoriaDto } from './admin.dto';
 import { ensureGeoCoordinates, normalizeEmail, normalizeSigla } from './admin.rules';
 
 @Injectable()
@@ -96,6 +96,7 @@ export class AdminService {
         latitude: dto.latitude,
         longitude: dto.longitude,
         raioValidacaoMetros: dto.raioValidacaoMetros ?? 200,
+        regiao: dto.regiao ?? null,
         ativo: dto.ativo ?? true,
       },
     });
@@ -122,6 +123,7 @@ export class AdminService {
       latitude: dto.latitude,
       longitude: dto.longitude,
       raioValidacaoMetros: dto.raioValidacaoMetros ?? 200,
+      regiao: dto.regiao ?? null,
       ativo: dto.ativo ?? true,
     };
 
@@ -284,6 +286,50 @@ export class AdminService {
     return equipe;
   }
 
+  listCategoriasVistoria() {
+    return this.prisma.categoriaVistoria.findMany({
+      orderBy: [{ ativo: 'desc' }, { nome: 'asc' }],
+    });
+  }
+
+  async createCategoriaVistoria(dto: CategoriaVistoriaDto, user: JwtPayload) {
+    const categoria = await this.prisma.categoriaVistoria.create({
+      data: {
+        nome: dto.nome.trim(),
+        ativo: dto.ativo ?? true,
+      },
+    });
+
+    await this.audit(user, AuditAction.CREATE, 'CategoriaVistoria', categoria.id, null, categoria);
+    return categoria;
+  }
+
+  async updateCategoriaVistoria(id: string, dto: CategoriaVistoriaDto, user: JwtPayload) {
+    const before = await this.getCategoriaVistoriaOrThrow(id);
+    const categoria = await this.prisma.categoriaVistoria.update({
+      where: { id },
+      data: {
+        nome: dto.nome.trim(),
+        ativo: dto.ativo ?? true,
+      },
+    });
+
+    await this.audit(user, AuditAction.UPDATE, 'CategoriaVistoria', id, before, categoria);
+    return categoria;
+  }
+
+  async deleteCategoriaVistoria(id: string, user: JwtPayload) {
+    const before = await this.getCategoriaVistoriaOrThrow(id);
+    const emUso = await this.prisma.checklistItem.count({ where: { categoriaVistoriaId: id } });
+    if (emUso > 0) {
+      throw new BadRequestException('Categoria em uso em checklists. Inative em vez de excluir.');
+    }
+
+    await this.prisma.categoriaVistoria.delete({ where: { id } });
+    await this.audit(user, AuditAction.DELETE, 'CategoriaVistoria', id, before, null);
+    return { ok: true };
+  }
+
   listTiposChamado() {
     return this.prisma.tipoChamado.findMany({
       orderBy: { nome: 'asc' },
@@ -342,7 +388,6 @@ export class AdminService {
 
   listPerfis() {
     return this.prisma.perfil.findMany({
-      where: { ativo: true },
       orderBy: { nome: 'asc' },
       include: {
         permissoes: {
@@ -351,7 +396,21 @@ export class AdminService {
           },
         },
       },
-    });
+    }).then((perfis) =>
+      perfis.map((perfil) => ({
+        id: perfil.id,
+        nome: perfil.nome,
+        descricao: perfil.descricao,
+        sistema: perfil.sistema,
+        ativo: perfil.ativo,
+        permissoes: perfil.permissoes.map((item) => ({
+          id: item.permissao.id,
+          codigo: item.permissao.chave,
+          descricao: item.permissao.descricao,
+          modulo: item.permissao.modulo,
+        })),
+      })),
+    );
   }
 
   async createUsuario(dto: UsuarioDto, user: JwtPayload) {
@@ -467,6 +526,12 @@ export class AdminService {
   private getTipoChamadoOrThrow(id: string) {
     return this.prisma.tipoChamado.findUniqueOrThrow({ where: { id } }).catch(() => {
       throw new NotFoundException('Tipo de chamado nao encontrado');
+    });
+  }
+
+  private getCategoriaVistoriaOrThrow(id: string) {
+    return this.prisma.categoriaVistoria.findUniqueOrThrow({ where: { id } }).catch(() => {
+      throw new NotFoundException('Categoria de vistoria nao encontrada');
     });
   }
 

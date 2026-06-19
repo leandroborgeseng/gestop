@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, ClipboardList, Download, MapPin, Search, Shield, UserRound, UsersRound } from 'lucide-react';
+import { Building2, ClipboardList, Download, Layers3, MapPin, Search, Shield, UserRound, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
 import { PageShell } from '@/components/layout/page-shell';
@@ -40,16 +40,22 @@ import {
   saveAdminUnidade,
   saveAdminUsuario,
   deleteAdminTipoChamado,
+  deleteAdminCategoriaVistoria,
+  listAdminCategoriasVistoria,
+  saveAdminCategoriaVistoria,
   anonymizeUsuarioLgpd,
   purgeAuditoriaLgpd,
 } from '@/lib/api';
-import { AdminEquipe, AdminPerfil, AdminSecretaria, AdminTipoChamado, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
+import { AdminCategoriaVistoria, AdminEquipe, AdminPerfil, AdminSecretaria, AdminTipoChamado, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
+import { REGIAO_UNIDADE_LABELS, RegiaoUnidade } from '@/lib/regiao-unidade';
+import { PermissoesMatrizPanel } from '@/components/admin/permissoes-matriz-panel';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { formatUnidadeOrigem, getLockedFields, getUnidadeMetadata, isQgisImported } from '@/lib/unidade-metadata';
 
-type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'tipos-chamado' | 'importacao';
+type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'tipos-chamado' | 'categorias-vistoria' | 'permissoes' | 'importacao';
 
 const tipos: UnidadeTipo[] = ['ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO', 'ESPACO_ESPORTIVO', 'OUTRO'];
+const regioes: RegiaoUnidade[] = ['NORTE', 'SUL', 'LESTE', 'OESTE', 'CENTRO'];
 
 export default function AdminPage() {
   const snackbar = useSnackbar();
@@ -59,6 +65,7 @@ export default function AdminPage() {
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
   const [equipes, setEquipes] = useState<AdminEquipe[]>([]);
   const [tiposChamado, setTiposChamado] = useState<AdminTipoChamado[]>([]);
+  const [categoriasVistoria, setCategoriasVistoria] = useState<AdminCategoriaVistoria[]>([]);
   const [perfis, setPerfis] = useState<AdminPerfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -68,13 +75,14 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextSecretarias, nextUnidades, nextUsuarios, nextEquipes, nextPerfis, nextTiposChamado] = await Promise.all([
+      const [nextSecretarias, nextUnidades, nextUsuarios, nextEquipes, nextPerfis, nextTiposChamado, nextCategorias] = await Promise.all([
         listAdminSecretarias(),
         listAdminUnidades(),
         listAdminUsuarios(),
         listAdminEquipes(),
         listAdminPerfis(),
         listAdminTiposChamado(),
+        listAdminCategoriasVistoria(),
       ]);
       setSecretarias(nextSecretarias);
       setUnidades(nextUnidades);
@@ -82,6 +90,7 @@ export default function AdminPage() {
       setEquipes(nextEquipes);
       setPerfis(nextPerfis);
       setTiposChamado(nextTiposChamado);
+      setCategoriasVistoria(nextCategorias);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar administração.');
     } finally {
@@ -136,6 +145,8 @@ export default function AdminPage() {
               { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" />, count: usuarios.length },
               { id: 'equipes', label: 'Equipes', icon: <UsersRound className="h-4 w-4" />, count: equipes.length },
               { id: 'tipos-chamado', label: 'Tipos de chamado', icon: <ClipboardList className="h-4 w-4" />, count: tiposChamado.length },
+              { id: 'categorias-vistoria', label: 'Categorias vistoria', icon: <Layers3 className="h-4 w-4" />, count: categoriasVistoria.length },
+              { id: 'permissoes', label: 'Permissões', icon: <Shield className="h-4 w-4" /> },
               { id: 'importacao', label: 'Importação', icon: <Download className="h-4 w-4" /> },
             ]}
           />
@@ -157,6 +168,12 @@ export default function AdminPage() {
         ) : null}
         {!loading && tab === 'tipos-chamado' ? (
           <TiposChamadoPanel tipos={tiposChamado} mutate={mutate} />
+        ) : null}
+        {!loading && tab === 'categorias-vistoria' ? (
+          <CategoriasVistoriaPanel categorias={categoriasVistoria} mutate={mutate} />
+        ) : null}
+        {!loading && tab === 'permissoes' ? (
+          <PermissoesMatrizPanel mutate={mutate} />
         ) : null}
         {!loading && tab === 'importacao' ? (
           <ImportacaoPanel onSynced={() => void load()} />
@@ -327,6 +344,7 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
           endereco: String(form.get('endereco')),
           bairro: String(form.get('bairro') || ''),
           cep: String(form.get('cep') || ''),
+          regiao: String(form.get('regiao') || '') || undefined,
           latitude,
           longitude,
           raioValidacaoMetros: Number(form.get('raioValidacaoMetros') || 200),
@@ -356,6 +374,7 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
             endereco: String(form.get('endereco')),
             bairro: String(form.get('bairro') || ''),
             cep: String(form.get('cep') || ''),
+            regiao: String(form.get('regiao') || '') || undefined,
             latitude,
             longitude,
             raioValidacaoMetros: Number(form.get('raioValidacaoMetros') || 200),
@@ -410,6 +429,16 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
             <Field label="Endereço"><Input name="endereco" required /></Field>
             <Field label="Bairro"><Input name="bairro" /></Field>
             <Field label="CEP"><Input name="cep" /></Field>
+            <Field label="Região">
+              <Select name="regiao">
+                <option value="">Não informada</option>
+                {regioes.map((regiao) => (
+                  <option key={regiao} value={regiao}>
+                    {REGIAO_UNIDADE_LABELS[regiao]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Latitude"><Input name="latitude" type="number" step="0.000001" required /></Field>
               <Field label="Longitude"><Input name="longitude" type="number" step="0.000001" required /></Field>
@@ -554,6 +583,16 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
             </Field>
             <Field label="CEP">
               <Input name="cep" defaultValue={editing.cep ?? ''} />
+            </Field>
+            <Field label="Região">
+              <Select name="regiao" defaultValue={editing.regiao ?? ''}>
+                <option value="">Não informada</option>
+                {regioes.map((regiao) => (
+                  <option key={regiao} value={regiao}>
+                    {REGIAO_UNIDADE_LABELS[regiao]}
+                  </option>
+                ))}
+              </Select>
             </Field>
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Latitude">
@@ -769,7 +808,7 @@ function UsuariosPanel({
           </Field>
           <Field label="Perfis">
             <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
-              {perfis.map((p) => (
+              {perfis.filter((p) => p.ativo !== false).map((p) => (
                 <label key={p.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
                   <input
                     type="checkbox"
@@ -1147,6 +1186,92 @@ function TiposChamadoPanel({
                   <div className="flex gap-2">
                     <Button variant="text" size="sm" onClick={() => setEditing(tipo)}>Editar</Button>
                     <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminTipoChamado(tipo.id), 'Tipo excluído.')}>
+                      Excluir
+                    </Button>
+                  </div>
+                }
+              />
+            ))}
+          </RecordList>
+        </FormSection>
+      </FormGrid>
+    </div>
+  );
+}
+
+function CategoriasVistoriaPanel({
+  categorias,
+  mutate,
+}: {
+  categorias: AdminCategoriaVistoria[];
+  mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState<AdminCategoriaVistoria | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      nome: String(form.get('nome')),
+      ativo: editing?.ativo ?? true,
+    };
+    const ok = await mutate(
+      () => saveAdminCategoriaVistoria(payload, editing?.id),
+      editing ? 'Categoria atualizada.' : 'Categoria cadastrada.',
+    );
+    if (ok) {
+      setEditing(null);
+      event.currentTarget.reset();
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <TipBanner id="admin-categorias-vistoria">
+        Categorias usadas nos itens Likert dos checklists e no mapa de notas da CCO (Pintura, Piso, Móveis, etc.).
+      </TipBanner>
+
+      <DataTable>
+        <DataTableHead>
+          <DataTableHeaderCell>Nome</DataTableHeaderCell>
+          <DataTableHeaderCell>Status</DataTableHeaderCell>
+        </DataTableHead>
+        <DataTableBody>
+          {categorias.map((categoria) => (
+            <DataTableRow key={categoria.id}>
+              <DataTableCell>{categoria.nome}</DataTableCell>
+              <DataTableCell>
+                <Badge variant={categoria.ativo ? 'success' : 'muted'}>{categoria.ativo ? 'Ativo' : 'Inativo'}</Badge>
+              </DataTableCell>
+            </DataTableRow>
+          ))}
+        </DataTableBody>
+      </DataTable>
+
+      <FormGrid>
+        <FormSection title={editing ? 'Editar categoria' : 'Nova categoria'}>
+          <form key={editing?.id ?? 'new-categoria'} onSubmit={submit} className="space-y-4">
+            <Field label="Nome"><Input name="nome" required defaultValue={editing?.nome} /></Field>
+            <div className="flex gap-2">
+              <Button type="submit" variant="filled" className="flex-1">{editing ? 'Salvar' : 'Cadastrar'}</Button>
+              {editing ? (
+                <Button type="button" variant="text" onClick={() => setEditing(null)}>Cancelar</Button>
+              ) : null}
+            </div>
+          </form>
+        </FormSection>
+        <FormSection title="Registros">
+          <RecordList empty="Nenhuma categoria cadastrada.">
+            {categorias.map((categoria) => (
+              <RecordItem
+                key={categoria.id}
+                title={categoria.nome}
+                subtitle={categoria.ativo ? 'Ativa' : 'Inativa'}
+                active={categoria.ativo}
+                actions={
+                  <div className="flex gap-2">
+                    <Button variant="text" size="sm" onClick={() => setEditing(categoria)}>Editar</Button>
+                    <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminCategoriaVistoria(categoria.id), 'Categoria excluída.')}>
                       Excluir
                     </Button>
                   </div>

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user';
@@ -19,6 +19,10 @@ class LoginDto {
   @MinLength(PASSWORD_MIN_LENGTH_LOGIN)
   @MaxLength(PASSWORD_MAX_LENGTH)
   password!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  remember?: boolean;
 }
 
 class ChangePasswordDto {
@@ -56,7 +60,7 @@ export class AuthController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('login')
   login(@Body() body: LoginDto) {
-    return this.authService.login(body.email, body.password);
+    return this.authService.login(body.email, body.password, body.remember);
   }
 
   @UseGuards(AuthGuard)

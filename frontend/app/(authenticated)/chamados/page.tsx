@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Clock,
   Crosshair,
+  FileDown,
   GitBranch,
   Inbox,
   Megaphone,
@@ -32,7 +33,7 @@ import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
-import { getChamado, listChamadoEquipes, listChamados, listTiposChamadoOpcoes, notificarChamadoEquipe, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
+import { downloadChamadoPdf, getChamado, listChamadoEquipes, listChamados, listTiposChamadoOpcoes, notificarChamadoEquipe, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { chamadoLocalLabel } from '@/lib/chamado-geo';
 import { toInputDate } from '@/lib/cronograma';
@@ -621,6 +622,7 @@ function ChamadoDetailPanel({
 }) {
   const snackbar = useSnackbar();
   const [pendingStatus, setPendingStatus] = useState<ChamadoStatus>('ABERTO');
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
   const [pendingEquipePlanejamentoId, setPendingEquipePlanejamentoId] = useState('');
@@ -689,7 +691,25 @@ function ChamadoDetailPanel({
         <div className="border-b border-[var(--line-2)] p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <span className="mono text-[13px] font-semibold text-[var(--brand-hover)]">{resumo.codigo}</span>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Button
+                type="button"
+                variant="outlined"
+                size="sm"
+                disabled={pdfBusy || busy}
+                onClick={() => {
+                  setPdfBusy(true);
+                  void downloadChamadoPdf(resumo.id, resumo.codigo)
+                    .then(() => snackbar.show('PDF gerado.', 'success'))
+                    .catch((err) =>
+                      snackbar.show(err instanceof Error ? err.message : 'Falha ao gerar PDF.', 'error'),
+                    )
+                    .finally(() => setPdfBusy(false));
+                }}
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                {pdfBusy ? 'Gerando…' : 'PDF'}
+              </Button>
               <Badge variant={prioridadeVariant(resumo.prioridade)}>{resumo.prioridade}</Badge>
               <Badge variant={st.badge}>{st.label}</Badge>
             </div>
