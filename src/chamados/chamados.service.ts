@@ -27,16 +27,19 @@ import {
   UpdateChamadoAtribuicaoDto,
   UpdateChamadoPlanejamentoDto,
   UpdateChamadoTriagemDto,
+  UpdateChamadoAberturaDto,
   RegistrarChamadoHistoricoDto,
   EmitirOrdensServicoDto,
   ChamadoExecucaoCheckinDto,
   ChamadoExecucaoConcluirDto,
   ChamadoExecucaoEvidenciaDto,
+  ChamadoExecucaoManualDto,
 } from './chamados.dto';
 import { buildOrdensServicoLotePdf } from './chamados-os-pdf';
 import { sendChamadoEquipeNotificacao } from './chamados-notificacao';
 import {
   buildAtribuicaoAlteracoes,
+  buildAberturaAlteracoes,
   buildPlanejamentoAlteracoes,
   buildTriagemAlteracoes,
   calcularPrazoSla,
@@ -1146,7 +1149,7 @@ export class ChamadosService {
           entidadeId: id,
           statusAnterior: before.status,
           statusNovo: before.status,
-          motivo: 'Triagem atualizada.',
+          motivo: dto.motivoAlteracao?.trim() || 'Triagem atualizada.',
           alteradoPorId: user.sub,
           metadata: {
             tipo: 'triagem_update',
@@ -1155,7 +1158,179 @@ export class ChamadosService {
             prioridade,
             prioridadeAnterior: before.prioridade,
             prazoEm: prazoEm?.toISOString() ?? null,
+            motivoAlteracao: dto.motivoAlteracao?.trim() || null,
             alteracoes,
+          },
+        },
+      });
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          valorAntigo: JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue,
+          valorNovo: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
+        },
+      });
+
+      return updated;
+    });
+
+    return this.serializeChamado(chamado);
+  }
+
+  async updateAbertura(id: string, dto: UpdateChamadoAberturaDto, user: JwtPayload) {
+    if (!user.permissoes.includes('chamados.gerenciar') && !user.permissoes.includes('chamados.editar_abertura')) {
+      throw new ForbiddenException('Sem permissão para editar informações de abertura do chamado.');
+    }
+
+    const before = await this.getChamadoOrThrow(id);
+    assertChamadoSecretariaAccess(user, before);
+
+    const enderecoBairro = dto.enderecoBairro === undefined ? before.enderecoBairro : dto.enderecoBairro?.trim() || null;
+    const solicitanteNome =
+      dto.solicitanteNome === undefined ? before.solicitanteNome : dto.solicitanteNome?.trim() || null;
+    const solicitanteTelefone =
+      dto.solicitanteTelefone === undefined ? before.solicitanteTelefone : dto.solicitanteTelefone?.trim() || null;
+    const enderecoTexto = dto.enderecoTexto === undefined ? before.enderecoTexto : dto.enderecoTexto?.trim() || null;
+    const latitude =
+      dto.latitude === undefined
+        ? before.latitude == null
+          ? null
+          : Number(before.latitude)
+        : dto.latitude;
+    const longitude =
+      dto.longitude === undefined
+        ? before.longitude == null
+          ? null
+          : Number(before.longitude)
+        : dto.longitude;
+
+    if ((latitude == null) !== (longitude == null)) {
+      throw new BadRequestException('Informe latitude e longitude juntas.');
+    }
+
+    const alteracoes = buildAberturaAlteracoes({
+      bairroAnterior: before.enderecoBairro,
+      bairroNovo: enderecoBairro,
+      solicitanteAnterior: before.solicitanteNome,
+      solicitanteNovo: solicitanteNome,
+      telefoneAnterior: before.solicitanteTelefone,
+      telefoneNovo: solicitanteTelefone,
+      enderecoAnterior: before.enderecoTexto,
+      enderecoNovo: enderecoTexto,
+      latitudeAnterior: before.latitude == null ? null : Number(before.latitude),
+      longitudeAnterior: before.longitude == null ? null : Number(before.longitude),
+      latitudeNova: latitude,
+      longitudeNova: longitude,
+    });
+
+    if (alteracoes.length === 0) {
+      return this.serializeChamado(before);
+    }
+
+    const chamado = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.chamado.update({
+        where: { id },
+        data: {
+          enderecoBairro,
+          solicitanteNome,
+          solicitanteTelefone,
+          enderecoTexto,
+          latitude,
+          longitude,
+          modoLocalizacao:
+            latitude != null && longitude != null ? ChamadoModoLocalizacao.GEOLOCALIZACAO : before.modoLocalizacao,
+        },
+        include: this.includeRelations(),
+      });
+
+      await tx.historicoStatus.create({
+        data: {
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          statusAnterior: before.status,
+          statusNovo: before.status,
+          motivo: 'Informações de abertura atualizadas.',
+          alteradoPorId: user.sub,
+          metadata: {
+            tipo: 'abertura_update',
+            alteracoes,
+          },
+        },
+      });
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          valorAntigo: JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue,
+          valorNovo: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
+        },
+      });
+
+      return updated;
+    });
+
+    return this.serializeChamado(chamado);
+  }
+
+  async registrarExecucaoManual(id: string, dto: ChamadoExecucaoManualDto, user: JwtPayload) {
+    if (!user.permissoes.includes('chamados.gerenciar') && !user.permissoes.includes('chamados.execucao_manual')) {
+      throw new ForbiddenException('Sem permissão para lançamento manual de execução.');
+    }
+
+    const before = await this.getChamadoOrThrow(id);
+    assertChamadoSecretariaAccess(user, before);
+
+    const dataExecucao = new Date(dto.dataExecucao);
+    if (Number.isNaN(dataExecucao.getTime())) {
+      throw new BadRequestException('Data da execução inválida.');
+    }
+
+    const nextStatus = dto.impedimento ? ChamadoStatus.IMPEDIDO : ChamadoStatus.CONCLUIDO;
+    if (dto.impedimento && !dto.impedimentoMotivo?.trim()) {
+      throw new BadRequestException('Informe o motivo do impedimento.');
+    }
+
+    try {
+      assertValidChamadoTransition(before.status, nextStatus);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'Transição inválida');
+    }
+
+    const dataLabel = formatDateBr(dataExecucao);
+
+    const chamado = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.chamado.update({
+        where: { id },
+        data: {
+          status: nextStatus,
+          impedimentoMotivo: dto.impedimento ? dto.impedimentoMotivo?.trim() : null,
+          concluidoEm: nextStatus === ChamadoStatus.CONCLUIDO ? dataExecucao : before.concluidoEm,
+          encerradoEm: nextStatus === ChamadoStatus.CONCLUIDO ? dataExecucao : before.encerradoEm,
+        },
+        include: this.includeRelations(),
+      });
+
+      await tx.historicoStatus.create({
+        data: {
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          statusAnterior: before.status,
+          statusNovo: nextStatus,
+          motivo: `Execução lançada manualmente. Data da execução: ${dataLabel}`,
+          alteradoPorId: user.sub,
+          metadata: {
+            tipo: 'execucao_manual',
+            relatorio: dto.relatorio.trim(),
+            dataExecucao: dataExecucao.toISOString(),
+            impedimento: Boolean(dto.impedimento),
+            impedimentoMotivo: dto.impedimento ? dto.impedimentoMotivo?.trim() ?? null : null,
           },
         },
       });
@@ -1346,6 +1521,19 @@ export class ChamadosService {
       throw new BadRequestException('Nenhum chamado encontrado para emissão de OS.');
     }
 
+    const titulo = (() => {
+      if (dto.hoje) {
+        return `Ordens de Serviço — data ${formatDateBr(new Date())}`;
+      }
+      if (dto.programacaoFrom && dto.programacaoTo && dto.programacaoFrom !== dto.programacaoTo) {
+        return `Ordens de Serviço — período ${formatDateBr(dto.programacaoFrom)} a ${formatDateBr(dto.programacaoTo)}`;
+      }
+      if (dto.programacaoFrom) {
+        return `Ordens de Serviço — data ${formatDateBr(dto.programacaoFrom)}`;
+      }
+      return 'Ordens de Serviço — Lote';
+    })();
+
     return buildOrdensServicoLotePdf(
       chamados.map((item) => {
         const serialized = this.serializeChamado(item);
@@ -1360,8 +1548,11 @@ export class ChamadosService {
           equipe: item.equipe?.nome ?? null,
           prazoSla: item.prazoEm?.toISOString() ?? null,
           fotoUrl: serialized.fotoUrl,
+          abertoEm: item.createdAt.toISOString(),
+          programadoEm: item.previstaExecucaoEm?.toISOString() ?? null,
         };
       }),
+      { titulo },
     );
   }
 

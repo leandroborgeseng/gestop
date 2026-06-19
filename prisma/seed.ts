@@ -175,6 +175,8 @@ async function main() {
       ['fiscalizacoes.executar', 'Executar fiscalizacoes em campo', 'fiscalizacao'],
       ['chamados.gerenciar', 'Gerenciar chamados operacionais', 'chamados'],
       ['chamados.executar', 'Executar chamados em campo', 'chamados'],
+      ['chamados.editar_abertura', 'Editar informações de abertura do chamado', 'chamados'],
+      ['chamados.execucao_manual', 'Lançar execução de chamado manualmente', 'chamados'],
       ['dashboard.visualizar', 'Visualizar indicadores operacionais', 'dashboard'],
       ['auditoria.visualizar', 'Visualizar trilhas de auditoria', 'auditoria'],
     ].map(([chave, descricao, modulo]) =>

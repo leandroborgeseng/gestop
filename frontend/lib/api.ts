@@ -641,9 +641,27 @@ export function updateChamadoPlanejamento(
 
 export function updateChamadoTriagem(
   id: string,
-  payload: { tipoChamadoId?: string | null; prioridade?: string },
+  payload: { tipoChamadoId?: string | null; prioridade?: string; motivoAlteracao?: string },
 ) {
   return request<ChamadoResumo>(`/chamados/${id}/triagem`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateChamadoAbertura(
+  id: string,
+  payload: {
+    enderecoBairro?: string | null;
+    solicitanteNome?: string | null;
+    solicitanteTelefone?: string | null;
+    enderecoTexto?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+  },
+) {
+  return request<ChamadoResumo>(`/chamados/${id}/abertura`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

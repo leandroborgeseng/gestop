@@ -80,7 +80,7 @@ export function ChamadoHistoricoForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
+    <form onSubmit={submit} className="w-full space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
       <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Registrar histórico</p>
       <textarea
         value={descricao}

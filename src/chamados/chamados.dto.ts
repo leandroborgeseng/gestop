@@ -142,6 +142,38 @@ export class UpdateChamadoTriagemDto {
   @IsOptional()
   @IsEnum(ChamadoPrioridade)
   prioridade?: ChamadoPrioridade;
+
+  @IsOptional()
+  @IsString()
+  motivoAlteracao?: string;
+}
+
+export class UpdateChamadoAberturaDto {
+  @IsOptional()
+  @IsString()
+  enderecoBairro?: string | null;
+
+  @IsOptional()
+  @IsString()
+  solicitanteNome?: string | null;
+
+  @IsOptional()
+  @IsString()
+  solicitanteTelefone?: string | null;
+
+  @IsOptional()
+  @IsString()
+  enderecoTexto?: string | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsNumber()
+  latitude?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsNumber()
+  longitude?: number | null;
 }
 
 class ChamadoHistoricoAnexoDto {
@@ -241,6 +273,24 @@ export class ChamadoExecucaoConcluirDto {
   @ValidateNested()
   @Type(() => ChamadoExecucaoGeoDto)
   checkin!: ChamadoExecucaoGeoDto;
+
+  @IsOptional()
+  @IsBoolean()
+  impedimento?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MinLength(5)
+  impedimentoMotivo?: string;
+}
+
+export class ChamadoExecucaoManualDto {
+  @IsDateString()
+  dataExecucao!: string;
+
+  @IsString()
+  @MinLength(10)
+  relatorio!: string;
 
   @IsOptional()
   @IsBoolean()

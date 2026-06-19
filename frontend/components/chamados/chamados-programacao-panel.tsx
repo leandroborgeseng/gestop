@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
 import { ChamadosProgramacaoMap } from '@/components/chamados/chamados-programacao-map';
+import { ChamadoProgramacaoDialog } from '@/components/chamados/chamado-programacao-dialog';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { listChamadosProgramacao, updateChamadoPlanejamento } from '@/lib/api';
@@ -63,6 +64,7 @@ export function ChamadosProgramacaoPanel({
   const [formEquipeId, setFormEquipeId] = useState('');
   const [formDate, setFormDate] = useState('');
   const [equipeDraft, setEquipeDraft] = useState<Record<string, string>>({});
+  const [programacaoDialogChamadoId, setProgramacaoDialogChamadoId] = useState<string | null>(null);
 
   const bounds = useMemo(() => {
     if (viewMode === 'semanal') {
@@ -126,19 +128,25 @@ export function ChamadosProgramacaoPanel({
   }, [data]);
 
   function handleProgramarFromMap(chamadoId: string) {
-    const chamado = allChamadosMapa.get(chamadoId);
-    if (!chamado) return;
+    setProgramacaoDialogChamadoId(chamadoId);
+  }
 
-    const dateKey = chamado.previstaExecucaoEm?.slice(0, 10) ?? selectedDate ?? minDate;
-    setFormChamadoId(chamado.id);
-    setFormDate(dateKey);
-    setSelectedDate(dateKey);
-    setFormEquipeId(chamado.equipe?.id ?? '');
-
-    window.requestAnimationFrame(() => {
-      agendarFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    });
-    snackbar.show(`${chamado.codigo}: preencha data e equipe para programar.`, 'success');
+  async function handleProgramacaoDialogConfirm(payload: { chamadoId: string; date: string; equipeId: string }) {
+    setBusyId(payload.chamadoId);
+    try {
+      await updateChamadoPlanejamento(payload.chamadoId, {
+        previstaExecucaoEm: `${payload.date}T12:00:00.000Z`,
+        equipeId: payload.equipeId,
+      });
+      snackbar.show('Chamado programado com sucesso.', 'success');
+      setProgramacaoDialogChamadoId(null);
+      onScheduled?.();
+      await load();
+    } catch (err) {
+      snackbar.show(err instanceof Error ? err.message : 'Falha ao programar chamado.', 'error');
+    } finally {
+      setBusyId(null);
+    }
   }
 
   function renderChamadosDoDiaList(options?: { showEmpty?: boolean }) {
@@ -500,34 +508,13 @@ export function ChamadosProgramacaoPanel({
                         {day.chamados.length === 0 ? (
                           <p className="mt-1 text-[12px] text-[var(--ink-3)]">Nenhum chamado programado</p>
                         ) : (
-                          <ul className="mt-2 space-y-1">
-                            {day.chamados.map((chamado) => (
-                              <li key={chamado.id} className="text-[12px] text-[var(--ink-2)]">
-                                · {chamado.codigo} — {chamadoTitulo(chamado).slice(0, 60)}
-                              </li>
-                            ))}
-                          </ul>
+                          <p className="mt-1 text-[12px] text-[var(--ink-3)]">
+                            {day.chamados.length} chamado{day.chamados.length > 1 ? 's' : ''} programado{day.chamados.length > 1 ? 's' : ''}
+                          </p>
                         )}
                       </button>
                     );
                   })}
-
-                  {selectedDate && weekDays.some((day) => day.key === selectedDate) ? (
-                    <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] p-4">
-                      <h3 className="text-[14px] font-semibold text-[var(--ink)]">
-                        {new Date(`${selectedDate}T12:00:00`).toLocaleDateString('pt-BR', {
-                          weekday: 'long',
-                          day: '2-digit',
-                          month: 'long',
-                          year: 'numeric',
-                        })}
-                      </h3>
-                      <p className="mt-1 text-[12px] text-[var(--ink-3)]">
-                        Detalhamento dos chamados programados para o dia selecionado.
-                      </p>
-                      <div className="mt-3">{renderChamadosDoDiaList()}</div>
-                    </div>
-                  ) : null}
                 </div>
               )}
             </CardContent>
@@ -608,6 +595,15 @@ export function ChamadosProgramacaoPanel({
         </div>
         </>
       ) : null}
+
+      <ChamadoProgramacaoDialog
+        open={Boolean(programacaoDialogChamadoId)}
+        chamado={programacaoDialogChamadoId ? allChamadosMapa.get(programacaoDialogChamadoId) ?? null : null}
+        equipes={equipes}
+        busy={busyId !== null}
+        onClose={() => setProgramacaoDialogChamadoId(null)}
+        onConfirm={(payload) => void handleProgramacaoDialogConfirm(payload)}
+      />
     </div>
   );
 }

@@ -15,6 +15,14 @@ enum UnidadeTipo {
   OUTRO
 }
 
+enum RegiaoUnidade {
+  NORTE
+  SUL
+  LESTE
+  OESTE
+  CENTRO
+}
+
 enum ChecklistEscopo {
   GLOBAL
   SECRETARIA
@@ -201,6 +209,7 @@ model UnidadePublica {
   endereco              String
   bairro                String?
   cep                   String?
+  regiao                RegiaoUnidade?
   latitude              Decimal     @db.Decimal(10, 7)
   longitude             Decimal     @db.Decimal(10, 7)
   raioValidacaoMetros   Int         @default(200)
@@ -385,6 +394,16 @@ model ChamadoSequencia {
   ultimo Int @default(0)
 }
 
+model CategoriaVistoria {
+  id        String   @id @default(uuid())
+  nome      String   @unique
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  itens ChecklistItem[]
+}
+
 model Checklist {
   id            String          @id @default(uuid())
   secretariaId  String?
@@ -441,13 +460,15 @@ model ChecklistItem {
   exigeEvidencia      Boolean           @default(false)
   opcoes              Json?
   peso                Int               @default(0)
+  categoriaVistoriaId String?
   ativo               Boolean           @default(true)
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
 
-  checklistVersao  ChecklistVersao    @relation(fields: [checklistVersaoId], references: [id], onDelete: Cascade)
-  respostas        RespostaChecklist[]
-  naoConformidades NaoConformidade[]
+  checklistVersao   ChecklistVersao    @relation(fields: [checklistVersaoId], references: [id], onDelete: Cascade)
+  categoriaVistoria CategoriaVistoria? @relation(fields: [categoriaVistoriaId], references: [id], onDelete: SetNull)
+  respostas         RespostaChecklist[]
+  naoConformidades  NaoConformidade[]
 
   @@unique([checklistVersaoId, codigo])
   @@index([checklistVersaoId, ordem])

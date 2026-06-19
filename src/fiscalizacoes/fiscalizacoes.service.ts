@@ -59,6 +59,12 @@ export class FiscalizacoesService {
           orderBy: { respondidoEm: 'asc' },
           include: {
             item: { select: { id: true, codigo: true, titulo: true, tipo: true } },
+            naoConformidade: {
+              select: {
+                id: true,
+                chamado: { select: { id: true, codigo: true } },
+              },
+            },
           },
         },
         evidencias: {
@@ -69,7 +75,7 @@ export class FiscalizacoesService {
             url: true,
             mimeType: true,
             capturadaEm: true,
-            descricao: true,
+            metadata: true,
           },
         },
         naoConformidades: {

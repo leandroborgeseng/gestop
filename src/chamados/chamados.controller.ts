@@ -14,8 +14,10 @@ import {
   UpdateChamadoAtribuicaoDto,
   UpdateChamadoPlanejamentoDto,
   UpdateChamadoTriagemDto,
+  UpdateChamadoAberturaDto,
   RegistrarChamadoHistoricoDto,
   EmitirOrdensServicoDto,
+  ChamadoExecucaoManualDto,
 } from './chamados.dto';
 import { ChamadosService } from './chamados.service';
 
@@ -139,6 +141,16 @@ export class ChamadosController {
     return this.chamadosService.concluirExecucao(id, body, user);
   }
 
+  @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar', 'chamados.execucao_manual')
+  @Post(':id/execucao/manual')
+  registrarExecucaoManual(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: ChamadoExecucaoManualDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.chamadosService.registrarExecucaoManual(id, body, user);
+  }
+
   @RequirePermissions('chamados.gerenciar')
   @Get(':id')
   get(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
@@ -189,6 +201,16 @@ export class ChamadosController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.chamadosService.updateTriagem(id, body, user);
+  }
+
+  @RequireAnyPermissions('chamados.gerenciar', 'chamados.editar_abertura')
+  @Put(':id/abertura')
+  updateAbertura(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: UpdateChamadoAberturaDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.chamadosService.updateAbertura(id, body, user);
   }
 
   @RequirePermissions('chamados.gerenciar')

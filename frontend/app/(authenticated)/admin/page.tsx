@@ -588,7 +588,9 @@ function usuarioPayloadFromForm(
     cpf: String(form.get('cpf') || ''),
     telefone: String(form.get('telefone') || ''),
     cargo: String(form.get('cargo') || ''),
-    perfilIds: [String(form.get('perfilId') || defaultPerfil)].filter(Boolean),
+    perfilIds: form.getAll('perfilIds').map(String).filter(Boolean).length
+      ? form.getAll('perfilIds').map(String)
+      : [String(form.get('perfilId') || defaultPerfil)].filter(Boolean),
     equipeIds,
     ativo,
   };
@@ -765,14 +767,20 @@ function UsuariosPanel({
               ))}
             </Select>
           </Field>
-          <Field label="Perfil">
-            <Select name="perfilId" required defaultValue={editingPerfilId}>
+          <Field label="Perfis">
+            <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
               {perfis.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome}
-                </option>
+                <label key={p.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+                  <input
+                    type="checkbox"
+                    name="perfilIds"
+                    value={p.id}
+                    defaultChecked={editing?.perfis.some((item) => item.perfil.id === p.id) ?? p.id === defaultPerfil}
+                  />
+                  <span>{p.nome}</span>
+                </label>
               ))}
-            </Select>
+            </div>
           </Field>
           <Field label="Equipes">
             <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
@@ -1117,7 +1125,7 @@ function TiposChamadoPanel({
                 defaultChecked={editing?.exigeVistoriaPrevia ?? false}
                 className="h-4 w-4 rounded border-[var(--line)]"
               />
-              Exige vistoria prévia
+              Exige Análise Técnica Prévia
             </label>
             <div className="flex gap-2">
               <Button type="submit" variant="filled" className="flex-1">{editing ? 'Salvar' : 'Cadastrar'}</Button>

@@ -20,6 +20,7 @@ import {
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
 import { ChamadoHistoricoForm } from '@/components/chamados/chamado-historico-form';
+import { ChamadoAberturaSection } from '@/components/chamados/chamado-abertura-section';
 import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { PageShell } from '@/components/layout/page-shell';
@@ -50,6 +51,14 @@ type PrioridadeFilter = 'TODAS' | string;
 type ChamadosView = 'triagem' | 'programacao';
 
 const TRIAGEM_PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
+
+const PRIORIDADE_CHIPS: Array<{ value: PrioridadeFilter; label: string }> = [
+  { value: 'TODAS', label: 'Todas' },
+  { value: 'BAIXA', label: 'Baixa' },
+  { value: 'MEDIA', label: 'Média' },
+  { value: 'ALTA', label: 'Alta' },
+  { value: 'URGENTE', label: 'Urgente' },
+];
 
 const CHAMADOS_PAGE_SIZE = 50;
 
@@ -340,7 +349,7 @@ function ChamadosPageContent() {
   async function saveTriagem(
     id: string,
     codigo: string,
-    payload: { tipoChamadoId: string | null; prioridade: (typeof TRIAGEM_PRIORIDADES)[number] },
+    payload: { tipoChamadoId: string | null; prioridade: (typeof TRIAGEM_PRIORIDADES)[number]; motivoAlteracao?: string },
   ) {
     setBusyId(id);
     setError(null);
@@ -432,18 +441,13 @@ function ChamadosPageContent() {
                 </Chip>
               ))}
             </div>
-            <Select
-              value={prioridade}
-              onChange={(event) => setPrioridade(event.target.value)}
-              className="h-9 w-full max-w-[220px] text-xs"
-            >
-              <option value="TODAS">Todas prioridades</option>
-              {prioridades.map((item) => (
-                <option key={item} value={item}>
-                  {item}
-                </option>
+            <div className="flex flex-wrap gap-1.5">
+              {PRIORIDADE_CHIPS.map((item) => (
+                <Chip key={item.value} active={prioridade === item.value} onClick={() => setPrioridade(item.value)}>
+                  {item.label}
+                </Chip>
               ))}
-            </Select>
+            </div>
           </div>
         ) : null}
 
@@ -564,7 +568,12 @@ function ChamadosPageContent() {
                 onSaveTriagem={saveTriagem}
                 onRefreshDetail={() => {
                   if (!selected?.id) return;
-                  getChamado(selected.id).then(setDetail).catch(() => undefined);
+                  getChamado(selected.id)
+                    .then((refreshed) => {
+                      setDetail(refreshed);
+                      setChamados((current) => current.map((item) => (item.id === refreshed.id ? { ...item, ...refreshed } : item)));
+                    })
+                    .catch(() => undefined);
                 }}
               />
             </section>
@@ -606,7 +615,7 @@ function ChamadoDetailPanel({
   onSaveTriagem: (
     id: string,
     codigo: string,
-    payload: { tipoChamadoId: string | null; prioridade: (typeof TRIAGEM_PRIORIDADES)[number] },
+    payload: { tipoChamadoId: string | null; prioridade: (typeof TRIAGEM_PRIORIDADES)[number]; motivoAlteracao?: string },
   ) => void;
   onRefreshDetail: () => void;
 }) {
@@ -621,6 +630,7 @@ function ChamadoDetailPanel({
   const [pendingPrevista, setPendingPrevista] = useState('');
   const [pendingTipoId, setPendingTipoId] = useState('');
   const [pendingPrioridadeTriagem, setPendingPrioridadeTriagem] = useState<string>('MEDIA');
+  const [triagemMotivo, setTriagemMotivo] = useState('');
 
   useEffect(() => {
     if (!resumo) return;
@@ -634,6 +644,7 @@ function ChamadoDetailPanel({
     setPendingPrevista(resumo.previstaExecucaoEm ? resumo.previstaExecucaoEm.slice(0, 10) : '');
     setPendingTipoId(resumo.tipoChamado?.id ?? '');
     setPendingPrioridadeTriagem(resumo.prioridade);
+    setTriagemMotivo('');
   }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo, resumo?.equipe?.id, resumo?.responsavel?.id, resumo?.previstaExecucaoEm, resumo?.tipoChamado?.id, resumo?.prioridade]);
 
   if (!resumo) {
@@ -707,11 +718,14 @@ function ChamadoDetailPanel({
             <SummaryCard label="Prazo SLA" value={prazo.value} sub={prazo.sub} tone={prazo.tone} />
             {resumo.tipoChamado ? (
               <SummaryCard
-                label="Vistoria prévia"
+                label="Análise técnica"
                 value={resumo.tipoChamado.exigeVistoriaPrevia ? 'Exigida' : 'Não exigida'}
                 sub={resumo.tipoChamado.nome}
                 tone={resumo.tipoChamado.exigeVistoriaPrevia ? 'warning' : 'neutral'}
               />
+            ) : null}
+            {resumo.status === 'EM_AVALIACAO_TECNICA' ? (
+              <SummaryCard label="Fluxo" value="ANÁLISE TÉCNICA" sub="EXECUÇÃO" tone="warning" />
             ) : null}
             <SummaryCard label="Equipe" value={resumo.equipe?.nome ?? 'Não atribuída'} sub={resumo.secretaria.sigla} />
             <SummaryCard
@@ -720,6 +734,76 @@ function ChamadoDetailPanel({
               sub={membrosEquipe.length ? `${membrosEquipe.length} membro(s) na equipe` : undefined}
             />
             <SummaryCard label="Canal" value={canal.label} />
+          </div>
+
+          <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
+            <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Alterar status</p>
+            <div className="grid gap-3 sm:grid-cols-[minmax(180px,220px)_1fr]">
+              <div>
+                <label htmlFor="chamado-status" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Status
+                </label>
+                <Select
+                  id="chamado-status"
+                  value={pendingStatus}
+                  onChange={(event) => setPendingStatus(event.target.value as ChamadoStatus)}
+                  className="h-9 w-full text-xs"
+                  disabled={busy}
+                >
+                  {statusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {status === resumo.status ? `${chamadoStatusLabel(status)} (atual)` : chamadoStatusLabel(status)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div>
+                <label htmlFor="chamado-motivo" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Motivo da alteração
+                </label>
+                <input
+                  id="chamado-motivo"
+                  value={motivo}
+                  onChange={(event) => setMotivo(event.target.value)}
+                  placeholder="Ex.: retorno para triagem, aguardando peça…"
+                  disabled={busy}
+                  className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+                />
+              </div>
+            </div>
+
+            {pendingStatus === 'IMPEDIDO' ? (
+              <div>
+                <label htmlFor="chamado-impedimento" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+                  Motivo do impedimento
+                </label>
+                <input
+                  id="chamado-impedimento"
+                  value={impedimentoMotivo}
+                  onChange={(event) => setImpedimentoMotivo(event.target.value)}
+                  placeholder="Descreva o que está bloqueando o atendimento"
+                  disabled={busy}
+                  className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+                />
+              </div>
+            ) : null}
+
+            <Button
+              variant="filled"
+              size="sm"
+              disabled={busy || !statusChanged}
+              onClick={() =>
+                onTransition(
+                  resumo.id,
+                  pendingStatus,
+                  resumo.codigo,
+                  motivo,
+                  pendingStatus === 'IMPEDIDO' ? impedimentoMotivo : undefined,
+                )
+              }
+            >
+              Salvar status
+            </Button>
           </div>
 
           <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
@@ -913,6 +997,13 @@ function ChamadoDetailPanel({
                 </Select>
               </div>
             </div>
+            <input
+              value={triagemMotivo}
+              onChange={(event) => setTriagemMotivo(event.target.value)}
+              placeholder="Motivo da alteração (opcional)"
+              disabled={busy}
+              className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+            />
             <Button
               variant="outlined"
               size="sm"
@@ -921,6 +1012,7 @@ function ChamadoDetailPanel({
                 void onSaveTriagem(resumo.id, resumo.codigo, {
                   tipoChamadoId: pendingTipoId || null,
                   prioridade: pendingPrioridadeTriagem as (typeof TRIAGEM_PRIORIDADES)[number],
+                  motivoAlteracao: triagemMotivo.trim() || undefined,
                 });
               }}
             >
@@ -928,26 +1020,7 @@ function ChamadoDetailPanel({
             </Button>
           </div>
 
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <DetailField label="Aberto em">
-              {new Date(resumo.createdAt).toLocaleString('pt-BR')}
-            </DetailField>
-            <DetailField label="Bairro">{resumo.unidade?.bairro ?? resumo.enderecoBairro ?? '—'}</DetailField>
-            <DetailField label="Solicitante" className="sm:col-span-2">
-              {resumo.solicitanteNome ?? '—'}
-              {resumo.solicitanteTelefone ? ` · ${resumo.solicitanteTelefone}` : ''}
-            </DetailField>
-          </dl>
-
-          {resumo.unidade?.endereco || resumo.enderecoTexto ? (
-            <div>
-              <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Endereço</p>
-              <p className="mt-1 text-[13px] text-[var(--ink-2)]">
-                {resumo.unidade?.endereco ?? resumo.enderecoTexto}
-                {resumo.enderecoBairro ? ` · ${resumo.enderecoBairro}` : ''}
-              </p>
-            </div>
-          ) : null}
+          <ChamadoAberturaSection resumo={resumo} busy={busy} onSaved={onRefreshDetail} />
 
           {resumo.fotoUrl ? (
             <div>
@@ -983,81 +1056,11 @@ function ChamadoDetailPanel({
           ) : null}
 
           <div>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Linha do tempo</p>
+            <div className="mb-3">
               <ChamadoHistoricoForm chamadoId={resumo.id} disabled={busy} onSaved={onRefreshDetail} />
             </div>
+            <p className="mb-3 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Linha do tempo</p>
             {loading ? <LoadingState label="Carregando timeline..." /> : <ChamadoTimeline steps={timeline} />}
-          </div>
-
-          <div className="space-y-3 border-t border-[var(--line-2)] pt-4">
-            <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Alterar status</p>
-            <div className="grid gap-3 sm:grid-cols-[minmax(180px,220px)_1fr]">
-              <div>
-                <label htmlFor="chamado-status" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
-                  Status
-                </label>
-                <Select
-                  id="chamado-status"
-                  value={pendingStatus}
-                  onChange={(event) => setPendingStatus(event.target.value as ChamadoStatus)}
-                  className="h-9 w-full text-xs"
-                  disabled={busy}
-                >
-                  {statusOptions.map((status) => (
-                    <option key={status} value={status}>
-                      {status === resumo.status ? `${chamadoStatusLabel(status)} (atual)` : chamadoStatusLabel(status)}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div>
-                <label htmlFor="chamado-motivo" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
-                  Motivo da alteração
-                </label>
-                <input
-                  id="chamado-motivo"
-                  value={motivo}
-                  onChange={(event) => setMotivo(event.target.value)}
-                  placeholder="Ex.: retorno para triagem, aguardando peça…"
-                  disabled={busy}
-                  className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
-                />
-              </div>
-            </div>
-
-            {pendingStatus === 'IMPEDIDO' ? (
-              <div>
-                <label htmlFor="chamado-impedimento" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
-                  Motivo do impedimento
-                </label>
-                <input
-                  id="chamado-impedimento"
-                  value={impedimentoMotivo}
-                  onChange={(event) => setImpedimentoMotivo(event.target.value)}
-                  placeholder="Descreva o que está bloqueando o atendimento"
-                  disabled={busy}
-                  className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
-                />
-              </div>
-            ) : null}
-
-            <Button
-              variant="filled"
-              size="sm"
-              disabled={busy || !statusChanged}
-              onClick={() =>
-                onTransition(
-                  resumo.id,
-                  pendingStatus,
-                  resumo.codigo,
-                  motivo,
-                  pendingStatus === 'IMPEDIDO' ? impedimentoMotivo : undefined,
-                )
-              }
-            >
-              Salvar status
-            </Button>
           </div>
         </div>
       </CardContent>

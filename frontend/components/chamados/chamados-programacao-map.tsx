@@ -1,23 +1,18 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { ChamadoResumo } from '@/lib/types';
 import { chamadoToMapPoint } from '@/lib/chamado-geo';
-import { prazoInfo } from '@/lib/chamado-status';
+import { chamadoEstaProgramado } from '@/lib/chamado-map-pin';
+import { Chip } from '@/components/ui/chip';
 
 const ChamadosExecucaoMap = dynamic(
   () => import('@/components/chamados/chamados-execucao-map').then((mod) => mod.ChamadosExecucaoMap),
   { ssr: false, loading: () => <div className="h-[320px] animate-pulse rounded-[var(--r-card)] bg-[var(--surface-2)]" /> },
 );
 
-function pinTone(chamado: ChamadoResumo, programado: boolean) {
-  const prazo = prazoInfo(chamado.prazoEm, chamado.status);
-  if (prazo.tone === 'danger') return 'vencido';
-  if (!programado) return 'pendente';
-  if (chamado.prioridade.includes('URG') || chamado.prioridade.includes('ALTA')) return 'alta';
-  if (chamado.prioridade.includes('MED')) return 'media';
-  return 'baixa';
-}
+type MapFilter = 'todos' | 'programados' | 'pendentes';
 
 export function ChamadosProgramacaoMap({
   programados,
@@ -30,37 +25,70 @@ export function ChamadosProgramacaoMap({
   selectedId?: string | null;
   onSelect?: (id: string) => void;
 }) {
-  const pontos = [...programados, ...pendentes]
+  const [mapFilter, setMapFilter] = useState<MapFilter>('todos');
+
+  const allChamados = useMemo(() => {
+    const map = new Map<string, ChamadoResumo>();
+    for (const chamado of programados) map.set(chamado.id, chamado);
+    for (const chamado of pendentes) map.set(chamado.id, chamado);
+    return [...map.values()];
+  }, [programados, pendentes]);
+
+  const filteredChamados = useMemo(() => {
+    if (mapFilter === 'programados') {
+      return allChamados.filter((chamado) => chamadoEstaProgramado(chamado));
+    }
+    if (mapFilter === 'pendentes') {
+      return allChamados.filter((chamado) => !chamadoEstaProgramado(chamado));
+    }
+    return allChamados;
+  }, [allChamados, mapFilter]);
+
+  const pontos = filteredChamados
     .map((chamado) => {
       const base = chamadoToMapPoint(chamado);
       if (!base) return null;
-      const programado = Boolean(chamado.previstaExecucaoEm);
+      const programado = chamadoEstaProgramado(chamado);
       return {
         ...base,
-        meta: pinTone(chamado, programado),
+        previstaExecucaoEm: chamado.previstaExecucaoEm,
+        prazoEm: chamado.prazoEm,
+        programado,
+        equipeNome: chamado.equipe?.nome ?? null,
         label: `${chamado.codigo} · ${programado ? 'Programado' : 'Pendente'}`,
       };
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item));
 
-  if (pontos.length === 0) {
-    return (
-      <div className="flex h-[320px] items-center justify-center rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface-2)] text-[13px] text-[var(--ink-3)]">
-        Nenhum chamado com localização para exibir no mapa.
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-[320px]">
-      <ChamadosExecucaoMap
-        pontos={pontos}
-        selectedId={selectedId ?? null}
-        hoveredId={null}
-        onSelect={(id) => onSelect?.(id)}
-        onHover={() => undefined}
-        popupActionLabel="Programar chamado →"
-      />
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-1.5">
+        <Chip active={mapFilter === 'todos'} onClick={() => setMapFilter('todos')}>
+          Todos
+        </Chip>
+        <Chip active={mapFilter === 'programados'} onClick={() => setMapFilter('programados')}>
+          Programados
+        </Chip>
+        <Chip active={mapFilter === 'pendentes'} onClick={() => setMapFilter('pendentes')}>
+          Sem programação
+        </Chip>
+      </div>
+      {pontos.length === 0 ? (
+        <div className="flex h-[320px] items-center justify-center rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface-2)] text-[13px] text-[var(--ink-3)]">
+          Nenhum chamado com localização para o filtro selecionado.
+        </div>
+      ) : (
+        <div className="min-h-[320px]">
+          <ChamadosExecucaoMap
+            pontos={pontos}
+            selectedId={selectedId ?? null}
+            hoveredId={null}
+            onSelect={(id) => onSelect?.(id)}
+            onHover={() => undefined}
+            popupActionLabel="Programar chamado →"
+          />
+        </div>
+      )}
     </div>
   );
 }

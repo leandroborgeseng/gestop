@@ -12,6 +12,12 @@ export type OsPdfChamado = {
   equipe?: string | null;
   prazoSla?: string | null;
   fotoUrl?: string | null;
+  abertoEm?: string | null;
+  programadoEm?: string | null;
+};
+
+export type OsPdfOptions = {
+  titulo: string;
 };
 
 const BRAND_PRIMARY = '#0066cc';
@@ -44,6 +50,12 @@ function drawOsBlock(doc: InstanceType<typeof PDFDocument>, chamado: OsPdfChamad
   doc.text(`Tipo: ${chamado.tipo ?? '—'}  ·  Prioridade: ${prioridadeLabel(chamado.prioridade)}`, left + 10, cursorY);
   cursorY += 12;
   doc.text(`Equipe: ${chamado.equipe ?? '—'}  ·  Prazo SLA: ${chamado.prazoSla ? formatDateBr(chamado.prazoSla) : '—'}`, left + 10, cursorY);
+  cursorY += 12;
+  doc.text(
+    `Abertura: ${chamado.abertoEm ? formatDateBr(chamado.abertoEm) : '—'}  ·  Programado: ${chamado.programadoEm ? formatDateBr(chamado.programadoEm) : '—'}`,
+    left + 10,
+    cursorY,
+  );
   cursorY += 14;
 
   doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Descrição', left + 10, cursorY);
@@ -65,7 +77,7 @@ function drawOsBlock(doc: InstanceType<typeof PDFDocument>, chamado: OsPdfChamad
   doc.rect(left + 10, manualY + 42, width - 20, 50).stroke(BORDER);
 }
 
-export function buildOrdensServicoLotePdf(chamados: OsPdfChamado[]): Promise<Buffer> {
+export function buildOrdensServicoLotePdf(chamados: OsPdfChamado[], options?: OsPdfOptions): Promise<Buffer> {
   return new Promise((resolvePromise, reject) => {
     const doc = new PDFDocument({ margin: 36, size: 'A4', layout: 'portrait' });
     const chunks: Buffer[] = [];
@@ -95,7 +107,7 @@ export function buildOrdensServicoLotePdf(chamados: OsPdfChamado[]): Promise<Buf
           .font('Helvetica-Bold')
           .fontSize(12)
           .fillColor(BRAND_PRIMARY)
-          .text('Ordens de Serviço — Lote', left, blockY + (logoPath ? 40 : 0));
+          .text(options?.titulo ?? 'Ordens de Serviço — Lote', left, blockY + (logoPath ? 40 : 0));
         drawOsBlock(doc, chamado, blockY + (logoPath ? 58 : 18), blockHeight - (logoPath ? 58 : 18));
       } else {
         drawOsBlock(doc, chamado, blockY, blockHeight);

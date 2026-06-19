@@ -654,6 +654,11 @@ export type ChamadoMapPoint = {
   unidadeNome: string;
   prioridade: string;
   equipeNome?: string | null;
+  previstaExecucaoEm?: string | null;
+  prazoEm?: string | null;
+  programado?: boolean;
+  meta?: string;
+  label?: string;
 };
 
 export type PublicUnidadeChamado = {
@@ -853,6 +858,10 @@ export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
     comentario: string | null;
     respondidoEm: string;
     item: { id: string; codigo: string; titulo: string; tipo: string };
+    naoConformidade?: {
+      id: string;
+      chamado?: { id: string; codigo: string } | null;
+    } | null;
   }>;
   evidencias?: Array<{
     id: string;

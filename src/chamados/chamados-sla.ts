@@ -177,3 +177,62 @@ export function buildTriagemAlteracoes(input: {
 
   return alteracoes;
 }
+
+function formatCoords(lat: number | null | undefined, lng: number | null | undefined) {
+  if (lat == null || lng == null) return '—';
+  return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+}
+
+export function buildAberturaAlteracoes(input: {
+  bairroAnterior?: string | null;
+  bairroNovo?: string | null;
+  solicitanteAnterior?: string | null;
+  solicitanteNovo?: string | null;
+  telefoneAnterior?: string | null;
+  telefoneNovo?: string | null;
+  enderecoAnterior?: string | null;
+  enderecoNovo?: string | null;
+  latitudeAnterior?: number | null;
+  longitudeAnterior?: number | null;
+  latitudeNova?: number | null;
+  longitudeNova?: number | null;
+}): PlanejamentoAlteracao[] {
+  const alteracoes: PlanejamentoAlteracao[] = [];
+
+  const bairroAnterior = input.bairroAnterior?.trim() || '—';
+  const bairroNovo = input.bairroNovo?.trim() || '—';
+  if (bairroAnterior !== bairroNovo) {
+    alteracoes.push({ campo: 'enderecoBairro', label: 'Bairro', de: bairroAnterior, para: bairroNovo });
+  }
+
+  const solicitanteAnterior = input.solicitanteAnterior?.trim() || '—';
+  const solicitanteNovo = input.solicitanteNovo?.trim() || '—';
+  if (solicitanteAnterior !== solicitanteNovo) {
+    alteracoes.push({ campo: 'solicitanteNome', label: 'Solicitante', de: solicitanteAnterior, para: solicitanteNovo });
+  }
+
+  const telefoneAnterior = input.telefoneAnterior?.trim() || '—';
+  const telefoneNovo = input.telefoneNovo?.trim() || '—';
+  if (telefoneAnterior !== telefoneNovo) {
+    alteracoes.push({ campo: 'solicitanteTelefone', label: 'Telefone', de: telefoneAnterior, para: telefoneNovo });
+  }
+
+  const enderecoAnterior = input.enderecoAnterior?.trim() || '—';
+  const enderecoNovo = input.enderecoNovo?.trim() || '—';
+  if (enderecoAnterior !== enderecoNovo) {
+    alteracoes.push({ campo: 'enderecoTexto', label: 'Endereço', de: enderecoAnterior, para: enderecoNovo });
+  }
+
+  const coordsAnteriores = formatCoords(input.latitudeAnterior, input.longitudeAnterior);
+  const coordsNovas = formatCoords(input.latitudeNova, input.longitudeNova);
+  if (coordsAnteriores !== coordsNovas) {
+    alteracoes.push({
+      campo: 'coordenadas',
+      label: 'Coordenadas geográficas',
+      de: coordsAnteriores,
+      para: coordsNovas,
+    });
+  }
+
+  return alteracoes;
+}

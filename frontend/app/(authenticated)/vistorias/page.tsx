@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
+import { Sheet } from '@/components/ui/sheet';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -60,6 +61,7 @@ export default function VistoriasPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<FiscalizacaoDetalhe | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [questionarioOpen, setQuestionarioOpen] = useState(false);
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'' | FiscalizacaoStatus>('CONCLUIDA');
@@ -322,6 +324,13 @@ export default function VistoriasPage() {
                       </DetailField>
                     </dl>
 
+                    {detail?.respostas?.length ? (
+                      <Button variant="outlined" size="sm" onClick={() => setQuestionarioOpen(true)}>
+                        <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
+                        Exibir questionário
+                      </Button>
+                    ) : null}
+
                     {detail?.observacoes ? (
                       <div>
                         <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Observações</p>
@@ -362,6 +371,14 @@ export default function VistoriasPage() {
                               {resposta.comentario ? (
                                 <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p>
                               ) : null}
+                              {resposta.naoConformidade?.chamado ? (
+                                <p className="mt-2 text-[12px]">
+                                  Chamado gerado:{' '}
+                                  <Link href={`/chamados?search=${encodeURIComponent(resposta.naoConformidade.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
+                                    {resposta.naoConformidade.chamado.codigo}
+                                  </Link>
+                                </p>
+                              ) : null}
                             </div>
                           ))}
                         </div>
@@ -373,6 +390,34 @@ export default function VistoriasPage() {
             )}
           </section>
         </div>
+
+        <Sheet open={questionarioOpen} onClose={() => setQuestionarioOpen(false)} title="Questionário da vistoria">
+          <div className="space-y-3">
+            {(detail?.respostas ?? []).map((resposta) => (
+              <div key={resposta.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
+                <p className="text-[12px] font-semibold text-[var(--ink)]">
+                  {resposta.item.codigo} — {resposta.item.titulo}
+                </p>
+                <p className="mt-1 text-[13px] text-[var(--ink-2)]">
+                  {resposta.valorTexto ??
+                    (resposta.valorBooleano != null ? (resposta.valorBooleano ? 'Sim' : 'Não') : null) ??
+                    (resposta.valorNumero != null ? String(resposta.valorNumero) : null) ??
+                    resposta.conformidade ??
+                    '—'}
+                </p>
+                {resposta.comentario ? <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p> : null}
+                {resposta.naoConformidade?.chamado ? (
+                  <p className="mt-2 text-[12px]">
+                    Chamado:{' '}
+                    <Link href={`/chamados?search=${encodeURIComponent(resposta.naoConformidade.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
+                      {resposta.naoConformidade.chamado.codigo}
+                    </Link>
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </Sheet>
       </PageShell>
     </RequirePermissions>
   );

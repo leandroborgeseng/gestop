@@ -18,45 +18,51 @@ import {
 } from '@/lib/franca-geo';
 import { escapeHtml } from '@/lib/security';
 import { ChamadoMapPoint } from '@/lib/types';
+import { chamadoPinColor, chamadoPinIcon } from '@/lib/chamado-map-pin';
 import { MapViewControls } from '@/components/map/map-view-controls';
 
-const MARKER_COLOR = '#b5680a';
-
-function configureLeafletIcons() {
-  delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-  });
+function formatDateBr(value?: string | null) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('pt-BR');
 }
 
-function createChamadoIcon(emphasis: 'normal' | 'hover' | 'selected') {
+function createChamadoIcon(point: ChamadoMapPoint, emphasis: 'normal' | 'hover' | 'selected') {
   const scale = emphasis === 'selected' ? 1.28 : emphasis === 'hover' ? 1.12 : 1;
+  const color = chamadoPinColor(point.prioridade);
+  const icon = chamadoPinIcon(Boolean(point.programado));
   const ring =
     emphasis === 'selected'
-      ? `0 0 0 4px color-mix(in srgb, ${MARKER_COLOR} 28%, transparent), 0 6px 16px rgba(15,27,45,.4)`
+      ? `0 0 0 4px color-mix(in srgb, ${color} 28%, transparent), 0 6px 16px rgba(15,27,45,.4)`
       : '0 3px 8px rgba(15,27,45,.35)';
 
   return L.divIcon({
     className: 'sigma-map-marker',
     html: `<span style="
-      display:grid;place-items:center;width:24px;height:24px;
-      background:${MARKER_COLOR};border:2px solid #fff;border-radius:50% 50% 50% 0;
+      display:grid;place-items:center;width:26px;height:26px;
+      background:${color};border:2px solid #fff;border-radius:50% 50% 50% 0;
       transform:rotate(-45deg) scale(${scale});
       box-shadow:${ring};
-    "><b style="width:7px;height:7px;background:#fff;border-radius:50%;transform:rotate(45deg);display:block;"></b></span>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 24],
+      color:#fff;font-size:11px;font-weight:700;
+    "><b style="transform:rotate(45deg);display:block;line-height:1;">${icon}</b></span>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 26],
   });
 }
 
 function buildPopupHtml(point: ChamadoMapPoint, actionLabel: string) {
+  const programado = point.programado ? formatDateBr(point.previstaExecucaoEm) : null;
+  const prazo = point.prazoEm ? formatDateBr(point.prazoEm) : null;
   return `
-    <div style="min-width:220px;font-family:system-ui,sans-serif;">
+    <div style="min-width:240px;font-family:system-ui,sans-serif;">
       <strong style="display:block;font-size:13px;color:#0066cc;">${escapeHtml(point.codigo)}</strong>
       <span style="display:block;margin-top:4px;font-size:13px;color:#0f1b2d;font-weight:600;">${escapeHtml(point.titulo)}</span>
       <span style="display:block;margin-top:4px;font-size:12px;color:#647389;">${escapeHtml(point.unidadeNome)}</span>
+      ${programado ? `<span style="display:block;margin-top:6px;font-size:12px;color:#647389;">Data programada: <strong>${escapeHtml(programado)}</strong></span>` : ''}
+      ${point.equipeNome ? `<span style="display:block;margin-top:4px;font-size:12px;color:#647389;">Equipe: <strong>${escapeHtml(point.equipeNome)}</strong></span>` : ''}
+      <span style="display:block;margin-top:4px;font-size:12px;color:#647389;">Prioridade: <strong>${escapeHtml(point.prioridade)}</strong></span>
+      ${prazo ? `<span style="display:block;margin-top:4px;font-size:12px;color:#647389;">Prazo: <strong>${escapeHtml(prazo)}</strong></span>` : ''}
       <button type="button" data-chamado-id="${point.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
         ${escapeHtml(actionLabel)}
       </button>
@@ -92,6 +98,7 @@ export function ChamadosExecucaoMapClient({
   const labelsLayerRef = useRef<L.TileLayer | null>(null);
   const markersLayerRef = useRef<L.MarkerClusterGroup | null>(null);
   const markerByIdRef = useRef<Map<string, L.Marker>>(new Map());
+  const pontoByIdRef = useRef<Map<string, ChamadoMapPoint>>(new Map());
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
   const popupActionLabelRef = useRef(popupActionLabel);
@@ -116,7 +123,6 @@ export function ChamadosExecucaoMapClient({
   }, []);
 
   useEffect(() => {
-    configureLeafletIcons();
     if (!containerReady || !containerRef.current || mapRef.current) return;
 
     const map = L.map(containerRef.current, { zoomControl: true, scrollWheelZoom: true }).setView(
@@ -211,12 +217,13 @@ export function ChamadosExecucaoMapClient({
 
     markersLayer.clearLayers();
     markerByIdRef.current.clear();
+    pontoByIdRef.current.clear();
 
     located.forEach(({ ponto, latLng }) => {
-      const marker = L.marker(latLng, { icon: createChamadoIcon('normal') }).bindPopup(
+      pontoByIdRef.current.set(ponto.id, ponto);
+      const marker = L.marker(latLng, { icon: createChamadoIcon(ponto, 'normal') }).bindPopup(
         buildPopupHtml(ponto, popupActionLabelRef.current),
       );
-      marker.on('click', () => onSelectRef.current?.(ponto.id));
       marker.on('mouseover', () => onHoverRef.current?.(ponto.id));
       marker.on('mouseout', () => onHoverRef.current?.(null));
       markersLayer.addLayer(marker);
@@ -239,11 +246,13 @@ export function ChamadosExecucaoMapClient({
 
   useEffect(() => {
     markerByIdRef.current.forEach((marker, id) => {
+      const ponto = pontoByIdRef.current.get(id);
+      if (!ponto) return;
       const emphasis = id === selectedId ? 'selected' : id === hoveredId ? 'hover' : 'normal';
-      marker.setIcon(createChamadoIcon(emphasis));
+      marker.setIcon(createChamadoIcon(ponto, emphasis));
       if (id === selectedId) marker.openPopup();
     });
-  }, [selectedId, hoveredId]);
+  }, [selectedId, hoveredId, located]);
 
   const toggleFullscreen = useCallback(async () => {
     const shell = shellRef.current;
