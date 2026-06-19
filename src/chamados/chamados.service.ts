@@ -307,10 +307,10 @@ export class ChamadosService {
       status: detail.status,
       prioridade: detail.prioridade,
       origem: detail.origem,
-      createdAt: detail.createdAt,
-      prazoEm: detail.prazoEm,
-      previstaExecucaoEm: detail.previstaExecucaoEm,
-      concluidoEm: detail.concluidoEm,
+      createdAt: toIsoString(detail.createdAt) ?? '',
+      prazoEm: toIsoString(detail.prazoEm),
+      previstaExecucaoEm: toIsoString(detail.previstaExecucaoEm),
+      concluidoEm: toIsoString(detail.concluidoEm),
       solicitanteNome: detail.solicitanteNome,
       solicitanteTelefone: detail.solicitanteTelefone,
       enderecoTexto: detail.enderecoTexto,
@@ -2121,4 +2121,9 @@ export class ChamadosService {
       },
     });
   }
+}
+
+function toIsoString(value: Date | string | null | undefined) {
+  if (value == null) return null;
+  return value instanceof Date ? value.toISOString() : value;
 }

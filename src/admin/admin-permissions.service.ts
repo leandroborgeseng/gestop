@@ -90,6 +90,8 @@ export class AdminPermissionsService {
       throw new BadRequestException(`Permissões não sincronizadas: ${missing.join(', ')}`);
     }
 
+    const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
+
     await this.prisma.$transaction(async (tx) => {
       await tx.perfilPermissao.deleteMany({ where: { perfilId } });
       await tx.perfilPermissao.createMany({
@@ -101,7 +103,7 @@ export class AdminPermissionsService {
 
       await tx.logAuditoria.create({
         data: {
-          usuarioId: resolveAuditUsuarioId(user),
+          usuarioId,
           acao: AuditAction.UPDATE,
           entidadeTipo: 'PerfilPermissao',
           entidadeId: perfilId,

@@ -125,8 +125,8 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
       ['Solicitante', [chamado.solicitanteNome, chamado.solicitanteTelefone].filter(Boolean).join(' · ') || '—'],
       [
         'Endereço',
-        chamado.unidade?.endereco ??
-          [chamado.enderecoTexto, chamado.enderecoBairro].filter(Boolean).join(' · ') ||
+        (chamado.unidade?.endereco ??
+          [chamado.enderecoTexto, chamado.enderecoBairro].filter(Boolean).join(' · ')) ||
           '—',
       ],
       [

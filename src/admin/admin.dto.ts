@@ -176,6 +176,11 @@ export class UsuarioDto {
   perfilIds!: string[];
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  equipeIds?: string[];
+
+  @IsOptional()
   @IsBoolean()
   ativo?: boolean;
 }
