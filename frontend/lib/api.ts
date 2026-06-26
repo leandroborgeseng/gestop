@@ -7,6 +7,7 @@ import {
   AdminEquipe,
   AdminTipoChamado,
   AdminCategoriaVistoria,
+  AdminCargo,
   EquipeOpcao,
   TipoChamadoOpcao,
   ChamadosEmExecucaoResponse,
@@ -365,6 +366,22 @@ export function saveAdminCategoriaVistoria(payload: Record<string, unknown>, id?
 
 export function deleteAdminCategoriaVistoria(id: string) {
   return request<{ ok: boolean }>(`/admin/categorias-vistoria/${id}`, { method: 'DELETE' });
+}
+
+export function listAdminCargos() {
+  return request<AdminCargo[]>('/admin/cargos');
+}
+
+export function saveAdminCargo(payload: Record<string, unknown>, id?: string) {
+  return request<AdminCargo>(`/admin/cargos${id ? `/${id}` : ''}`, {
+    method: id ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminCargo(id: string) {
+  return request<{ ok: boolean }>(`/admin/cargos/${id}`, { method: 'DELETE' });
 }
 
 export function getWebmapImportStatus() {
@@ -867,6 +884,9 @@ export function concluirChamadoExecucao(
   payload: {
     relatorio: string;
     checkin: { latitude: number; longitude: number; precisaoMetros: number };
+    equipeExecutoraId: string;
+    membroIds: string[];
+    membrosExternos?: string[];
     impedimento?: boolean;
     impedimentoMotivo?: string;
   },
@@ -883,6 +903,10 @@ export function registrarChamadoExecucaoManual(
   payload: {
     dataExecucao: string;
     relatorio: string;
+    equipeExecutoraId: string;
+    membroIds: string[];
+    membrosExternos?: string[];
+    anexos?: Array<{ dataUrl: string; mimeType?: string; nome?: string }>;
     impedimento?: boolean;
     impedimentoMotivo?: string;
   },

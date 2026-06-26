@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, ClipboardList, Download, Layers3, MapPin, Search, Shield, UserRound, UsersRound } from 'lucide-react';
+import { Building2, Briefcase, ClipboardList, Download, Layers3, MapPin, Search, Shield, UserRound, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
 import { PageShell } from '@/components/layout/page-shell';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { FormGrid, FormSection, RecordItem, RecordList } from '@/components/ui/form-section';
 import { Input } from '@/components/ui/input';
+import { MaskedInput } from '@/components/ui/masked-input';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { Tabs } from '@/components/ui/tabs';
@@ -43,16 +44,27 @@ import {
   deleteAdminCategoriaVistoria,
   listAdminCategoriasVistoria,
   saveAdminCategoriaVistoria,
+  listAdminCargos,
+  saveAdminCargo,
+  deleteAdminCargo,
   anonymizeUsuarioLgpd,
   purgeAuditoriaLgpd,
 } from '@/lib/api';
-import { AdminCategoriaVistoria, AdminEquipe, AdminPerfil, AdminSecretaria, AdminTipoChamado, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
+import { AdminCategoriaVistoria, AdminCargo, AdminEquipe, AdminPerfil, AdminSecretaria, AdminTipoChamado, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
+import {
+  formatCpfInput,
+  formatPhoneInput,
+  isValidCpf,
+  isValidEmail,
+  normalizeCpfForApi,
+  normalizePhoneForApi,
+} from '@/lib/br-input-masks';
 import { REGIAO_UNIDADE_LABELS, RegiaoUnidade } from '@/lib/regiao-unidade';
 import { PermissoesMatrizPanel } from '@/components/admin/permissoes-matriz-panel';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { formatUnidadeOrigem, getLockedFields, getUnidadeMetadata, isQgisImported } from '@/lib/unidade-metadata';
 
-type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'tipos-chamado' | 'categorias-vistoria' | 'permissoes' | 'importacao';
+type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'cargos' | 'tipos-chamado' | 'categorias-vistoria' | 'permissoes' | 'importacao';
 
 const tipos: UnidadeTipo[] = ['ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO', 'ESPACO_ESPORTIVO', 'OUTRO'];
 const regioes: RegiaoUnidade[] = ['NORTE', 'SUL', 'LESTE', 'OESTE', 'CENTRO'];
@@ -66,6 +78,7 @@ export default function AdminPage() {
   const [equipes, setEquipes] = useState<AdminEquipe[]>([]);
   const [tiposChamado, setTiposChamado] = useState<AdminTipoChamado[]>([]);
   const [categoriasVistoria, setCategoriasVistoria] = useState<AdminCategoriaVistoria[]>([]);
+  const [cargos, setCargos] = useState<AdminCargo[]>([]);
   const [perfis, setPerfis] = useState<AdminPerfil[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +88,7 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextSecretarias, nextUnidades, nextUsuarios, nextEquipes, nextPerfis, nextTiposChamado, nextCategorias] = await Promise.all([
+      const [nextSecretarias, nextUnidades, nextUsuarios, nextEquipes, nextPerfis, nextTiposChamado, nextCategorias, nextCargos] = await Promise.all([
         listAdminSecretarias(),
         listAdminUnidades(),
         listAdminUsuarios(),
@@ -83,6 +96,7 @@ export default function AdminPage() {
         listAdminPerfis(),
         listAdminTiposChamado(),
         listAdminCategoriasVistoria(),
+        listAdminCargos(),
       ]);
       setSecretarias(nextSecretarias);
       setUnidades(nextUnidades);
@@ -91,6 +105,7 @@ export default function AdminPage() {
       setPerfis(nextPerfis);
       setTiposChamado(nextTiposChamado);
       setCategoriasVistoria(nextCategorias);
+      setCargos(nextCargos);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar administração.');
     } finally {
@@ -144,6 +159,7 @@ export default function AdminPage() {
               { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" />, count: unidades.length },
               { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" />, count: usuarios.length },
               { id: 'equipes', label: 'Equipes', icon: <UsersRound className="h-4 w-4" />, count: equipes.length },
+              { id: 'cargos', label: 'Cargos', icon: <Briefcase className="h-4 w-4" />, count: cargos.length },
               { id: 'tipos-chamado', label: 'Tipos de chamado', icon: <ClipboardList className="h-4 w-4" />, count: tiposChamado.length },
               { id: 'categorias-vistoria', label: 'Categorias vistoria', icon: <Layers3 className="h-4 w-4" />, count: categoriasVistoria.length },
               { id: 'permissoes', label: 'Permissões', icon: <Shield className="h-4 w-4" /> },
@@ -161,10 +177,13 @@ export default function AdminPage() {
           <UnidadesPanel secretarias={secretarias} unidades={unidades} mutate={mutate} />
         ) : null}
         {!loading && tab === 'usuarios' ? (
-          <UsuariosPanel secretarias={secretarias} usuarios={usuarios} equipes={equipes} perfis={perfis} mutate={mutate} />
+          <UsuariosPanel secretarias={secretarias} usuarios={usuarios} equipes={equipes} perfis={perfis} cargos={cargos} mutate={mutate} />
         ) : null}
         {!loading && tab === 'equipes' ? (
           <EquipesPanel secretarias={secretarias} usuarios={usuarios} equipes={equipes} mutate={mutate} />
+        ) : null}
+        {!loading && tab === 'cargos' ? (
+          <CargosPanel cargos={cargos} mutate={mutate} />
         ) : null}
         {!loading && tab === 'tipos-chamado' ? (
           <TiposChamadoPanel tipos={tiposChamado} mutate={mutate} />
@@ -618,15 +637,17 @@ function usuarioPayloadFromForm(
   ativo: boolean,
   equipeIds: string[],
   editingId?: string,
+  cpfValue?: string,
+  telefoneValue?: string,
 ) {
   const senha = String(form.get('senha') || '').trim();
   const payload: Record<string, unknown> = {
     secretariaId: String(form.get('secretariaId') || ''),
     nome: String(form.get('nome')),
     email: String(form.get('email')),
-    cpf: String(form.get('cpf') || ''),
-    telefone: String(form.get('telefone') || ''),
-    cargo: String(form.get('cargo') || ''),
+    cpf: normalizeCpfForApi(cpfValue ?? String(form.get('cpf') || '')) ?? '',
+    telefone: normalizePhoneForApi(telefoneValue ?? String(form.get('telefone') || '')) ?? '',
+    cargoId: String(form.get('cargoId') || ''),
     perfilIds: form.getAll('perfilIds').map(String).filter(Boolean).length
       ? form.getAll('perfilIds').map(String)
       : [String(form.get('perfilId') || defaultPerfil)].filter(Boolean),
@@ -655,7 +676,7 @@ function usuarioPayloadFromRecord(usuario: AdminUsuario, ativo: boolean) {
     email: usuario.email,
     cpf: usuario.cpf ?? '',
     telefone: usuario.telefone ?? '',
-    cargo: usuario.cargo ?? '',
+    cargoId: usuario.cargoId ?? usuario.cargoRef?.id ?? '',
     perfilIds: usuario.perfis.map((item) => item.perfil.id),
     equipeIds: usuario.equipes?.map((item) => item.equipe.id) ?? [],
     ativo,
@@ -665,6 +686,7 @@ function usuarioPayloadFromRecord(usuario: AdminUsuario, ativo: boolean) {
 function equipePayloadFromForm(form: FormData, usuarioIds: string[], ativo: boolean) {
   return {
     secretariaId: String(form.get('secretariaId') || ''),
+    codigo: String(form.get('codigo')),
     nome: String(form.get('nome')),
     descricao: String(form.get('descricao') || ''),
     tipo: String(form.get('tipo') || 'PROPRIA'),
@@ -677,6 +699,7 @@ function equipePayloadFromForm(form: FormData, usuarioIds: string[], ativo: bool
 function equipePayloadFromRecord(equipe: AdminEquipe, ativo: boolean) {
   return {
     secretariaId: equipe.secretariaId ?? '',
+    codigo: equipe.codigo,
     nome: equipe.nome,
     descricao: equipe.descricao ?? '',
     tipo: equipe.tipo ?? 'PROPRIA',
@@ -691,29 +714,58 @@ function UsuariosPanel({
   usuarios,
   equipes,
   perfis,
+  cargos,
   mutate,
 }: {
   secretarias: AdminSecretaria[];
   usuarios: AdminUsuario[];
   equipes: AdminEquipe[];
   perfis: AdminPerfil[];
+  cargos: AdminCargo[];
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
+  const snackbar = useSnackbar();
   const defaultPerfil = useMemo(() => perfis[0]?.id ?? '', [perfis]);
   const [editing, setEditing] = useState<AdminUsuario | null>(null);
   const [selectedEquipeIds, setSelectedEquipeIds] = useState<string[]>([]);
+  const [cpfValue, setCpfValue] = useState('');
+  const [telefoneValue, setTelefoneValue] = useState('');
+  const [emailValue, setEmailValue] = useState('');
 
   useEffect(() => {
     setSelectedEquipeIds(editing?.equipes?.map((item) => item.equipe.id) ?? []);
-  }, [editing?.id, editing?.equipes]);
+    setCpfValue(formatCpfInput(editing?.cpf ?? ''));
+    setTelefoneValue(formatPhoneInput(editing?.telefone ?? ''));
+    setEmailValue(editing?.email ?? '');
+  }, [editing?.id, editing?.equipes, editing?.cpf, editing?.telefone, editing?.email]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const email = emailValue.trim();
+    if (!isValidEmail(email)) {
+      snackbar.show('Informe um e-mail válido.', 'warning');
+      return;
+    }
+    const cpfDigits = normalizeCpfForApi(cpfValue);
+    if (cpfDigits && !isValidCpf(cpfDigits)) {
+      snackbar.show('CPF inválido.', 'warning');
+      return;
+    }
+
     const isEdit = Boolean(editing);
     const ok = await mutate(
       () => {
-        const payload = usuarioPayloadFromForm(form, defaultPerfil, editing?.ativo ?? true, selectedEquipeIds, editing?.id);
+        const payload = usuarioPayloadFromForm(
+          form,
+          defaultPerfil,
+          editing?.ativo ?? true,
+          selectedEquipeIds,
+          editing?.id,
+          cpfValue,
+          telefoneValue,
+        );
+        payload.email = email;
         return saveAdminUsuario(payload, editing?.id);
       },
       isEdit ? 'Usuário atualizado.' : 'Usuário cadastrado.',
@@ -721,6 +773,9 @@ function UsuariosPanel({
     if (ok) {
       setEditing(null);
       setSelectedEquipeIds([]);
+      setCpfValue('');
+      setTelefoneValue('');
+      setEmailValue('');
       event.currentTarget.reset();
     }
   }
@@ -771,22 +826,45 @@ function UsuariosPanel({
       <FormGrid>
       <FormSection title={editing ? 'Editar usuário' : 'Novo usuário'}>
         <form key={editing?.id ?? 'new'} onSubmit={submit} className="space-y-4">
-          <Field label="Nome">
+          <Field label="Nome" tooltip="Nome completo do usuário para identificação no sistema.">
             <Input name="nome" required defaultValue={editing?.nome} />
           </Field>
-          <Field label="E-mail">
-            <Input name="email" type="email" required defaultValue={editing?.email} />
+          <Field label="E-mail" tooltip="Use um e-mail válido. Será usado para login e notificações.">
+            <Input
+              name="email"
+              type="email"
+              required
+              value={emailValue}
+              onChange={(event) => setEmailValue(event.target.value)}
+            />
           </Field>
-          <Field label="CPF">
-            <Input name="cpf" defaultValue={editing?.cpf ?? ''} />
+          <Field label="CPF" tooltip="Digite apenas números. A máscara é aplicada automaticamente.">
+            <MaskedInput name="cpf" mask="cpf" value={cpfValue} onValueChange={(_, formatted) => setCpfValue(formatted)} />
           </Field>
-          <Field label="Telefone">
-            <Input name="telefone" defaultValue={editing?.telefone ?? ''} />
+          <Field
+            label="Telefone"
+            tooltip="Digite apenas números com DDD. Aceita 8 ou 9 dígitos após o DDD (fixo ou celular)."
+          >
+            <MaskedInput
+              name="telefone"
+              mask="phone"
+              value={telefoneValue}
+              onValueChange={(_, formatted) => setTelefoneValue(formatted)}
+            />
           </Field>
-          <Field label="Cargo">
-            <Input name="cargo" defaultValue={editing?.cargo ?? ''} />
+          <Field label="Cargo" tooltip="Selecione um cargo cadastrado para relatórios futuros por função.">
+            <Select name="cargoId" defaultValue={editing?.cargoId ?? editing?.cargoRef?.id ?? ''}>
+              <option value="">Sem cargo</option>
+              {cargos
+                .filter((cargo) => cargo.ativo)
+                .map((cargo) => (
+                  <option key={cargo.id} value={cargo.id}>
+                    {cargo.nome}
+                  </option>
+                ))}
+            </Select>
           </Field>
-          <Field label={editing ? 'Nova senha (opcional)' : 'Senha inicial (mín. 12 caracteres)'}>
+          <Field label={editing ? 'Nova senha (opcional)' : 'Senha inicial (mín. 12 caracteres)'} tooltip="Mínimo de 12 caracteres. Em edição, deixe em branco para manter a senha atual.">
             <Input
               name="senha"
               type="password"
@@ -975,6 +1053,7 @@ function EquipesPanel({
             <DataTableRow key={equipe.id}>
               <DataTableCell>
                 <div>
+                  <p className="mono text-[11px] text-[var(--ink-3)]">{equipe.codigo}</p>
                   <p className="font-semibold text-[var(--ink)]">{equipe.nome}</p>
                   {equipe.descricao ? <p className="text-[12px] text-[var(--ink-3)]">{equipe.descricao}</p> : null}
                 </div>
@@ -993,7 +1072,16 @@ function EquipesPanel({
       <FormGrid>
         <FormSection title={editing ? 'Editar equipe' : 'Nova equipe'}>
           <form key={editing?.id ?? 'new-equipe'} onSubmit={submit} className="space-y-4">
-            <Field label="Nome">
+            <Field label="Código" tooltip="Código único da equipe (ex.: ZEL-A). Não pode repetir em outra equipe.">
+              <Input
+                name="codigo"
+                required
+                defaultValue={editing?.codigo ?? ''}
+                placeholder="Ex.: ZEL-A"
+                className="uppercase"
+              />
+            </Field>
+            <Field label="Nome" tooltip="Nome da equipe. Não pode repetir na mesma secretaria.">
               <Input name="nome" required defaultValue={editing?.nome} placeholder="Ex.: Zeladoria Bloco A" />
             </Field>
             <Field label="Descrição">
@@ -1188,6 +1276,114 @@ function TiposChamadoPanel({
                     <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminTipoChamado(tipo.id), 'Tipo excluído.')}>
                       Excluir
                     </Button>
+                  </div>
+                }
+              />
+            ))}
+          </RecordList>
+        </FormSection>
+      </FormGrid>
+    </div>
+  );
+}
+
+function CargosPanel({
+  cargos,
+  mutate,
+}: {
+  cargos: AdminCargo[];
+  mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState<AdminCargo | null>(null);
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      nome: String(form.get('nome')),
+      ativo: editing?.ativo ?? true,
+    };
+    const ok = await mutate(
+      () => saveAdminCargo(payload, editing?.id),
+      editing ? 'Cargo atualizado.' : 'Cargo cadastrado.',
+    );
+    if (ok) {
+      setEditing(null);
+      event.currentTarget.reset();
+    }
+  }
+
+  async function toggleAtivo(cargo: AdminCargo) {
+    const nextAtivo = !cargo.ativo;
+    await mutate(() => saveAdminCargo({ nome: cargo.nome, ativo: nextAtivo }, cargo.id), nextAtivo ? 'Cargo reativado.' : 'Cargo inativado.');
+    if (editing?.id === cargo.id) {
+      setEditing({ ...cargo, ativo: nextAtivo });
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <TipBanner id="admin-cargos">
+        Cadastre os cargos dos usuários (ex.: Agente, Encarregado). Eles aparecem no cadastro de usuários para relatórios futuros por função.
+      </TipBanner>
+
+      <DataTable>
+        <DataTableHead>
+          <DataTableHeaderCell>Nome</DataTableHeaderCell>
+          <DataTableHeaderCell>Status</DataTableHeaderCell>
+        </DataTableHead>
+        <DataTableBody>
+          {cargos.map((cargo) => (
+            <DataTableRow key={cargo.id}>
+              <DataTableCell>{cargo.nome}</DataTableCell>
+              <DataTableCell>
+                <Badge variant={cargo.ativo ? 'success' : 'muted'}>{cargo.ativo ? 'Ativo' : 'Inativo'}</Badge>
+              </DataTableCell>
+            </DataTableRow>
+          ))}
+        </DataTableBody>
+      </DataTable>
+
+      <FormGrid>
+        <FormSection title={editing ? 'Editar cargo' : 'Novo cargo'}>
+          <form key={editing?.id ?? 'new-cargo'} onSubmit={submit} className="space-y-4">
+            <Field label="Nome" tooltip="Nome do cargo exibido na lista do cadastro de usuários.">
+              <Input name="nome" required defaultValue={editing?.nome} placeholder="Ex.: Agente de campo" />
+            </Field>
+            <div className="flex gap-2">
+              <Button type="submit" variant="filled" className="flex-1">
+                {editing ? 'Salvar' : 'Cadastrar'}
+              </Button>
+              {editing ? (
+                <Button type="button" variant="text" onClick={() => setEditing(null)}>
+                  Cancelar
+                </Button>
+              ) : null}
+            </div>
+          </form>
+        </FormSection>
+        <FormSection title="Registros">
+          <RecordList empty="Nenhum cargo cadastrado.">
+            {cargos.map((cargo) => (
+              <RecordItem
+                key={cargo.id}
+                title={cargo.nome}
+                subtitle={cargo.ativo ? 'Ativo' : 'Inativo'}
+                active={cargo.ativo}
+                actions={
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Button variant="text" size="sm" onClick={() => setEditing(cargo)}>
+                      Editar
+                    </Button>
+                    {cargo.ativo ? (
+                      <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(cargo)}>
+                        Inativar
+                      </Button>
+                    ) : (
+                      <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(cargo)}>
+                        Reativar
+                      </Button>
+                    )}
                   </div>
                 }
               />

@@ -36,7 +36,7 @@ export function Sheet({
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[min(88vh,100dvh)] flex-col overflow-hidden rounded-t-[var(--md-shape-xl)] bg-[var(--md-surface)] shadow-[var(--md-elevation-5)] md:inset-x-auto md:bottom-auto md:left-1/2 md:top-1/2 md:max-h-[88vh] md:w-full md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[var(--md-shape-xl)]"
+            className="fixed inset-x-0 bottom-0 z-50 flex max-h-[min(92dvh,100dvh)] flex-col overflow-hidden rounded-t-[var(--md-shape-xl)] bg-[var(--md-surface)] shadow-[var(--md-elevation-5)] md:inset-x-auto md:bottom-auto md:left-1/2 md:top-1/2 md:max-h-[88vh] md:w-full md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[var(--md-shape-xl)]"
             initial={{ y: '100%', opacity: 0.8 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: '100%', opacity: 0.8 }}

@@ -46,7 +46,7 @@ export function ChamadoAberturaSection({
     getStoredAuth()?.user.permissoes.includes('chamados.editar_abertura');
 
   const coords = resolveChamadoCoordinates(resumo);
-  const [editingField, setEditingField] = useState<'bairro' | 'solicitante' | 'endereco' | 'coords' | null>(null);
+  const [editingField, setEditingField] = useState<'solicitante' | 'endereco' | 'coords' | null>(null);
   const [draftBairro, setDraftBairro] = useState('');
   const [draftSolicitante, setDraftSolicitante] = useState('');
   const [draftTelefone, setDraftTelefone] = useState('');
@@ -82,24 +82,44 @@ export function ChamadoAberturaSection({
 
       <div>
         <EditableLabel
-          label="Bairro"
+          label="Endereço"
           editable={canEdit}
-          onEdit={() => setEditingField(editingField === 'bairro' ? null : 'bairro')}
+          onEdit={() => setEditingField(editingField === 'endereco' ? null : 'endereco')}
         />
-        {editingField === 'bairro' ? (
-          <div className="flex gap-2">
-            <Input value={draftBairro} onChange={(e) => setDraftBairro(e.target.value)} disabled={saving || busy} />
+        {editingField === 'endereco' ? (
+          <div className="space-y-2">
+            <Input
+              value={draftEndereco}
+              onChange={(e) => setDraftEndereco(e.target.value)}
+              disabled={saving || busy}
+              placeholder="Logradouro e número"
+            />
+            <Input
+              value={draftBairro}
+              onChange={(e) => setDraftBairro(e.target.value)}
+              disabled={saving || busy}
+              placeholder="Bairro"
+            />
             <Button
               size="sm"
               variant="outlined"
               disabled={saving || busy}
-              onClick={() => void saveAbertura({ enderecoBairro: draftBairro || null })}
+              onClick={() =>
+                void saveAbertura({
+                  enderecoTexto: draftEndereco || null,
+                  enderecoBairro: draftBairro || null,
+                })
+              }
             >
               Salvar
             </Button>
           </div>
         ) : (
-          <p className="text-[13px] text-[var(--ink-2)]">{resumo.unidade?.bairro ?? resumo.enderecoBairro ?? '—'}</p>
+          <p className="text-[13px] text-[var(--ink-2)]">
+            {[resumo.unidade?.endereco ?? resumo.enderecoTexto, resumo.unidade?.bairro ?? resumo.enderecoBairro]
+              .filter(Boolean)
+              .join(' · ') || '—'}
+          </p>
         )}
       </div>
 
@@ -131,32 +151,6 @@ export function ChamadoAberturaSection({
           <p className="text-[13px] text-[var(--ink-2)]">
             {resumo.solicitanteNome ?? '—'}
             {resumo.solicitanteTelefone ? ` · ${resumo.solicitanteTelefone}` : ''}
-          </p>
-        )}
-      </div>
-
-      <div>
-        <EditableLabel
-          label="Endereço"
-          editable={canEdit}
-          onEdit={() => setEditingField(editingField === 'endereco' ? null : 'endereco')}
-        />
-        {editingField === 'endereco' ? (
-          <div className="flex gap-2">
-            <Input value={draftEndereco} onChange={(e) => setDraftEndereco(e.target.value)} disabled={saving || busy} />
-            <Button
-              size="sm"
-              variant="outlined"
-              disabled={saving || busy}
-              onClick={() => void saveAbertura({ enderecoTexto: draftEndereco || null })}
-            >
-              Salvar
-            </Button>
-          </div>
-        ) : (
-          <p className="text-[13px] text-[var(--ink-2)]">
-            {resumo.unidade?.endereco ?? resumo.enderecoTexto ?? '—'}
-            {resumo.enderecoBairro ? ` · ${resumo.enderecoBairro}` : ''}
           </p>
         )}
       </div>

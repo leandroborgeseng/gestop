@@ -241,12 +241,14 @@ model Usuario {
   senhaHash     String
   telefone      String?
   cargo         String?
+  cargoId       String?
   ativo         Boolean   @default(true)
   ultimoLoginAt DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
   secretaria       Secretaria?       @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
+  cargoRef         Cargo?            @relation(fields: [cargoId], references: [id], onDelete: SetNull)
   perfis           UsuarioPerfil[]
   checklistVersoes ChecklistVersao[]  @relation("ChecklistVersaoPublicadoPor")
   fiscalizacoes    Fiscalizacao[]     @relation("FiscalizacaoAgente")
@@ -361,6 +363,7 @@ model TipoChamado {
 model Equipe {
   id           String     @id @default(uuid())
   secretariaId String?
+  codigo       String     @unique
   nome         String
   descricao    String?
   tipo         EquipeTipo @default(PROPRIA)
@@ -375,6 +378,16 @@ model Equipe {
 
   @@unique([secretariaId, nome])
   @@index([ativo])
+}
+
+model Cargo {
+  id        String   @id @default(uuid())
+  nome      String   @unique
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  usuarios Usuario[]
 }
 
 model EquipeUsuario {

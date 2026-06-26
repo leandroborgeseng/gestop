@@ -274,6 +274,18 @@ export class ChamadoExecucaoConcluirDto {
   @Type(() => ChamadoExecucaoGeoDto)
   checkin!: ChamadoExecucaoGeoDto;
 
+  @IsString()
+  equipeExecutoraId!: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  membroIds!: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  membrosExternos?: string[];
+
   @IsOptional()
   @IsBoolean()
   impedimento?: boolean;
@@ -291,6 +303,24 @@ export class ChamadoExecucaoManualDto {
   @IsString()
   @MinLength(10)
   relatorio!: string;
+
+  @IsString()
+  equipeExecutoraId!: string;
+
+  @IsArray()
+  @IsString({ each: true })
+  membroIds!: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  membrosExternos?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChamadoHistoricoAnexoDto)
+  anexos?: ChamadoHistoricoAnexoDto[];
 
   @IsOptional()
   @IsBoolean()

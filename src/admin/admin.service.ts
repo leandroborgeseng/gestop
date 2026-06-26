@@ -11,8 +11,9 @@ import {
   isWebmapImported,
   mergeMetadataWithManualOverride,
 } from '../../prisma/webmap-manual-override';
-import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto, CategoriaVistoriaDto } from './admin.dto';
+import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto, CategoriaVistoriaDto, CargoDto } from './admin.dto';
 import { ensureGeoCoordinates, normalizeEmail, normalizeSigla } from './admin.rules';
+import { isValidCpf, normalizeCpf } from '../common/br-documents';
 
 @Injectable()
 export class AdminService {
@@ -222,10 +223,12 @@ export class AdminService {
   async createEquipe(dto: EquipeDto, user: JwtPayload) {
     await this.ensureUsuariosExist(dto.usuarioIds);
     await this.ensureEquipeMembrosCoerentes(dto.secretariaId, dto.usuarioIds);
+    await this.ensureEquipeUnica(dto.codigo.trim(), dto.nome.trim(), dto.secretariaId || null);
 
     const equipe = await this.prisma.equipe.create({
       data: {
         secretariaId: dto.secretariaId || null,
+        codigo: dto.codigo.trim().toUpperCase(),
         nome: dto.nome.trim(),
         descricao: dto.descricao?.trim(),
         tipo: dto.tipo ?? 'PROPRIA',
@@ -248,6 +251,7 @@ export class AdminService {
     const before = await this.getEquipeOrThrow(id);
     await this.ensureUsuariosExist(dto.usuarioIds);
     await this.ensureEquipeMembrosCoerentes(dto.secretariaId, dto.usuarioIds);
+    await this.ensureEquipeUnica(dto.codigo.trim(), dto.nome.trim(), dto.secretariaId || null, id);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.equipeUsuario.deleteMany({ where: { equipeId: id } });
@@ -255,6 +259,7 @@ export class AdminService {
         where: { id },
         data: {
           secretariaId: dto.secretariaId || null,
+          codigo: dto.codigo.trim().toUpperCase(),
           nome: dto.nome.trim(),
           descricao: dto.descricao?.trim() ?? null,
           tipo: dto.tipo ?? before.tipo,
@@ -327,6 +332,50 @@ export class AdminService {
 
     await this.prisma.categoriaVistoria.delete({ where: { id } });
     await this.audit(user, AuditAction.DELETE, 'CategoriaVistoria', id, before, null);
+    return { ok: true };
+  }
+
+  listCargos() {
+    return this.prisma.cargo.findMany({
+      orderBy: [{ ativo: 'desc' }, { nome: 'asc' }],
+    });
+  }
+
+  async createCargo(dto: CargoDto, user: JwtPayload) {
+    const cargo = await this.prisma.cargo.create({
+      data: {
+        nome: dto.nome.trim(),
+        ativo: dto.ativo ?? true,
+      },
+    });
+
+    await this.audit(user, AuditAction.CREATE, 'Cargo', cargo.id, null, cargo);
+    return cargo;
+  }
+
+  async updateCargo(id: string, dto: CargoDto, user: JwtPayload) {
+    const before = await this.getCargoOrThrow(id);
+    const cargo = await this.prisma.cargo.update({
+      where: { id },
+      data: {
+        nome: dto.nome.trim(),
+        ativo: dto.ativo ?? true,
+      },
+    });
+
+    await this.audit(user, AuditAction.UPDATE, 'Cargo', id, before, cargo);
+    return cargo;
+  }
+
+  async deleteCargo(id: string, user: JwtPayload) {
+    const before = await this.getCargoOrThrow(id);
+    const emUso = await this.prisma.usuario.count({ where: { cargoId: id } });
+    if (emUso > 0) {
+      throw new BadRequestException('Cargo em uso por usuários. Inative em vez de excluir.');
+    }
+
+    await this.prisma.cargo.delete({ where: { id } });
+    await this.audit(user, AuditAction.DELETE, 'Cargo', id, before, null);
     return { ok: true };
   }
 
@@ -427,6 +476,13 @@ export class AdminService {
       );
     }
 
+    const cpf = normalizeCpf(dto.cpf);
+    if (cpf && !isValidCpf(cpf)) {
+      throw new BadRequestException('CPF inválido.');
+    }
+
+    const cargoFields = await this.resolveUsuarioCargoFields(dto);
+
     const resolvedPassword = senha || 'Gestop@123';
     const equipeIds = dto.equipeIds ?? [];
     const usuario = await this.prisma.usuario.create({
@@ -434,9 +490,9 @@ export class AdminService {
         secretariaId: dto.secretariaId || null,
         nome: dto.nome.trim(),
         email: normalizeEmail(dto.email),
-        cpf: dto.cpf?.trim(),
-        telefone: dto.telefone?.trim(),
-        cargo: dto.cargo?.trim(),
+        cpf,
+        telefone: dto.telefone?.replace(/\D/g, '') || null,
+        ...cargoFields,
         senhaHash: hashPassword(resolvedPassword),
         ativo: dto.ativo ?? true,
         perfis: {
@@ -460,6 +516,13 @@ export class AdminService {
   async updateUsuario(id: string, dto: UsuarioDto, user: JwtPayload) {
     const before = await this.getUsuarioOrThrow(id);
 
+    const cpf = normalizeCpf(dto.cpf);
+    if (cpf && !isValidCpf(cpf)) {
+      throw new BadRequestException('CPF inválido.');
+    }
+
+    const cargoFields = await this.resolveUsuarioCargoFields(dto);
+
     await this.prisma.$transaction(async (tx) => {
       await tx.usuarioPerfil.deleteMany({ where: { usuarioId: id } });
       await tx.equipeUsuario.deleteMany({ where: { usuarioId: id } });
@@ -469,9 +532,9 @@ export class AdminService {
           secretariaId: dto.secretariaId || null,
           nome: dto.nome.trim(),
           email: normalizeEmail(dto.email),
-          cpf: dto.cpf?.trim() ?? null,
-          telefone: dto.telefone?.trim() ?? null,
-          cargo: dto.cargo?.trim() ?? null,
+          cpf,
+          telefone: dto.telefone?.replace(/\D/g, '') || null,
+          ...cargoFields,
           ...(dto.senha ? { senhaHash: hashPassword(dto.senha) } : {}),
           ativo: dto.ativo ?? true,
           perfis: {
@@ -535,6 +598,12 @@ export class AdminService {
     });
   }
 
+  private getCargoOrThrow(id: string) {
+    return this.prisma.cargo.findUniqueOrThrow({ where: { id } }).catch(() => {
+      throw new NotFoundException('Cargo nao encontrado');
+    });
+  }
+
   private getUsuarioOrThrow(id: string) {
     return this.prisma.usuario.findUniqueOrThrow({ where: { id }, select: this.usuarioSelect() }).catch(() => {
       throw new NotFoundException('Usuario nao encontrado');
@@ -549,6 +618,8 @@ export class AdminService {
       cpf: true,
       telefone: true,
       cargo: true,
+      cargoId: true,
+      cargoRef: { select: { id: true, nome: true, ativo: true } },
       ativo: true,
       secretariaId: true,
       secretaria: { select: { id: true, nome: true, sigla: true } },
@@ -575,6 +646,46 @@ export class AdminService {
       },
       _count: { select: { chamados: true } },
     } satisfies Prisma.EquipeInclude;
+  }
+
+  private async ensureEquipeUnica(codigo: string, nome: string, secretariaId: string | null, excludeId?: string) {
+    const normalizedCodigo = codigo.trim().toUpperCase();
+    const normalizedNome = nome.trim();
+
+    const codigoDuplicado = await this.prisma.equipe.findFirst({
+      where: {
+        codigo: normalizedCodigo,
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (codigoDuplicado) {
+      throw new BadRequestException('Já existe uma equipe com este código.');
+    }
+
+    const nomeDuplicado = await this.prisma.equipe.findFirst({
+      where: {
+        nome: normalizedNome,
+        secretariaId,
+        ...(excludeId ? { NOT: { id: excludeId } } : {}),
+      },
+      select: { id: true },
+    });
+    if (nomeDuplicado) {
+      throw new BadRequestException('Já existe uma equipe com este nome nesta secretaria.');
+    }
+  }
+
+  private async resolveUsuarioCargoFields(dto: UsuarioDto) {
+    if (dto.cargoId?.trim()) {
+      const cargo = await this.getCargoOrThrow(dto.cargoId.trim());
+      if (!cargo.ativo) {
+        throw new BadRequestException('Cargo inativo.');
+      }
+      return { cargoId: cargo.id, cargo: cargo.nome };
+    }
+
+    return { cargoId: null, cargo: dto.cargo?.trim() || null };
   }
 
   private async ensureEquipeMembrosCoerentes(secretariaId: string | null | undefined, usuarioIds: string[]) {

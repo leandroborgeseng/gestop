@@ -81,6 +81,10 @@ export class EquipeDto {
 
   @IsString()
   @MinLength(2)
+  codigo!: string;
+
+  @IsString()
+  @MinLength(2)
   nome!: string;
 
   @IsOptional()
@@ -167,6 +171,10 @@ export class UsuarioDto {
 
   @IsOptional()
   @IsString()
+  cargoId?: string;
+
+  @IsOptional()
+  @IsString()
   @MinLength(PASSWORD_MIN_LENGTH_NEW)
   @MaxLength(PASSWORD_MAX_LENGTH)
   senha?: string;
@@ -204,6 +212,16 @@ export class PerfilDto {
 }
 
 export class CategoriaVistoriaDto {
+  @IsString()
+  @MinLength(2)
+  nome!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  ativo?: boolean;
+}
+
+export class CargoDto {
   @IsString()
   @MinLength(2)
   nome!: string;

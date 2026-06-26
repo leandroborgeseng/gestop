@@ -51,6 +51,7 @@ import {
   buildChamadoCode,
   buildChamadoTitleFromNc,
   buildDefaultDeadlineFromSeverity,
+  canTransitionChamadoStatus,
   canUsuarioExecutarChamado,
   isEvidenciaExecucaoCampo,
   parseExecucaoCheckinMetadata,
@@ -165,6 +166,7 @@ export class ChamadosService {
       orderBy: { nome: 'asc' },
       select: {
         id: true,
+        codigo: true,
         nome: true,
         secretaria: { select: { id: true, sigla: true } },
         membros: {
@@ -545,6 +547,8 @@ export class ChamadosService {
       throw new BadRequestException('Registre ao menos uma evidência fotográfica da execução em campo.');
     }
 
+    const participantes = await this.resolveExecucaoParticipantes(dto);
+
     const nextStatus = dto.impedimento ? ChamadoStatus.IMPEDIDO : ChamadoStatus.CONCLUIDO;
     if (dto.impedimento && !dto.impedimentoMotivo?.trim()) {
       throw new BadRequestException('Informe o motivo do impedimento.');
@@ -591,6 +595,9 @@ export class ChamadosService {
             distanciaMetros: checkinValidation.result.distanceMeters,
             evidenciasCount,
             evidenciaIds: evidenciasExecucao.map((item) => item.id),
+            equipeExecutora: participantes.equipeExecutora,
+            membrosExecutores: participantes.membrosExecutores,
+            membrosExternos: participantes.membrosExternos,
           },
         },
       });
@@ -1063,6 +1070,13 @@ export class ChamadosService {
       return this.serializeChamado(before);
     }
 
+    let nextStatus = before.status;
+    if (scheduling && equipeId && before.status !== ChamadoStatus.EM_EXECUCAO) {
+      if (canTransitionChamadoStatus(before.status, ChamadoStatus.EM_EXECUCAO)) {
+        nextStatus = ChamadoStatus.EM_EXECUCAO;
+      }
+    }
+
     const [equipeAnterior, equipeNova, responsavelAnterior, responsavelNovo] = await Promise.all([
       before.equipeId
         ? this.prisma.equipe.findUnique({ where: { id: before.equipeId }, select: { nome: true } })
@@ -1090,7 +1104,7 @@ export class ChamadosService {
     const chamado = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.chamado.update({
         where: { id },
-        data: { previstaExecucaoEm, equipeId, responsavelId, prioridade },
+        data: { previstaExecucaoEm, equipeId, responsavelId, prioridade, status: nextStatus },
         include: this.includeRelations(),
       });
 
@@ -1099,8 +1113,11 @@ export class ChamadosService {
           entidadeTipo: 'Chamado',
           entidadeId: id,
           statusAnterior: before.status,
-          statusNovo: before.status,
-          motivo: 'Programação de execução atualizada.',
+          statusNovo: nextStatus,
+          motivo:
+            nextStatus !== before.status
+              ? 'Programação de execução atualizada. Status alterado para em execução.'
+              : 'Programação de execução atualizada.',
           alteradoPorId: user.sub,
           metadata: {
             tipo: 'programacao_update',
@@ -1345,6 +1362,35 @@ export class ChamadosService {
 
     const dataLabel = formatDateBr(dataExecucao);
 
+    const participantes = await this.resolveExecucaoParticipantes(dto);
+    const anexosInput = dto.anexos ?? [];
+    const evidenciaIds: string[] = [];
+    const storedKeys: string[] = [];
+
+    for (const anexo of anexosInput) {
+      const stored = await this.storageService.persistEvidenceUrl(anexo.dataUrl.trim(), anexo.mimeType);
+      storedKeys.push(stored.storageKey);
+      const isImage = (stored.mimeType ?? anexo.mimeType ?? '').startsWith('image/');
+      const evidencia = await this.prisma.evidencia.create({
+        data: {
+          chamadoId: id,
+          tipo: isImage ? EvidenciaTipo.FOTO : EvidenciaTipo.DOCUMENTO,
+          url: stored.url,
+          storageKey: stored.storageKey,
+          mimeType: stored.mimeType,
+          tamanhoBytes: stored.tamanhoBytes,
+          checksum: stored.checksum,
+          capturadaEm: dataExecucao,
+          enviadaEm: new Date(),
+          metadata: {
+            origem: 'execucao_manual',
+            ...(anexo.nome?.trim() ? { nome: anexo.nome.trim() } : {}),
+          },
+        },
+      });
+      evidenciaIds.push(evidencia.id);
+    }
+
     const chamado = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.chamado.update({
         where: { id },
@@ -1371,6 +1417,10 @@ export class ChamadosService {
             dataExecucao: dataExecucao.toISOString(),
             impedimento: Boolean(dto.impedimento),
             impedimentoMotivo: dto.impedimento ? dto.impedimentoMotivo?.trim() ?? null : null,
+            evidenciaIds,
+            equipeExecutora: participantes.equipeExecutora,
+            membrosExecutores: participantes.membrosExecutores,
+            membrosExternos: participantes.membrosExternos,
           },
         },
       });
@@ -2098,6 +2148,49 @@ export class ChamadosService {
   private async ensureEquipeAtiva(equipeId: string) {
     const equipe = await this.prisma.equipe.findFirst({ where: { id: equipeId, ativo: true } });
     if (!equipe) throw new BadRequestException('Equipe nao encontrada ou inativa.');
+  }
+
+  private async resolveExecucaoParticipantes(dto: {
+    equipeExecutoraId: string;
+    membroIds: string[];
+    membrosExternos?: string[];
+  }) {
+    const equipe = await this.prisma.equipe.findFirst({
+      where: { id: dto.equipeExecutoraId.trim(), ativo: true },
+      select: { id: true, codigo: true, nome: true },
+    });
+    if (!equipe) {
+      throw new BadRequestException('Equipe executora não encontrada ou inativa.');
+    }
+
+    const membrosExternos = (dto.membrosExternos ?? []).map((item) => item.trim()).filter(Boolean);
+    const membroIds = [...new Set((dto.membroIds ?? []).map((item) => item.trim()).filter(Boolean))];
+
+    if (membroIds.length === 0 && membrosExternos.length === 0) {
+      throw new BadRequestException('Selecione ao menos um membro que participou da execução.');
+    }
+
+    const membrosExecutores =
+      membroIds.length === 0
+        ? []
+        : await this.prisma.usuario.findMany({
+            where: { id: { in: membroIds }, ativo: true },
+            select: { id: true, nome: true },
+          });
+
+    if (membrosExecutores.length !== membroIds.length) {
+      throw new BadRequestException('Um ou mais membros selecionados não foram encontrados ou estão inativos.');
+    }
+
+    return {
+      equipeExecutora: {
+        id: equipe.id,
+        codigo: equipe.codigo,
+        nome: equipe.nome,
+      },
+      membrosExecutores,
+      membrosExternos,
+    };
   }
 
   private async ensureUsuarioNaEquipe(usuarioId: string, equipeId: string) {

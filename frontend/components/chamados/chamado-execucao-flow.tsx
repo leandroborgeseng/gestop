@@ -11,6 +11,7 @@ import {
   Crosshair,
   LoaderCircle,
   MapPin,
+  Paperclip,
   Wrench,
   X,
 } from 'lucide-react';
@@ -21,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
+import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { useCanGerenciarChamados, useCanLancarExecucaoManual } from '@/components/auth/session-context';
@@ -30,13 +32,14 @@ import {
   concluirChamadoExecucao,
   deleteChamadoExecucaoEvidencia,
   getChamadoExecucao,
+  listChamadoEquipes,
   registrarChamadoExecucaoManual,
 } from '@/lib/api';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import { CHAMADO_STATUS_META, prioridadeVariant } from '@/lib/chamado-status';
 import { formatEvidenceSizeLimitMb, prepareEvidenceImage } from '@/lib/evidence-image';
 import { captureCurrentPosition, GeoPosition } from '@/lib/geolocation';
-import { ChamadoEvidencia, ChamadoExecucaoDetalhe } from '@/lib/types';
+import { ChamadoEvidencia, ChamadoExecucaoDetalhe, EquipeOpcao } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
 type Step = 'chegada' | 'registro' | 'encerramento';
@@ -65,6 +68,106 @@ function buildRelatorioFinal(impedimento: boolean, motivo: string, relatorio: st
   if (!extra || extra === motivoTrim) return prefix;
   if (extra.startsWith('Impedimento:')) return extra;
   return `${prefix}\n\n${extra}`;
+}
+
+function ExecucaoParticipantesBlock({
+  equipes,
+  equipeExecutoraId,
+  selectedMembroIds,
+  membrosExternos,
+  membroExternoInput,
+  disabled,
+  onEquipeChange,
+  onToggleMembro,
+  onMembroExternoInput,
+  onAddMembroExterno,
+  onRemoveMembroExterno,
+}: {
+  equipes: EquipeOpcao[];
+  equipeExecutoraId: string;
+  selectedMembroIds: string[];
+  membrosExternos: string[];
+  membroExternoInput: string;
+  disabled?: boolean;
+  onEquipeChange: (equipeId: string) => void;
+  onToggleMembro: (usuarioId: string, checked: boolean) => void;
+  onMembroExternoInput: (value: string) => void;
+  onAddMembroExterno: () => void;
+  onRemoveMembroExterno: (nome: string) => void;
+}) {
+  const equipeSelecionada = equipes.find((item) => item.id === equipeExecutoraId);
+  const membros = equipeSelecionada?.membros.map((item) => item.usuario).filter((usuario) => usuario.ativo) ?? [];
+
+  return (
+    <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)] p-4">
+      <Field label="Equipe executora">
+        <Select
+          value={equipeExecutoraId}
+          onChange={(event) => onEquipeChange(event.target.value)}
+          className="h-9 w-full text-xs"
+          disabled={disabled}
+        >
+          <option value="">Selecione a equipe</option>
+          {equipes.map((equipe) => (
+            <option key={equipe.id} value={equipe.id}>
+              {equipe.codigo ? `${equipe.codigo} · ` : ''}
+              {equipe.nome}
+              {equipe.secretaria?.sigla ? ` · ${equipe.secretaria.sigla}` : ''}
+            </option>
+          ))}
+        </Select>
+      </Field>
+
+      <div>
+        <p className="mb-2 text-[12px] font-semibold text-[var(--ink-2)]">Membros que participaram</p>
+        {membros.length === 0 ? (
+          <p className="text-[12px] text-[var(--ink-3)]">Nenhum membro ativo na equipe selecionada.</p>
+        ) : (
+          <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
+            {membros.map((usuario) => (
+              <label key={usuario.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+                <input
+                  type="checkbox"
+                  checked={selectedMembroIds.includes(usuario.id)}
+                  onChange={(event) => onToggleMembro(usuario.id, event.target.checked)}
+                  disabled={disabled}
+                />
+                <span>{usuario.nome}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <p className="mb-2 text-[12px] font-semibold text-[var(--ink-2)]">Membro externo à equipe (opcional)</p>
+        <div className="flex gap-2">
+          <input
+            value={membroExternoInput}
+            onChange={(event) => onMembroExternoInput(event.target.value)}
+            placeholder="Nome de quem ajudou na execução"
+            disabled={disabled}
+            className="h-9 min-w-0 flex-1 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px]"
+          />
+          <Button type="button" variant="outlined" size="sm" disabled={disabled || !membroExternoInput.trim()} onClick={onAddMembroExterno}>
+            Incluir
+          </Button>
+        </div>
+        {membrosExternos.length > 0 ? (
+          <ul className="mt-2 space-y-1">
+            {membrosExternos.map((nome) => (
+              <li key={nome} className="flex items-center justify-between gap-2 text-[12px] text-[var(--ink-2)]">
+                <span>{nome}</span>
+                <button type="button" className="text-[var(--danger)]" onClick={() => onRemoveMembroExterno(nome)} disabled={disabled}>
+                  Remover
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function EvidenceLightbox({ src, onClose }: { src: string; onClose: () => void }) {
@@ -113,14 +216,50 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   const [manualRelatorio, setManualRelatorio] = useState('');
   const [manualImpedimento, setManualImpedimento] = useState(false);
   const [manualImpedimentoMotivo, setManualImpedimentoMotivo] = useState('');
+  const [equipesOpcoes, setEquipesOpcoes] = useState<EquipeOpcao[]>([]);
+  const [equipeExecutoraId, setEquipeExecutoraId] = useState('');
+  const [selectedMembroIds, setSelectedMembroIds] = useState<string[]>([]);
+  const [membrosExternos, setMembrosExternos] = useState<string[]>([]);
+  const [membroExternoInput, setMembroExternoInput] = useState('');
+  const [manualAnexos, setManualAnexos] = useState<Array<{ dataUrl: string; mimeType: string; nome: string }>>([]);
+
+  function applyEquipeExecutora(equipeId: string, equipes: EquipeOpcao[]) {
+    setEquipeExecutoraId(equipeId);
+    const equipe = equipes.find((item) => item.id === equipeId);
+    setSelectedMembroIds(equipe?.membros.filter((item) => item.usuario.ativo).map((item) => item.usuario.id) ?? []);
+    setMembrosExternos([]);
+    setMembroExternoInput('');
+  }
+
+  function participantesPayload() {
+    return {
+      equipeExecutoraId,
+      membroIds: selectedMembroIds,
+      membrosExternos: membrosExternos.length > 0 ? membrosExternos : undefined,
+    };
+  }
+
+  function validateParticipantes() {
+    if (!equipeExecutoraId) {
+      setError('Selecione a equipe que executou o chamado.');
+      return false;
+    }
+    if (selectedMembroIds.length === 0 && membrosExternos.length === 0) {
+      setError('Selecione ao menos um membro que participou da execução.');
+      return false;
+    }
+    return true;
+  }
 
   async function load() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getChamadoExecucao(chamadoId);
+      const [data, equipes] = await Promise.all([getChamadoExecucao(chamadoId), listChamadoEquipes()]);
       setDetail(data);
       setEvidencias(data.evidencias);
+      setEquipesOpcoes(equipes);
+      applyEquipeExecutora(data.equipe?.id ?? '', equipes);
       if (data.execucaoCheckin) {
         setStep('registro');
         setPosition({
@@ -296,9 +435,33 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
     setStep('encerramento');
   }
 
+  async function handleManualAnexos(event: ChangeEvent<HTMLInputElement>) {
+    const files = event.target.files;
+    event.target.value = '';
+    if (!files?.length) return;
+
+    const next: Array<{ dataUrl: string; mimeType: string; nome: string }> = [];
+    for (const file of Array.from(files)) {
+      const prepared = file.type.startsWith('image/') ? await prepareEvidenceImage(file) : null;
+      if (prepared) {
+        next.push({ dataUrl: prepared.dataUrl, mimeType: prepared.mimeType, nome: file.name });
+        continue;
+      }
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      next.push({ dataUrl, mimeType: file.type || 'application/octet-stream', nome: file.name });
+    }
+    setManualAnexos((current) => [...current, ...next]);
+  }
+
   async function handleConcluir() {
     if (!detail) return;
     if (!validateExecucaoStep()) return;
+    if (!validateParticipantes()) return;
 
     setBusy(true);
     setError(null);
@@ -307,6 +470,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
       await concluirChamadoExecucao(chamadoId, {
         relatorio: relatorioFinal,
         checkin,
+        ...participantesPayload(),
         impedimento,
         impedimentoMotivo: impedimento ? impedimentoMotivo.trim() : undefined,
       });
@@ -334,12 +498,19 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
       setError('Descreva a execução com ao menos 10 caracteres.');
       return;
     }
+    if (!validateParticipantes()) return;
 
     setBusy(true);
     try {
       await registrarChamadoExecucaoManual(chamadoId, {
         dataExecucao: new Date(`${manualDataExecucao}T12:00:00`).toISOString(),
         relatorio: manualRelatorio.trim(),
+        ...participantesPayload(),
+        anexos: manualAnexos.map((item) => ({
+          dataUrl: item.dataUrl,
+          mimeType: item.mimeType,
+          nome: item.nome,
+        })),
         impedimento: manualImpedimento,
         impedimentoMotivo: manualImpedimento ? manualImpedimentoMotivo.trim() : undefined,
       });
@@ -551,6 +722,49 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                         />
                       </Field>
                     ) : null}
+                    <ExecucaoParticipantesBlock
+                      equipes={equipesOpcoes}
+                      equipeExecutoraId={equipeExecutoraId}
+                      selectedMembroIds={selectedMembroIds}
+                      membrosExternos={membrosExternos}
+                      membroExternoInput={membroExternoInput}
+                      disabled={busy}
+                      onEquipeChange={(equipeId) => applyEquipeExecutora(equipeId, equipesOpcoes)}
+                      onToggleMembro={(usuarioId, checked) =>
+                        setSelectedMembroIds((current) =>
+                          checked ? [...current, usuarioId] : current.filter((id) => id !== usuarioId),
+                        )
+                      }
+                      onMembroExternoInput={setMembroExternoInput}
+                      onAddMembroExterno={() => {
+                        const nome = membroExternoInput.trim();
+                        if (!nome || membrosExternos.includes(nome)) return;
+                        setMembrosExternos((current) => [...current, nome]);
+                        setMembroExternoInput('');
+                      }}
+                      onRemoveMembroExterno={(nome) => setMembrosExternos((current) => current.filter((item) => item !== nome))}
+                    />
+                    <div>
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--r-sm)] border border-[var(--line)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-2)] hover:bg-[var(--surface)]">
+                          <Paperclip className="h-3.5 w-3.5" />
+                          Anexar imagens
+                          <input type="file" multiple accept="image/*" className="hidden" onChange={handleManualAnexos} disabled={busy} />
+                        </label>
+                        {manualAnexos.length > 0 ? (
+                          <span className="text-[12px] text-[var(--ink-3)]">{manualAnexos.length} imagem(ns)</span>
+                        ) : null}
+                      </div>
+                      {manualAnexos.length > 0 ? (
+                        <ul className="space-y-1 text-[12px] text-[var(--ink-3)]">
+                          {manualAnexos.map((anexo) => (
+                            <li key={anexo.nome + anexo.dataUrl.slice(0, 24)}>{anexo.nome}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-[12px] text-[var(--ink-3)]">Opcional: fotos da galeria ou pasta do computador.</p>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-2">
                       <Button type="button" variant="filled" onClick={() => void handleLancamentoManual()} disabled={busy}>
                         {busy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
@@ -729,6 +943,29 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
               </p>
               <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-[var(--ink)]">{relatorioFinal || '—'}</p>
             </div>
+
+            <ExecucaoParticipantesBlock
+              equipes={equipesOpcoes}
+              equipeExecutoraId={equipeExecutoraId}
+              selectedMembroIds={selectedMembroIds}
+              membrosExternos={membrosExternos}
+              membroExternoInput={membroExternoInput}
+              disabled={busy}
+              onEquipeChange={(equipeId) => applyEquipeExecutora(equipeId, equipesOpcoes)}
+              onToggleMembro={(usuarioId, checked) =>
+                setSelectedMembroIds((current) =>
+                  checked ? [...current, usuarioId] : current.filter((id) => id !== usuarioId),
+                )
+              }
+              onMembroExternoInput={setMembroExternoInput}
+              onAddMembroExterno={() => {
+                const nome = membroExternoInput.trim();
+                if (!nome || membrosExternos.includes(nome)) return;
+                setMembrosExternos((current) => [...current, nome]);
+                setMembroExternoInput('');
+              }}
+              onRemoveMembroExterno={(nome) => setMembrosExternos((current) => current.filter((item) => item !== nome))}
+            />
 
             <div>
               <div className="mb-2 flex items-center justify-between gap-2">

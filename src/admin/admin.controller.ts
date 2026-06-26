@@ -7,7 +7,7 @@ import { RequireAnyPermissions, RequirePermissions } from '../auth/permissions';
 import { AdminPermissionsService } from './admin-permissions.service';
 import { PerfilCreateDto, PerfilMatrizDto } from './admin-permissions.dto';
 import { AdminService } from './admin.service';
-import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto, CategoriaVistoriaDto } from './admin.dto';
+import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto, CategoriaVistoriaDto, CargoDto } from './admin.dto';
 
 @UseGuards(AuthGuard, PermissionsGuard)
 @Controller('admin')
@@ -195,5 +195,29 @@ export class AdminController {
   @Delete('categorias-vistoria/:id')
   deleteCategoriaVistoria(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.adminService.deleteCategoriaVistoria(id, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Get('cargos')
+  listCargos() {
+    return this.adminService.listCargos();
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Post('cargos')
+  createCargo(@Body() body: CargoDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.createCargo(body, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Put('cargos/:id')
+  updateCargo(@Param('id') id: string, @Body() body: CargoDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.updateCargo(id, body, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Delete('cargos/:id')
+  deleteCargo(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.adminService.deleteCargo(id, user);
   }
 }

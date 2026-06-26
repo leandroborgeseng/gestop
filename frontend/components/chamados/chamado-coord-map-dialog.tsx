@@ -84,6 +84,7 @@ export function ChamadoCoordMapDialog({
           latitude={draft.latitude}
           longitude={draft.longitude}
           editable={editable}
+          active={open}
           onChange={(coords) => setDraft(coords)}
         />
       </div>

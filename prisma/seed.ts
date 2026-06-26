@@ -270,6 +270,7 @@ async function main() {
   const equipeManutencao = await prisma.equipe.create({
     data: {
       secretariaId: servicos.id,
+      codigo: 'MAN-ESC',
       nome: 'Manutencao Escolar',
       descricao: 'Equipe de manutencao predial das escolas municipais.',
       membros: {

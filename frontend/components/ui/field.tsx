@@ -1,4 +1,5 @@
 import { cn } from '@/lib/cn';
+import { Hint } from '@/components/help/hint';
 
 export function Label({
   className,
@@ -17,15 +18,20 @@ export function Field({
   children,
   className,
   hint,
+  tooltip,
 }: {
   label: string;
   children: React.ReactNode;
   className?: string;
   hint?: string;
+  tooltip?: string;
 }) {
   return (
     <div className={cn('flex flex-col gap-[5px]', className)}>
-      <Label>{label}</Label>
+      <div className="flex items-center gap-1.5">
+        <Label>{label}</Label>
+        {tooltip ? <Hint text={tooltip} /> : null}
+      </div>
       {children}
       {hint ? <p className="text-[11.5px] text-[var(--ink-3)]">{hint}</p> : null}
     </div>

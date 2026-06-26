@@ -247,6 +247,8 @@ export type AdminUsuario = {
   cpf?: string | null;
   telefone?: string | null;
   cargo?: string | null;
+  cargoId?: string | null;
+  cargoRef?: { id: string; nome: string; ativo: boolean } | null;
   ativo: boolean;
   secretaria?: SecretariaOption | null;
   perfis: Array<{
@@ -259,6 +261,7 @@ export type AdminUsuario = {
 
 export type AdminEquipe = {
   id: string;
+  codigo: string;
   nome: string;
   descricao?: string | null;
   tipo?: 'PROPRIA' | 'TERCEIRIZADA';
@@ -270,6 +273,12 @@ export type AdminEquipe = {
     usuario: { id: string; nome: string; email: string; ativo: boolean };
   }>;
   _count?: { chamados: number };
+};
+
+export type AdminCargo = {
+  id: string;
+  nome: string;
+  ativo: boolean;
 };
 
 export type AdminTipoChamado = {
@@ -291,6 +300,7 @@ export type TipoChamadoOpcao = {
 
 export type EquipeOpcaoResumo = {
   id: string;
+  codigo?: string;
   nome: string;
   secretaria?: SecretariaOption | null;
 };

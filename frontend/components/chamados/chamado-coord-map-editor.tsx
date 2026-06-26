@@ -10,15 +10,33 @@ import {
   FRANCA_DEFAULT_ZOOM,
 } from '@/lib/franca-geo';
 
+function configureLeafletIcons() {
+  delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
+  L.Icon.Default.mergeOptions({
+    iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+    iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+    shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+  });
+}
+
+function invalidateMapSize(map: L.Map) {
+  map.invalidateSize({ animate: false });
+  requestAnimationFrame(() => map.invalidateSize({ animate: false }));
+  window.setTimeout(() => map.invalidateSize({ animate: false }), 120);
+  window.setTimeout(() => map.invalidateSize({ animate: false }), 400);
+}
+
 export function ChamadoCoordMapEditor({
   latitude,
   longitude,
   editable,
+  active = true,
   onChange,
 }: {
   latitude: number | null;
   longitude: number | null;
   editable?: boolean;
+  active?: boolean;
   onChange?: (coords: { latitude: number; longitude: number }) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -28,6 +46,7 @@ export function ChamadoCoordMapEditor({
   onChangeRef.current = onChange;
 
   useEffect(() => {
+    configureLeafletIcons();
     if (!containerRef.current || mapRef.current) return;
 
     const lat = latitude ?? FRANCA_CENTER.lat;
@@ -56,6 +75,8 @@ export function ChamadoCoordMapEditor({
     mapRef.current = map;
     markerRef.current = marker;
 
+    requestAnimationFrame(() => invalidateMapSize(map));
+
     return () => {
       map.remove();
       mapRef.current = null;
@@ -70,6 +91,12 @@ export function ChamadoCoordMapEditor({
     marker.setLatLng([latitude, longitude]);
     map.setView([latitude, longitude], map.getZoom(), { animate: false });
   }, [latitude, longitude]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !active) return;
+    invalidateMapSize(map);
+  }, [active]);
 
   return <div ref={containerRef} className="h-[320px] w-full overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]" />;
 }
