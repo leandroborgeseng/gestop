@@ -14,6 +14,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { formatNotaBr, notaCorHex } from '@/lib/vistoria-nota';
 import type { AdminUsuario, FiscalizacaoDetalhe, FiscalizacaoResumo, FiscalizacaoStatus, SecretariaOption } from '@/lib/types';
 
 const PAGE_SIZE = 50;
@@ -41,6 +42,25 @@ function statusLabel(status: FiscalizacaoStatus) {
 
 function formatDateTime(value: string | null | undefined) {
   return value ? new Date(value).toLocaleString('pt-BR') : '—';
+}
+
+function NotaVistoriaDestaque({ notaGeral }: { notaGeral: number }) {
+  const color = notaCorHex(notaGeral);
+  return (
+    <div
+      className="flex min-w-[92px] flex-col items-center rounded-[var(--r-md)] border px-3 py-2 text-center"
+      style={{
+        borderColor: `${color}55`,
+        backgroundColor: `${color}14`,
+      }}
+      title="Nota média dos itens Likert nesta vistoria (0 a 10)"
+    >
+      <span className="text-[10px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Nota do próprio</span>
+      <span className="text-[26px] font-bold leading-tight" style={{ color }}>
+        {formatNotaBr(notaGeral)}
+      </span>
+    </div>
+  );
 }
 
 export default function VistoriasPage() {
@@ -297,7 +317,7 @@ export default function VistoriasPage() {
               <Card elevation={1} className="h-full overflow-hidden">
                 <CardContent className="flex h-full flex-col p-0">
                   <div className="border-b border-[var(--line-2)] p-5">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
                       <div>
                         <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Unidade</p>
                         <h2 className="mt-1 text-[17px] font-semibold text-[var(--ink)]">{selected.unidade.nome}</h2>
@@ -305,7 +325,12 @@ export default function VistoriasPage() {
                           {selected.unidade.codigoPatrimonial} · {selected.secretaria.sigla}
                         </p>
                       </div>
-                      <Badge variant={STATUS_BADGE[selected.status]}>{statusLabel(selected.status)}</Badge>
+                      <div className="flex flex-col items-end gap-2">
+                        {!detailLoading && detail?.nota?.notaGeral != null ? (
+                          <NotaVistoriaDestaque notaGeral={detail.nota.notaGeral} />
+                        ) : null}
+                        <Badge variant={STATUS_BADGE[selected.status]}>{statusLabel(selected.status)}</Badge>
+                      </div>
                     </div>
                   </div>
 
@@ -323,6 +348,29 @@ export default function VistoriasPage() {
                         {selected.distanciaCheckinMetros != null ? `${Math.round(selected.distanciaCheckinMetros)} m` : '—'}
                       </DetailField>
                     </dl>
+
+                    {!detailLoading && detail?.nota?.notasPorCategoria?.length ? (
+                      <div>
+                        <p className="mb-2 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Notas por categoria</p>
+                        <div className="flex flex-wrap gap-2">
+                          {detail.nota.notasPorCategoria.map((item) => (
+                            <div
+                              key={item.categoriaId}
+                              className="rounded-[var(--r-md)] border px-3 py-2 text-center"
+                              style={{
+                                borderColor: `${notaCorHex(item.nota)}44`,
+                                backgroundColor: `${notaCorHex(item.nota)}10`,
+                              }}
+                            >
+                              <p className="text-[11px] font-semibold text-[var(--ink-3)]">{item.categoriaNome}</p>
+                              <p className="text-[16px] font-bold" style={{ color: notaCorHex(item.nota) }}>
+                                {formatNotaBr(item.nota)}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
 
                     {detail?.respostas?.length ? (
                       <Button variant="outlined" size="sm" onClick={() => setQuestionarioOpen(true)}>

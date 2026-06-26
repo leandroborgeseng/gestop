@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { resolveSecretariaScopeId } from '../auth/secretaria-scope';
+import { computeVistoriaNotas } from '../domain/vistoria-nota';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListFiscalizacoesQueryDto } from './fiscalizacoes.dto';
 
@@ -58,7 +59,16 @@ export class FiscalizacoesService {
         respostas: {
           orderBy: { respondidoEm: 'asc' },
           include: {
-            item: { select: { id: true, codigo: true, titulo: true, tipo: true } },
+            item: {
+              select: {
+                id: true,
+                codigo: true,
+                titulo: true,
+                tipo: true,
+                categoriaVistoriaId: true,
+                categoriaVistoria: { select: { id: true, nome: true } },
+              },
+            },
             naoConformidade: {
               select: {
                 id: true,
@@ -94,8 +104,11 @@ export class FiscalizacoesService {
       throw new NotFoundException('Vistoria não encontrada.');
     }
 
+    const nota = computeVistoriaNotas(fiscalizacao.respostas);
+
     return {
       ...this.serialize(fiscalizacao),
+      nota,
       respostas: fiscalizacao.respostas.map((resposta) => ({
         ...resposta,
         valorNumero: resposta.valorNumero == null ? null : Number(resposta.valorNumero),

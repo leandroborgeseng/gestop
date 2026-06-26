@@ -898,6 +898,7 @@ export type FiscalizacaoResumo = {
 };
 
 export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
+  nota?: VistoriaNotaResumo | null;
   respostas?: Array<{
     id: string;
     conformidade: string | null;
@@ -906,7 +907,14 @@ export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
     valorBooleano: boolean | null;
     comentario: string | null;
     respondidoEm: string;
-    item: { id: string; codigo: string; titulo: string; tipo: string };
+    item: {
+      id: string;
+      codigo: string;
+      titulo: string;
+      tipo: string;
+      categoriaVistoriaId?: string | null;
+      categoriaVistoria?: { id: string; nome: string } | null;
+    };
     naoConformidade?: {
       id: string;
       chamado?: { id: string; codigo: string } | null;
