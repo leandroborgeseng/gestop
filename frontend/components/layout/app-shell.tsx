@@ -16,8 +16,10 @@ import {
 import { SIGMA_NAME, SIGMA_SHORT_TAGLINE } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { getAlertasOperacionais, getResumoOperacional, logout } from '@/lib/api';
+import type { AuthUser } from '@/lib/types';
 import { buildNavBadges, resolveGlobalSearchRoute, type NavBadges } from '@/lib/nav-badges';
-import { getGroupedNavItems, getMobileNav, getVisibleNavItems, isNavActive, MORE_NAV_ICON, type NavItem } from '@/lib/navigation';
+import { getGroupedNavItems, getMobileNav, isNavActive, MORE_NAV_ICON, type NavItem } from '@/lib/navigation';
+import { SessionScopeSwitchers } from '@/components/auth/session-scope-switchers';
 import { useGuide } from '@/components/help/guide-provider';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
@@ -79,22 +81,19 @@ function NavLink({
 }
 
 function DesktopSidebar({
-  userName,
-  userRoles,
-  permissions,
+  user,
   collapsed,
   badges,
   onToggleCollapsed,
 }: {
-  userName: string;
-  userRoles: string[];
-  permissions: string[];
+  user: AuthUser;
   collapsed: boolean;
   badges: NavBadges;
   onToggleCollapsed: () => void;
 }) {
   const pathname = usePathname();
-  const groups = getGroupedNavItems(permissions);
+  const groups = getGroupedNavItems(user.permissoes);
+  const userName = user.nome;
   const initials = userName
     .split(' ')
     .slice(0, 2)
@@ -160,14 +159,16 @@ function DesktopSidebar({
 
       <div className="border-t border-[var(--line-2)] p-3">
         {!collapsed ? (
-          <div className="mb-2 flex items-center gap-2.5 rounded-[var(--r-md)] px-2 py-1.5">
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--brand)] to-[var(--brand-bright)] text-[11px] font-bold text-white">
-              {initials}
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate text-[13px] font-semibold text-[var(--ink)]">{userName}</span>
-              <span className="block truncate text-[11px] text-[var(--ink-3)]">{userRoles[0] ?? 'Usuário'}</span>
-            </span>
+          <div className="mb-2 space-y-2 rounded-[var(--r-md)] px-2 py-1.5">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--brand)] to-[var(--brand-bright)] text-[11px] font-bold text-white">
+                {initials}
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-[13px] font-semibold text-[var(--ink)]">{userName}</span>
+              </span>
+            </div>
+            <SessionScopeSwitchers user={user} dense />
           </div>
         ) : null}
         <Link
@@ -325,18 +326,19 @@ export function MobileAppBar({ userName, syncPending }: { userName: string; sync
 }
 
 export function MobileBottomNav({
-  permissions,
+  user,
   badges,
   moreOpen,
   onMoreOpen,
 }: {
-  permissions: string[];
+  user: AuthUser;
   badges: NavBadges;
   moreOpen: boolean;
   onMoreOpen: (open: boolean) => void;
 }) {
   const pathname = usePathname();
   const { openGuide } = useGuide();
+  const permissions = user.permissoes;
   const { primary, secondary, hasMore } = getMobileNav(permissions);
   const MoreIcon = MORE_NAV_ICON;
   const slotCount = hasMore ? primary.length + 1 : primary.length;
@@ -413,6 +415,10 @@ export function MobileBottomNav({
 
       <Sheet open={moreOpen} onClose={() => onMoreOpen(false)} title="Mais opções">
         <div className="space-y-1">
+          <div className="mb-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-3">
+            <p className="mb-2 truncate text-[13.5px] font-semibold text-[var(--ink)]">{user.nome}</p>
+            <SessionScopeSwitchers user={user} />
+          </div>
           {secondary.map((item) => (
               <NavLink
                 key={item.id}
@@ -448,20 +454,17 @@ export function MobileBottomNav({
 }
 
 export function AppShell({
-  userName,
-  userRoles,
-  permissions,
+  user,
   children,
 }: {
-  userName: string;
-  userRoles: string[];
-  permissions: string[];
+  user: AuthUser;
   children: React.ReactNode;
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [syncPending, setSyncPending] = useState(0);
   const [navBadges, setNavBadges] = useState<NavBadges>({});
+  const permissions = user.permissoes;
 
   useEffect(() => {
     Promise.all([
@@ -476,18 +479,16 @@ export function AppShell({
   return (
     <div className="sigma-app flex min-h-dvh bg-[var(--canvas)]">
       <DesktopSidebar
-        userName={userName}
-        userRoles={userRoles}
-        permissions={permissions}
+        user={user}
         collapsed={collapsed}
         badges={navBadges}
         onToggleCollapsed={() => setCollapsed((v) => !v)}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <MobileAppBar userName={userName} syncPending={syncPending} />
+        <MobileAppBar userName={user.nome} syncPending={syncPending} />
         <DesktopTopbar syncPending={syncPending} />
         <main className="sigma-main relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
-        <MobileBottomNav permissions={permissions} badges={navBadges} moreOpen={moreOpen} onMoreOpen={setMoreOpen} />
+        <MobileBottomNav user={user} badges={navBadges} moreOpen={moreOpen} onMoreOpen={setMoreOpen} />
       </div>
     </div>
   );

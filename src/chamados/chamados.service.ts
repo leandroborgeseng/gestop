@@ -10,6 +10,7 @@ import {
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import {
+  assertChamadoExecucaoAccess,
   assertChamadoSecretariaAccess,
   resolveChamadoSecretariaFilter,
   resolveEquipeSecretariaFilter,
@@ -841,7 +842,7 @@ export class ChamadosService {
 
   async updateStatus(id: string, dto: UpdateChamadoStatusDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
-    assertChamadoSecretariaAccess(user, before);
+    assertChamadoExecucaoAccess(user, before);
 
     try {
       assertValidChamadoTransition(before.status, dto.status);
@@ -921,7 +922,7 @@ export class ChamadosService {
 
   async updateAtribuicao(id: string, dto: UpdateChamadoAtribuicaoDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
-    assertChamadoSecretariaAccess(user, before);
+    assertChamadoExecucaoAccess(user, before);
     const equipeId = dto.equipeId === undefined ? before.equipeId : dto.equipeId || null;
     const equipeChanged = dto.equipeId !== undefined && equipeId !== before.equipeId;
     let responsavelId: string | null;
@@ -1013,7 +1014,7 @@ export class ChamadosService {
 
   async updatePlanejamento(id: string, dto: UpdateChamadoPlanejamentoDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
-    assertChamadoSecretariaAccess(user, before);
+    assertChamadoExecucaoAccess(user, before);
 
     if (before.status === ChamadoStatus.CONCLUIDO || before.status === ChamadoStatus.CANCELADO) {
       throw new BadRequestException('Chamados concluídos ou cancelados não podem ser reprogramados.');
@@ -1150,7 +1151,7 @@ export class ChamadosService {
 
   async updateTriagem(id: string, dto: UpdateChamadoTriagemDto, user: JwtPayload) {
     const before = await this.getChamadoOrThrow(id);
-    assertChamadoSecretariaAccess(user, before);
+    assertChamadoExecucaoAccess(user, before);
 
     const tipoChamadoId =
       dto.tipoChamadoId === undefined
@@ -1244,7 +1245,7 @@ export class ChamadosService {
     }
 
     const before = await this.getChamadoOrThrow(id);
-    assertChamadoSecretariaAccess(user, before);
+    assertChamadoExecucaoAccess(user, before);
 
     const enderecoBairro = dto.enderecoBairro === undefined ? before.enderecoBairro : dto.enderecoBairro?.trim() || null;
     const solicitanteNome =
@@ -1269,6 +1270,24 @@ export class ChamadosService {
       throw new BadRequestException('Informe latitude e longitude juntas.');
     }
 
+    let secretariaId = before.secretariaId;
+    let secretariaNovaLabel = before.secretaria
+      ? `${before.secretaria.sigla} — ${before.secretaria.nome}`
+      : '—';
+    if (dto.secretariaId !== undefined && dto.secretariaId !== null) {
+      const secretaria = await this.prisma.secretaria.findFirst({
+        where: { id: dto.secretariaId.trim(), ativo: true },
+        select: { id: true, nome: true, sigla: true },
+      });
+      if (!secretaria) throw new BadRequestException('Secretaria não encontrada ou inativa.');
+      secretariaId = secretaria.id;
+      secretariaNovaLabel = `${secretaria.sigla} — ${secretaria.nome}`;
+    }
+
+    const secretariaAnteriorLabel = before.secretaria
+      ? `${before.secretaria.sigla} — ${before.secretaria.nome}`
+      : '—';
+
     const alteracoes = buildAberturaAlteracoes({
       bairroAnterior: before.enderecoBairro,
       bairroNovo: enderecoBairro,
@@ -1282,6 +1301,8 @@ export class ChamadosService {
       longitudeAnterior: before.longitude == null ? null : Number(before.longitude),
       latitudeNova: latitude,
       longitudeNova: longitude,
+      secretariaAnterior: secretariaAnteriorLabel,
+      secretariaNova: secretariaNovaLabel,
     });
 
     if (alteracoes.length === 0) {
@@ -1298,6 +1319,7 @@ export class ChamadosService {
           enderecoTexto,
           latitude,
           longitude,
+          secretariaId,
           modoLocalizacao: before.modoLocalizacao,
         },
         include: this.includeRelations(),
@@ -1341,7 +1363,7 @@ export class ChamadosService {
     }
 
     const before = await this.getChamadoOrThrow(id);
-    assertChamadoSecretariaAccess(user, before);
+    assertChamadoExecucaoAccess(user, before);
 
     const dataExecucao = new Date(dto.dataExecucao);
     if (Number.isNaN(dataExecucao.getTime())) {
@@ -1501,7 +1523,7 @@ export class ChamadosService {
 
   async notificarEquipe(id: string, user: JwtPayload) {
     const chamado = await this.getChamadoOrThrow(id);
-    assertChamadoSecretariaAccess(user, chamado);
+    assertChamadoExecucaoAccess(user, chamado);
 
     if (!chamado.equipeId) {
       throw new BadRequestException('Chamado sem equipe atribuída.');
@@ -1888,6 +1910,7 @@ export class ChamadosService {
           latitude: true,
           longitude: true,
           raioValidacaoMetros: true,
+          secretariaId: true,
           secretaria: { select: { id: true, nome: true, sigla: true } },
         },
       },
@@ -1908,9 +1931,11 @@ export class ChamadosService {
   }
 
   private async assertUsuarioPodeExecutarChamado(
-    chamado: { equipeId: string | null },
+    chamado: { equipeId: string | null; secretariaId: string },
     user: JwtPayload,
   ) {
+    assertChamadoExecucaoAccess(user, chamado);
+
     if (user.permissoes.includes('chamados.gerenciar')) {
       return;
     }

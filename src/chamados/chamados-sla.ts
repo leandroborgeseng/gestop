@@ -210,6 +210,8 @@ export function buildAberturaAlteracoes(input: {
   longitudeAnterior?: number | null;
   latitudeNova?: number | null;
   longitudeNova?: number | null;
+  secretariaAnterior?: string | null;
+  secretariaNova?: string | null;
 }): PlanejamentoAlteracao[] {
   const alteracoes: PlanejamentoAlteracao[] = [];
 
@@ -245,6 +247,17 @@ export function buildAberturaAlteracoes(input: {
       label: 'Coordenadas geográficas',
       de: coordsAnteriores,
       para: coordsNovas,
+    });
+  }
+
+  const secretariaAnterior = input.secretariaAnterior?.trim() || '—';
+  const secretariaNova = input.secretariaNova?.trim() || '—';
+  if (secretariaAnterior !== secretariaNova) {
+    alteracoes.push({
+      campo: 'secretariaId',
+      label: 'Secretaria responsável pela execução',
+      de: secretariaAnterior,
+      para: secretariaNova,
     });
   }
 

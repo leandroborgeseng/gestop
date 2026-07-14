@@ -174,6 +174,11 @@ export class UpdateChamadoAberturaDto {
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsNumber()
   longitude?: number | null;
+
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  secretariaId?: string | null;
 }
 
 class ChamadoHistoricoAnexoDto {

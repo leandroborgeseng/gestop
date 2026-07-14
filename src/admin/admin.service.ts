@@ -488,6 +488,8 @@ export class AdminService {
     const usuario = await this.prisma.usuario.create({
       data: {
         secretariaId: dto.secretariaId || null,
+        secretariaAtivaId: dto.secretariaId || null,
+        perfilAtivoId: dto.perfilIds[0] ?? null,
         nome: dto.nome.trim(),
         email: normalizeEmail(dto.email),
         cpf,
@@ -509,8 +511,10 @@ export class AdminService {
       select: this.usuarioSelect(),
     });
 
-    await this.audit(user, AuditAction.CREATE, 'Usuario', usuario.id, null, this.maskUsuario(usuario));
-    return usuario;
+    await this.syncUsuarioSecretarias(usuario.id, dto);
+    const created = await this.getUsuarioOrThrow(usuario.id);
+    await this.audit(user, AuditAction.CREATE, 'Usuario', created.id, null, this.maskUsuario(created));
+    return created;
   }
 
   async updateUsuario(id: string, dto: UsuarioDto, user: JwtPayload) {
@@ -551,6 +555,7 @@ export class AdminService {
       });
     });
 
+    await this.syncUsuarioSecretarias(id, dto);
     const usuario = await this.getUsuarioOrThrow(id);
     await this.audit(user, AuditAction.UPDATE, 'Usuario', id, this.maskUsuario(before), this.maskUsuario(usuario));
     return usuario;
@@ -604,6 +609,51 @@ export class AdminService {
     });
   }
 
+  private async syncUsuarioSecretarias(usuarioId: string, dto: UsuarioDto) {
+    const principalId = dto.secretariaId?.trim() || null;
+    const linkedIds = Array.from(
+      new Set([...(dto.secretariaIds ?? []).map((id) => id.trim()).filter(Boolean), ...(principalId ? [principalId] : [])]),
+    );
+
+    const current = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: { perfilAtivoId: true, secretariaAtivaId: true },
+    });
+
+    const nextPerfilAtivoId =
+      current?.perfilAtivoId && dto.perfilIds.includes(current.perfilAtivoId)
+        ? current.perfilAtivoId
+        : (dto.perfilIds[0] ?? null);
+
+    const nextSecretariaAtivaId =
+      current?.secretariaAtivaId && linkedIds.includes(current.secretariaAtivaId)
+        ? current.secretariaAtivaId
+        : principalId;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.usuarioSecretaria.deleteMany({ where: { usuarioId } });
+      if (linkedIds.length > 0) {
+        await tx.usuarioSecretaria.createMany({
+          data: linkedIds.map((secretariaId) => ({
+            usuarioId,
+            secretariaId,
+            principal: secretariaId === (principalId ?? linkedIds[0]),
+          })),
+        });
+      }
+
+      await tx.usuario.update({
+        where: { id: usuarioId },
+        data: {
+          perfilAtivoId: nextPerfilAtivoId,
+          secretariaAtivaId: nextSecretariaAtivaId,
+          secretariaId: principalId,
+          acessoTodasSecretarias: Boolean(dto.acessoTodasSecretarias),
+        },
+      });
+    });
+  }
+
   private getUsuarioOrThrow(id: string) {
     return this.prisma.usuario.findUniqueOrThrow({ where: { id }, select: this.usuarioSelect() }).catch(() => {
       throw new NotFoundException('Usuario nao encontrado');
@@ -622,7 +672,14 @@ export class AdminService {
       cargoRef: { select: { id: true, nome: true, ativo: true } },
       ativo: true,
       secretariaId: true,
+      acessoTodasSecretarias: true,
       secretaria: { select: { id: true, nome: true, sigla: true } },
+      secretariasVinculos: {
+        select: {
+          principal: true,
+          secretaria: { select: { id: true, nome: true, sigla: true } },
+        },
+      },
       perfis: {
         select: {
           perfil: { select: { id: true, nome: true } },

@@ -4,41 +4,105 @@ import { JwtPayload } from './jwt';
 
 /** Administrador do sistema — visão global. */
 export function isGlobalOperator(user: JwtPayload) {
-  return user.permissoes.includes('usuarios.gerenciar');
+  return user.permissoes.includes('usuarios.gerenciar') || Boolean(user.acessoTodasSecretarias);
 }
 
-/** Gestor de Secretaria — operações limitadas à pasta do usuário. */
+/** Operador com escopo em uma secretaria específica. */
 export function isSecretariaScoped(user: JwtPayload) {
-  return user.permissoes.includes('secretaria.gerenciar') && Boolean(user.secretariaId?.trim());
+  if (isGlobalOperator(user) && !user.secretariaId?.trim()) return false;
+  return Boolean(user.secretariaId?.trim());
 }
 
+/**
+ * Retorna a secretaria ativa da sessão (escopo).
+ * `undefined` = sem filtro (todas as secretarias autorizadas / visão global).
+ */
 export function resolveSecretariaScopeId(user: JwtPayload): string | undefined {
-  if (isSecretariaScoped(user)) return user.secretariaId!.trim();
-  return undefined;
+  const active = user.secretariaId?.trim();
+  if (!active) return undefined;
+  return active;
+}
+
+/**
+ * IDs de secretarias no escopo da sessão.
+ * `undefined` = visão global (sem filtro).
+ * `[]` = sem secretaria autorizada (não enxerga dados de outras secretarias).
+ */
+export function resolveSecretariaScopeIds(user: JwtPayload): string[] | undefined {
+  if (user.acessoTodasSecretarias || user.permissoes.includes('usuarios.gerenciar')) {
+    if (!user.secretariaId?.trim()) return undefined; // global real
+  }
+  const active = resolveSecretariaScopeId(user);
+  if (active) return [active];
+  const links = user.secretariasIds?.filter(Boolean) ?? [];
+  if (links.length > 0) return links;
+  // Sem secretaria ativa/vínculos e sem modo global: bloqueia acesso cruzado
+  return [];
 }
 
 export function resolveChamadoSecretariaFilter(user: JwtPayload): Prisma.ChamadoWhereInput {
-  const secretariaId = resolveSecretariaScopeId(user);
-  return secretariaId ? { secretariaId } : {};
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return {};
+  if (ids.length === 0) return { id: { in: [] } };
+  if (ids.length === 1) {
+    const secretariaId = ids[0];
+    return {
+      OR: [{ secretariaId }, { unidade: { secretariaId } }],
+    };
+  }
+  return {
+    OR: [{ secretariaId: { in: ids } }, { unidade: { secretariaId: { in: ids } } }],
+  };
 }
 
 export function resolveEquipeSecretariaFilter(user: JwtPayload): Prisma.EquipeWhereInput {
-  const secretariaId = resolveSecretariaScopeId(user);
-  return secretariaId ? { secretariaId } : {};
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return {};
+  if (ids.length === 0) return { id: { in: [] } };
+  return ids.length === 1 ? { secretariaId: ids[0] } : { secretariaId: { in: ids } };
 }
 
 export function resolveUnidadeSecretariaFilter(user: JwtPayload): Prisma.UnidadePublicaWhereInput {
-  const secretariaId = resolveSecretariaScopeId(user);
-  return secretariaId ? { secretariaId } : {};
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return {};
+  if (ids.length === 0) return { id: { in: [] } };
+  return ids.length === 1 ? { secretariaId: ids[0] } : { secretariaId: { in: ids } };
 }
 
-export function assertChamadoSecretariaAccess(user: JwtPayload, chamado: { secretariaId: string }) {
-  if (isGlobalOperator(user)) return;
-
-  const scopeId = resolveSecretariaScopeId(user);
-  if (scopeId && chamado.secretariaId === scopeId) return;
-
-  if (scopeId) {
-    throw new ForbiddenException('Chamado fora da secretaria autorizada.');
+/** Visualização: execução OU próprio da secretaria no escopo. */
+export function assertChamadoSecretariaAccess(
+  user: JwtPayload,
+  chamado: {
+    secretariaId: string;
+    unidade?: {
+      secretariaId?: string | null;
+      secretaria?: { id: string } | null;
+    } | null;
+  },
+) {
+  if (user.permissoes.includes('usuarios.gerenciar') || user.acessoTodasSecretarias) {
+    if (!user.secretariaId?.trim()) return;
   }
+
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return;
+
+  if (ids.includes(chamado.secretariaId)) return;
+  const unidadeSec = chamado.unidade?.secretariaId ?? chamado.unidade?.secretaria?.id;
+  if (unidadeSec && ids.includes(unidadeSec)) return;
+
+  throw new ForbiddenException('Chamado fora da secretaria autorizada.');
+}
+
+/** Tratativa operacional: somente secretaria responsável pela execução. */
+export function assertChamadoExecucaoAccess(user: JwtPayload, chamado: { secretariaId: string }) {
+  if (user.permissoes.includes('usuarios.gerenciar') || user.acessoTodasSecretarias) {
+    if (!user.secretariaId?.trim()) return;
+  }
+
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return;
+  if (ids.includes(chamado.secretariaId)) return;
+
+  throw new ForbiddenException('Sem permissão de tratativa: secretaria de execução diferente da ativa.');
 }

@@ -190,7 +190,9 @@ model Secretaria {
   updatedAt       DateTime @updatedAt
 
   unidades          UnidadePublica[]
-  usuarios          Usuario[]
+  usuarios          Usuario[] @relation("UsuarioSecretariaPrincipal")
+  usuariosAtivos    Usuario[] @relation("UsuarioSecretariaAtiva")
+  usuarioVinculos   UsuarioSecretaria[]
   checklists        Checklist[]
   fiscalizacoes     Fiscalizacao[]
   chamados          Chamado[]
@@ -235,6 +237,9 @@ model UnidadePublica {
 model Usuario {
   id            String    @id @default(uuid())
   secretariaId  String?
+  perfilAtivoId String?
+  secretariaAtivaId String?
+  acessoTodasSecretarias Boolean @default(false)
   nome          String
   email         String    @unique
   cpf           String?   @unique
@@ -247,9 +252,13 @@ model Usuario {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  secretaria       Secretaria?       @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
+  secretaria       Secretaria?       @relation("UsuarioSecretariaPrincipal", fields: [secretariaId], references: [id], onDelete: SetNull)
+  perfilAtivo      Perfil?           @relation("UsuarioPerfilAtivo", fields: [perfilAtivoId], references: [id], onDelete: SetNull)
+  secretariaAtiva  Secretaria?       @relation("UsuarioSecretariaAtiva", fields: [secretariaAtivaId], references: [id], onDelete: SetNull)
   cargoRef         Cargo?            @relation(fields: [cargoId], references: [id], onDelete: SetNull)
   perfis           UsuarioPerfil[]
+  permissoesIndividuais UsuarioPermissao[]
+  secretariasVinculos   UsuarioSecretaria[]
   checklistVersoes ChecklistVersao[]  @relation("ChecklistVersaoPublicadoPor")
   fiscalizacoes    Fiscalizacao[]     @relation("FiscalizacaoAgente")
   naoConformidades NaoConformidade[]  @relation("NaoConformidadeRegistradaPor")
@@ -265,6 +274,8 @@ model Usuario {
   equipes             EquipeUsuario[]
 
   @@index([secretariaId])
+  @@index([perfilAtivoId])
+  @@index([secretariaAtivaId])
   @@index([ativo])
 }
 
@@ -304,8 +315,9 @@ model Perfil {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  usuarios    UsuarioPerfil[]
-  permissoes  PerfilPermissao[]
+  usuarios         UsuarioPerfil[]
+  usuariosAtivos   Usuario[] @relation("UsuarioPerfilAtivo")
+  permissoes       PerfilPermissao[]
 }
 
 model Permissao {
@@ -315,7 +327,8 @@ model Permissao {
   modulo      String
   createdAt   DateTime @default(now())
 
-  perfis      PerfilPermissao[]
+  perfis                PerfilPermissao[]
+  usuariosIndividuais   UsuarioPermissao[]
 
   @@index([modulo])
 }
@@ -340,6 +353,30 @@ model PerfilPermissao {
   permissao Permissao @relation(fields: [permissaoId], references: [id], onDelete: Cascade)
 
   @@id([perfilId, permissaoId])
+}
+
+model UsuarioPermissao {
+  usuarioId   String
+  permissaoId String
+  createdAt   DateTime @default(now())
+
+  usuario   Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  permissao Permissao @relation(fields: [permissaoId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, permissaoId])
+}
+
+model UsuarioSecretaria {
+  usuarioId    String
+  secretariaId String
+  principal    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  secretaria Secretaria @relation(fields: [secretariaId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, secretariaId])
+  @@index([secretariaId])
 }
 
 model TipoChamado {

@@ -7,6 +7,9 @@ export type JwtPayload = {
   perfis: string[];
   permissoes: string[];
   secretariaId?: string | null;
+  perfilAtivoId?: string | null;
+  acessoTodasSecretarias?: boolean;
+  secretariasIds?: string[];
   iat?: number;
   exp?: number;
 };

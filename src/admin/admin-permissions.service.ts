@@ -130,6 +130,99 @@ export class AdminPermissionsService {
     return this.getMatrizPerfil(perfilId);
   }
 
+  async getMatrizUsuario(usuarioId: string) {
+    const usuario = await this.getUsuarioOrThrow(usuarioId);
+    const permissoes = await this.prisma.usuarioPermissao.findMany({
+      where: { usuarioId },
+      include: { permissao: true },
+    });
+    const storedKeys = permissoes.map((item) => item.permissao.chave);
+    const effective = resolveEffectiveMatrixKeys(storedKeys);
+
+    return {
+      usuario: {
+        id: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+      },
+      perfisVinculados: usuario.perfis.map((item) => ({
+        id: item.perfil.id,
+        nome: item.perfil.nome,
+      })),
+      catalogo: serializeCatalog(),
+      chaves: [...effective].sort(),
+    };
+  }
+
+  async saveMatrizUsuario(usuarioId: string, chaves: string[], user: JwtPayload) {
+    const usuario = await this.getUsuarioOrThrow(usuarioId);
+    const beforeStored = await this.prisma.usuarioPermissao.findMany({
+      where: { usuarioId },
+      include: { permissao: true },
+    });
+    const beforeKeys = resolveEffectiveMatrixKeys(beforeStored.map((item) => item.permissao.chave));
+    const payload = buildMatrixSavePayload(chaves);
+    const afterKeys = new Set(payload.matrixKeys);
+
+    const changes = diffMatrixPermissions(beforeKeys, afterKeys);
+    if (changes.length === 0) {
+      return this.getMatrizUsuario(usuarioId);
+    }
+
+    await this.ensureCatalogPermissions();
+
+    const permissaoRecords = await this.prisma.permissao.findMany({
+      where: { chave: { in: payload.allKeys } },
+      select: { id: true, chave: true },
+    });
+    const permissaoByChave = new Map(permissaoRecords.map((item) => [item.chave, item.id]));
+    const missing = payload.allKeys.filter((key) => !permissaoByChave.has(key));
+    if (missing.length > 0) {
+      throw new BadRequestException(`Permissões não sincronizadas: ${missing.join(', ')}`);
+    }
+
+    const auditorId = await resolveAuditUsuarioId(this.prisma, user.sub);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.usuarioPermissao.deleteMany({ where: { usuarioId } });
+      if (payload.allKeys.length > 0) {
+        await tx.usuarioPermissao.createMany({
+          data: payload.allKeys.map((chave) => ({
+            usuarioId,
+            permissaoId: permissaoByChave.get(chave)!,
+          })),
+        });
+      }
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: auditorId,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'UsuarioPermissao',
+          entidadeId: usuarioId,
+          valorAntigo: {
+            usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email },
+            chaves: [...beforeKeys].sort(),
+          },
+          valorNovo: {
+            usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email },
+            chaves: payload.matrixKeys,
+            legacy: payload.legacyKeys,
+            alteracoes: changes.map((change) => ({
+              tela: change.telaLabel,
+              funcao: change.funcaoLabel,
+              acao: change.acao,
+              anterior: change.anterior,
+              novo: change.novo,
+            })),
+          },
+        },
+      });
+    });
+
+    return this.getMatrizUsuario(usuarioId);
+  }
+
   async createPerfil(dto: PerfilCreateDto) {
     const existing = await this.prisma.perfil.findUnique({ where: { nome: dto.nome.trim() } });
     if (existing) {
@@ -173,5 +266,25 @@ export class AdminPermissionsService {
       throw new BadRequestException('O perfil Administrador do Sistema não é configurável nesta rotina.');
     }
     return perfil;
+  }
+
+  private async getUsuarioOrThrow(usuarioId: string) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: usuarioId },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        perfis: {
+          select: {
+            perfil: { select: { id: true, nome: true } },
+          },
+        },
+      },
+    });
+    if (!usuario) {
+      throw new NotFoundException('Usuário não encontrado');
+    }
+    return usuario;
   }
 }

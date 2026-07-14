@@ -199,6 +199,33 @@ export function getMe() {
   return request<AuthUser>('/auth/me');
 }
 
+function persistUpdatedUser(user: AuthUser) {
+  const auth = getStoredAuth();
+  if (!auth) return user;
+  setStoredAuth({ ...auth, user });
+  return user;
+}
+
+/** Troca o perfil ativo da sessão e atualiza o usuário em storage. */
+export async function switchPerfilAtivo(perfilId: string) {
+  const next = await request<AuthUser>('/auth/perfil-ativo', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ perfilId }),
+  });
+  return persistUpdatedUser(next);
+}
+
+/** Troca a secretaria ativa (`null` = Todas as Secretarias) e atualiza o usuário em storage. */
+export async function switchSecretariaAtiva(secretariaId: string | null) {
+  const next = await request<AuthUser>('/auth/secretaria-ativa', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secretariaId }),
+  });
+  return persistUpdatedUser(next);
+}
+
 export function getResumoOperacional() {
   return request<OperacionalResumo>('/operacional/resumo');
 }
@@ -323,6 +350,13 @@ export type AdminPerfilMatrizResponse = {
   chaves: string[];
 };
 
+export type AdminUsuarioMatrizResponse = {
+  usuario: { id: string; nome: string; email: string };
+  perfisVinculados: Array<{ id: string; nome: string }>;
+  catalogo: import('@/lib/permissions-matrix').PermissionCatalogScreen[];
+  chaves: string[];
+};
+
 export function listAdminPerfisConfiguraveis() {
   return request<AdminPerfilConfiguravel[]>('/admin/perfis/configuraveis');
 }
@@ -333,6 +367,18 @@ export function getAdminPerfilMatriz(id: string) {
 
 export function saveAdminPerfilMatriz(id: string, chaves: string[]) {
   return request<AdminPerfilMatrizResponse>(`/admin/perfis/${id}/matriz`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chaves }),
+  });
+}
+
+export function getAdminUsuarioMatriz(id: string) {
+  return request<AdminUsuarioMatrizResponse>(`/admin/usuarios/${id}/matriz`);
+}
+
+export function saveAdminUsuarioMatriz(id: string, chaves: string[]) {
+  return request<AdminUsuarioMatrizResponse>(`/admin/usuarios/${id}/matriz`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ chaves }),
@@ -761,6 +807,7 @@ export function updateChamadoAbertura(
     enderecoTexto?: string | null;
     latitude?: number | null;
     longitude?: number | null;
+    secretariaId?: string | null;
   },
 ) {
   return request<ChamadoResumo>(`/chamados/${id}/abertura`, {

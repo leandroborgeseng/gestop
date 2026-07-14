@@ -122,8 +122,9 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
     label: 'Permissões',
     functions: [
       { id: '_tela', label: 'Permissões', actions: [...PERMISSION_ACTIONS] },
-      { id: 'configurar', label: 'Configurar permissões por perfil', actions: ['visualizar', 'alterar'] },
+      { id: 'configurar', label: 'Configurar permissões por perfil e usuário', actions: ['visualizar', 'alterar'] },
       { id: 'criar_perfil', label: 'Criar perfil', actions: ['inserir'] },
+      { id: 'todas_secretarias', label: 'Atuar em todas as secretarias', actions: ['executar'] },
     ],
   },
   {

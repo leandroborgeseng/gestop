@@ -208,6 +208,18 @@ export type ChamadoMapaItem = {
   responsavel: { id: string; nome: string } | null;
 };
 
+export type AuthUserPerfilResumo = {
+  id: string;
+  nome: string;
+};
+
+export type AuthUserSecretariaResumo = {
+  id: string;
+  nome: string;
+  sigla: string;
+  principal?: boolean;
+};
+
 export type AuthUser = {
   id: string;
   nome: string;
@@ -219,6 +231,12 @@ export type AuthUser = {
     nome: string;
     sigla: string;
   } | null;
+  perfilAtivo?: AuthUserPerfilResumo | null;
+  perfisDisponiveis?: AuthUserPerfilResumo[];
+  secretariaAtiva?: AuthUserSecretariaResumo | null;
+  secretariasDisponiveis?: AuthUserSecretariaResumo[];
+  acessoTodasSecretarias?: boolean;
+  secretariaEscopoTodas?: boolean;
 };
 
 export type LoginResponse = {
@@ -302,6 +320,7 @@ export type AdminPermissao = {
 export type AdminUsuario = {
   id: string;
   secretariaId?: string | null;
+  acessoTodasSecretarias?: boolean;
   nome: string;
   email: string;
   cpf?: string | null;
@@ -311,6 +330,10 @@ export type AdminUsuario = {
   cargoRef?: { id: string; nome: string; ativo: boolean } | null;
   ativo: boolean;
   secretaria?: SecretariaOption | null;
+  secretariasVinculos?: Array<{
+    principal: boolean;
+    secretaria: SecretariaOption;
+  }>;
   perfis: Array<{
     perfil: AdminPerfil;
   }>;

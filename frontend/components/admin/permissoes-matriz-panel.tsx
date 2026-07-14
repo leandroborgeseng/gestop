@@ -4,6 +4,7 @@ import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState 
 import { ChevronDown, ChevronRight, Plus, Save } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
 import { FormSection } from '@/components/ui/form-section';
 import { Input } from '@/components/ui/input';
@@ -12,8 +13,11 @@ import { LoadingState } from '@/components/ui-states';
 import {
   createAdminPerfil,
   getAdminPerfilMatriz,
+  getAdminUsuarioMatriz,
   listAdminPerfisConfiguraveis,
+  listAdminUsuarios,
   saveAdminPerfilMatriz,
+  saveAdminUsuarioMatriz,
 } from '@/lib/api';
 import {
   PERMISSION_ACTIONS,
@@ -26,6 +30,7 @@ import {
   setScreenAction,
   setFunctionAction,
 } from '@/lib/permissions-matrix';
+import { AdminUsuario } from '@/lib/types';
 
 type ConfigurablePerfil = {
   id: string;
@@ -35,13 +40,19 @@ type ConfigurablePerfil = {
   ativo: boolean;
 };
 
+type MatrizMode = 'perfil' | 'usuario';
+
 export function PermissoesMatrizPanel({
   mutate,
 }: {
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
+  const [mode, setMode] = useState<MatrizMode>('perfil');
   const [perfis, setPerfis] = useState<ConfigurablePerfil[]>([]);
+  const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
   const [selectedPerfilId, setSelectedPerfilId] = useState('');
+  const [selectedUsuarioId, setSelectedUsuarioId] = useState('');
+  const [perfisVinculados, setPerfisVinculados] = useState<Array<{ id: string; nome: string }>>([]);
   const [catalogo, setCatalogo] = useState<PermissionCatalogScreen[]>([]);
   const [chaves, setChaves] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -68,12 +79,31 @@ export function PermissoesMatrizPanel({
     }
   }, [selectedPerfilId]);
 
+  const loadUsuarios = useCallback(async () => {
+    setError(null);
+    try {
+      const items = await listAdminUsuarios();
+      setUsuarios(items);
+      if (!selectedUsuarioId && items.length > 0) {
+        setSelectedUsuarioId(items[0].id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar usuários.');
+    }
+  }, [selectedUsuarioId]);
+
   useEffect(() => {
     void loadPerfis();
   }, [loadPerfis]);
 
   useEffect(() => {
-    if (!selectedPerfilId) return;
+    if (mode === 'usuario') {
+      void loadUsuarios();
+    }
+  }, [mode, loadUsuarios]);
+
+  useEffect(() => {
+    if (mode !== 'perfil' || !selectedPerfilId) return;
     setLoadingMatriz(true);
     setError(null);
     void getAdminPerfilMatriz(selectedPerfilId)
@@ -83,6 +113,7 @@ export function PermissoesMatrizPanel({
         setChaves(next);
         initialKeysRef.current = new Set(data.chaves);
         setDirty(false);
+        setPerfisVinculados([]);
         const expandedDefaults: Record<string, boolean> = {};
         for (const tela of data.catalogo) {
           expandedDefaults[tela.id] = false;
@@ -93,9 +124,35 @@ export function PermissoesMatrizPanel({
         setError(err instanceof Error ? err.message : 'Falha ao carregar permissões do perfil.');
       })
       .finally(() => setLoadingMatriz(false));
-  }, [selectedPerfilId]);
+  }, [mode, selectedPerfilId]);
+
+  useEffect(() => {
+    if (mode !== 'usuario' || !selectedUsuarioId) return;
+    setLoadingMatriz(true);
+    setError(null);
+    void getAdminUsuarioMatriz(selectedUsuarioId)
+      .then((data) => {
+        setCatalogo(data.catalogo);
+        const next = new Set(data.chaves);
+        setChaves(next);
+        initialKeysRef.current = new Set(data.chaves);
+        setDirty(false);
+        setPerfisVinculados(data.perfisVinculados);
+        const expandedDefaults: Record<string, boolean> = {};
+        for (const tela of data.catalogo) {
+          expandedDefaults[tela.id] = false;
+        }
+        setExpanded(expandedDefaults);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Falha ao carregar permissões do usuário.');
+      })
+      .finally(() => setLoadingMatriz(false));
+  }, [mode, selectedUsuarioId]);
 
   const selectedPerfil = perfis.find((item) => item.id === selectedPerfilId);
+  const selectedUsuario = usuarios.find((item) => item.id === selectedUsuarioId);
+  const hasSelection = mode === 'perfil' ? Boolean(selectedPerfilId) : Boolean(selectedUsuarioId);
 
   const screenRows = useMemo(
     () =>
@@ -131,15 +188,31 @@ export function PermissoesMatrizPanel({
     updateKeys((current) => setFunctionAction(current, telaId, funcao, acao, checked));
   }
 
+  function switchMode(next: MatrizMode) {
+    if (next === mode) return;
+    setMode(next);
+    setDirty(false);
+    setError(null);
+    setCatalogo([]);
+    setChaves(new Set());
+    setPerfisVinculados([]);
+  }
+
   async function handleSave() {
-    if (!selectedPerfilId || saving) return;
+    if (!hasSelection || saving) return;
     setSaving(true);
     setError(null);
     try {
-      const ok = await mutate(
-        () => saveAdminPerfilMatriz(selectedPerfilId, [...chaves]),
-        'Permissões do perfil salvas.',
-      );
+      const ok =
+        mode === 'perfil'
+          ? await mutate(
+              () => saveAdminPerfilMatriz(selectedPerfilId, [...chaves]),
+              'Permissões do perfil salvas.',
+            )
+          : await mutate(
+              () => saveAdminUsuarioMatriz(selectedUsuarioId, [...chaves]),
+              'Permissões individuais do usuário salvas.',
+            );
       if (ok) {
         initialKeysRef.current = new Set(chaves);
         setDirty(false);
@@ -163,6 +236,7 @@ export function PermissoesMatrizPanel({
     if (ok) {
       event.currentTarget.reset();
       await loadPerfis();
+      setMode('perfil');
     }
   }
 
@@ -189,27 +263,54 @@ export function PermissoesMatrizPanel({
           </p>
         </FormSection>
 
-        <FormSection title="Permissões por perfil">
+        <FormSection title={mode === 'perfil' ? 'Permissões por perfil' : 'Permissões individuais por usuário'}>
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            <Chip active={mode === 'perfil'} onClick={() => switchMode('perfil')}>
+              Perfil
+            </Chip>
+            <Chip active={mode === 'usuario'} onClick={() => switchMode('usuario')}>
+              Usuário
+            </Chip>
+          </div>
+
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <Field label="Perfil" className="flex-1">
-              <Select
-                value={selectedPerfilId}
-                onChange={(event) => setSelectedPerfilId(event.target.value)}
-                disabled={perfis.length === 0}
-              >
-                {perfis.length === 0 ? <option value="">Nenhum perfil configurável</option> : null}
-                {perfis.map((perfil) => (
-                  <option key={perfil.id} value={perfil.id}>
-                    {perfil.nome}
-                    {perfil.sistema ? ' (sistema)' : ''}
-                  </option>
-                ))}
-              </Select>
-            </Field>
+            {mode === 'perfil' ? (
+              <Field label="Perfil" className="flex-1">
+                <Select
+                  value={selectedPerfilId}
+                  onChange={(event) => setSelectedPerfilId(event.target.value)}
+                  disabled={perfis.length === 0}
+                >
+                  {perfis.length === 0 ? <option value="">Nenhum perfil configurável</option> : null}
+                  {perfis.map((perfil) => (
+                    <option key={perfil.id} value={perfil.id}>
+                      {perfil.nome}
+                      {perfil.sistema ? ' (sistema)' : ''}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : (
+              <Field label="Usuário" className="flex-1">
+                <Select
+                  value={selectedUsuarioId}
+                  onChange={(event) => setSelectedUsuarioId(event.target.value)}
+                  disabled={usuarios.length === 0}
+                >
+                  {usuarios.length === 0 ? <option value="">Nenhum usuário encontrado</option> : null}
+                  {usuarios.map((usuario) => (
+                    <option key={usuario.id} value={usuario.id}>
+                      {usuario.nome} ({usuario.email})
+                      {!usuario.ativo ? ' — inativo' : ''}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            )}
             <Button
               type="button"
               variant="filled"
-              disabled={!selectedPerfilId || saving || !dirty || loadingMatriz}
+              disabled={!hasSelection || saving || !dirty || loadingMatriz}
               onClick={() => void handleSave()}
             >
               <Save className="h-4 w-4" />
@@ -217,10 +318,24 @@ export function PermissoesMatrizPanel({
             </Button>
           </div>
 
-          {selectedPerfil ? (
+          {mode === 'perfil' && selectedPerfil ? (
             <p className="mb-4 text-[13px] text-[var(--ink-3)]">
               {selectedPerfil.descricao || 'Configure telas e funções para este perfil.'}
             </p>
+          ) : null}
+
+          {mode === 'usuario' && selectedUsuario ? (
+            <div className="mb-4 space-y-1 text-[13px] text-[var(--ink-3)]">
+              <p>Permissões individuais adicionais ao(s) perfil(is) do usuário.</p>
+              <p>
+                Perfis vinculados:{' '}
+                <strong className="text-[var(--ink-2)]">
+                  {perfisVinculados.length > 0
+                    ? perfisVinculados.map((item) => item.nome).join(', ')
+                    : 'nenhum'}
+                </strong>
+              </p>
+            </div>
           ) : null}
 
           {error ? <Alert variant="error" className="mb-4">{error}</Alert> : null}

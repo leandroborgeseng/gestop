@@ -643,6 +643,8 @@ function usuarioPayloadFromForm(
   const senha = String(form.get('senha') || '').trim();
   const payload: Record<string, unknown> = {
     secretariaId: String(form.get('secretariaId') || ''),
+    secretariaIds: form.getAll('secretariaIds').map(String).filter(Boolean),
+    acessoTodasSecretarias: form.get('acessoTodasSecretarias') === 'on',
     nome: String(form.get('nome')),
     email: String(form.get('email')),
     cpf: normalizeCpfForApi(cpfValue ?? String(form.get('cpf') || '')) ?? '',
@@ -672,6 +674,9 @@ function usuarioPayloadFromForm(
 function usuarioPayloadFromRecord(usuario: AdminUsuario, ativo: boolean) {
   return {
     secretariaId: usuario.secretariaId ?? '',
+    secretariaIds: usuario.secretariasVinculos?.map((item) => item.secretaria.id) ??
+      (usuario.secretariaId ? [usuario.secretariaId] : []),
+    acessoTodasSecretarias: Boolean(usuario.acessoTodasSecretarias),
     nome: usuario.nome,
     email: usuario.email,
     cpf: usuario.cpf ?? '',
@@ -874,7 +879,7 @@ function UsuariosPanel({
               placeholder={editing ? 'Deixe em branco para manter a atual' : 'Defina uma senha forte'}
             />
           </Field>
-          <Field label="Secretaria">
+          <Field label="Secretaria principal" tooltip="Secretaria padrão inicial da sessão do usuário.">
             <Select name="secretariaId" defaultValue={editing?.secretariaId ?? ''}>
               <option value="">Sem secretaria</option>
               {secretarias.map((s) => (
@@ -884,6 +889,43 @@ function UsuariosPanel({
               ))}
             </Select>
           </Field>
+          <Field
+            label="Secretarias vinculadas"
+            tooltip="Secretarias em que o usuário pode atuar (alternáveis na sessão)."
+          >
+            <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
+              {secretarias.length === 0 ? (
+                <p className="text-[12px] text-[var(--ink-3)]">Nenhuma secretaria cadastrada.</p>
+              ) : (
+                secretarias.map((s) => {
+                  const linkedIds =
+                    editing?.secretariasVinculos?.map((item) => item.secretaria.id) ??
+                    (editing?.secretariaId ? [editing.secretariaId] : []);
+                  return (
+                    <label key={s.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+                      <input
+                        type="checkbox"
+                        name="secretariaIds"
+                        value={s.id}
+                        defaultChecked={linkedIds.includes(s.id)}
+                      />
+                      <span>
+                        {s.sigla} — {s.nome}
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+          </Field>
+          <label className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+            <input
+              type="checkbox"
+              name="acessoTodasSecretarias"
+              defaultChecked={Boolean(editing?.acessoTodasSecretarias)}
+            />
+            <span>Permitir atuação em “Todas as Secretarias”</span>
+          </label>
           <Field label="Perfis">
             <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
               {perfis.filter((p) => p.ativo !== false).map((p) => (

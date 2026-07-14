@@ -70,7 +70,7 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
   return (
     <GuideProvider>
       <SessionProvider user={auth.user}>
-        <AppShell userName={auth.user.nome} userRoles={auth.user.perfis} permissions={auth.user.permissoes}>
+        <AppShell user={auth.user}>
           {children}
         </AppShell>
       </SessionProvider>

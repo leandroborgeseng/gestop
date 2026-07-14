@@ -40,6 +40,9 @@ export class AuthGuard implements CanActivate {
         perfis: session.perfis,
         permissoes: session.permissoes,
         secretariaId: session.secretariaId,
+        perfilAtivoId: session.perfilAtivoId,
+        acessoTodasSecretarias: session.acessoTodasSecretarias,
+        secretariasIds: session.secretariasIds,
       };
     } catch {
       throw new UnauthorizedException('Sessao invalida ou expirada');

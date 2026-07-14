@@ -16,6 +16,7 @@ const LEGACY_FISCALIZACOES_EXECUTAR = 'fiscalizacoes.executar';
 const LEGACY_DASHBOARD_VISUALIZAR = 'dashboard.visualizar';
 const LEGACY_USUARIOS_GERENCIAR = 'usuarios.gerenciar';
 const LEGACY_SECRETARIAS_GERENCIAR = 'secretarias.gerenciar';
+const LEGACY_SECRETARIAS_TODAS = 'secretarias.todas';
 const LEGACY_UNIDADES_GERENCIAR = 'unidades.gerenciar';
 const LEGACY_CHECKLISTS_GERENCIAR = 'checklists.gerenciar';
 const LEGACY_AUDITORIA_VISUALIZAR = 'auditoria.visualizar';
@@ -76,6 +77,9 @@ export function deriveLegacyPermissionKeys(matrixKeys: Set<string>): Set<string>
   if (hasPrefix('permissoes')) {
     legacy.add(LEGACY_PERMISSOES_GERENCIAR);
     legacy.add(LEGACY_USUARIOS_GERENCIAR);
+  }
+  if (matrixKeys.has(permissionMatrixKey('permissoes', 'todas_secretarias', 'executar'))) {
+    legacy.add(LEGACY_SECRETARIAS_TODAS);
   }
   if (hasPrefix('integracoes')) {
     legacy.add(LEGACY_DASHBOARD_VISUALIZAR);
@@ -148,6 +152,9 @@ export function expandLegacyToMatrixKeys(legacyKeys: Set<string>): Set<string> {
   }
   if (legacyKeys.has(LEGACY_PERMISSOES_GERENCIAR)) {
     grantScreen('permissoes', ['visualizar', 'alterar', 'inserir']);
+  }
+  if (legacyKeys.has(LEGACY_SECRETARIAS_TODAS)) {
+    matrix.add(permissionMatrixKey('permissoes', 'todas_secretarias', 'executar'));
   }
 
   return matrix;

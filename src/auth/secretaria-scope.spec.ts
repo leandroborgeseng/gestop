@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assertChamadoExecucaoAccess,
   assertChamadoSecretariaAccess,
   isGlobalOperator,
   isSecretariaScoped,
@@ -8,13 +9,24 @@ import {
 } from './secretaria-scope';
 import { JwtPayload } from './jwt';
 
-const admin: JwtPayload = {
+const adminTodas: JwtPayload = {
   sub: '1',
   nome: 'Admin',
   email: 'a@x.com',
   perfis: [],
   permissoes: ['usuarios.gerenciar', 'chamados.gerenciar'],
+  secretariaId: null,
+  acessoTodasSecretarias: true,
+};
+
+const adminSecretariaAtiva: JwtPayload = {
+  sub: '1b',
+  nome: 'Admin',
+  email: 'a@x.com',
+  perfis: [],
+  permissoes: ['usuarios.gerenciar', 'chamados.gerenciar'],
   secretariaId: 'sec-a',
+  acessoTodasSecretarias: true,
 };
 
 const gestorSecretaria: JwtPayload = {
@@ -26,38 +38,64 @@ const gestorSecretaria: JwtPayload = {
   secretariaId: 'sec-educacao',
 };
 
-const gestorCco: JwtPayload = {
-  sub: '3',
-  nome: 'CCO',
-  email: 'c@x.com',
-  perfis: [],
-  permissoes: ['chamados.gerenciar'],
-  secretariaId: 'sec-servicos',
-};
-
 describe('secretaria-scope', () => {
-  it('identifica admin global', () => {
-    expect(isGlobalOperator(admin)).toBe(true);
-    expect(resolveChamadoSecretariaFilter(admin)).toEqual({});
+  it('identifica admin em modo Todas sem filtro', () => {
+    expect(isGlobalOperator(adminTodas)).toBe(true);
+    expect(resolveChamadoSecretariaFilter(adminTodas)).toEqual({});
   });
 
-  it('aplica filtro para gestor de secretaria', () => {
+  it('admin com secretaria ativa filtra pela secretaria', () => {
+    expect(resolveSecretariaScopeId(adminSecretariaAtiva)).toBe('sec-a');
+    expect(resolveChamadoSecretariaFilter(adminSecretariaAtiva)).toEqual({
+      OR: [{ secretariaId: 'sec-a' }, { unidade: { secretariaId: 'sec-a' } }],
+    });
+  });
+
+  it('aplica filtro para secretaria ativa (execução ou próprio)', () => {
     expect(isSecretariaScoped(gestorSecretaria)).toBe(true);
     expect(resolveSecretariaScopeId(gestorSecretaria)).toBe('sec-educacao');
-    expect(resolveChamadoSecretariaFilter(gestorSecretaria)).toEqual({ secretariaId: 'sec-educacao' });
+    expect(resolveChamadoSecretariaFilter(gestorSecretaria)).toEqual({
+      OR: [{ secretariaId: 'sec-educacao' }, { unidade: { secretariaId: 'sec-educacao' } }],
+    });
   });
 
-  it('nao aplica filtro para gestor CCO sem secretaria.gerenciar', () => {
-    expect(isSecretariaScoped(gestorCco)).toBe(false);
-    expect(resolveChamadoSecretariaFilter(gestorCco)).toEqual({});
+  it('visualização permite próprio da secretaria mesmo com execução diferente', () => {
+    expect(() =>
+      assertChamadoSecretariaAccess(gestorSecretaria, {
+        secretariaId: 'sec-servicos',
+        unidade: { secretariaId: 'sec-educacao' },
+      }),
+    ).not.toThrow();
   });
 
-  it('bloqueia acesso cross-secretaria', () => {
+  it('tratativa exige secretaria de execução', () => {
+    expect(() =>
+      assertChamadoExecucaoAccess(gestorSecretaria, { secretariaId: 'sec-servicos' }),
+    ).toThrow(/tratativa|execução/i);
+    expect(() =>
+      assertChamadoExecucaoAccess(gestorSecretaria, { secretariaId: 'sec-educacao' }),
+    ).not.toThrow();
+  });
+
+  it('bloqueia visualização fora do escopo', () => {
     expect(() =>
       assertChamadoSecretariaAccess(gestorSecretaria, { secretariaId: 'sec-servicos' }),
     ).toThrow(/secretaria/i);
+  });
+
+  it('usuário sem secretaria e sem modo global não vê dados cruzados', () => {
+    const semEscopo: JwtPayload = {
+      sub: '3',
+      nome: 'Operador',
+      email: 'o@x.com',
+      perfis: [],
+      permissoes: ['chamados.ver'],
+      secretariaId: null,
+      secretariasIds: [],
+    };
+    expect(resolveChamadoSecretariaFilter(semEscopo)).toEqual({ id: { in: [] } });
     expect(() =>
-      assertChamadoSecretariaAccess(gestorSecretaria, { secretariaId: 'sec-educacao' }),
-    ).not.toThrow();
+      assertChamadoSecretariaAccess(semEscopo, { secretariaId: 'sec-educacao' }),
+    ).toThrow(/secretaria/i);
   });
 });

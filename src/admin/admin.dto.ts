@@ -186,6 +186,15 @@ export class UsuarioDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  secretariaIds?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  acessoTodasSecretarias?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   equipeIds?: string[];
 
   @IsOptional()

@@ -301,6 +301,27 @@ export function buildChamadoTimelineFromHistorico(
       };
     }
 
+    if (tipo === 'abertura_update' || entry.motivo === 'Informações de abertura atualizadas.') {
+      const alteracoes = Array.isArray(metadata.alteracoes)
+        ? (metadata.alteracoes as Array<{ campo: string; label: string; de: string; para: string }>)
+        : [];
+      return {
+        id: entry.id,
+        title: 'Informações de abertura atualizadas',
+        date: formatTimelineDate(entry.createdAt),
+        sub: timelineSubComResponsavel(entry.alteradoPor?.nome, alteracoes),
+        done: true,
+        active: false,
+        expand: alteracoes.length
+          ? {
+              alteracoes,
+              usuario: entry.alteradoPor?.nome,
+              dataHora: formatTimelineDate(entry.createdAt),
+            }
+          : undefined,
+      };
+    }
+
     if (tipo === 'atribuicao_update' || isAtribuicaoMotivo(entry.motivo)) {
       const alteracoes = Array.isArray(metadata.alteracoes)
         ? (metadata.alteracoes as Array<{ campo: string; label: string; de: string; para: string }>)

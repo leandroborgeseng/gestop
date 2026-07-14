@@ -1,42 +1,28 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { AuditAction } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveJwtSecret } from '../config/env';
 import { hashPassword, verifyPassword } from './password';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH_NEW } from './password-policy';
-import { signJwt } from './jwt';
+import { JwtPayload, signJwt } from './jwt';
 
-const USER_SESSION_SELECT = {
+const SECRETARIA_SELECT = {
   id: true,
   nome: true,
-  email: true,
-  senhaHash: true,
+  sigla: true,
+} as const;
+
+const PERFIL_SESSION_SELECT = {
+  id: true,
+  nome: true,
   ativo: true,
-  secretariaId: true,
-  secretaria: {
+  permissoes: {
     select: {
-      id: true,
-      nome: true,
-      sigla: true,
-    },
-  },
-  perfis: {
-    select: {
-      perfil: {
-        select: {
-          nome: true,
-          permissoes: {
-            select: {
-              permissao: {
-                select: {
-                  chave: true,
-                },
-              },
-            },
-          },
-        },
+      permissao: {
+        select: { chave: true },
       },
     },
   },
@@ -57,23 +43,14 @@ export class AuthService {
 
     const usuario = await this.prisma.usuario.findUnique({
       where: { email: email.toLowerCase().trim() },
-      select: USER_SESSION_SELECT,
+      select: this.userSessionSelect(),
     });
 
     if (!usuario || !usuario.ativo || !verifyPassword(password, usuario.senhaHash)) {
       throw new UnauthorizedException('Credenciais invalidas');
     }
 
-    const { perfis, permissoes } = this.extractPerfisPermissoes(usuario);
-    const user = {
-      id: usuario.id,
-      nome: usuario.nome,
-      email: usuario.email,
-      secretaria: usuario.secretaria,
-      perfis,
-      permissoes,
-    };
-
+    const session = this.buildSessionPayload(usuario);
     const expiresInSeconds = remember ? 60 * 60 * 24 * 30 : 60 * 60 * 8;
 
     const accessToken = signJwt(
@@ -81,8 +58,12 @@ export class AuthService {
         sub: usuario.id,
         nome: usuario.nome,
         email: usuario.email,
-        perfis,
-        permissoes,
+        perfis: session.perfis,
+        permissoes: session.permissoes,
+        secretariaId: session.secretariaId,
+        perfilAtivoId: session.perfilAtivo?.id ?? null,
+        acessoTodasSecretarias: session.acessoTodasSecretarias,
+        secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
       },
       this.getJwtSecret(),
       expiresInSeconds,
@@ -97,78 +78,336 @@ export class AuthService {
       accessToken,
       tokenType: 'Bearer',
       expiresInSeconds,
-      user,
+      user: session.user,
     };
   }
 
-  async resolveActiveSession(userId: string) {
+  async resolveActiveSession(userId: string): Promise<{
+    perfis: string[];
+    permissoes: string[];
+    secretariaId: string | null;
+    perfilAtivoId: string | null;
+    acessoTodasSecretarias: boolean;
+    secretariasIds: string[];
+  }> {
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: userId },
-      select: {
-        ativo: true,
-        secretariaId: true,
-        perfis: USER_SESSION_SELECT.perfis,
-      },
+      select: this.userSessionSelect(),
     });
 
     if (!usuario?.ativo) {
       throw new UnauthorizedException('Sessao invalida ou expirada');
     }
 
-    const { perfis, permissoes } = this.extractPerfisPermissoes(usuario);
+    const session = this.buildSessionPayload(usuario);
     return {
-      perfis,
-      permissoes,
-      secretariaId: usuario.secretariaId,
+      perfis: session.perfis,
+      permissoes: session.permissoes,
+      secretariaId: session.secretariaId,
+      perfilAtivoId: session.perfilAtivo?.id ?? null,
+      acessoTodasSecretarias: session.acessoTodasSecretarias,
+      secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
     };
   }
 
   async getUserProfile(userId: string) {
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: userId },
-      select: {
-        id: true,
-        nome: true,
-        email: true,
-        ativo: true,
-        secretaria: USER_SESSION_SELECT.secretaria,
-        perfis: USER_SESSION_SELECT.perfis,
-      },
+      select: this.userSessionSelect(),
     });
 
     if (!usuario?.ativo) {
       throw new UnauthorizedException('Sessao invalida ou expirada');
     }
 
-    const { perfis, permissoes } = this.extractPerfisPermissoes(usuario);
-    return {
-      id: usuario.id,
-      nome: usuario.nome,
-      email: usuario.email,
-      secretaria: usuario.secretaria,
-      perfis,
-      permissoes,
-    };
+    return this.buildSessionPayload(usuario).user;
   }
 
-  private extractPerfisPermissoes(usuario: {
+  async switchPerfilAtivo(userId: string, perfilId: string) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        perfilAtivoId: true,
+        perfis: { select: { perfilId: true, perfil: { select: { id: true, nome: true, ativo: true } } } },
+      },
+    });
+    if (!usuario) throw new UnauthorizedException('Sessao invalida ou expirada');
+
+    const link = usuario.perfis.find((item) => item.perfilId === perfilId && item.perfil.ativo);
+    if (!link) {
+      throw new BadRequestException('Perfil não vinculado ao usuário.');
+    }
+
+    const anterior = usuario.perfis.find((item) => item.perfilId === usuario.perfilAtivoId)?.perfil.nome ?? null;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.usuario.update({
+        where: { id: userId },
+        data: { perfilAtivoId: perfilId },
+      });
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: userId,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'SessaoPerfil',
+          entidadeId: userId,
+          valorAntigo: { perfilAtivo: anterior },
+          valorNovo: { perfilAtivo: link.perfil.nome, perfilId },
+        },
+      });
+    });
+
+    return this.getUserProfile(userId);
+  }
+
+  async switchSecretariaAtiva(userId: string, secretariaId: string | null) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        secretariaAtivaId: true,
+        perfilAtivoId: true,
+        acessoTodasSecretarias: true,
+        secretaria: { select: SECRETARIA_SELECT },
+        secretariasVinculos: {
+          select: { secretariaId: true, principal: true, secretaria: { select: SECRETARIA_SELECT } },
+        },
+        perfis: {
+          select: {
+            perfilId: true,
+            perfil: {
+              select: {
+                nome: true,
+                ativo: true,
+                permissoes: { select: { permissao: { select: { chave: true } } } },
+              },
+            },
+          },
+        },
+        permissoesIndividuais: {
+          select: { permissao: { select: { chave: true } } },
+        },
+      },
+    });
+    if (!usuario) throw new UnauthorizedException('Sessao invalida ou expirada');
+
+    const perfilAtivo =
+      usuario.perfis.find((item) => item.perfilId === usuario.perfilAtivoId && item.perfil.ativo) ??
+      usuario.perfis.find((item) => item.perfil.ativo) ??
+      null;
+
+    const sessionPerms = new Set<string>();
+    if (perfilAtivo) {
+      for (const pp of perfilAtivo.perfil.permissoes) sessionPerms.add(pp.permissao.chave);
+    }
+    for (const p of usuario.permissoesIndividuais) sessionPerms.add(p.permissao.chave);
+
+    const canTodas =
+      usuario.acessoTodasSecretarias ||
+      sessionPerms.has('usuarios.gerenciar') ||
+      sessionPerms.has('secretarias.todas');
+
+    const vinculos = usuario.secretariasVinculos;
+    const anteriorId = usuario.secretariaAtivaId;
+    const anteriorNome =
+      vinculos.find((item) => item.secretariaId === anteriorId)?.secretaria.sigla ??
+      (anteriorId == null && canTodas ? 'Todas as Secretarias' : null);
+
+    if (secretariaId == null) {
+      if (!canTodas) {
+        throw new BadRequestException('Usuário sem permissão para atuar em todas as secretarias.');
+      }
+    } else {
+      const ok =
+        vinculos.some((item) => item.secretariaId === secretariaId) ||
+        usuario.secretaria?.id === secretariaId ||
+        canTodas;
+      if (!ok) {
+        throw new BadRequestException('Secretaria não vinculada ao usuário.');
+      }
+    }
+
+    const nova =
+      secretariaId == null
+        ? 'Todas as Secretarias'
+        : vinculos.find((item) => item.secretariaId === secretariaId)?.secretaria.sigla ?? secretariaId;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.usuario.update({
+        where: { id: userId },
+        data: { secretariaAtivaId: secretariaId },
+      });
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: userId,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'SessaoSecretaria',
+          entidadeId: userId,
+          valorAntigo: { secretariaAtiva: anteriorNome, perfilAtivoId: usuario.perfilAtivoId },
+          valorNovo: { secretariaAtiva: nova, secretariaId, perfilAtivoId: usuario.perfilAtivoId },
+        },
+      });
+    });
+
+    return this.getUserProfile(userId);
+  }
+
+  private userSessionSelect() {
+    return {
+      id: true,
+      nome: true,
+      email: true,
+      senhaHash: true,
+      ativo: true,
+      secretariaId: true,
+      perfilAtivoId: true,
+      secretariaAtivaId: true,
+      acessoTodasSecretarias: true,
+      secretaria: { select: SECRETARIA_SELECT },
+      secretariaAtiva: { select: SECRETARIA_SELECT },
+      perfilAtivo: { select: { id: true, nome: true, ativo: true } },
+      perfis: {
+        select: {
+          perfilId: true,
+          perfil: { select: PERFIL_SESSION_SELECT },
+        },
+      },
+      permissoesIndividuais: {
+        select: {
+          permissao: { select: { chave: true } },
+        },
+      },
+      secretariasVinculos: {
+        select: {
+          secretariaId: true,
+          principal: true,
+          secretaria: { select: SECRETARIA_SELECT },
+        },
+      },
+    } as const;
+  }
+
+  private buildSessionPayload(usuario: {
+    id: string;
+    nome: string;
+    email: string;
+    secretariaId: string | null;
+    perfilAtivoId: string | null;
+    secretariaAtivaId: string | null;
+    acessoTodasSecretarias: boolean;
+    secretaria: { id: string; nome: string; sigla: string } | null;
+    secretariaAtiva: { id: string; nome: string; sigla: string } | null;
+    perfilAtivo: { id: string; nome: string; ativo: boolean } | null;
     perfis: Array<{
+      perfilId: string;
       perfil: {
+        id: string;
         nome: string;
+        ativo: boolean;
         permissoes: Array<{ permissao: { chave: string } }>;
       };
     }>;
+    permissoesIndividuais: Array<{ permissao: { chave: string } }>;
+    secretariasVinculos: Array<{
+      secretariaId: string;
+      principal: boolean;
+      secretaria: { id: string; nome: string; sigla: string };
+    }>;
   }) {
-    const perfis = usuario.perfis.map((item) => item.perfil.nome);
-    const permissoes = Array.from(
-      new Set(
-        usuario.perfis.flatMap((item) =>
-          item.perfil.permissoes.map((perfilPermissao) => perfilPermissao.permissao.chave),
-        ),
-      ),
-    ).sort();
+    const perfisAtivos = usuario.perfis.filter((item) => item.perfil.ativo);
+    let perfilAtivo =
+      (usuario.perfilAtivoId
+        ? perfisAtivos.find((item) => item.perfilId === usuario.perfilAtivoId)?.perfil
+        : null) ??
+      usuario.perfilAtivo ??
+      perfisAtivos[0]?.perfil ??
+      null;
 
-    return { perfis, permissoes };
+    if (perfilAtivo && !perfilAtivo.ativo) {
+      perfilAtivo = perfisAtivos[0]?.perfil ?? null;
+    }
+
+    const perfilPermKeys =
+      perfilAtivo != null
+        ? perfisAtivos
+            .find((item) => item.perfil.id === perfilAtivo!.id)
+            ?.perfil.permissoes.map((item) => item.permissao.chave) ??
+          (usuario.perfis.find((item) => item.perfil.id === perfilAtivo.id)?.perfil.permissoes.map(
+            (item) => item.permissao.chave,
+          ) ?? [])
+        : [];
+
+    const individKeys = usuario.permissoesIndividuais.map((item) => item.permissao.chave);
+    const permissoes = Array.from(new Set([...perfilPermKeys, ...individKeys])).sort();
+
+    const secretariasDisponiveisMap = new Map<string, { id: string; nome: string; sigla: string; principal?: boolean }>();
+    for (const link of usuario.secretariasVinculos) {
+      secretariasDisponiveisMap.set(link.secretariaId, {
+        ...link.secretaria,
+        principal: link.principal,
+      });
+    }
+    if (usuario.secretaria) {
+      const prev = secretariasDisponiveisMap.get(usuario.secretaria.id);
+      secretariasDisponiveisMap.set(usuario.secretaria.id, {
+        ...usuario.secretaria,
+        principal: prev?.principal ?? true,
+      });
+    }
+    const secretariasDisponiveis = [...secretariasDisponiveisMap.values()].sort((a, b) =>
+      a.sigla.localeCompare(b.sigla, 'pt-BR'),
+    );
+
+    const canTodas =
+      usuario.acessoTodasSecretarias ||
+      permissoes.includes('usuarios.gerenciar') ||
+      permissoes.includes('secretarias.todas');
+
+    let secretariaAtiva = usuario.secretariaAtiva;
+    let secretariaId: string | null = usuario.secretariaAtivaId;
+
+    // null secretariaAtivaId + canTodas = modo Todas as Secretarias
+    if (!usuario.secretariaAtivaId && canTodas) {
+      secretariaAtiva = null;
+      secretariaId = null;
+    } else if (!secretariaAtiva) {
+      secretariaAtiva =
+        secretariasDisponiveis.find((item) => item.principal) ??
+        secretariasDisponiveis[0] ??
+        usuario.secretaria ??
+        null;
+      secretariaId = secretariaAtiva?.id ?? null;
+    }
+
+    const perfisDisponiveis = perfisAtivos
+      .map((item) => ({ id: item.perfil.id, nome: item.perfil.nome }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    const user = {
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      secretaria: secretariaAtiva,
+      perfis: perfilAtivo ? [perfilAtivo.nome] : [],
+      permissoes,
+      perfilAtivo: perfilAtivo ? { id: perfilAtivo.id, nome: perfilAtivo.nome } : null,
+      perfisDisponiveis,
+      secretariaAtiva,
+      secretariasDisponiveis,
+      acessoTodasSecretarias: canTodas,
+      secretariaEscopoTodas: canTodas && !secretariaId,
+    };
+
+    return {
+      user,
+      perfis: user.perfis,
+      permissoes,
+      secretariaId,
+      perfilAtivo,
+      acessoTodasSecretarias: canTodas,
+      secretariasDisponiveis,
+    };
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string) {

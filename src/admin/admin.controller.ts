@@ -65,10 +65,22 @@ export class AdminController {
     return this.adminService.deleteUnidade(id, user);
   }
 
-  @RequirePermissions('usuarios.gerenciar')
+  @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
   @Get('usuarios')
   listUsuarios() {
     return this.adminService.listUsuarios();
+  }
+
+  @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
+  @Get('usuarios/:id/matriz')
+  getMatrizUsuario(@Param('id') id: string) {
+    return this.adminPermissionsService.getMatrizUsuario(id);
+  }
+
+  @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
+  @Put('usuarios/:id/matriz')
+  saveMatrizUsuario(@Param('id') id: string, @Body() body: PerfilMatrizDto, @CurrentUser() user: JwtPayload) {
+    return this.adminPermissionsService.saveMatrizUsuario(id, body.chaves, user);
   }
 
   @RequirePermissions('usuarios.gerenciar')

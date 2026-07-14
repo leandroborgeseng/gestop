@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
-import { IsBoolean, IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsOptional, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard';
 import { CurrentUser } from './current-user';
@@ -53,6 +53,18 @@ class ResetPasswordDto {
   newPassword!: string;
 }
 
+class SwitchPerfilDto {
+  @IsString()
+  perfilId!: string;
+}
+
+class SwitchSecretariaDto {
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
+  @IsString()
+  secretariaId?: string | null;
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -67,6 +79,18 @@ export class AuthController {
   @Get('me')
   me(@CurrentUser() user: JwtPayload) {
     return this.authService.getUserProfile(user.sub);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('perfil-ativo')
+  switchPerfil(@CurrentUser() user: JwtPayload, @Body() body: SwitchPerfilDto) {
+    return this.authService.switchPerfilAtivo(user.sub, body.perfilId);
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('secretaria-ativa')
+  switchSecretaria(@CurrentUser() user: JwtPayload, @Body() body: SwitchSecretariaDto) {
+    return this.authService.switchSecretariaAtiva(user.sub, body.secretariaId ?? null);
   }
 
   @UseGuards(AuthGuard)
