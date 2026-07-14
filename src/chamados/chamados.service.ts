@@ -12,9 +12,9 @@ import { JwtPayload } from '../auth/jwt';
 import {
   assertChamadoExecucaoAccess,
   assertChamadoSecretariaAccess,
+  assertSecretariaNoEscopo,
   resolveChamadoSecretariaFilter,
   resolveEquipeSecretariaFilter,
-  resolveSecretariaScopeId,
 } from '../auth/secretaria-scope';
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { EmailService } from '../email/email.service';
@@ -715,10 +715,7 @@ export class ChamadosService {
 
   async createChamado(dto: CreateChamadoDto, user: JwtPayload) {
     const location = await this.resolveCreateLocation(dto, user.sub);
-    const scopeId = resolveSecretariaScopeId(user);
-    if (scopeId && location.secretariaId !== scopeId) {
-      throw new ForbiddenException('Nao e permitido abrir chamado fora da sua secretaria.');
-    }
+    assertSecretariaNoEscopo(user, location.secretariaId);
 
     let fotoStorageKey: string | undefined;
     let fotoUrl: string | undefined;

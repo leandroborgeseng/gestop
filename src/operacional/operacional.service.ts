@@ -8,7 +8,12 @@ import {
   UnidadeTipo,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
-import { resolveChamadoSecretariaFilter, resolveSecretariaScopeId } from '../auth/secretaria-scope';
+import {
+  resolveChamadoSecretariaFilter,
+  resolveDirectSecretariaFilter,
+  resolveSecretariaScopeIds,
+  resolveUnidadeSecretariaFilter,
+} from '../auth/secretaria-scope';
 import { computeVistoriaNotas } from '../domain/vistoria-nota';
 import { PrismaService } from '../prisma/prisma.service';
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
@@ -39,11 +44,18 @@ export class OperacionalService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getResumo(user: JwtPayload) {
-    const secretariaId = resolveSecretariaScopeId(user);
-    const unidadeWhere = secretariaId ? { secretariaId } : {};
-    const chamadoWhere = secretariaId ? { secretariaId } : {};
-    const ncWhere = secretariaId ? { unidade: { secretariaId } } : {};
-    const fiscalizacaoWhere = secretariaId ? { secretariaId } : {};
+    const scopeIds = resolveSecretariaScopeIds(user);
+    const unidadeWhere = resolveUnidadeSecretariaFilter(user);
+    const chamadoWhere = resolveChamadoSecretariaFilter(user);
+    const fiscalizacaoWhere = resolveDirectSecretariaFilter(user);
+    const ncWhere =
+      !scopeIds
+        ? {}
+        : scopeIds.length === 0
+          ? { id: { in: [] as string[] } }
+          : scopeIds.length === 1
+            ? { unidade: { secretariaId: scopeIds[0] } }
+            : { unidade: { secretariaId: { in: scopeIds } } };
 
     const [
       unidadesAtivas,
@@ -54,9 +66,11 @@ export class OperacionalService {
       eventosSyncPendentes,
     ] = await Promise.all([
       this.prisma.unidadePublica.count({ where: { ...unidadeWhere, ativo: true } }),
-      secretariaId
-        ? this.prisma.secretaria.count({ where: { id: secretariaId, ativo: true } })
-        : this.prisma.secretaria.count({ where: { ativo: true } }),
+      !scopeIds
+        ? this.prisma.secretaria.count({ where: { ativo: true } })
+        : scopeIds.length === 0
+          ? Promise.resolve(0)
+          : this.prisma.secretaria.count({ where: { id: { in: scopeIds }, ativo: true } }),
       this.prisma.fiscalizacao.count({ where: { ...fiscalizacaoWhere, status: 'CONCLUIDA' } }),
       this.prisma.naoConformidade.count({
         where: { ...ncWhere, status: { in: NON_CONFORMITY_OPEN_STATUSES } },
@@ -81,9 +95,13 @@ export class OperacionalService {
   }
 
   async listSecretarias(user: JwtPayload) {
-    const secretariaId = resolveSecretariaScopeId(user);
+    const scopeIds = resolveSecretariaScopeIds(user);
+    if (scopeIds && scopeIds.length === 0) return [];
     return this.prisma.secretaria.findMany({
-      where: { ativo: true, ...(secretariaId ? { id: secretariaId } : {}) },
+      where: {
+        ativo: true,
+        ...(scopeIds ? { id: scopeIds.length === 1 ? scopeIds[0] : { in: scopeIds } } : {}),
+      },
       orderBy: { nome: 'asc' },
       select: {
         id: true,
@@ -108,41 +126,49 @@ export class OperacionalService {
   }
 
   async getOpcoesFiltro(user: JwtPayload) {
-    const secretariaId = resolveSecretariaScopeId(user);
+    const scopeIds = resolveSecretariaScopeIds(user);
+    const secretariaIdFilter =
+      !scopeIds ? {} : scopeIds.length === 1 ? { id: scopeIds[0] } : { id: { in: scopeIds } };
+    const equipeScope = resolveDirectSecretariaFilter(user);
     const [secretarias, bairros, tiposRows, responsaveisRows, regioesRows, categoriasVistoria, equipes, tiposChamado] =
       await Promise.all([
-        this.prisma.secretaria.findMany({
-          where: {
-            ativo: true,
-            unidades: { some: { ativo: true } },
-            ...(secretariaId ? { id: secretariaId } : {}),
-          },
-          orderBy: { nome: 'asc' },
-          select: { id: true, nome: true, sigla: true },
-        }),
+        scopeIds && scopeIds.length === 0
+          ? Promise.resolve([])
+          : this.prisma.secretaria.findMany({
+              where: {
+                ativo: true,
+                unidades: { some: { ativo: true } },
+                ...secretariaIdFilter,
+              },
+              orderBy: { nome: 'asc' },
+              select: { id: true, nome: true, sigla: true },
+            }),
         this.listBairros(),
         this.prisma.unidadePublica.findMany({
-          where: { ativo: true },
+          where: { ativo: true, ...resolveUnidadeSecretariaFilter(user) },
           distinct: ['tipo'],
           orderBy: { tipo: 'asc' },
           select: { tipo: true },
         }),
-        this.prisma.secretaria.findMany({
-          where: {
-            ativo: true,
-            unidades: { some: { ativo: true } },
-            OR: [{ responsavelNome: { not: null } }, { responsavelEmail: { not: null } }],
-          },
-          orderBy: [{ responsavelNome: 'asc' }, { sigla: 'asc' }],
-          select: {
-            id: true,
-            sigla: true,
-            responsavelNome: true,
-            responsavelEmail: true,
-          },
-        }),
+        scopeIds && scopeIds.length === 0
+          ? Promise.resolve([])
+          : this.prisma.secretaria.findMany({
+              where: {
+                ativo: true,
+                unidades: { some: { ativo: true } },
+                OR: [{ responsavelNome: { not: null } }, { responsavelEmail: { not: null } }],
+                ...secretariaIdFilter,
+              },
+              orderBy: [{ responsavelNome: 'asc' }, { sigla: 'asc' }],
+              select: {
+                id: true,
+                sigla: true,
+                responsavelNome: true,
+                responsavelEmail: true,
+              },
+            }),
         this.prisma.unidadePublica.findMany({
-          where: { ativo: true, regiao: { not: null } },
+          where: { ativo: true, regiao: { not: null }, ...resolveUnidadeSecretariaFilter(user) },
           distinct: ['regiao'],
           orderBy: { regiao: 'asc' },
           select: { regiao: true },
@@ -153,7 +179,7 @@ export class OperacionalService {
           select: { id: true, nome: true },
         }),
         this.prisma.equipe.findMany({
-          where: { ativo: true, ...(secretariaId ? { secretariaId } : {}) },
+          where: { ativo: true, ...equipeScope },
           orderBy: { nome: 'asc' },
           select: { id: true, nome: true, codigo: true },
         }),
@@ -191,8 +217,12 @@ export class OperacionalService {
   }
 
   async listUnidades(query: UnidadeListQuery, user: JwtPayload) {
-    const scopeId = resolveSecretariaScopeId(user);
-    const effectiveQuery = scopeId ? { ...query, secretariaId: scopeId } : query;
+    const scopeIds = resolveSecretariaScopeIds(user);
+    if (scopeIds && scopeIds.length === 0) {
+      return [];
+    }
+    const effectiveQuery =
+      scopeIds && scopeIds.length === 1 ? { ...query, secretariaId: scopeIds[0] } : query;
     const tiposPendencia = this.resolveTiposPendencia(query.tiposPendencia);
     const usesChamados = tiposPendencia.includes('CHAMADOS');
     const usesNc = tiposPendencia.includes('NAO_CONFORMIDADES');
@@ -202,7 +232,10 @@ export class OperacionalService {
     // Equipe/SLA olham chamados abertos independente do chip de tipo de pendência.
     const chamadoWhere = this.buildChamadoPendenciaWhere({ tiposChamadoId, equipeIds });
 
-    const where = this.buildUnidadeWhere(effectiveQuery);
+    const where: Prisma.UnidadePublicaWhereInput = {
+      ...this.buildUnidadeWhere(effectiveQuery),
+      ...(scopeIds && scopeIds.length > 1 ? { secretariaId: { in: scopeIds } } : {}),
+    };
     const unidades = await this.prisma.unidadePublica.findMany({
       where,
       orderBy: [{ secretaria: { sigla: 'asc' } }, { nome: 'asc' }],

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   assertChamadoExecucaoAccess,
   assertChamadoSecretariaAccess,
+  assertSecretariaNoEscopo,
   isGlobalOperator,
   isSecretariaScoped,
   resolveChamadoSecretariaFilter,
@@ -97,5 +98,11 @@ describe('secretaria-scope', () => {
     expect(() =>
       assertChamadoSecretariaAccess(semEscopo, { secretariaId: 'sec-educacao' }),
     ).toThrow(/secretaria/i);
+  });
+
+  it('impede abertura fora do escopo ativo', () => {
+    expect(() => assertSecretariaNoEscopo(gestorSecretaria, 'sec-servicos')).toThrow(/secretaria/i);
+    expect(() => assertSecretariaNoEscopo(gestorSecretaria, 'sec-educacao')).not.toThrow();
+    expect(() => assertSecretariaNoEscopo(adminTodas, 'sec-qualquer')).not.toThrow();
   });
 });

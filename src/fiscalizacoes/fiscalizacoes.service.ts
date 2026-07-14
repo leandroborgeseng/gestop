@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
-import { resolveSecretariaScopeId } from '../auth/secretaria-scope';
+import { resolveDirectSecretariaFilter } from '../auth/secretaria-scope';
 import { computeVistoriaNotas } from '../domain/vistoria-nota';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListFiscalizacoesQueryDto } from './fiscalizacoes.dto';
@@ -189,8 +189,7 @@ export class FiscalizacoesService {
   }
 
   private scopeFilter(user: JwtPayload): Prisma.FiscalizacaoWhereInput {
-    const secretariaId = resolveSecretariaScopeId(user);
-    return secretariaId ? { secretariaId } : {};
+    return resolveDirectSecretariaFilter(user);
   }
 
   private serialize<T extends {

@@ -106,3 +106,19 @@ export function assertChamadoExecucaoAccess(user: JwtPayload, chamado: { secreta
 
   throw new ForbiddenException('Sem permissão de tratativa: secretaria de execução diferente da ativa.');
 }
+
+/** Garante que a secretaria alvo está no escopo ativo (abertura / cadastro). */
+export function assertSecretariaNoEscopo(user: JwtPayload, secretariaId: string) {
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return;
+  if (ids.includes(secretariaId)) return;
+  throw new ForbiddenException('Nao e permitido atuar fora da secretaria autorizada na sessao.');
+}
+
+/** Filtro de secretaria em entidades com `secretariaId` direto (ex.: fiscalização). */
+export function resolveDirectSecretariaFilter(user: JwtPayload): { secretariaId?: string | { in: string[] } } | { id: { in: [] } } {
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return {};
+  if (ids.length === 0) return { id: { in: [] } };
+  return ids.length === 1 ? { secretariaId: ids[0] } : { secretariaId: { in: ids } };
+}
