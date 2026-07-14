@@ -508,9 +508,10 @@ async function searchPhotonItems(query: string, limit = 6): Promise<NominatimIte
       headers: { Accept: 'application/json' },
     });
     if (!response.ok) return [];
+
     const payload = (await response.json()) as {
       features?: Array<{
-        geometry?: { coordinates?: [number, number] };
+        geometry?: { coordinates?: number[] };
         properties?: {
           name?: string;
           street?: string;
@@ -526,17 +527,23 @@ async function searchPhotonItems(query: string, limit = 6): Promise<NominatimIte
       }>;
     };
 
-    return (payload.features ?? []).flatMap((feature) => {
-      const [lon, lat] = feature.geometry?.coordinates ?? [];
-      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
-      if (!isWithinFrancaMunicipio(lat, lon)) return [];
+    const results: NominatimItem[] = [];
+    for (const feature of payload.features ?? []) {
+      const coordinates = feature.geometry?.coordinates;
+      if (!coordinates || coordinates.length < 2) continue;
+      const lon = Number(coordinates[0]);
+      const lat = Number(coordinates[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+      if (!isWithinFrancaMunicipio(lat, lon)) continue;
+
       const props = feature.properties ?? {};
       const city = props.city ?? props.locality ?? props.county ?? 'Franca';
       const road = props.street ?? props.name ?? '';
       const display = [road, props.housenumber, props.district ?? props.suburb, city, props.state, props.country]
         .filter(Boolean)
         .join(', ');
-      const item: NominatimItem = {
+
+      results.push({
         display_name: display || props.name || query,
         lat: String(lat),
         lon: String(lon),
@@ -549,9 +556,10 @@ async function searchPhotonItems(query: string, limit = 6): Promise<NominatimIte
           city,
           state: props.state,
         },
-      };
-      return [item];
-    });
+      });
+    }
+
+    return results;
   } catch {
     return [];
   }
