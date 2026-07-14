@@ -526,36 +526,32 @@ async function searchPhotonItems(query: string, limit = 6): Promise<NominatimIte
       }>;
     };
 
-    return (payload.features ?? [])
-      .map((feature) => {
-        const [lon, lat] = feature.geometry?.coordinates ?? [];
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-        if (!isWithinFrancaMunicipio(lat, lon)) return null;
-        const props = feature.properties ?? {};
-        const city = props.city ?? props.locality ?? props.county ?? 'Franca';
-        if (city && !normalizeForMatch(city).includes('franca') && !normalizeForMatch(String(props.state ?? '')).includes('sao paulo')) {
-          // Ainda aceita se estiver dentro do bbox municipal.
-        }
-        const road = props.street ?? props.name ?? '';
-        const display = [road, props.housenumber, props.district ?? props.suburb, city, props.state, props.country]
-          .filter(Boolean)
-          .join(', ');
-        return {
-          display_name: display || props.name || query,
-          lat: String(lat),
-          lon: String(lon),
-          class: 'place',
-          address: {
-            road: props.street ?? props.name,
-            house_number: props.housenumber,
-            suburb: props.suburb,
-            neighbourhood: props.district,
-            city,
-            state: props.state,
-          },
-        } satisfies NominatimItem;
-      })
-      .filter((item): item is NominatimItem => Boolean(item));
+    return (payload.features ?? []).flatMap((feature) => {
+      const [lon, lat] = feature.geometry?.coordinates ?? [];
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return [];
+      if (!isWithinFrancaMunicipio(lat, lon)) return [];
+      const props = feature.properties ?? {};
+      const city = props.city ?? props.locality ?? props.county ?? 'Franca';
+      const road = props.street ?? props.name ?? '';
+      const display = [road, props.housenumber, props.district ?? props.suburb, city, props.state, props.country]
+        .filter(Boolean)
+        .join(', ');
+      const item: NominatimItem = {
+        display_name: display || props.name || query,
+        lat: String(lat),
+        lon: String(lon),
+        class: 'place',
+        address: {
+          road: props.street ?? props.name,
+          house_number: props.housenumber,
+          suburb: props.suburb,
+          neighbourhood: props.district,
+          city,
+          state: props.state,
+        },
+      };
+      return [item];
+    });
   } catch {
     return [];
   }
