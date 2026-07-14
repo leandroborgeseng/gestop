@@ -86,6 +86,8 @@ export function AbrirChamadoForm({
   const [geoLoading, setGeoLoading] = useState(false);
   const [pinUpdating, setPinUpdating] = useState(false);
   const [reverseGeocodingPin, setReverseGeocodingPin] = useState(false);
+  /** Número que estava ativo quando o pin foi sincronizado (busca/geocode/manual). */
+  const [pinSyncedNumero, setPinSyncedNumero] = useState<string | null>(null);
   const reverseGeocodePinTimerRef = useRef<number | null>(null);
   const [fotoDataUrl, setFotoDataUrl] = useState<string | null>(null);
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
@@ -184,6 +186,14 @@ export function AbrirChamadoForm({
       .slice(0, 80);
   }, [pickerSearch, unidades]);
 
+  const pinNeedsRefresh =
+    modo === 'ENDERECO' &&
+    latitude != null &&
+    longitude != null &&
+    numero.trim() !== '' &&
+    pinSyncedNumero !== null &&
+    pinSyncedNumero !== numero.trim();
+
   function applyAddressFields(item: {
     label: string;
     latitude: number;
@@ -193,14 +203,17 @@ export function AbrirChamadoForm({
     numero?: string | null;
     cidade?: string | null;
   }) {
+    const nextNumero = item.numero ?? '';
     setLogradouro(item.logradouro ?? item.label.split(',')[0]?.trim() ?? '');
-    setNumero(item.numero ?? '');
+    setNumero(nextNumero);
     setBairro(item.bairro ?? '');
     setCidade(item.cidade ?? 'Franca');
     setLatitude(item.latitude);
     setLongitude(item.longitude);
+    setPinSyncedNumero(nextNumero.trim());
     setAddressQuery(item.label);
     setAddressResults([]);
+    setError(null);
   }
 
   async function handleCaptureGeo() {
@@ -213,13 +226,23 @@ export function AbrirChamadoForm({
 
       const parsed = await reverseGeocodeAddress(position.latitude, position.longitude);
       if (parsed) {
-        setLogradouro(parsed.logradouro);
-        setNumero(parsed.numero);
-        setComplemento(parsed.complemento);
-        setBairro(parsed.bairro);
-        setCidade(parsed.cidade || 'Franca');
-        setAddressQuery(composeEnderecoTexto(parsed));
+        setLogradouro((current) => current.trim() || parsed.logradouro);
+        setNumero((current) => current.trim() || parsed.numero);
+        setComplemento((current) => current.trim() || parsed.complemento);
+        setBairro((current) => current.trim() || parsed.bairro);
+        setCidade((current) => current.trim() || parsed.cidade || 'Franca');
+        setAddressQuery((current) =>
+          current.trim()
+            ? current
+            : composeEnderecoTexto({
+                logradouro: parsed.logradouro,
+                numero: parsed.numero,
+                complemento: parsed.complemento,
+                cidade: parsed.cidade || 'Franca',
+              }),
+        );
       }
+      setPinSyncedNumero(numero.trim() || parsed?.numero?.trim() || '');
 
       if (!fotoGeo) {
         setFotoGeo({ latitude: position.latitude, longitude: position.longitude });
@@ -261,6 +284,7 @@ export function AbrirChamadoForm({
   function handlePinChange(coords: { latitude: number; longitude: number }) {
     setLatitude(coords.latitude);
     setLongitude(coords.longitude);
+    setPinSyncedNumero(numero.trim());
     setError(null);
 
     if (reverseGeocodePinTimerRef.current) {
@@ -276,25 +300,37 @@ export function AbrirChamadoForm({
       setError('Informe o logradouro antes de atualizar o pin.');
       return;
     }
-    if (!bairro.trim()) {
-      setError('Informe o bairro para facilitar a localização do pin.');
-      return;
-    }
 
     setPinUpdating(true);
     setError(null);
     try {
-      const coords = await geocodeStructuredAddress({ logradouro, numero, bairro, cidade });
-      if (!coords) {
+      const result = await geocodeStructuredAddress({ logradouro, numero, bairro, cidade });
+      if (!result) {
         setError(
           'Endereço não localizado automaticamente. Posicione o pin manualmente no mapa dentro do município de Franca e salve.',
         );
         snackbar.show('Não encontramos o endereço. Mova o pin no mapa.', 'warning');
         return;
       }
-      setLatitude(coords.latitude);
-      setLongitude(coords.longitude);
-      snackbar.show('Pin atualizado conforme o endereço informado.', 'success');
+      setLatitude(result.latitude);
+      setLongitude(result.longitude);
+      setPinSyncedNumero(numero.trim());
+
+      if (result.precision === 'exact') {
+        snackbar.show('Pin atualizado no número informado.', 'success');
+      } else if (result.precision === 'approximate') {
+        setError(
+          'Localização aproximada para o número informado. Confira o pin no mapa e ajuste manualmente se necessário.',
+        );
+        snackbar.show('Pin aproximado — confira no mapa.', 'warning');
+      } else {
+        setError(
+          numero.trim()
+            ? 'Não localizamos o número exato. O pin ficou no logradouro — ajuste manualmente se preciso.'
+            : 'Pin posicionado no logradouro. Informe o número e atualize novamente para mais precisão.',
+        );
+        snackbar.show('Pin no logradouro — confira no mapa.', 'warning');
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -536,7 +572,7 @@ export function AbrirChamadoForm({
             </Button>
             <Button
               type="button"
-              variant="outlined"
+              variant={pinNeedsRefresh ? 'filled' : 'outlined'}
               size="sm"
               disabled={busy || pinUpdating || !logradouro.trim()}
               onClick={() => void handleUpdatePinFromAddress()}
@@ -549,11 +585,16 @@ export function AbrirChamadoForm({
               ) : (
                 <>
                   <RefreshCw className="h-4 w-4" />
-                  Atualizar pin no mapa
+                  {pinNeedsRefresh ? 'Atualizar pin (número mudou)' : 'Atualizar pin no mapa'}
                 </>
               )}
             </Button>
           </div>
+          {pinNeedsRefresh ? (
+            <p className="text-[12px] text-[var(--warn)]">
+              O número foi alterado depois da última localização. Clique em “Atualizar pin no mapa” para recalcular.
+            </p>
+          ) : null}
 
           <Field
             label="Buscar endereço"
@@ -592,7 +633,7 @@ export function AbrirChamadoForm({
                 required
               />
             </Field>
-            <Field label="Número" hint="Opcional — use complemento se não houver número.">
+            <Field label="Número" hint="Obrigatório para posicionar o pin no imóvel. Opcional só se usar complementar/pin manual.">
               <Input
                 value={numero}
                 onChange={(event) => setNumero(event.target.value)}

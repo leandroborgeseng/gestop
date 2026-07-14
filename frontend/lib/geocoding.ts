@@ -289,14 +289,11 @@ export function parseEnderecoTexto(
 }
 
 export function buildGeocodeQuery(parts: Pick<ParsedAddress, 'logradouro' | 'numero' | 'bairro' | 'cidade'>) {
-  const segments = [
-    [parts.logradouro.trim(), parts.numero.trim()].filter(Boolean).join(' '),
-    parts.bairro.trim(),
-    parts.cidade.trim() || 'Franca',
-    'SP',
-    'Brasil',
-  ].filter(Boolean);
-
+  const logradouro = parts.logradouro.trim();
+  const numero = parts.numero.trim();
+  // Coloca o número junto ao logradouro (ex.: "Rua X, 1000") — essencial para o Nominatim.
+  const streetLine = numero ? `${logradouro}, ${numero}` : logradouro;
+  const segments = [streetLine, parts.bairro.trim(), parts.cidade.trim() || 'Franca', 'SP', 'Brasil'].filter(Boolean);
   return segments.join(', ');
 }
 
@@ -307,20 +304,39 @@ function parseHouseNumber(value: string) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-
 function matchesStreet(item: NominatimItem, street: string) {
-  const road = item.address?.road ?? item.address?.pedestrian ?? item.address?.footway ?? item.display_name;
-  return normalizeStreetName(road ?? '').includes(normalizeStreetName(street));
+  const road = item.address?.road ?? item.address?.pedestrian ?? item.address?.footway ?? '';
+  if (road && normalizeStreetName(road).includes(normalizeStreetName(street))) return true;
+  return normalizeStreetName(item.display_name).includes(normalizeStreetName(street));
 }
 
 function isBuildingResult(item: NominatimItem) {
-  return item.class === 'building' || item.class === 'place' || item.addresstype === 'building';
+  return (
+    item.class === 'building' ||
+    item.class === 'place' ||
+    item.addresstype === 'building' ||
+    item.addresstype === 'house' ||
+    item.type === 'house' ||
+    item.type === 'yes'
+  );
 }
 
 function isRoadResult(item: NominatimItem) {
   return item.class === 'highway' || item.addresstype === 'road';
 }
 
+function itemHouseNumber(item: NominatimItem) {
+  const fromAddress = parseHouseNumber(item.address?.house_number ?? '');
+  if (fromAddress) return fromAddress;
+  // Ex.: "Rua X, 1000, Bairro, Franca..."
+  const match = item.display_name.match(/,\s*(\d{1,6})\b/);
+  return match ? parseHouseNumber(match[1]) : null;
+}
+
+/**
+ * Interpola ao longo do eixo principal do bbox (lógica típica de numeração crescente na via).
+ * `houseNumber` é mapeado aproximadamente em 1..3000.
+ */
 function interpolateHouseOnBoundingBox(
   boundingbox: [string, string, string, string],
   houseNumber: number,
@@ -329,47 +345,99 @@ function interpolateHouseOnBoundingBox(
 ) {
   const [south, north, west, east] = boundingbox.map(Number);
   const span = Math.max(segmentCount, 1);
-  const segmentOffset = Math.min(segmentIndex, span - 1) / span;
-  const localT = Math.min(Math.max((houseNumber % 2000) / 2000, 0.05), 0.95);
-  const t = Math.min(segmentOffset + localT / span, 0.98);
+  const segmentStart = Math.min(Math.max(segmentIndex, 0), span - 1) / span;
+  const segmentWidth = 1 / span;
+  const localT = Math.min(Math.max((houseNumber - 1) / 2999, 0.02), 0.98);
+  const t = segmentStart + localT * segmentWidth;
+
+  const latSpan = Math.abs(north - south);
+  const lngSpan = Math.abs(east - west);
+
+  if (lngSpan >= latSpan) {
+    return {
+      latitude: (south + north) / 2,
+      longitude: west + (east - west) * t,
+    };
+  }
 
   return {
     latitude: south + (north - south) * t,
-    longitude: west + (east - west) * t,
+    longitude: (west + east) / 2,
   };
 }
 
-function resolveCoordsFromItems(items: NominatimItem[], street: string, houseNumber: number | null) {
+export type GeocodePrecision = 'exact' | 'approximate' | 'street';
+
+export type GeocodeStructuredResult = {
+  latitude: number;
+  longitude: number;
+  precision: GeocodePrecision;
+};
+
+function resolveCoordsFromItems(
+  items: NominatimItem[],
+  street: string,
+  houseNumber: number | null,
+): GeocodeStructuredResult | null {
   const streetMatches = items.filter((item) => matchesStreet(item, street));
   const pool = streetMatches.length > 0 ? streetMatches : items;
+  if (pool.length === 0) return null;
 
   if (houseNumber) {
-    const exactBuilding = pool.find(
-      (item) =>
-        isBuildingResult(item) &&
-        parseHouseNumber(item.address?.house_number ?? '') === houseNumber,
-    );
-    if (exactBuilding) {
-      return { latitude: Number(exactBuilding.lat), longitude: Number(exactBuilding.lon) };
+    const exact = pool.find((item) => itemHouseNumber(item) === houseNumber);
+    if (exact) {
+      return {
+        latitude: Number(exact.lat),
+        longitude: Number(exact.lon),
+        precision: 'exact',
+      };
     }
+
+    const nearBuilding = pool.find(
+      (item) => isBuildingResult(item) && itemHouseNumber(item) != null && !isRoadResult(item),
+    );
 
     const roads = pool.filter((item) => isRoadResult(item) && item.boundingbox?.length === 4);
     if (roads.length > 0) {
-      const sortedRoads = [...roads].sort((left, right) => Number(right.importance ?? 0) - Number(left.importance ?? 0));
+      // Ordena segmentos de N→S / O→L para a numeração crescer de forma estável.
+      const sortedRoads = [...roads].sort((left, right) => {
+        const [lSouth, , lWest] = (left.boundingbox ?? []).map(Number);
+        const [rSouth, , rWest] = (right.boundingbox ?? []).map(Number);
+        const latDiff = (lSouth ?? 0) - (rSouth ?? 0);
+        if (Math.abs(latDiff) > 1e-6) return latDiff;
+        return (lWest ?? 0) - (rWest ?? 0);
+      });
       const segmentIndex = Math.min(
-        Math.floor((houseNumber / 2000) * sortedRoads.length),
+        Math.floor(((houseNumber - 1) / 2999) * sortedRoads.length),
         sortedRoads.length - 1,
       );
-      const road = sortedRoads[segmentIndex];
+      const road = sortedRoads[Math.max(segmentIndex, 0)];
       if (road?.boundingbox) {
-        return interpolateHouseOnBoundingBox(road.boundingbox, houseNumber, segmentIndex, sortedRoads.length);
+        const interpolated = interpolateHouseOnBoundingBox(
+          road.boundingbox,
+          houseNumber,
+          segmentIndex,
+          sortedRoads.length,
+        );
+        return { ...interpolated, precision: 'approximate' };
       }
+    }
+
+    if (nearBuilding) {
+      return {
+        latitude: Number(nearBuilding.lat),
+        longitude: Number(nearBuilding.lon),
+        precision: 'approximate',
+      };
     }
   }
 
   const first = pool[0];
-  if (!first) return null;
-  return { latitude: Number(first.lat), longitude: Number(first.lon) };
+  return {
+    latitude: Number(first.lat),
+    longitude: Number(first.lon),
+    precision: houseNumber ? 'approximate' : 'street',
+  };
 }
 
 async function fetchNominatim(url: string): Promise<NominatimItem[]> {
@@ -575,29 +643,70 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
   return parsed ? composeEnderecoTexto(parsed) : null;
 }
 
-export async function geocodeStructuredAddress(
+async function resolveAttempt(
   parts: Pick<ParsedAddress, 'logradouro' | 'numero' | 'bairro' | 'cidade'>,
-): Promise<{ latitude: number; longitude: number } | null> {
+): Promise<GeocodeStructuredResult | null> {
   const street = parts.logradouro.trim();
   const houseNumberRaw = parts.numero.trim();
   const city = parts.cidade.trim() || 'Franca';
   const bairro = parts.bairro.trim();
   const houseNumber = parseHouseNumber(houseNumberRaw);
 
-  if (!street) return null;
-  if (!houseNumber && !bairro && street.length < 3) return null;
+  const structured = await searchStructuredNominatim(street, houseNumberRaw, city, bairro, 8);
+  let resolved = resolveCoordsFromItems(structured, street, houseNumber);
 
-  const structured = await searchStructuredNominatim(street, houseNumberRaw, city, bairro, 5);
-  let coords = resolveCoordsFromItems(structured, street, houseNumber);
-
-  if (!coords) {
-    const freeText = await searchNominatimItems(buildGeocodeQuery(parts), 8);
-    coords = resolveCoordsFromItems(freeText, street, houseNumber);
+  if (!resolved) {
+    const freeText = await searchNominatimItems(buildGeocodeQuery(parts), 10);
+    resolved = resolveCoordsFromItems(freeText, street, houseNumber);
   }
 
-  if (!coords) return null;
-  if (!isWithinFrancaMunicipio(coords.latitude, coords.longitude)) return null;
-  return coords;
+  if (!resolved && houseNumberRaw) {
+    // Query curta só com logradouro+número+cidade (reforça o uso do número).
+    const shortQuery = [street, houseNumberRaw, city, 'SP'].filter(Boolean).join(', ');
+    const shortItems = await searchNominatimItems(shortQuery, 10);
+    resolved = resolveCoordsFromItems(shortItems, street, houseNumber);
+  }
+
+  if (!resolved) return null;
+  if (!isWithinFrancaMunicipio(resolved.latitude, resolved.longitude)) return null;
+  return resolved;
+}
+
+/**
+ * Geocodifica endereço estruturado priorizando o número:
+ * 1) Logradouro + Número + Bairro + Cidade
+ * 2) Logradouro + Número + Cidade
+ * 3) Logradouro + Bairro + Cidade (aproximado / início da via)
+ */
+export async function geocodeStructuredAddress(
+  parts: Pick<ParsedAddress, 'logradouro' | 'numero' | 'bairro' | 'cidade'>,
+): Promise<GeocodeStructuredResult | null> {
+  const street = parts.logradouro.trim();
+  const houseNumberRaw = parts.numero.trim();
+  const city = parts.cidade.trim() || 'Franca';
+  const bairro = parts.bairro.trim();
+
+  if (!street) return null;
+  if (!houseNumberRaw && !bairro && street.length < 3) return null;
+
+  if (houseNumberRaw && bairro) {
+    const withAll = await resolveAttempt({ logradouro: street, numero: houseNumberRaw, bairro, cidade: city });
+    if (withAll) return withAll;
+  }
+
+  if (houseNumberRaw) {
+    const withNumber = await resolveAttempt({ logradouro: street, numero: houseNumberRaw, bairro: '', cidade: city });
+    if (withNumber) return withNumber;
+  }
+
+  if (bairro) {
+    const streetOnly = await resolveAttempt({ logradouro: street, numero: '', bairro, cidade: city });
+    if (streetOnly) {
+      return { ...streetOnly, precision: houseNumberRaw ? 'approximate' : 'street' };
+    }
+  }
+
+  return null;
 }
 
 // Test helpers
