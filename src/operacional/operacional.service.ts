@@ -1,21 +1,32 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
+  ChamadoPrioridade,
+  ChamadoStatus,
   FiscalizacaoStatus,
   NaoConformidadeStatus,
   Prisma,
   UnidadeTipo,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
-import { resolveSecretariaScopeId } from '../auth/secretaria-scope';
+import { resolveChamadoSecretariaFilter, resolveSecretariaScopeId } from '../auth/secretaria-scope';
 import { computeVistoriaNotas } from '../domain/vistoria-nota';
 import { PrismaService } from '../prisma/prisma.service';
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import {
   applyInMemoryUnidadeFilters,
+  DEFAULT_TIPOS_PENDENCIA,
+  isChamadoForaPrazo,
+  LEGACY_TIPOS_PENDENCIA,
   mapUnidadeOperacional,
   UnidadeBaseRecord,
 } from './operacional.mapper';
-import { UnidadeListQuery, UnidadeVistoriaNotaResumo } from './operacional.types';
+import {
+  ChamadoMapaItem,
+  ChamadosMapaQuery,
+  TipoPendencia,
+  UnidadeListQuery,
+  UnidadeVistoriaNotaResumo,
+} from './operacional.types';
 
 const NON_CONFORMITY_OPEN_STATUSES: NaoConformidadeStatus[] = [
   NaoConformidadeStatus.ABERTA,
@@ -98,49 +109,60 @@ export class OperacionalService {
 
   async getOpcoesFiltro(user: JwtPayload) {
     const secretariaId = resolveSecretariaScopeId(user);
-    const [secretarias, bairros, tiposRows, responsaveisRows, regioesRows, categoriasVistoria] = await Promise.all([
-      this.prisma.secretaria.findMany({
-        where: {
-          ativo: true,
-          unidades: { some: { ativo: true } },
-          ...(secretariaId ? { id: secretariaId } : {}),
-        },
-        orderBy: { nome: 'asc' },
-        select: { id: true, nome: true, sigla: true },
-      }),
-      this.listBairros(),
-      this.prisma.unidadePublica.findMany({
-        where: { ativo: true },
-        distinct: ['tipo'],
-        orderBy: { tipo: 'asc' },
-        select: { tipo: true },
-      }),
-      this.prisma.secretaria.findMany({
-        where: {
-          ativo: true,
-          unidades: { some: { ativo: true } },
-          OR: [{ responsavelNome: { not: null } }, { responsavelEmail: { not: null } }],
-        },
-        orderBy: [{ responsavelNome: 'asc' }, { sigla: 'asc' }],
-        select: {
-          id: true,
-          sigla: true,
-          responsavelNome: true,
-          responsavelEmail: true,
-        },
-      }),
-      this.prisma.unidadePublica.findMany({
-        where: { ativo: true, regiao: { not: null } },
-        distinct: ['regiao'],
-        orderBy: { regiao: 'asc' },
-        select: { regiao: true },
-      }),
-      this.prisma.categoriaVistoria.findMany({
-        where: { ativo: true },
-        orderBy: { nome: 'asc' },
-        select: { id: true, nome: true },
-      }),
-    ]);
+    const [secretarias, bairros, tiposRows, responsaveisRows, regioesRows, categoriasVistoria, equipes, tiposChamado] =
+      await Promise.all([
+        this.prisma.secretaria.findMany({
+          where: {
+            ativo: true,
+            unidades: { some: { ativo: true } },
+            ...(secretariaId ? { id: secretariaId } : {}),
+          },
+          orderBy: { nome: 'asc' },
+          select: { id: true, nome: true, sigla: true },
+        }),
+        this.listBairros(),
+        this.prisma.unidadePublica.findMany({
+          where: { ativo: true },
+          distinct: ['tipo'],
+          orderBy: { tipo: 'asc' },
+          select: { tipo: true },
+        }),
+        this.prisma.secretaria.findMany({
+          where: {
+            ativo: true,
+            unidades: { some: { ativo: true } },
+            OR: [{ responsavelNome: { not: null } }, { responsavelEmail: { not: null } }],
+          },
+          orderBy: [{ responsavelNome: 'asc' }, { sigla: 'asc' }],
+          select: {
+            id: true,
+            sigla: true,
+            responsavelNome: true,
+            responsavelEmail: true,
+          },
+        }),
+        this.prisma.unidadePublica.findMany({
+          where: { ativo: true, regiao: { not: null } },
+          distinct: ['regiao'],
+          orderBy: { regiao: 'asc' },
+          select: { regiao: true },
+        }),
+        this.prisma.categoriaVistoria.findMany({
+          where: { ativo: true },
+          orderBy: { nome: 'asc' },
+          select: { id: true, nome: true },
+        }),
+        this.prisma.equipe.findMany({
+          where: { ativo: true, ...(secretariaId ? { secretariaId } : {}) },
+          orderBy: { nome: 'asc' },
+          select: { id: true, nome: true, codigo: true },
+        }),
+        this.prisma.tipoChamado.findMany({
+          where: { ativo: true },
+          orderBy: { nome: 'asc' },
+          select: { id: true, nome: true },
+        }),
+      ]);
 
     const responsaveis = responsaveisRows
       .filter((item) => item.responsavelNome?.trim())
@@ -163,12 +185,23 @@ export class OperacionalService {
       categoriasVistoria,
       responsaveis,
       emails,
+      equipes,
+      tiposChamado,
     };
   }
 
   async listUnidades(query: UnidadeListQuery, user: JwtPayload) {
     const scopeId = resolveSecretariaScopeId(user);
     const effectiveQuery = scopeId ? { ...query, secretariaId: scopeId } : query;
+    const tiposPendencia = this.resolveTiposPendencia(query.tiposPendencia);
+    const usesChamados = tiposPendencia.includes('CHAMADOS');
+    const usesNc = tiposPendencia.includes('NAO_CONFORMIDADES');
+    const usesVistorias = tiposPendencia.includes('VISTORIAS');
+    const tiposChamadoId = usesChamados && query.tiposChamadoId?.length ? query.tiposChamadoId : undefined;
+    const equipeIds = query.equipeIds?.length ? query.equipeIds : undefined;
+    // Equipe/SLA olham chamados abertos independente do chip de tipo de pendência.
+    const chamadoWhere = this.buildChamadoPendenciaWhere({ tiposChamadoId, equipeIds });
+
     const where = this.buildUnidadeWhere(effectiveQuery);
     const unidades = await this.prisma.unidadePublica.findMany({
       where,
@@ -197,13 +230,23 @@ export class OperacionalService {
         },
         _count: {
           select: {
-            fiscalizacoes: true,
+            fiscalizacoes: {
+              where: { status: FiscalizacaoStatus.CONCLUIDA },
+            },
             naoConformidades: {
-              where: { status: { in: NON_CONFORMITY_OPEN_STATUSES } },
+              where: this.buildNcPendenciaWhere(),
             },
             chamados: {
-              where: { status: { in: CHAMADO_OPEN_STATUSES } },
+              where: chamadoWhere,
             },
+          },
+        },
+        chamados: {
+          where: chamadoWhere,
+          select: {
+            id: true,
+            prazoEm: true,
+            status: true,
           },
         },
       },
@@ -211,22 +254,188 @@ export class OperacionalService {
 
     const notasPorUnidade = await this.loadUltimasNotasPorUnidade(unidades.map((unidade) => unidade.id));
 
-    const mapped = unidades.map((unidade) =>
-      mapUnidadeOperacional(
+    const mapped = unidades.map((unidade) => {
+      const chamadosSlaForaPrazo = unidade.chamados.filter((chamado) =>
+        isChamadoForaPrazo(chamado.prazoEm),
+      ).length;
+      const semVistoria = unidade._count.fiscalizacoes === 0;
+      const countsForSituacao = {
+        fiscalizacoes: unidade._count.fiscalizacoes,
+        naoConformidadesAbertas: usesNc ? unidade._count.naoConformidades : 0,
+        chamadosAbertos: usesChamados ? unidade._count.chamados : 0,
+        chamadosSlaForaPrazo: usesChamados ? chamadosSlaForaPrazo : 0,
+        semVistoria: usesVistorias ? semVistoria : false,
+      };
+
+      const mappedUnidade = mapUnidadeOperacional(
         unidade as UnidadeBaseRecord,
-        {
+        countsForSituacao,
+        notasPorUnidade.get(unidade.id) ?? null,
+        tiposPendencia,
+      );
+
+      const slaMapa =
+        unidade._count.chamados > 0
+          ? chamadosSlaForaPrazo > 0
+            ? ('FORA' as const)
+            : ('DENTRO' as const)
+          : null;
+
+      return {
+        ...mappedUnidade,
+        pendencias: {
+          naoConformidadesAbertas: unidade._count.naoConformidades,
+          chamadosAbertos: unidade._count.chamados,
+          semVistoria,
+        },
+        totais: {
           fiscalizacoes: unidade._count.fiscalizacoes,
           naoConformidadesAbertas: unidade._count.naoConformidades,
           chamadosAbertos: unidade._count.chamados,
+          chamadosSlaForaPrazo,
+          semVistoria,
         },
-        notasPorUnidade.get(unidade.id) ?? null,
-      ),
-    );
+        slaMapa,
+      };
+    });
 
-    return applyInMemoryUnidadeFilters(mapped, {
+    let filtered = applyInMemoryUnidadeFilters(mapped, {
       situacao: query.situacao,
       pendencias: query.pendencias,
+      tiposPendencia,
+      sla: query.sla,
     });
+
+    if (equipeIds?.length || (usesChamados && tiposChamadoId?.length)) {
+      filtered = filtered.filter((unidade) => unidade.pendencias.chamadosAbertos > 0);
+    }
+
+    return filtered;
+  }
+
+  async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload): Promise<ChamadoMapaItem[]> {
+    const where: Prisma.ChamadoWhereInput = {
+      ...resolveChamadoSecretariaFilter(user),
+      ...(query.status?.length ? { status: { in: query.status as ChamadoStatus[] } } : {}),
+      ...(query.prioridade?.length ? { prioridade: { in: query.prioridade as ChamadoPrioridade[] } } : {}),
+      ...(query.tipoChamadoId?.length ? { tipoChamadoId: { in: query.tipoChamadoId } } : {}),
+      ...(query.equipeIds?.length ? { equipeId: { in: query.equipeIds } } : {}),
+      ...(query.comUnidade === 'COM' ? { unidadeId: { not: null } } : {}),
+      ...(query.comUnidade === 'SEM' ? { unidadeId: null } : {}),
+      ...(query.bairro
+        ? {
+            OR: [
+              { enderecoBairro: { equals: query.bairro, mode: 'insensitive' } },
+              { unidade: { bairro: { equals: query.bairro, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { codigo: { contains: query.search, mode: 'insensitive' } },
+              { titulo: { contains: query.search, mode: 'insensitive' } },
+              { descricao: { contains: query.search, mode: 'insensitive' } },
+              { enderecoTexto: { contains: query.search, mode: 'insensitive' } },
+              { enderecoBairro: { contains: query.search, mode: 'insensitive' } },
+              { unidade: { nome: { contains: query.search, mode: 'insensitive' } } },
+              { unidade: { codigoPatrimonial: { contains: query.search, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+
+    const chamados = await this.prisma.chamado.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }],
+      take: 2000,
+      select: {
+        id: true,
+        codigo: true,
+        titulo: true,
+        descricao: true,
+        status: true,
+        prioridade: true,
+        origem: true,
+        prazoEm: true,
+        previstaExecucaoEm: true,
+        enderecoTexto: true,
+        enderecoBairro: true,
+        latitude: true,
+        longitude: true,
+        createdAt: true,
+        secretaria: { select: { id: true, nome: true, sigla: true } },
+        unidade: {
+          select: {
+            id: true,
+            nome: true,
+            codigoPatrimonial: true,
+            endereco: true,
+            bairro: true,
+            latitude: true,
+            longitude: true,
+          },
+        },
+        equipe: { select: { id: true, nome: true } },
+        tipoChamado: { select: { id: true, nome: true } },
+        responsavel: { select: { id: true, nome: true } },
+      },
+    });
+
+    const now = new Date();
+    const items = chamados.map((chamado): ChamadoMapaItem => {
+      const latitude = chamado.latitude != null ? Number(chamado.latitude) : null;
+      const longitude = chamado.longitude != null ? Number(chamado.longitude) : null;
+      const unidadeLat = chamado.unidade?.latitude != null ? Number(chamado.unidade.latitude) : null;
+      const unidadeLng = chamado.unidade?.longitude != null ? Number(chamado.unidade.longitude) : null;
+      const mapaLatitude = latitude ?? unidadeLat;
+      const mapaLongitude = longitude ?? unidadeLng;
+      const open = (CHAMADO_OPEN_STATUSES as string[]).includes(chamado.status);
+      const slaMapa =
+        open && chamado.prazoEm
+          ? isChamadoForaPrazo(chamado.prazoEm, now)
+            ? ('FORA' as const)
+            : ('DENTRO' as const)
+          : null;
+
+      return {
+        id: chamado.id,
+        codigo: chamado.codigo,
+        titulo: chamado.titulo,
+        descricao: chamado.descricao,
+        status: chamado.status,
+        prioridade: chamado.prioridade,
+        origem: chamado.origem,
+        prazoEm: chamado.prazoEm?.toISOString() ?? null,
+        previstaExecucaoEm: chamado.previstaExecucaoEm?.toISOString() ?? null,
+        enderecoTexto: chamado.enderecoTexto,
+        enderecoBairro: chamado.enderecoBairro,
+        latitude,
+        longitude,
+        mapaLatitude: Number.isFinite(mapaLatitude) ? mapaLatitude : null,
+        mapaLongitude: Number.isFinite(mapaLongitude) ? mapaLongitude : null,
+        slaMapa,
+        createdAt: chamado.createdAt.toISOString(),
+        secretaria: chamado.secretaria,
+        unidade: chamado.unidade
+          ? {
+              id: chamado.unidade.id,
+              nome: chamado.unidade.nome,
+              codigoPatrimonial: chamado.unidade.codigoPatrimonial,
+              endereco: chamado.unidade.endereco,
+              bairro: chamado.unidade.bairro,
+              latitude: unidadeLat,
+              longitude: unidadeLng,
+            }
+          : null,
+        equipe: chamado.equipe,
+        tipoChamado: chamado.tipoChamado,
+        responsavel: chamado.responsavel,
+      };
+    });
+
+    if (!query.sla) return items;
+    return items.filter((item) => item.slaMapa === query.sla);
   }
 
   async getUnidadeDetalhe(id: string) {
@@ -326,7 +535,9 @@ export class OperacionalService {
         },
         _count: {
           select: {
-            fiscalizacoes: true,
+            fiscalizacoes: {
+              where: { status: FiscalizacaoStatus.CONCLUIDA },
+            },
             naoConformidades: {
               where: { status: { in: NON_CONFORMITY_OPEN_STATUSES } },
             },
@@ -342,14 +553,20 @@ export class OperacionalService {
       throw new NotFoundException('Proprio publico nao encontrado');
     }
 
+    const chamadosSlaForaPrazo = unidade.chamados.filter((chamado) => isChamadoForaPrazo(chamado.prazoEm)).length;
+    const semVistoria = unidade._count.fiscalizacoes === 0;
+
     const resumo = mapUnidadeOperacional(
       unidade as UnidadeBaseRecord,
       {
         fiscalizacoes: unidade._count.fiscalizacoes,
         naoConformidadesAbertas: unidade._count.naoConformidades,
         chamadosAbertos: unidade._count.chamados,
+        chamadosSlaForaPrazo,
+        semVistoria,
       },
       (await this.loadUltimasNotasPorUnidade([id])).get(id) ?? null,
+      LEGACY_TIPOS_PENDENCIA,
     );
 
     return {
@@ -366,6 +583,43 @@ export class OperacionalService {
         naoConformidades: unidade.naoConformidades,
         chamados: unidade.chamados,
       },
+    };
+  }
+
+  private resolveTiposPendencia(tipos?: TipoPendencia[]) {
+    if (!tipos || tipos.length === 0) {
+      return [...LEGACY_TIPOS_PENDENCIA];
+    }
+    const valid = tipos.filter((tipo): tipo is TipoPendencia =>
+      DEFAULT_TIPOS_PENDENCIA.includes(tipo),
+    );
+    return valid.length > 0 ? valid : [...LEGACY_TIPOS_PENDENCIA];
+  }
+
+  private buildNcPendenciaWhere(): Prisma.NaoConformidadeWhereInput {
+    // NC pendente = gerou chamado ainda aberto, ou NC aberta/em triagem ainda sem chamado.
+    return {
+      status: { in: NON_CONFORMITY_OPEN_STATUSES },
+      OR: [
+        { chamado: { status: { in: CHAMADO_OPEN_STATUSES } } },
+        {
+          AND: [
+            { chamado: { is: null } },
+            { status: { in: [NaoConformidadeStatus.ABERTA, NaoConformidadeStatus.EM_TRIAGEM] } },
+          ],
+        },
+      ],
+    };
+  }
+
+  private buildChamadoPendenciaWhere(filters: {
+    tiposChamadoId?: string[];
+    equipeIds?: string[];
+  }): Prisma.ChamadoWhereInput {
+    return {
+      status: { in: CHAMADO_OPEN_STATUSES },
+      ...(filters.tiposChamadoId?.length ? { tipoChamadoId: { in: filters.tiposChamadoId } } : {}),
+      ...(filters.equipeIds?.length ? { equipeId: { in: filters.equipeIds } } : {}),
     };
   }
 
@@ -421,9 +675,11 @@ export class OperacionalService {
         respostas: {
           select: {
             valorTexto: true,
+            valorBooleano: true,
             item: {
               select: {
                 tipo: true,
+                opcoes: true,
                 categoriaVistoriaId: true,
                 categoriaVistoria: { select: { id: true, nome: true } },
               },

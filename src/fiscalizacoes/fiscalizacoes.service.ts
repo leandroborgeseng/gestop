@@ -8,7 +8,7 @@ import { ListFiscalizacoesQueryDto } from './fiscalizacoes.dto';
 
 const listInclude = {
   secretaria: { select: { id: true, sigla: true, nome: true } },
-  unidade: { select: { id: true, nome: true, codigoPatrimonial: true, bairro: true } },
+  unidade: { select: { id: true, nome: true, codigoPatrimonial: true, bairro: true, tipo: true } },
   agente: { select: { id: true, nome: true } },
   checklistVersao: {
     select: {
@@ -18,6 +18,19 @@ const listInclude = {
     },
   },
 } satisfies Prisma.FiscalizacaoInclude;
+
+const listRespostasSelect = {
+  valorTexto: true,
+  valorBooleano: true,
+  item: {
+    select: {
+      tipo: true,
+      opcoes: true,
+      categoriaVistoriaId: true,
+      categoriaVistoria: { select: { id: true, nome: true } },
+    },
+  },
+} satisfies Prisma.RespostaChecklistSelect;
 
 @Injectable()
 export class FiscalizacoesService {
@@ -34,13 +47,19 @@ export class FiscalizacoesService {
         orderBy: [{ concluidaEm: 'desc' }, { iniciadaEm: 'desc' }, { createdAt: 'desc' }],
         take: limit,
         skip: offset,
-        include: listInclude,
+        include: {
+          ...listInclude,
+          respostas: { select: listRespostasSelect },
+        },
       }),
       this.prisma.fiscalizacao.count({ where }),
     ]);
 
     return {
-      items: items.map((item) => this.serialize(item)),
+      items: items.map(({ respostas, ...item }) => ({
+        ...this.serialize(item),
+        nota: computeVistoriaNotas(respostas),
+      })),
       total,
       limit,
       offset,
@@ -65,6 +84,7 @@ export class FiscalizacoesService {
                 codigo: true,
                 titulo: true,
                 tipo: true,
+                opcoes: true,
                 categoriaVistoriaId: true,
                 categoriaVistoria: { select: { id: true, nome: true } },
               },
@@ -130,6 +150,7 @@ export class FiscalizacoesService {
       ...(query.secretariaId ? { secretariaId: query.secretariaId } : {}),
       ...(query.unidadeId ? { unidadeId: query.unidadeId } : {}),
       ...(query.agenteId ? { agenteId: query.agenteId } : {}),
+      ...(query.tipo ? { unidade: { tipo: query.tipo } } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.from || query.to
         ? {

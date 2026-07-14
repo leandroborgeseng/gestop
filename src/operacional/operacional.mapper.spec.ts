@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyInMemoryUnidadeFilters,
   deriveUnidadeSituacao,
+  hasPendenciaAtiva,
+  isChamadoForaPrazo,
   mapUnidadeOperacional,
 } from './operacional.mapper';
 
@@ -54,10 +56,51 @@ describe('mapeamento operacional de unidades', () => {
       fiscalizacoes: 2,
       naoConformidadesAbertas: 1,
       chamadosAbertos: 1,
+      chamadosSlaForaPrazo: 0,
+      semVistoria: false,
     });
 
     expect(unidade.situacao).toBe('COM_PENDENCIAS');
     expect(unidade.pendencias.chamadosAbertos).toBe(1);
+    expect(unidade.slaMapa).toBe('DENTRO');
+  });
+
+  it('marca SLA fora do prazo quando ha chamado atrasado', () => {
+    const unidade = mapUnidadeOperacional(baseUnidade, {
+      fiscalizacoes: 1,
+      naoConformidadesAbertas: 0,
+      chamadosAbertos: 2,
+      chamadosSlaForaPrazo: 1,
+      semVistoria: false,
+    });
+
+    expect(unidade.slaMapa).toBe('FORA');
+  });
+
+  it('considera sem vistoria quando tiposPendencia inclui VISTORIAS', () => {
+    expect(
+      deriveUnidadeSituacao({
+        ativo: true,
+        latitude: -20.53936,
+        longitude: -47.40081,
+        naoConformidadesAbertas: 0,
+        chamadosAbertos: 0,
+        semVistoria: true,
+        tiposPendencia: ['VISTORIAS'],
+      }),
+    ).toBe('COM_PENDENCIAS');
+
+    expect(
+      deriveUnidadeSituacao({
+        ativo: true,
+        latitude: -20.53936,
+        longitude: -47.40081,
+        naoConformidadesAbertas: 0,
+        chamadosAbertos: 0,
+        semVistoria: true,
+        tiposPendencia: ['CHAMADOS'],
+      }),
+    ).toBe('OPERACIONAL');
   });
 
   it('filtra lista por situacao e pendencias', () => {
@@ -65,6 +108,8 @@ describe('mapeamento operacional de unidades', () => {
       fiscalizacoes: 1,
       naoConformidadesAbertas: 0,
       chamadosAbertos: 0,
+      chamadosSlaForaPrazo: 0,
+      semVistoria: false,
     });
     const pendente = mapUnidadeOperacional(
       { ...baseUnidade, id: 'unidade-2', nome: 'UBS Teste', tipo: 'UBS' },
@@ -72,6 +117,8 @@ describe('mapeamento operacional de unidades', () => {
         fiscalizacoes: 1,
         naoConformidadesAbertas: 0,
         chamadosAbertos: 2,
+        chamadosSlaForaPrazo: 1,
+        semVistoria: false,
       },
     );
 
@@ -81,5 +128,37 @@ describe('mapeamento operacional de unidades', () => {
         pendencias: true,
       }),
     ).toEqual([pendente]);
+
+    expect(
+      applyInMemoryUnidadeFilters([operacional, pendente], {
+        sla: 'FORA',
+      }),
+    ).toEqual([pendente]);
+  });
+
+  it('detecta chamado fora do prazo por dia', () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    expect(isChamadoForaPrazo(yesterday)).toBe(true);
+    expect(isChamadoForaPrazo(new Date())).toBe(true);
+    expect(isChamadoForaPrazo(tomorrow)).toBe(false);
+    expect(isChamadoForaPrazo(null)).toBe(false);
+  });
+
+  it('avalia tipos de pendencia selecionados', () => {
+    expect(
+      hasPendenciaAtiva(
+        { chamadosAbertos: 0, naoConformidadesAbertas: 0, semVistoria: true },
+        ['VISTORIAS'],
+      ),
+    ).toBe(true);
+    expect(
+      hasPendenciaAtiva(
+        { chamadosAbertos: 1, naoConformidadesAbertas: 0, semVistoria: false },
+        ['NAO_CONFORMIDADES'],
+      ),
+    ).toBe(false);
   });
 });

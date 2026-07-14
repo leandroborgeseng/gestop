@@ -41,6 +41,7 @@ import { formatEvidenceSizeLimitMb, prepareEvidenceImage } from '@/lib/evidence-
 import { captureCurrentPosition, GeoPosition } from '@/lib/geolocation';
 import { ChamadoEvidencia, ChamadoExecucaoDetalhe, EquipeOpcao } from '@/lib/types';
 import { cn } from '@/lib/cn';
+import { openMapsRoute } from '@/lib/maps-route';
 
 type Step = 'chegada' | 'registro' | 'encerramento';
 
@@ -49,15 +50,6 @@ const STEPS: Array<{ id: Step; label: string }> = [
   { id: 'registro', label: 'Execução' },
   { id: 'encerramento', label: 'Encerramento' },
 ];
-
-function openMapsRoute(latitude: number, longitude: number) {
-  const destination = `${latitude},${longitude}`;
-  const isApple = typeof navigator !== 'undefined' && /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent);
-  const url = isApple
-    ? `maps://?daddr=${destination}`
-    : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
-  window.open(url, '_blank', 'noopener,noreferrer');
-}
 
 function buildRelatorioFinal(impedimento: boolean, motivo: string, relatorio: string) {
   if (!impedimento) return relatorio.trim();

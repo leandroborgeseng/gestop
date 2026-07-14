@@ -2,6 +2,12 @@ import { RegiaoUnidade, UnidadeTipo } from '@prisma/client';
 
 export type UnidadeSituacao = 'OPERACIONAL' | 'COM_PENDENCIAS' | 'SEM_LOCALIZACAO' | 'INATIVA';
 
+export type TipoPendencia = 'CHAMADOS' | 'NAO_CONFORMIDADES' | 'VISTORIAS';
+
+export type SlaFiltro = 'DENTRO' | 'FORA';
+
+export type UnidadeSlaMapa = 'DENTRO' | 'FORA' | null;
+
 export type UnidadeListQuery = {
   search?: string;
   secretariaId?: string;
@@ -12,12 +18,22 @@ export type UnidadeListQuery = {
   regiao?: RegiaoUnidade;
   responsavel?: string;
   responsavelEmail?: string;
+  /** Quando informado, redefine o que conta como pendência (default legado: CH + NC). */
+  tiposPendencia?: TipoPendencia[];
+  /** Só aplica quando CHAMADOS está entre os tipos de pendência ativos. */
+  tiposChamadoId?: string[];
+  /** Filtra próprios que tenham chamado aberto atribuído a estas equipes. */
+  equipeIds?: string[];
+  /** Filtra próprios conforme SLA dos chamados abertos relevantes. */
+  sla?: SlaFiltro;
 };
 
 export type UnidadeResumoCounts = {
   fiscalizacoes: number;
   naoConformidadesAbertas: number;
   chamadosAbertos: number;
+  chamadosSlaForaPrazo: number;
+  semVistoria: boolean;
 };
 
 export type UnidadeVistoriaNotaResumo = {
@@ -55,7 +71,54 @@ export type UnidadeOperacional = {
   pendencias: {
     naoConformidadesAbertas: number;
     chamadosAbertos: number;
+    semVistoria: boolean;
   };
   totais: UnidadeResumoCounts;
+  /** Verde/vermelho no mapa quando há chamado aberto com prazo. */
+  slaMapa: UnidadeSlaMapa;
   ultimaVistoriaNota?: UnidadeVistoriaNotaResumo | null;
+};
+
+export type ChamadosMapaQuery = {
+  search?: string;
+  status?: string[];
+  prioridade?: string[];
+  tipoChamadoId?: string[];
+  equipeIds?: string[];
+  sla?: SlaFiltro;
+  bairro?: string;
+  comUnidade?: 'TODOS' | 'COM' | 'SEM';
+};
+
+export type ChamadoMapaItem = {
+  id: string;
+  codigo: string;
+  titulo: string | null;
+  descricao: string;
+  status: string;
+  prioridade: string;
+  origem: string;
+  prazoEm: string | null;
+  previstaExecucaoEm: string | null;
+  enderecoTexto: string | null;
+  enderecoBairro: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  mapaLatitude: number | null;
+  mapaLongitude: number | null;
+  slaMapa: UnidadeSlaMapa;
+  createdAt: string;
+  secretaria: { id: string; nome: string; sigla: string };
+  unidade: {
+    id: string;
+    nome: string;
+    codigoPatrimonial: string;
+    endereco: string;
+    bairro: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  } | null;
+  equipe: { id: string; nome: string } | null;
+  tipoChamado: { id: string; nome: string } | null;
+  responsavel: { id: string; nome: string } | null;
 };

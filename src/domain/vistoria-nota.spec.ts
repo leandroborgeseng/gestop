@@ -38,6 +38,71 @@ describe('vistoria-nota', () => {
     ]);
   });
 
+  it('inclui múltipla escolha com notas e ignora opções sem nota', () => {
+    const result = computeVistoriaNotas([
+      {
+        valorTexto: 'Bom',
+        item: {
+          tipo: ChecklistItemTipo.MULTIPLA_ESCOLHA,
+          opcoes: { opcoes: ['Ruim', 'Bom'], notas: [2, 8], modoExibicao: 'SELECT' },
+          categoriaVistoriaId: 'cat-a',
+          categoriaVistoria: { id: 'cat-a', nome: 'Categoria A' },
+        },
+      },
+      {
+        valorTexto: 'Qualquer',
+        item: {
+          tipo: ChecklistItemTipo.MULTIPLA_ESCOLHA,
+          opcoes: { opcoes: ['Qualquer', 'Outro'], modoExibicao: 'SELECT' },
+          categoriaVistoriaId: 'cat-a',
+          categoriaVistoria: { id: 'cat-a', nome: 'Categoria A' },
+        },
+      },
+    ]);
+
+    expect(result.notaGeral).toBe(8);
+    expect(result.notasPorCategoria).toEqual([
+      { categoriaId: 'cat-a', categoriaNome: 'Categoria A', nota: 8 },
+    ]);
+  });
+
+  it('pontua Sim/Não apenas quando pontuar=true', () => {
+    const comPontuacao = computeVistoriaNotas([
+      {
+        valorBooleano: true,
+        item: {
+          tipo: ChecklistItemTipo.BOOLEANO,
+          opcoes: { pontuar: true, notaSim: 10, notaNao: 0 },
+          categoriaVistoriaId: 'cat-b',
+          categoriaVistoria: { id: 'cat-b', nome: 'Categoria B' },
+        },
+      },
+      {
+        valorBooleano: false,
+        item: {
+          tipo: ChecklistItemTipo.BOOLEANO,
+          opcoes: { pontuar: true, notaSim: 10, notaNao: 4 },
+          categoriaVistoriaId: 'cat-b',
+          categoriaVistoria: { id: 'cat-b', nome: 'Categoria B' },
+        },
+      },
+    ]);
+    expect(comPontuacao.notaGeral).toBe(7);
+
+    const semPontuacao = computeVistoriaNotas([
+      {
+        valorBooleano: true,
+        item: {
+          tipo: ChecklistItemTipo.BOOLEANO,
+          opcoes: { simConformidade: 'CONFORME', naoConformidade: 'NAO_CONFORME' },
+          categoriaVistoriaId: 'cat-b',
+          categoriaVistoria: { id: 'cat-b', nome: 'Categoria B' },
+        },
+      },
+    ]);
+    expect(semPontuacao.notaGeral).toBeNull();
+  });
+
   it('nunca ultrapassa 10', () => {
     expect(clampNota(10.4)).toBe(10);
     expect(clampNota(-1)).toBe(0);

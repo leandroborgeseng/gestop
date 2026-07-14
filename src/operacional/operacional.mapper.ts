@@ -1,5 +1,12 @@
 import { Prisma } from '@prisma/client';
-import { UnidadeOperacional, UnidadeResumoCounts, UnidadeSituacao, UnidadeVistoriaNotaResumo } from './operacional.types';
+import {
+  TipoPendencia,
+  UnidadeOperacional,
+  UnidadeResumoCounts,
+  UnidadeSituacao,
+  UnidadeSlaMapa,
+  UnidadeVistoriaNotaResumo,
+} from './operacional.types';
 
 type DecimalLike = Prisma.Decimal | number | string | null | undefined;
 
@@ -25,6 +32,15 @@ export type UnidadeBaseRecord = {
   };
 };
 
+export const DEFAULT_TIPOS_PENDENCIA: TipoPendencia[] = [
+  'CHAMADOS',
+  'NAO_CONFORMIDADES',
+  'VISTORIAS',
+];
+
+/** Comportamento legado da situação antes dos filtros por tipo de pendência. */
+export const LEGACY_TIPOS_PENDENCIA: TipoPendencia[] = ['CHAMADOS', 'NAO_CONFORMIDADES'];
+
 function decimalToNumber(value: DecimalLike) {
   if (value === null || value === undefined) {
     return null;
@@ -33,12 +49,40 @@ function decimalToNumber(value: DecimalLike) {
   return Number(value);
 }
 
+export function isChamadoForaPrazo(prazoEm: Date | string | null | undefined, now = new Date()) {
+  if (!prazoEm) return false;
+  const prazo = prazoEm instanceof Date ? prazoEm : new Date(prazoEm);
+  if (Number.isNaN(prazo.getTime())) return false;
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0);
+  const deadline = new Date(prazo);
+  deadline.setHours(0, 0, 0, 0);
+  // Alinhado ao prazoInfo do frontend: “vence hoje” já é risco (fora do prazo).
+  return deadline.getTime() <= today.getTime();
+}
+
+export function hasPendenciaAtiva(
+  counts: Pick<UnidadeResumoCounts, 'chamadosAbertos' | 'naoConformidadesAbertas' | 'semVistoria'>,
+  tiposPendencia: TipoPendencia[] = LEGACY_TIPOS_PENDENCIA,
+) {
+  const tipos = tiposPendencia.length > 0 ? tiposPendencia : LEGACY_TIPOS_PENDENCIA;
+
+  return tipos.some((tipo) => {
+    if (tipo === 'CHAMADOS') return counts.chamadosAbertos > 0;
+    if (tipo === 'NAO_CONFORMIDADES') return counts.naoConformidadesAbertas > 0;
+    if (tipo === 'VISTORIAS') return counts.semVistoria;
+    return false;
+  });
+}
+
 export function deriveUnidadeSituacao(input: {
   ativo: boolean;
   latitude: DecimalLike;
   longitude: DecimalLike;
   naoConformidadesAbertas: number;
   chamadosAbertos: number;
+  semVistoria?: boolean;
+  tiposPendencia?: TipoPendencia[];
 }): UnidadeSituacao {
   if (!input.ativo) {
     return 'INATIVA';
@@ -48,17 +92,33 @@ export function deriveUnidadeSituacao(input: {
     return 'SEM_LOCALIZACAO';
   }
 
-  if (input.naoConformidadesAbertas > 0 || input.chamadosAbertos > 0) {
+  const tipos = input.tiposPendencia ?? LEGACY_TIPOS_PENDENCIA;
+  if (
+    hasPendenciaAtiva(
+      {
+        chamadosAbertos: input.chamadosAbertos,
+        naoConformidadesAbertas: input.naoConformidadesAbertas,
+        semVistoria: Boolean(input.semVistoria),
+      },
+      tipos,
+    )
+  ) {
     return 'COM_PENDENCIAS';
   }
 
   return 'OPERACIONAL';
 }
 
+export function resolveUnidadeSlaMapa(chamadosAbertos: number, chamadosSlaForaPrazo: number): UnidadeSlaMapa {
+  if (chamadosAbertos <= 0) return null;
+  return chamadosSlaForaPrazo > 0 ? 'FORA' : 'DENTRO';
+}
+
 export function mapUnidadeOperacional(
   unidade: UnidadeBaseRecord,
   counts: UnidadeResumoCounts,
   ultimaVistoriaNota?: UnidadeVistoriaNotaResumo | null,
+  tiposPendencia?: TipoPendencia[],
 ): UnidadeOperacional {
   const situacao = deriveUnidadeSituacao({
     ativo: unidade.ativo,
@@ -66,6 +126,8 @@ export function mapUnidadeOperacional(
     longitude: unidade.longitude,
     naoConformidadesAbertas: counts.naoConformidadesAbertas,
     chamadosAbertos: counts.chamadosAbertos,
+    semVistoria: counts.semVistoria,
+    tiposPendencia,
   });
 
   return {
@@ -86,8 +148,10 @@ export function mapUnidadeOperacional(
     pendencias: {
       naoConformidadesAbertas: counts.naoConformidadesAbertas,
       chamadosAbertos: counts.chamadosAbertos,
+      semVistoria: counts.semVistoria,
     },
     totais: counts,
+    slaMapa: resolveUnidadeSlaMapa(counts.chamadosAbertos, counts.chamadosSlaForaPrazo),
     ultimaVistoriaNota: ultimaVistoriaNota ?? null,
   };
 }
@@ -97,18 +161,36 @@ export function applyInMemoryUnidadeFilters<T extends UnidadeOperacional>(
   filters: {
     situacao?: UnidadeSituacao;
     pendencias?: boolean;
+    tiposPendencia?: TipoPendencia[];
+    sla?: 'DENTRO' | 'FORA';
   },
 ) {
+  const tipos = filters.tiposPendencia;
+
   return unidades.filter((unidade) => {
     if (filters.situacao && unidade.situacao !== filters.situacao) {
       return false;
     }
 
     if (filters.pendencias !== undefined) {
-      const hasPendencias =
-        unidade.pendencias.naoConformidadesAbertas > 0 || unidade.pendencias.chamadosAbertos > 0;
+      const hasPendencias = tipos
+        ? hasPendenciaAtiva(
+            {
+              chamadosAbertos: unidade.pendencias.chamadosAbertos,
+              naoConformidadesAbertas: unidade.pendencias.naoConformidadesAbertas,
+              semVistoria: unidade.pendencias.semVistoria,
+            },
+            tipos,
+          )
+        : unidade.pendencias.naoConformidadesAbertas > 0 || unidade.pendencias.chamadosAbertos > 0;
 
       if (hasPendencias !== filters.pendencias) {
+        return false;
+      }
+    }
+
+    if (filters.sla) {
+      if (unidade.slaMapa !== filters.sla) {
         return false;
       }
     }

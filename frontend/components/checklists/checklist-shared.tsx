@@ -27,19 +27,26 @@ import {
 } from '@/lib/types';
 import { LikertScale } from '@/components/checklists/likert-scale';
 import {
+  CONFORMIDADE_BINARIA_LABELS,
   defaultOpcoesForTipo,
   formatOpcoesResumo,
   LIKERT_CATEGORIA_LABELS,
   LIKERT_CATALOGO,
+  LIKERT_CONFORMIDADE_PADRAO,
   LIKERT_NIVEIS_ORDEM,
   LIKERT_NIVEIS_PADRAO,
   MULTIPLA_ESCOLHA_MODO_LABELS,
+  parseBooleanoOpcoes,
   parseLikertConfig,
   parseMultiplaEscolhaOpcoes,
   parseTextoOpcoes,
+  resolveLikertConformidade,
   serializeItemOpcoes,
   TEXTO_FORMATO_LABELS,
   validateItemOpcoes,
+  type ChecklistConformidadeBinaria,
+  type ChecklistLikertOpcoes,
+  type LikertConformidade,
   type LikertNivelId,
 } from '@/lib/checklist-item-opcoes';
 
@@ -416,7 +423,7 @@ export function ItemsReadonlyPanel({
               </div>
               <p className="md-body-md mt-2 text-[var(--md-on-surface-variant)]">
                 {item.obrigatorio ? 'Obrigatório' : 'Opcional'}
-                {item.geraNaoConformidade ? ' · Gera NC' : ''}
+                {item.geraNaoConformidade ? ' · Gera Chamado NC' : ''}
                 {item.exigeEvidencia ? ' · Exige evidência' : ''}
                 {formatOpcoesResumo(item.tipo, item.opcoes) ? ` · ${formatOpcoesResumo(item.tipo, item.opcoes)}` : ''}
               </p>
@@ -629,7 +636,7 @@ export function VersionEditor({
                   checked={item.geraNaoConformidade}
                   onChange={(e) => updateItem(items, setItems, index, { geraNaoConformidade: e.target.checked })}
                 />
-                Gera NC
+                Gera Chamado NC
               </label>
               <label className="flex min-h-11 items-center gap-2 md-label-lg">
                 <input
@@ -645,6 +652,12 @@ export function VersionEditor({
             </div>
             {item.tipo === 'MULTIPLA_ESCOLHA' ? (
               <MultiplaEscolhaEditor
+                opcoes={item.opcoes}
+                onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
+              />
+            ) : null}
+            {item.tipo === 'BOOLEANO' ? (
+              <BooleanoOpcoesEditor
                 opcoes={item.opcoes}
                 onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
               />
@@ -676,25 +689,45 @@ function MultiplaEscolhaEditor({
   onChange: (opcoes: unknown) => void;
 }) {
   const config = parseMultiplaEscolhaOpcoes(opcoes);
+  const notas = config.notas ?? config.opcoes.map(() => null as number | null);
 
-  function updateOpcoes(nextOpcoes: string[]) {
-    onChange({ ...config, opcoes: nextOpcoes });
+  function commit(nextOpcoes: string[], nextNotas: Array<number | null>) {
+    onChange({ ...config, opcoes: nextOpcoes, notas: nextNotas });
   }
 
   return (
     <div className="space-y-3 border-t border-[var(--md-outline-variant)] pt-3">
       <p className="md-title-sm text-[var(--md-on-surface)]">Opções de múltipla escolha</p>
+      <p className="text-[13px] text-[var(--md-on-surface-variant)]">
+        Nota opcional por opção (0 a 10). Se uma tiver nota, todas devem ter.
+      </p>
       <div className="space-y-2">
         {config.opcoes.map((opcao, optionIndex) => (
-          <div key={optionIndex} className="flex items-end gap-2">
-            <Field label={`Opção ${optionIndex + 1}`} className="min-w-0 flex-1">
+          <div key={optionIndex} className="flex flex-wrap items-end gap-2">
+            <Field label={`Opção ${optionIndex + 1}`} className="min-w-0 flex-1 basis-48">
               <Input
                 value={opcao}
                 placeholder={`Digite a opção ${optionIndex + 1}`}
                 onChange={(e) => {
                   const next = [...config.opcoes];
                   next[optionIndex] = e.target.value;
-                  updateOpcoes(next);
+                  commit(next, notas);
+                }}
+              />
+            </Field>
+            <Field label="Nota (0–10)" className="w-28 shrink-0">
+              <Input
+                type="number"
+                min={0}
+                max={10}
+                step={0.1}
+                value={notas[optionIndex] ?? ''}
+                placeholder="—"
+                onChange={(e) => {
+                  const nextNotas = [...notas];
+                  const raw = e.target.value.trim();
+                  nextNotas[optionIndex] = raw === '' ? null : Number(raw);
+                  commit(config.opcoes, nextNotas);
                 }}
               />
             </Field>
@@ -705,7 +738,12 @@ function MultiplaEscolhaEditor({
                 size="sm"
                 className="mb-0.5 shrink-0 text-red-700"
                 aria-label={`Remover opção ${optionIndex + 1}`}
-                onClick={() => updateOpcoes(config.opcoes.filter((_, i) => i !== optionIndex))}
+                onClick={() =>
+                  commit(
+                    config.opcoes.filter((_, i) => i !== optionIndex),
+                    notas.filter((_, i) => i !== optionIndex),
+                  )
+                }
               >
                 <Minus className="h-4 w-4" />
               </Button>
@@ -718,7 +756,7 @@ function MultiplaEscolhaEditor({
         variant="tonal"
         size="sm"
         className="mt-2 gap-1.5"
-        onClick={() => updateOpcoes([...config.opcoes, ''])}
+        onClick={() => commit([...config.opcoes, ''], [...notas, null])}
       >
         <Plus className="h-4 w-4" />
         Cadastrar mais opções
@@ -726,7 +764,7 @@ function MultiplaEscolhaEditor({
       <Field label="Modo de exibição" className="mt-3 max-w-md">
         <Select
           value={config.modoExibicao}
-          onChange={(e) => onChange({ ...config, modoExibicao: e.target.value })}
+          onChange={(e) => onChange({ ...config, notas, modoExibicao: e.target.value })}
         >
           {(Object.keys(MULTIPLA_ESCOLHA_MODO_LABELS) as Array<keyof typeof MULTIPLA_ESCOLHA_MODO_LABELS>).map((modo) => (
             <option key={modo} value={modo}>
@@ -735,6 +773,96 @@ function MultiplaEscolhaEditor({
           ))}
         </Select>
       </Field>
+    </div>
+  );
+}
+
+function BooleanoOpcoesEditor({
+  opcoes,
+  onChange,
+}: {
+  opcoes: unknown;
+  onChange: (opcoes: unknown) => void;
+}) {
+  const config = parseBooleanoOpcoes(opcoes);
+
+  return (
+    <div className="space-y-3 border-t border-[var(--md-outline-variant)] pt-3">
+      <p className="md-title-sm text-[var(--md-on-surface)]">Respostas Sim/Não</p>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Field label="Sim é">
+          <Select
+            value={config.simConformidade ?? 'CONFORME'}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                simConformidade: e.target.value as ChecklistConformidadeBinaria,
+              })
+            }
+          >
+            {(Object.keys(CONFORMIDADE_BINARIA_LABELS) as ChecklistConformidadeBinaria[]).map((value) => (
+              <option key={value} value={value}>
+                {CONFORMIDADE_BINARIA_LABELS[value]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Não é">
+          <Select
+            value={config.naoConformidade ?? 'NAO_CONFORME'}
+            onChange={(e) =>
+              onChange({
+                ...config,
+                naoConformidade: e.target.value as ChecklistConformidadeBinaria,
+              })
+            }
+          >
+            {(Object.keys(CONFORMIDADE_BINARIA_LABELS) as ChecklistConformidadeBinaria[]).map((value) => (
+              <option key={value} value={value}>
+                {CONFORMIDADE_BINARIA_LABELS[value]}
+              </option>
+            ))}
+          </Select>
+        </Field>
+      </div>
+      <label className="flex min-h-11 items-center gap-2 md-label-lg">
+        <input
+          type="checkbox"
+          checked={Boolean(config.pontuar)}
+          onChange={(e) => onChange({ ...config, pontuar: e.target.checked })}
+        />
+        Atribuir nota às respostas
+      </label>
+      {config.pontuar ? (
+        <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Nota Sim (0–10)">
+            <Input
+              type="number"
+              min={0}
+              max={10}
+              step={0.1}
+              value={config.notaSim ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                onChange({ ...config, notaSim: raw === '' ? null : Number(raw) });
+              }}
+            />
+          </Field>
+          <Field label="Nota Não (0–10)">
+            <Input
+              type="number"
+              min={0}
+              max={10}
+              step={0.1}
+              value={config.notaNao ?? ''}
+              onChange={(e) => {
+                const raw = e.target.value.trim();
+                onChange({ ...config, notaNao: raw === '' ? null : Number(raw) });
+              }}
+            />
+          </Field>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -749,18 +877,35 @@ function LikertOpcoesEditor({
   const config = parseLikertConfig(opcoes);
   const selected = new Set(config.opcoes.niveis);
 
+  function conformidadeAtual(id: LikertNivelId): LikertConformidade {
+    return resolveLikertConformidade(LIKERT_CATALOGO[id], config.opcoes);
+  }
+
+  function commit(niveis: LikertNivelId[], conformidadePorNivel?: ChecklistLikertOpcoes['conformidadePorNivel']) {
+    const map: NonNullable<ChecklistLikertOpcoes['conformidadePorNivel']> = {};
+    for (const id of niveis) {
+      map[id] = conformidadePorNivel?.[id] ?? config.opcoes.conformidadePorNivel?.[id] ?? LIKERT_CONFORMIDADE_PADRAO[id];
+    }
+    onChange({ niveis, conformidadePorNivel: map });
+  }
+
   function toggleNivel(id: LikertNivelId, checked: boolean) {
     const next = new Set(selected);
     if (checked) next.add(id);
     else next.delete(id);
-    onChange({ niveis: LIKERT_NIVEIS_ORDEM.filter((nivelId) => next.has(nivelId)) });
+    commit(LIKERT_NIVEIS_ORDEM.filter((nivelId) => next.has(nivelId)));
   }
 
   return (
     <div className="space-y-3 border-t border-[var(--md-outline-variant)] pt-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="md-title-sm text-[var(--md-on-surface)]">Escala Likert fixa</p>
-        <Button type="button" variant="text" size="sm" onClick={() => onChange({ niveis: [...LIKERT_NIVEIS_PADRAO] })}>
+        <Button
+          type="button"
+          variant="text"
+          size="sm"
+          onClick={() => commit([...LIKERT_NIVEIS_PADRAO])}
+        >
           Selecionar todos
         </Button>
       </div>
@@ -776,6 +921,7 @@ function LikertOpcoesEditor({
               <th className="px-3 py-2">Nível</th>
               <th className="px-3 py-2">Categoria</th>
               <th className="px-3 py-2">Pontuação</th>
+              <th className="px-3 py-2">Conformidade</th>
             </tr>
           </thead>
           <tbody>
@@ -793,6 +939,20 @@ function LikertOpcoesEditor({
                   <td className="px-3 py-2 font-semibold text-[var(--ink)]">{nivel.label}</td>
                   <td className="px-3 py-2 text-[var(--ink-2)]">{LIKERT_CATEGORIA_LABELS[nivel.categoria]}</td>
                   <td className="px-3 py-2 font-mono text-[var(--ink-2)]">{nivel.pontuacao}/10</td>
+                  <td className="px-3 py-2">
+                    <Select
+                      value={conformidadeAtual(id)}
+                      disabled={!selected.has(id)}
+                      onChange={(event) => {
+                        const nextMap = { ...(config.opcoes.conformidadePorNivel ?? {}) };
+                        nextMap[id] = event.target.value as LikertConformidade;
+                        commit([...config.opcoes.niveis], nextMap);
+                      }}
+                    >
+                      <option value="CONFORME">Conforme</option>
+                      <option value="NAO_CONFORME">Não conforme</option>
+                    </Select>
+                  </td>
                 </tr>
               );
             })}
@@ -845,6 +1005,7 @@ function emptyItem(ordem: number, categoriaVistoriaId = ''): ItemDraft {
     geraNaoConformidade: true,
     exigeEvidencia: true,
     categoriaVistoriaId,
+    opcoes: defaultOpcoesForTipo('BOOLEANO'),
   };
 }
 

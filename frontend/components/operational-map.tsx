@@ -1,10 +1,11 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { UnidadeOperacional } from '@/lib/types';
+import { ChamadoMapaItem, UnidadeOperacional } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export type CcoMapMode = 'situacao' | 'notas';
+export type CcoMapView = 'unidades' | 'chamados';
 
 const OperationalMapClient = dynamic(
   () => import('./operational-map-client').then((module) => module.OperationalMapClient),
@@ -19,7 +20,9 @@ const OperationalMapClient = dynamic(
 );
 
 export function OperationalMap({
-  unidades,
+  view = 'unidades',
+  unidades = [],
+  chamados = [],
   selectedId = null,
   hoveredId = null,
   mapMode = 'situacao',
@@ -27,7 +30,9 @@ export function OperationalMap({
   onSelect,
   onHover,
 }: {
-  unidades: UnidadeOperacional[];
+  view?: CcoMapView;
+  unidades?: UnidadeOperacional[];
+  chamados?: ChamadoMapaItem[];
   selectedId?: string | null;
   hoveredId?: string | null;
   mapMode?: CcoMapMode;
@@ -37,7 +42,9 @@ export function OperationalMap({
 }) {
   return (
     <OperationalMapClient
+      view={view}
       unidades={unidades}
+      chamados={chamados}
       selectedId={selectedId}
       hoveredId={hoveredId}
       mapMode={mapMode}

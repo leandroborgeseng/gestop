@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 
 const situacoes = [
-  ['OPERACIONAL', 'Operacional'],
+  ['OPERACIONAL', 'Sem pendências'],
   ['COM_PENDENCIAS', 'Com pendências'],
   ['SEM_LOCALIZACAO', 'Sem localização'],
   ['INATIVA', 'Inativa'],

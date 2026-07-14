@@ -10,12 +10,33 @@ import { normalizeItemCode } from './checklist.rules';
 
 type MultiplaEscolhaOpcoes = {
   opcoes: string[];
+  notas?: Array<number | null>;
   modoExibicao: 'SELECT' | 'LISTA';
 };
 
 type TextoOpcoes = {
   formato: 'CURTO' | 'LONGO';
 };
+
+type ConformidadeBinaria = 'CONFORME' | 'NAO_CONFORME';
+
+type BooleanoOpcoes = {
+  pontuar?: boolean;
+  notaSim?: number | null;
+  notaNao?: number | null;
+  simConformidade?: ConformidadeBinaria;
+  naoConformidade?: ConformidadeBinaria;
+};
+
+function parseNotaSlot(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  const n = typeof value === 'number' ? value : Number(String(value).replace(',', '.'));
+  return Number.isFinite(n) ? n : null;
+}
+
+function isNotaInRange(nota: number): boolean {
+  return nota >= 0 && nota <= 10;
+}
 
 function parseMultiplaEscolhaOpcoes(opcoes: unknown): MultiplaEscolhaOpcoes {
   if (Array.isArray(opcoes)) {
@@ -24,13 +45,23 @@ function parseMultiplaEscolhaOpcoes(opcoes: unknown): MultiplaEscolhaOpcoes {
   }
 
   if (opcoes && typeof opcoes === 'object') {
-    const raw = opcoes as Partial<MultiplaEscolhaOpcoes> & { opcoes?: unknown };
+    const raw = opcoes as Partial<MultiplaEscolhaOpcoes> & { opcoes?: unknown; notas?: unknown };
     const values = Array.isArray(raw.opcoes)
       ? raw.opcoes.map(String).map((value) => value.trim()).filter(Boolean)
       : [];
+    const notasRaw = Array.isArray(raw.notas) ? raw.notas.map(parseNotaSlot) : undefined;
+    const notas =
+      notasRaw && Array.isArray(raw.opcoes)
+        ? (raw.opcoes as unknown[])
+            .map((value, index) => ({ value: String(value).trim(), nota: notasRaw[index] ?? null }))
+            .filter((entry) => entry.value)
+            .map((entry) => entry.nota)
+        : undefined;
+
     return {
       opcoes: values,
       modoExibicao: raw.modoExibicao === 'LISTA' ? 'LISTA' : 'SELECT',
+      ...(notasRaw ? { notas: notas ?? values.map(() => null) } : {}),
     };
   }
 
@@ -45,17 +76,56 @@ function parseTextoOpcoes(opcoes: unknown): TextoOpcoes {
   return { formato: 'CURTO' };
 }
 
+function parseBooleanoOpcoes(opcoes: unknown): BooleanoOpcoes {
+  if (!opcoes || typeof opcoes !== 'object') {
+    return {
+      pontuar: false,
+      notaSim: null,
+      notaNao: null,
+      simConformidade: 'CONFORME',
+      naoConformidade: 'NAO_CONFORME',
+    };
+  }
+
+  const raw = opcoes as Partial<BooleanoOpcoes>;
+  return {
+    pontuar: Boolean(raw.pontuar),
+    notaSim: parseNotaSlot(raw.notaSim),
+    notaNao: parseNotaSlot(raw.notaNao),
+    simConformidade: raw.simConformidade === 'NAO_CONFORME' ? 'NAO_CONFORME' : 'CONFORME',
+    naoConformidade: raw.naoConformidade === 'CONFORME' ? 'CONFORME' : 'NAO_CONFORME',
+  };
+}
+
 export function normalizeChecklistItemOpcoes(tipo: ChecklistItemTipo, opcoes: unknown): unknown | undefined {
   if (tipo === ChecklistItemTipo.MULTIPLA_ESCOLHA) {
     const config = parseMultiplaEscolhaOpcoes(opcoes);
-    return {
+    const result: MultiplaEscolhaOpcoes = {
       opcoes: config.opcoes,
       modoExibicao: config.modoExibicao,
     };
+    if (config.notas) {
+      result.notas = config.notas;
+    }
+    return result;
   }
 
   if (tipo === ChecklistItemTipo.TEXTO) {
     return parseTextoOpcoes(opcoes);
+  }
+
+  if (tipo === ChecklistItemTipo.BOOLEANO) {
+    const config = parseBooleanoOpcoes(opcoes);
+    const result: BooleanoOpcoes = {
+      simConformidade: config.simConformidade,
+      naoConformidade: config.naoConformidade,
+    };
+    if (config.pontuar) {
+      result.pontuar = true;
+      result.notaSim = config.notaSim;
+      result.notaNao = config.notaNao;
+    }
+    return result;
   }
 
   if (tipo === ChecklistItemTipo.ESCALA_LIKERT) {
@@ -77,6 +147,42 @@ export function validateChecklistItemOpcoes(
     const config = parseMultiplaEscolhaOpcoes(opcoes);
     if (config.opcoes.length < 2) {
       return `Item "${label}": cadastre ao menos 2 opcoes de multipla escolha.`;
+    }
+
+    if (config.notas) {
+      for (const nota of config.notas) {
+        if (nota != null && !isNotaInRange(nota)) {
+          return `Item "${label}": nota da opcao deve estar entre 0 e 10.`;
+        }
+      }
+
+      const someHaveNota = config.notas.some((nota) => nota != null);
+      if (someHaveNota) {
+        const allHaveNota =
+          config.notas.length === config.opcoes.length &&
+          config.notas.every((nota) => nota != null && isNotaInRange(nota));
+        if (!allHaveNota) {
+          return `Item "${label}": se uma opcao tiver nota, todas as opcoes devem ter nota entre 0 e 10.`;
+        }
+      }
+    }
+  }
+
+  if (tipo === ChecklistItemTipo.BOOLEANO) {
+    const config = parseBooleanoOpcoes(opcoes);
+    if (config.pontuar) {
+      if (config.notaSim == null || config.notaNao == null) {
+        return `Item "${label}": informe as notas de Sim e Nao (0 a 10).`;
+      }
+      if (!isNotaInRange(config.notaSim) || !isNotaInRange(config.notaNao)) {
+        return `Item "${label}": notas de Sim/Nao devem estar entre 0 e 10.`;
+      }
+    } else {
+      for (const nota of [config.notaSim, config.notaNao]) {
+        if (nota != null && !isNotaInRange(nota)) {
+          return `Item "${label}": notas de Sim/Nao devem estar entre 0 e 10.`;
+        }
+      }
     }
   }
 
@@ -128,4 +234,4 @@ export function getLikertValues(opcoes: unknown): string[] {
   return getLikertNivelIds(opcoes);
 }
 
-export { parseLikertConfig };
+export { parseLikertConfig, parseBooleanoOpcoes, parseMultiplaEscolhaOpcoes };

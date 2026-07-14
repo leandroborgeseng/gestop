@@ -14,8 +14,16 @@ import { Sheet } from '@/components/ui/sheet';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { formatUnidadeTipo, UNIDADE_TIPO_LABELS } from '@/lib/unidade-tipo';
 import { formatNotaBr, notaCorHex } from '@/lib/vistoria-nota';
-import type { AdminUsuario, FiscalizacaoDetalhe, FiscalizacaoResumo, FiscalizacaoStatus, SecretariaOption } from '@/lib/types';
+import type {
+  AdminUsuario,
+  FiscalizacaoDetalhe,
+  FiscalizacaoResumo,
+  FiscalizacaoStatus,
+  SecretariaOption,
+  UnidadeTipo,
+} from '@/lib/types';
 
 const PAGE_SIZE = 50;
 
@@ -85,6 +93,7 @@ export default function VistoriasPage() {
 
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<'' | FiscalizacaoStatus>('CONCLUIDA');
+  const [tipo, setTipo] = useState<'' | UnidadeTipo>('');
   const [secretariaId, setSecretariaId] = useState('');
   const [agenteId, setAgenteId] = useState('');
   const [from, setFrom] = useState('');
@@ -110,12 +119,13 @@ export default function VistoriasPage() {
     () => ({
       q: search.trim() || undefined,
       status: status || undefined,
+      tipo: tipo || undefined,
       secretariaId: secretariaId || undefined,
       agenteId: agenteId || undefined,
       from: from || undefined,
       to: to || undefined,
     }),
-    [search, status, secretariaId, agenteId, from, to],
+    [search, status, tipo, secretariaId, agenteId, from, to],
   );
 
   const loadList = useCallback(async (offset = 0, append = false) => {
@@ -213,6 +223,17 @@ export default function VistoriasPage() {
                     ))}
                   </Select>
                 </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Tipo de próprio</label>
+                  <Select value={tipo} onChange={(event) => setTipo(event.target.value as '' | UnidadeTipo)} className="h-9 w-full text-xs">
+                    <option value="">Todos</option>
+                    {(Object.keys(UNIDADE_TIPO_LABELS) as UnidadeTipo[]).map((item) => (
+                      <option key={item} value={item}>
+                        {formatUnidadeTipo(item)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
                 {canFilterSecretaria ? (
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Secretaria</label>
@@ -276,7 +297,22 @@ export default function VistoriasPage() {
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[13px] font-semibold text-[var(--ink)]">{item.unidade.nome}</span>
-                          <Badge variant={STATUS_BADGE[item.status]}>{statusLabel(item.status)}</Badge>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {item.nota?.notaGeral != null ? (
+                              <span
+                                className="inline-flex min-w-[2.25rem] items-center justify-center rounded-[var(--r-sm)] border px-1.5 py-0.5 text-[11px] font-bold tabular-nums"
+                                style={{
+                                  borderColor: `${notaCorHex(item.nota.notaGeral)}55`,
+                                  backgroundColor: `${notaCorHex(item.nota.notaGeral)}14`,
+                                  color: notaCorHex(item.nota.notaGeral),
+                                }}
+                                title="Nota do próprio"
+                              >
+                                {formatNotaBr(item.nota.notaGeral)}
+                              </span>
+                            ) : null}
+                            <Badge variant={STATUS_BADGE[item.status]}>{statusLabel(item.status)}</Badge>
+                          </div>
                         </div>
                         <p className="text-[12px] text-[var(--ink-3)]">
                           {item.unidade.codigoPatrimonial} · {item.secretaria.sigla}

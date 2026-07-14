@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
-import 'leaflet.markercluster';
 import { MapPinOff } from 'lucide-react';
 import {
   CARTO_ATTRIBUTION,
@@ -96,7 +95,7 @@ export function ChamadosExecucaoMapClient({
   const streetLayerRef = useRef<L.TileLayer | null>(null);
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
   const labelsLayerRef = useRef<L.TileLayer | null>(null);
-  const markersLayerRef = useRef<L.MarkerClusterGroup | null>(null);
+  const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const markerByIdRef = useRef<Map<string, L.Marker>>(new Map());
   const pontoByIdRef = useRef<Map<string, ChamadoMapPoint>>(new Map());
   const onSelectRef = useRef(onSelect);
@@ -151,11 +150,7 @@ export function ChamadosExecucaoMapClient({
 
     streetLayerRef.current.addTo(map);
 
-    markersLayerRef.current = L.markerClusterGroup({
-      showCoverageOnHover: false,
-      maxClusterRadius: 56,
-      spiderfyOnMaxZoom: true,
-    }).addTo(map);
+    markersLayerRef.current = L.layerGroup().addTo(map);
 
     map.on('popupopen', (event) => {
       const popup = event.popup.getElement();
@@ -229,8 +224,6 @@ export function ChamadosExecucaoMapClient({
       markersLayer.addLayer(marker);
       markerByIdRef.current.set(ponto.id, marker);
     });
-
-    markersLayer.refreshClusters();
 
     if (located.length > 0) {
       const bounds = L.latLngBounds(located.map((item) => item.latLng));

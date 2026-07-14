@@ -123,7 +123,7 @@ export function UnidadeList({
                 )}
               </span>
               <span className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
-                <span className="flex gap-1">
+                <span className="flex flex-wrap justify-end gap-1">
                   {unidade.pendencias.naoConformidadesAbertas > 0 ? (
                     <span className="mono inline-flex items-center rounded-md bg-[var(--warn-bg)] px-1 py-0.5 text-[11px] font-bold text-[var(--warn)]">
                       {unidade.pendencias.naoConformidadesAbertas} NC
@@ -132,6 +132,11 @@ export function UnidadeList({
                   {unidade.pendencias.chamadosAbertos > 0 ? (
                     <span className="mono inline-flex items-center rounded-md bg-[var(--brand-soft)] px-1 py-0.5 text-[11px] font-bold text-[var(--brand-bright)]">
                       {unidade.pendencias.chamadosAbertos} CH
+                    </span>
+                  ) : null}
+                  {unidade.pendencias.semVistoria ? (
+                    <span className="mono inline-flex items-center rounded-md bg-[var(--muted-bg)] px-1 py-0.5 text-[11px] font-bold text-[var(--muted)]">
+                      Sem vist.
                     </span>
                   ) : null}
                 </span>

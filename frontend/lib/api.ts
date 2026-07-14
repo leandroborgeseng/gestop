@@ -30,6 +30,8 @@ import {
   ChamadoExecucaoDetalhe,
   ChamadoProgramacaoResponse,
   ChamadoProtocoloPublico,
+  ChamadoMapaItem,
+  ChamadosMapaFilters,
   FiscalizacaoDetalhe,
   FiscalizacoesListResponse,
   EquipeOpcaoResumo,
@@ -217,13 +219,38 @@ export function getUnidades(filters: UnidadeFilters) {
   const params = new URLSearchParams();
 
   Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
     if (value) {
-      params.set(key, value);
+      params.set(key, String(value));
     }
   });
 
   const query = params.toString();
   return request<UnidadeOperacional[]>(`/operacional/unidades${query ? `?${query}` : ''}`);
+}
+
+export function listChamadosMapa(filters: ChamadosMapaFilters = {}) {
+  const params = new URLSearchParams();
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
+    if (value && value !== 'TODOS') {
+      params.set(key, String(value));
+    }
+  });
+
+  const query = params.toString();
+  return request<ChamadoMapaItem[]>(`/operacional/chamados-mapa${query ? `?${query}` : ''}`);
 }
 
 export function getUnidadeDetalhe(id: string) {
@@ -747,6 +774,7 @@ export function listFiscalizacoes(params?: {
   secretariaId?: string;
   unidadeId?: string;
   agenteId?: string;
+  tipo?: string;
   status?: string;
   from?: string;
   to?: string;
@@ -758,6 +786,7 @@ export function listFiscalizacoes(params?: {
   if (params?.secretariaId) query.set('secretariaId', params.secretariaId);
   if (params?.unidadeId) query.set('unidadeId', params.unidadeId);
   if (params?.agenteId) query.set('agenteId', params.agenteId);
+  if (params?.tipo) query.set('tipo', params.tipo);
   if (params?.status) query.set('status', params.status);
   if (params?.from) query.set('from', params.from);
   if (params?.to) query.set('to', params.to);

@@ -3,6 +3,7 @@ import {
   inferConformidadeFromLikert,
   LIKERT_CATALOGO,
   parseLikertConfig,
+  resolveLikertConformidade,
   resolveLikertNivel,
 } from './likert-scale';
 
@@ -25,6 +26,16 @@ describe('likert-scale', () => {
     expect(inferConformidadeFromLikert(LIKERT_CATALOGO.RUIM)).toBe('NAO_CONFORME');
     expect(inferConformidadeFromLikert(LIKERT_CATALOGO.REGULAR)).toBe('CONFORME');
     expect(inferConformidadeFromLikert(LIKERT_CATALOGO.OTIMO)).toBe('CONFORME');
+  });
+
+  it('permite override de conformidade por nivel', () => {
+    expect(
+      resolveLikertConformidade(LIKERT_CATALOGO.RUIM, {
+        niveis: ['RUIM', 'BOM'],
+        conformidadePorNivel: { RUIM: 'CONFORME' },
+      }),
+    ).toBe('CONFORME');
+    expect(resolveLikertConformidade(LIKERT_CATALOGO.BOM, { niveis: ['RUIM', 'BOM'] })).toBe('CONFORME');
   });
 
   it('resolve nivel por id ou rotulo', () => {

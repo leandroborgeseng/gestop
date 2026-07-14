@@ -196,6 +196,59 @@ export function composeEnderecoTexto(parts: Pick<ParsedAddress, 'logradouro' | '
   return cidade && !withCompl.toLowerCase().includes(cidade.toLowerCase()) ? `${withCompl} · ${cidade}` : withCompl;
 }
 
+/** Reverte o formato gerado por `composeEnderecoTexto` (melhor esforço para edição estruturada). */
+export function parseEnderecoTexto(
+  enderecoTexto: string | null | undefined,
+  defaults?: Partial<Pick<ParsedAddress, 'bairro' | 'cidade'>>,
+): ParsedAddress {
+  const raw = enderecoTexto?.trim() ?? '';
+  const empty: ParsedAddress = {
+    logradouro: '',
+    numero: '',
+    complemento: '',
+    bairro: defaults?.bairro?.trim() ?? '',
+    cidade: defaults?.cidade?.trim() || 'Franca',
+  };
+  if (!raw) return empty;
+
+  let remaining = raw;
+  let cidade = empty.cidade;
+  const citySplit = remaining.lastIndexOf(' · ');
+  if (citySplit >= 0) {
+    const maybeCity = remaining.slice(citySplit + 3).trim();
+    if (maybeCity && !/,|—/.test(maybeCity) && maybeCity.length <= 40) {
+      cidade = maybeCity;
+      remaining = remaining.slice(0, citySplit).trim();
+    }
+  }
+
+  let complemento = '';
+  const complSplit = remaining.indexOf(' — ');
+  if (complSplit >= 0) {
+    complemento = remaining.slice(complSplit + 3).trim();
+    remaining = remaining.slice(0, complSplit).trim();
+  }
+
+  let logradouro = remaining;
+  let numero = '';
+  const lastComma = remaining.lastIndexOf(', ');
+  if (lastComma >= 0) {
+    const maybeNumero = remaining.slice(lastComma + 2).trim();
+    if (/^[\dA-Za-z./\-]+$/.test(maybeNumero) && maybeNumero.length <= 12) {
+      logradouro = remaining.slice(0, lastComma).trim();
+      numero = maybeNumero;
+    }
+  }
+
+  return {
+    logradouro,
+    numero,
+    complemento,
+    bairro: empty.bairro,
+    cidade: cidade || 'Franca',
+  };
+}
+
 export function buildGeocodeQuery(parts: Pick<ParsedAddress, 'logradouro' | 'numero' | 'bairro' | 'cidade'>) {
   const segments = [
     [parts.logradouro.trim(), parts.numero.trim()].filter(Boolean).join(' '),

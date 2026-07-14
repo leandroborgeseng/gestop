@@ -108,6 +108,7 @@ function ChamadosPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>('TODOS');
   const [prioridade, setPrioridade] = useState<PrioridadeFilter>('TODAS');
+  const [equipeFilter, setEquipeFilter] = useState('');
   const [view, setView] = useState<ChamadosView>('triagem');
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
 
@@ -230,6 +231,11 @@ function ChamadosPageContent() {
     return chamados.filter((item) => {
       if (filter !== 'TODOS' && item.status !== filter) return false;
       if (prioridade !== 'TODAS' && item.prioridade !== prioridade) return false;
+      if (equipeFilter === 'sem-equipe') {
+        if (item.equipe?.id) return false;
+      } else if (equipeFilter && item.equipe?.id !== equipeFilter) {
+        return false;
+      }
       if (!query) return true;
       const haystack = [
         item.codigo,
@@ -247,7 +253,7 @@ function ChamadosPageContent() {
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [chamados, filter, prioridade, search]);
+  }, [chamados, equipeFilter, filter, prioridade, search]);
 
   const selected = useMemo(() => {
     if (selectedId) {
@@ -442,12 +448,31 @@ function ChamadosPageContent() {
                 </Chip>
               ))}
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {PRIORIDADE_CHIPS.map((item) => (
-                <Chip key={item.value} active={prioridade === item.value} onClick={() => setPrioridade(item.value)}>
-                  {item.label}
-                </Chip>
-              ))}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-[160px]">
+                <Select
+                  value={equipeFilter}
+                  onChange={(event) => setEquipeFilter(event.target.value)}
+                  className="h-8 w-full text-xs"
+                  aria-label="Filtrar por equipe"
+                >
+                  <option value="">Todas as equipes</option>
+                  {equipes.map((equipe) => (
+                    <option key={equipe.id} value={equipe.id}>
+                      {equipe.nome}
+                      {equipe.secretaria?.sigla ? ` · ${equipe.secretaria.sigla}` : ''}
+                    </option>
+                  ))}
+                  <option value="sem-equipe">Sem equipe</option>
+                </Select>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {PRIORIDADE_CHIPS.map((item) => (
+                  <Chip key={item.value} active={prioridade === item.value} onClick={() => setPrioridade(item.value)}>
+                    {item.label}
+                  </Chip>
+                ))}
+              </div>
             </div>
           </div>
         ) : null}
@@ -455,8 +480,8 @@ function ChamadosPageContent() {
         {view === 'triagem' && loading ? <LoadingState label="Carregando chamados..." /> : null}
 
         {view === 'triagem' && !loading ? (
-          <div className="grid min-h-0 flex-1 gap-3.5 xl:grid-cols-[minmax(320px,388px)_1fr]">
-            <section className="flex max-h-[min(360px,42vh)] min-h-[220px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] xl:max-h-none xl:min-h-[520px]">
+          <div className="grid min-h-0 flex-1 gap-3.5 xl:grid-cols-[minmax(320px,388px)_1fr] xl:items-stretch">
+            <section className="flex max-h-[min(360px,42vh)] min-h-[220px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] xl:h-[min(720px,calc(100dvh-220px))] xl:max-h-[min(720px,calc(100dvh-220px))]">
               <div className="shrink-0 border-b border-[var(--line-2)] p-3.5">
                 <div className="relative">
                   <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
@@ -555,7 +580,7 @@ function ChamadosPageContent() {
               </div>
             </section>
 
-            <section className="min-h-[320px]">
+            <section className="min-h-[320px] overflow-hidden xl:h-[min(720px,calc(100dvh-220px))] xl:overflow-y-auto">
               <ChamadoDetailPanel
                 resumo={selected}
                 detail={detail?.id === selected?.id ? detail : null}
@@ -748,6 +773,18 @@ function ChamadoDetailPanel({
               <SummaryCard label="Fluxo" value="ANÁLISE TÉCNICA" sub="EXECUÇÃO" tone="warning" />
             ) : null}
             <SummaryCard label="Equipe" value={resumo.equipe?.nome ?? 'Não atribuída'} sub={resumo.secretaria.sigla} />
+            <SummaryCard
+              label="Secretaria responsável pela execução"
+              value={resumo.secretaria.sigla}
+              sub={resumo.secretaria.nome}
+            />
+            {resumo.unidade?.secretaria ? (
+              <SummaryCard
+                label="Secretaria responsável pelo próprio"
+                value={resumo.unidade.secretaria.sigla}
+                sub={resumo.unidade.secretaria.nome}
+              />
+            ) : null}
             <SummaryCard
               label="Responsável"
               value={resumo.responsavel?.nome ?? 'Não atribuído'}

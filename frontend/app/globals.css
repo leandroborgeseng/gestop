@@ -526,8 +526,8 @@ a {
 
 @media (max-width: 1279px) {
   .sigma-main .cco-list-panel {
-    max-height: min(380px, calc(100dvh - 340px));
-    min-height: 240px;
+    max-height: min(520px, calc(100dvh - 280px));
+    min-height: 280px;
   }
 
   .sigma-main .cco-map-panel:not(.hidden) .sigma-map-shell {

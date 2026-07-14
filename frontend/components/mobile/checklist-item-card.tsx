@@ -5,12 +5,17 @@ import { Camera } from 'lucide-react';
 import { LikertScale } from '@/components/checklists/likert-scale';
 import { ChecklistItem } from '@/lib/types';
 import {
-  inferConformidadeFromLikert,
   LIKERT_CATEGORIA_LABELS,
   parseLikertConfig,
+  resolveLikertConformidade,
   resolveLikertNivel,
 } from '@/lib/likert-scale';
-import { parseMultiplaEscolhaOpcoes, parseTextoOpcoes } from '@/lib/checklist-item-opcoes';
+import {
+  CONFORMIDADE_BINARIA_LABELS,
+  parseBooleanoOpcoes,
+  parseMultiplaEscolhaOpcoes,
+  parseTextoOpcoes,
+} from '@/lib/checklist-item-opcoes';
 import { Card, CardContent } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
@@ -22,10 +27,18 @@ export type ResponseDraft = {
   comentario: string;
   valorTexto?: string;
   valorNumero?: number;
+  valorBooleano?: boolean | null;
   evidenceDataUrl?: string;
   evidenceMimeType?: string;
   evidenceSize?: number;
 };
+
+function booleanoSelectValue(current: ResponseDraft): '' | 'SIM' | 'NAO' | 'NAO_APLICAVEL' {
+  if (current.conformidade === 'NAO_APLICAVEL') return 'NAO_APLICAVEL';
+  if (current.valorBooleano === true) return 'SIM';
+  if (current.valorBooleano === false) return 'NAO';
+  return '';
+}
 
 export function ChecklistItemCard({
   item,
@@ -44,6 +57,7 @@ export function ChecklistItemCard({
   const likertConfig = parseLikertConfig(item.opcoes);
   const selectedLikert = resolveLikertNivel(current.valorTexto);
   const textoOpcoes = parseTextoOpcoes(item.opcoes);
+  const booleanoOpcoes = parseBooleanoOpcoes(item.opcoes);
   const needsEvidence =
     item.tipo === 'FOTO' ||
     item.tipo === 'ASSINATURA' ||
@@ -60,11 +74,35 @@ export function ChecklistItemCard({
 
         {item.tipo === 'BOOLEANO' ? (
           <Select
-            value={current.conformidade}
-            onChange={(e) => onChange({ conformidade: e.target.value as ResponseDraft['conformidade'] })}
+            value={booleanoSelectValue(current)}
+            onChange={(e) => {
+              const selected = e.target.value;
+              if (selected === 'NAO_APLICAVEL') {
+                onChange({ valorBooleano: null, conformidade: 'NAO_APLICAVEL' });
+                return;
+              }
+              if (selected === 'SIM') {
+                onChange({
+                  valorBooleano: true,
+                  conformidade: booleanoOpcoes.simConformidade ?? 'CONFORME',
+                });
+                return;
+              }
+              if (selected === 'NAO') {
+                onChange({
+                  valorBooleano: false,
+                  conformidade: booleanoOpcoes.naoConformidade ?? 'NAO_CONFORME',
+                });
+              }
+            }}
           >
-            <option value="CONFORME">Conforme</option>
-            <option value="NAO_CONFORME">Não conforme</option>
+            <option value="">Selecione</option>
+            <option value="SIM">
+              Sim ({CONFORMIDADE_BINARIA_LABELS[booleanoOpcoes.simConformidade ?? 'CONFORME']})
+            </option>
+            <option value="NAO">
+              Não ({CONFORMIDADE_BINARIA_LABELS[booleanoOpcoes.naoConformidade ?? 'NAO_CONFORME']})
+            </option>
             <option value="NAO_APLICAVEL">Não aplicável</option>
           </Select>
         ) : item.tipo === 'ESCALA_LIKERT' ? (
@@ -77,7 +115,7 @@ export function ChecklistItemCard({
                   onChange({
                     valorTexto: nivel.id,
                     valorNumero: nivel.pontuacao,
-                    conformidade: inferConformidadeFromLikert(nivel),
+                    conformidade: resolveLikertConformidade(nivel, likertConfig.opcoes),
                   })
                 }
               />
@@ -186,7 +224,7 @@ export function ChecklistItemCard({
         ) : null}
 
         {item.geraNaoConformidade ? (
-          <p className="md-body-md text-[var(--md-on-surface-variant)]">Item gera não conformidade se marcado como não conforme.</p>
+          <p className="md-body-md text-[var(--md-on-surface-variant)]">Item gera chamado NC se marcado como não conforme.</p>
         ) : null}
         {needsEvidence && current.conformidade === 'NAO_CONFORME' ? (
           <p className="md-body-md text-amber-700">Não conformidade exige evidência e comentário.</p>
@@ -199,6 +237,14 @@ export function ChecklistItemCard({
 export function validateItemResponse(item: ChecklistItem, response?: ResponseDraft) {
   if (!item.obrigatorio) return null;
   if (!response) return `Preencha o item obrigatório: ${item.titulo}.`;
+
+  if (item.tipo === 'BOOLEANO') {
+    if (response.conformidade === 'NAO_APLICAVEL') {
+      // N/A is a valid answer
+    } else if (response.valorBooleano == null) {
+      return `Selecione Sim, Não ou Não aplicável: ${item.titulo}.`;
+    }
+  }
 
   const needsValue = ['TEXTO', 'NUMERO', 'DATA', 'MULTIPLA_ESCOLHA', 'ESCALA_LIKERT'].includes(item.tipo);
   if (needsValue && item.tipo === 'ESCALA_LIKERT' && !resolveLikertNivel(response.valorTexto)) {
@@ -241,7 +287,12 @@ export function buildRespostaPayload(
   return {
     itemId: item.id,
     conformidade: response.conformidade,
-    valorBooleano: item.tipo === 'BOOLEANO' ? response.conformidade === 'CONFORME' : undefined,
+    valorBooleano:
+      item.tipo === 'BOOLEANO'
+        ? response.conformidade === 'NAO_APLICAVEL'
+          ? null
+          : response.valorBooleano ?? null
+        : undefined,
     valorTexto: item.tipo === 'ESCALA_LIKERT' ? response.valorTexto : response.valorTexto,
     valorNumero: item.tipo === 'ESCALA_LIKERT' ? response.valorNumero : undefined,
     comentario: response.comentario,

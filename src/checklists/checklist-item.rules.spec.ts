@@ -7,9 +7,16 @@ import {
 } from './checklist-item.rules';
 
 describe('checklist-item.rules', () => {
-  it('normaliza opcoes de multipla escolha', () => {
-    expect(normalizeChecklistItemOpcoes(ChecklistItemTipo.MULTIPLA_ESCOLHA, { opcoes: [' A ', 'B', ''], modoExibicao: 'LISTA' })).toEqual({
+  it('normaliza opcoes de multipla escolha com notas alinhadas', () => {
+    expect(
+      normalizeChecklistItemOpcoes(ChecklistItemTipo.MULTIPLA_ESCOLHA, {
+        opcoes: [' A ', 'B', ''],
+        notas: [8, 5, 1],
+        modoExibicao: 'LISTA',
+      }),
+    ).toEqual({
       opcoes: ['A', 'B'],
+      notas: [8, 5],
       modoExibicao: 'LISTA',
     });
   });
@@ -20,9 +27,61 @@ describe('checklist-item.rules', () => {
     ).toContain('2 opcoes');
   });
 
+  it('exige todas as notas quando qualquer opcao possui nota', () => {
+    expect(
+      validateChecklistItemOpcoes(
+        ChecklistItemTipo.MULTIPLA_ESCOLHA,
+        { opcoes: ['A', 'B'], notas: [8, null], modoExibicao: 'SELECT' },
+        'Pergunta',
+        'P1',
+      ),
+    ).toContain('todas as opcoes');
+  });
+
+  it('normaliza booleano com pontuacao e conformidade', () => {
+    expect(
+      normalizeChecklistItemOpcoes(ChecklistItemTipo.BOOLEANO, {
+        pontuar: true,
+        notaSim: 9,
+        notaNao: 1,
+        simConformidade: 'NAO_CONFORME',
+        naoConformidade: 'CONFORME',
+      }),
+    ).toEqual({
+      pontuar: true,
+      notaSim: 9,
+      notaNao: 1,
+      simConformidade: 'NAO_CONFORME',
+      naoConformidade: 'CONFORME',
+    });
+  });
+
+  it('exige notas Sim/Nao quando pontuar', () => {
+    expect(
+      validateChecklistItemOpcoes(
+        ChecklistItemTipo.BOOLEANO,
+        { pontuar: true, notaSim: 8, simConformidade: 'CONFORME' },
+        'Pergunta',
+        'B1',
+      ),
+    ).toContain('Sim e Nao');
+  });
+
   it('normaliza escala Likert padrao', () => {
     expect(normalizeChecklistItemOpcoes(ChecklistItemTipo.ESCALA_LIKERT, undefined)).toEqual({
       niveis: ['PESSIMO', 'RUIM', 'REGULAR', 'BOM', 'OTIMO'],
+    });
+  });
+
+  it('preserva conformidadePorNivel na Likert', () => {
+    expect(
+      normalizeChecklistItemOpcoes(ChecklistItemTipo.ESCALA_LIKERT, {
+        niveis: ['RUIM', 'BOM'],
+        conformidadePorNivel: { RUIM: 'CONFORME', BOM: 'NAO_CONFORME' },
+      }),
+    ).toEqual({
+      niveis: ['RUIM', 'BOM'],
+      conformidadePorNivel: { RUIM: 'CONFORME', BOM: 'NAO_CONFORME' },
     });
   });
 

@@ -1298,8 +1298,7 @@ export class ChamadosService {
           enderecoTexto,
           latitude,
           longitude,
-          modoLocalizacao:
-            latitude != null && longitude != null ? ChamadoModoLocalizacao.GEOLOCALIZACAO : before.modoLocalizacao,
+          modoLocalizacao: before.modoLocalizacao,
         },
         include: this.includeRelations(),
       });
@@ -1731,8 +1730,27 @@ export class ChamadosService {
         throw new BadRequestException('Selecione o próprio público para abrir o chamado.');
       }
       const unidade = await this.getActiveUnidadeOrThrow(dto.unidadeId);
+
+      let secretariaExecucaoId = dto.secretariaId?.trim();
+      if (!secretariaExecucaoId) {
+        const usuario = await this.prisma.usuario.findUnique({
+          where: { id: usuarioId },
+          select: { secretariaId: true },
+        });
+        secretariaExecucaoId = usuario?.secretariaId ?? undefined;
+      }
+      if (!secretariaExecucaoId) {
+        throw new BadRequestException('Selecione a secretaria responsável pela execução.');
+      }
+
+      const secretaria = await this.prisma.secretaria.findFirst({
+        where: { id: secretariaExecucaoId, ativo: true },
+      });
+      if (!secretaria) throw new BadRequestException('Secretaria não encontrada ou inativa.');
+
       return {
-        secretariaId: unidade.secretariaId,
+        // Secretaria do próprio fica em unidade.secretariaId; aqui gravamos a de execução.
+        secretariaId: secretaria.id,
         unidadeId: unidade.id,
         latitude: unidade.latitude,
         longitude: unidade.longitude,
@@ -1758,7 +1776,7 @@ export class ChamadosService {
       secretariaId = usuario?.secretariaId ?? undefined;
     }
     if (!secretariaId) {
-      throw new BadRequestException('Selecione a secretaria responsável pelo chamado.');
+      throw new BadRequestException('Selecione a secretaria responsável pela execução.');
     }
 
     const secretaria = await this.prisma.secretaria.findFirst({ where: { id: secretariaId, ativo: true } });
@@ -1870,6 +1888,7 @@ export class ChamadosService {
           latitude: true,
           longitude: true,
           raioValidacaoMetros: true,
+          secretaria: { select: { id: true, nome: true, sigla: true } },
         },
       },
       responsavel: { select: { id: true, nome: true } },

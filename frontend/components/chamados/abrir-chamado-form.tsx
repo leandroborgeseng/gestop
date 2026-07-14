@@ -55,7 +55,11 @@ export function AbrirChamadoForm({
   const [prioridade, setPrioridade] = useState<(typeof PRIORIDADES)[number]>('MEDIA');
   const [solicitanteNome, setSolicitanteNome] = useState('');
   const [secretariaId, setSecretariaId] = useState('');
-  const [pickedUnidade, setPickedUnidade] = useState<{ id: string; nome: string } | null>(
+  const [pickedUnidade, setPickedUnidade] = useState<{
+    id: string;
+    nome: string;
+    secretaria?: { id: string; nome: string; sigla: string } | null;
+  } | null>(
     initialUnidadeId && initialUnidadeNome ? { id: initialUnidadeId, nome: initialUnidadeNome } : null,
   );
   const [latitude, setLatitude] = useState<number | null>(null);
@@ -103,6 +107,27 @@ export function AbrirChamadoForm({
       .then((items) => setSecretarias(items))
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    if (!initialUnidadeId || pickedUnidade?.secretaria) return;
+    let active = true;
+    getUnidades({})
+      .then((items) => {
+        if (!active) return;
+        const match = items.find((item) => item.id === initialUnidadeId);
+        if (!match) return;
+        setPickedUnidade({
+          id: match.id,
+          nome: match.nome,
+          secretaria: match.secretaria,
+        });
+        setSecretariaId((current) => current || match.secretaria.id);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [initialUnidadeId, pickedUnidade?.secretaria]);
 
   useEffect(() => {
     if (modo !== 'UNIDADE' || pickedUnidade) return;
@@ -313,6 +338,11 @@ export function AbrirChamadoForm({
       return;
     }
 
+    if (!secretariaId) {
+      setError('Selecione a secretaria responsável pela execução.');
+      return;
+    }
+
     if (modo === 'ENDERECO') {
       if (!logradouro.trim()) {
         setError('Informe o logradouro.');
@@ -322,10 +352,6 @@ export function AbrirChamadoForm({
         setError('Confirme a localização no mapa ou use "Atualizar pin no mapa".');
         return;
       }
-      if (!secretariaId) {
-        setError('Selecione a secretaria responsável.');
-        return;
-      }
     }
 
     setBusy(true);
@@ -333,7 +359,7 @@ export function AbrirChamadoForm({
       const chamado = await createChamado({
         modoLocalizacao: modo,
         unidadeId: pickedUnidade?.id,
-        secretariaId: modo === 'ENDERECO' ? secretariaId : undefined,
+        secretariaId,
         latitude: modo === 'ENDERECO' ? latitude ?? undefined : undefined,
         longitude: modo === 'ENDERECO' ? longitude ?? undefined : undefined,
         enderecoTexto: modo === 'ENDERECO' ? enderecoComposto : undefined,
@@ -365,7 +391,13 @@ export function AbrirChamadoForm({
               Por próprio
             </span>
           </Chip>
-          <Chip active={modo === 'ENDERECO'} onClick={() => setModo('ENDERECO')}>
+          <Chip
+            active={modo === 'ENDERECO'}
+            onClick={() => {
+              setModo('ENDERECO');
+              setPickedUnidade(null);
+            }}
+          >
             <span className="inline-flex items-center gap-1.5">
               <MapPin className="h-3.5 w-3.5" />
               Por endereço
@@ -376,16 +408,34 @@ export function AbrirChamadoForm({
 
       {modo === 'UNIDADE' ? (
         pickedUnidade ? (
-          <p className="text-[13px] text-[var(--ink-3)]">
-            Próprio: <strong className="text-[var(--ink)]">{pickedUnidade.nome}</strong>{' '}
-            <button
-              type="button"
-              className="font-semibold text-[var(--brand)] hover:underline"
-              onClick={() => setPickedUnidade(null)}
-            >
-              Trocar
-            </button>
-          </p>
+          <div className="space-y-2 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
+            <p className="text-[13px] text-[var(--ink-3)]">
+              Próprio: <strong className="text-[var(--ink)]">{pickedUnidade.nome}</strong>{' '}
+              <button
+                type="button"
+                className="font-semibold text-[var(--brand)] hover:underline"
+                onClick={() => {
+                  setPickedUnidade(null);
+                  setSecretariaId('');
+                }}
+              >
+                Trocar
+              </button>
+            </p>
+            <div>
+              <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">
+                Secretaria responsável pelo próprio
+              </p>
+              <p className="mt-0.5 text-[13px] font-medium text-[var(--ink-2)]">
+                {pickedUnidade.secretaria
+                  ? `${pickedUnidade.secretaria.sigla} — ${pickedUnidade.secretaria.nome}`
+                  : '—'}
+              </p>
+              <p className="mt-1 text-[11px] text-[var(--ink-3)]">
+                Informação cadastral do próprio (somente consulta).
+              </p>
+            </div>
+          </div>
         ) : (
           <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] p-3">
             <Field label="Buscar próprio">
@@ -410,11 +460,21 @@ export function AbrirChamadoForm({
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setPickedUnidade({ id: item.id, nome: item.nome })}
+                    onClick={() => {
+                      setPickedUnidade({
+                        id: item.id,
+                        nome: item.nome,
+                        secretaria: item.secretaria,
+                      });
+                      setSecretariaId(item.secretaria.id);
+                    }}
                     className="flex w-full flex-col rounded-[var(--r-sm)] px-3 py-2 text-left hover:bg-[var(--surface-2)]"
                   >
                     <span className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{item.codigoPatrimonial}</span>
                     <span className="text-[13px] font-semibold text-[var(--ink)]">{item.nome}</span>
+                    <span className="text-[11px] text-[var(--ink-3)]">
+                      {item.secretaria.sigla} — {item.secretaria.nome}
+                    </span>
                   </button>
                 ))
               )}
@@ -529,9 +589,12 @@ export function AbrirChamadoForm({
         </div>
       ) : null}
 
-      {modo === 'ENDERECO' ? (
-        <Field label="Secretaria responsável">
-          <Select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} disabled={busy}>
+      {(modo === 'ENDERECO' || (modo === 'UNIDADE' && pickedUnidade)) ? (
+        <Field
+          label="Secretaria responsável pela execução"
+          hint="Secretaria que irá tratar e executar o chamado (obrigatório)."
+        >
+          <Select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} disabled={busy} required>
             <option value="">Selecione...</option>
             {secretarias.map((item) => (
               <option key={item.id} value={item.id}>
@@ -613,6 +676,7 @@ export function AbrirChamadoForm({
           disabled={
             busy ||
             (modo === 'UNIDADE' && !pickedUnidade) ||
+            !secretariaId ||
             descricao.trim().length < 10
           }
         >

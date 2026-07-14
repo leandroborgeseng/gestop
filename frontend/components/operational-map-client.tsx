@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
-import 'leaflet.markercluster';
 import { MapPinOff } from 'lucide-react';
 import {
   CARTO_ATTRIBUTION,
@@ -19,11 +18,12 @@ import {
 } from '@/lib/franca-geo';
 import { hasPlottableCoordinates, toLatLngTuple } from '@/lib/geo-coordinates';
 import { escapeHtml } from '@/lib/security';
-import { UnidadeOperacional, UnidadeSituacao } from '@/lib/types';
+import { ChamadoMapaItem, UnidadeOperacional, UnidadeSituacao, UnidadeSlaMapa } from '@/lib/types';
 import { formatNotaBr, notaCorHex, resolveNotaExibicao } from '@/lib/vistoria-nota';
 import { MapViewControls } from '@/components/map/map-view-controls';
 import { situacaoRailColor } from '@/components/status-badge';
-import type { CcoMapMode } from '@/components/operational-map';
+import type { CcoMapMode, CcoMapView } from '@/components/operational-map';
+import { chamadoStatusLabel } from '@/lib/chamado-status';
 
 const situacaoMarkerColor: Record<UnidadeSituacao, string> = {
   OPERACIONAL: '#15924e',
@@ -31,6 +31,11 @@ const situacaoMarkerColor: Record<UnidadeSituacao, string> = {
   SEM_LOCALIZACAO: '#5b6b82',
   INATIVA: '#8a97a8',
 };
+
+const SLA_COLORS = {
+  DENTRO: '#15924e',
+  FORA: '#d13b3b',
+} as const;
 
 function configureLeafletIcons() {
   delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
@@ -95,7 +100,20 @@ function createReferenceIcon() {
   });
 }
 
-function buildPopupHtml(unidade: UnidadeOperacional, mapMode: CcoMapMode, categoriaFiltroId?: string | null) {
+function resolveUnidadeMarkerColor(unidade: UnidadeOperacional, mapMode: CcoMapMode) {
+  if (mapMode === 'notas') return null;
+  if (unidade.slaMapa === 'FORA' || unidade.slaMapa === 'DENTRO') {
+    return SLA_COLORS[unidade.slaMapa];
+  }
+  return situacaoMarkerColor[unidade.situacao];
+}
+
+function resolveChamadoMarkerColor(slaMapa: UnidadeSlaMapa) {
+  if (slaMapa === 'FORA' || slaMapa === 'DENTRO') return SLA_COLORS[slaMapa];
+  return '#5b6b82';
+}
+
+function buildUnidadePopupHtml(unidade: UnidadeOperacional, mapMode: CcoMapMode, categoriaFiltroId?: string | null) {
   const nome = escapeHtml(unidade.nome);
   const secretaria = escapeHtml(unidade.secretaria.sigla);
   const bairro = escapeHtml(unidade.bairro ?? 'bairro não informado');
@@ -107,6 +125,12 @@ function buildPopupHtml(unidade: UnidadeOperacional, mapMode: CcoMapMode, catego
     mapMode === 'notas'
       ? `<span style="display:block;margin-top:6px;font-size:12px;font-weight:700;color:#0f1b2d;">Nota: ${escapeHtml(formatNotaBr(nota))}</span>`
       : '';
+  const slaLine =
+    unidade.slaMapa
+      ? `<span style="display:block;margin-top:6px;font-size:12px;font-weight:700;color:${SLA_COLORS[unidade.slaMapa]};">
+          SLA: ${unidade.slaMapa === 'FORA' ? 'Fora do prazo' : 'Dentro do prazo'}
+        </span>`
+      : '';
   return `
     <div style="min-width:220px;font-family:system-ui,sans-serif;">
       <strong style="display:block;font-size:14px;color:#0f1b2d;">${nome}</strong>
@@ -114,8 +138,39 @@ function buildPopupHtml(unidade: UnidadeOperacional, mapMode: CcoMapMode, catego
         ${secretaria} · ${bairro}
       </span>
       ${notaLine}
-      <button type="button" data-unidade-id="${unidade.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
+      ${slaLine}
+      <button type="button" data-marker-id="${unidade.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
         Ver detalhes →
+      </button>
+    </div>
+  `;
+}
+
+function buildChamadoPopupHtml(chamado: ChamadoMapaItem) {
+  const titulo = escapeHtml(chamado.titulo?.trim() || chamado.descricao);
+  const local = escapeHtml(
+    chamado.unidade?.nome ??
+      chamado.enderecoTexto ??
+      chamado.enderecoBairro ??
+      'Sem local',
+  );
+  const sla =
+    chamado.slaMapa === 'FORA'
+      ? 'Fora do prazo'
+      : chamado.slaMapa === 'DENTRO'
+        ? 'Dentro do prazo'
+        : 'Sem prazo';
+  const slaColor = resolveChamadoMarkerColor(chamado.slaMapa);
+  return `
+    <div style="min-width:220px;font-family:system-ui,sans-serif;">
+      <strong style="display:block;font-size:14px;color:#0f1b2d;">${escapeHtml(chamado.codigo)}</strong>
+      <span style="display:block;margin-top:4px;font-size:12px;color:#0f1b2d;">${titulo}</span>
+      <span style="display:block;margin-top:4px;font-size:12px;color:#647389;">
+        ${escapeHtml(chamadoStatusLabel(chamado.status))} · ${escapeHtml(chamado.prioridade)} · ${local}
+      </span>
+      <span style="display:block;margin-top:6px;font-size:12px;font-weight:700;color:${slaColor};">SLA: ${sla}</span>
+      <button type="button" data-marker-id="${chamado.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
+        Ver chamado →
       </button>
     </div>
   `;
@@ -128,9 +183,9 @@ function refreshMapSize(map: L.Map) {
   window.setTimeout(() => map.invalidateSize({ animate: false }), 400);
 }
 
-function fitMapToUnits(map: L.Map, located: Array<{ latLng: L.LatLngTuple }>) {
-  if (located.length > 0) {
-    const bounds = L.latLngBounds(located.map((item) => item.latLng));
+function fitMapToPoints(map: L.Map, points: Array<{ latLng: L.LatLngTuple }>) {
+  if (points.length > 0) {
+    const bounds = L.latLngBounds(points.map((item) => item.latLng));
     bounds.extend([FRANCA_REFERENCIA_FREDERICO_MOURA.lat, FRANCA_REFERENCIA_FREDERICO_MOURA.lng]);
     map.fitBounds(bounds, { padding: [28, 28], maxZoom: 13, animate: false });
     return;
@@ -145,7 +200,7 @@ function fitMapToUnits(map: L.Map, located: Array<{ latLng: L.LatLngTuple }>) {
   );
 }
 
-function locatedFingerprint(
+function locatedFingerprintUnidades(
   unidades: UnidadeOperacional[],
   mapMode: CcoMapMode,
   categoriaFiltroId?: string | null,
@@ -156,13 +211,20 @@ function locatedFingerprint(
       const nota =
         mapMode === 'notas'
           ? resolveNotaExibicao(u.ultimaVistoriaNota, categoriaFiltroId)
-          : u.situacao;
+          : `${u.situacao}:${u.slaMapa ?? ''}`;
       return `${u.id}:${u.latitude}:${u.longitude}:${nota}`;
     })
     .join('|');
 }
 
-function resolveMarkerIcon(
+function locatedFingerprintChamados(chamados: ChamadoMapaItem[]) {
+  return chamados
+    .filter((c) => c.mapaLatitude != null && c.mapaLongitude != null)
+    .map((c) => `${c.id}:${c.mapaLatitude}:${c.mapaLongitude}:${c.slaMapa ?? ''}`)
+    .join('|');
+}
+
+function resolveUnidadeMarkerIcon(
   unidade: UnidadeOperacional,
   mapMode: CcoMapMode,
   categoriaFiltroId: string | null | undefined,
@@ -172,11 +234,13 @@ function resolveMarkerIcon(
     const nota = resolveNotaExibicao(unidade.ultimaVistoriaNota, categoriaFiltroId);
     return createNotaIcon(nota, emphasis);
   }
-  return createUnitIcon(situacaoMarkerColor[unidade.situacao], emphasis);
+  return createUnitIcon(resolveUnidadeMarkerColor(unidade, mapMode) ?? situacaoMarkerColor[unidade.situacao], emphasis);
 }
 
 export function OperationalMapClient({
-  unidades,
+  view = 'unidades',
+  unidades = [],
+  chamados = [],
   selectedId = null,
   hoveredId = null,
   mapMode = 'situacao',
@@ -184,7 +248,9 @@ export function OperationalMapClient({
   onSelect,
   onHover,
 }: {
-  unidades: UnidadeOperacional[];
+  view?: CcoMapView;
+  unidades?: UnidadeOperacional[];
+  chamados?: ChamadoMapaItem[];
   selectedId?: string | null;
   hoveredId?: string | null;
   mapMode?: CcoMapMode;
@@ -198,40 +264,56 @@ export function OperationalMapClient({
   const streetLayerRef = useRef<L.TileLayer | null>(null);
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
   const labelsLayerRef = useRef<L.TileLayer | null>(null);
-  const markersLayerRef = useRef<L.MarkerClusterGroup | null>(null);
+  const markersLayerRef = useRef<L.LayerGroup | null>(null);
   const markerByIdRef = useRef<Map<string, L.Marker>>(new Map());
   const unidadeByIdRef = useRef<Map<string, UnidadeOperacional>>(new Map());
+  const chamadoByIdRef = useRef<Map<string, ChamadoMapaItem>>(new Map());
   const referenceMarkerRef = useRef<L.Marker | null>(null);
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
   const lastFitKeyRef = useRef('');
   const lastContainerSizeRef = useRef({ width: 0, height: 0 });
   const refitTimerRef = useRef<number | null>(null);
-  const locatedRef = useRef<Array<{ unidade: UnidadeOperacional; latLng: L.LatLngTuple }>>([]);
+  const locatedRef = useRef<Array<{ id: string; latLng: L.LatLngTuple }>>([]);
   const [containerReady, setContainerReady] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [basemap, setBasemap] = useState<MapBasemap>('street');
   const [fullscreenMode, setFullscreenMode] = useState<'off' | 'native' | 'fallback'>('off');
   const isFullscreen = fullscreenMode !== 'off';
 
-  const located = useMemo(
+  const locatedUnidades = useMemo(
     () =>
       unidades.flatMap((unidade) => {
         const latLng = toLatLngTuple(unidade);
-        return latLng ? [{ unidade, latLng }] : [];
+        return latLng ? [{ id: unidade.id, unidade, latLng }] : [];
       }),
     [unidades],
   );
 
+  const locatedChamados = useMemo(
+    () =>
+      chamados.flatMap((chamado) => {
+        if (chamado.mapaLatitude == null || chamado.mapaLongitude == null) return [];
+        return [{ id: chamado.id, chamado, latLng: [chamado.mapaLatitude, chamado.mapaLongitude] as L.LatLngTuple }];
+      }),
+    [chamados],
+  );
+
+  const located = view === 'chamados' ? locatedChamados : locatedUnidades;
+  const totalItems = view === 'chamados' ? chamados.length : unidades.length;
+
   const locatedKey = useMemo(
-    () => locatedFingerprint(unidades, mapMode, categoriaFiltroId),
-    [unidades, mapMode, categoriaFiltroId],
+    () =>
+      view === 'chamados'
+        ? locatedFingerprintChamados(chamados)
+        : locatedFingerprintUnidades(unidades, mapMode, categoriaFiltroId),
+    [view, chamados, unidades, mapMode, categoriaFiltroId],
   );
 
   useEffect(() => {
     onSelectRef.current = onSelect;
     onHoverRef.current = onHover;
-    locatedRef.current = located;
+    locatedRef.current = located.map(({ id, latLng }) => ({ id, latLng }));
   }, [onSelect, onHover, located]);
 
   const scheduleRefit = useCallback((map: L.Map, reason: 'data' | 'layout') => {
@@ -241,7 +323,7 @@ export function OperationalMapClient({
 
     refitTimerRef.current = window.setTimeout(() => {
       refreshMapSize(map);
-      fitMapToUnits(map, locatedRef.current);
+      fitMapToPoints(map, locatedRef.current);
       if (reason === 'data') {
         lastFitKeyRef.current = locatedKey;
       }
@@ -251,11 +333,20 @@ export function OperationalMapClient({
   const updateMarkerEmphasis = useCallback(
     (id: string, emphasis: 'normal' | 'hover' | 'selected') => {
       const marker = markerByIdRef.current.get(id);
+      if (!marker) return;
+
+      if (view === 'chamados') {
+        const chamado = chamadoByIdRef.current.get(id);
+        if (!chamado) return;
+        marker.setIcon(createUnitIcon(resolveChamadoMarkerColor(chamado.slaMapa), emphasis));
+        return;
+      }
+
       const unidade = unidadeByIdRef.current.get(id);
-      if (!marker || !unidade) return;
-      marker.setIcon(resolveMarkerIcon(unidade, mapMode, categoriaFiltroId, emphasis));
+      if (!unidade) return;
+      marker.setIcon(resolveUnidadeMarkerIcon(unidade, mapMode, categoriaFiltroId, emphasis));
     },
-    [mapMode, categoriaFiltroId],
+    [view, mapMode, categoriaFiltroId],
   );
 
   const markContainerReady = useCallback(() => {
@@ -277,11 +368,11 @@ export function OperationalMapClient({
       const map = mapRef.current;
       if (!map) return;
 
-      const node = containerRef.current;
-      if (!node) return;
+      const current = containerRef.current;
+      if (!current) return;
 
-      const width = node.offsetWidth;
-      const height = node.offsetHeight;
+      const width = current.offsetWidth;
+      const height = current.offsetHeight;
       const prev = lastContainerSizeRef.current;
       const sizeChanged = Math.abs(width - prev.width) > 16 || Math.abs(height - prev.height) > 16;
 
@@ -402,12 +493,7 @@ export function OperationalMapClient({
 
     streetLayerRef.current.addTo(map);
 
-    markersLayerRef.current = L.markerClusterGroup({
-      showCoverageOnHover: false,
-      maxClusterRadius: 56,
-      spiderfyOnMaxZoom: true,
-      animateAddingMarkers: false,
-    }).addTo(map);
+    markersLayerRef.current = L.layerGroup().addTo(map);
 
     referenceMarkerRef.current = L.marker(
       [FRANCA_REFERENCIA_FREDERICO_MOURA.lat, FRANCA_REFERENCIA_FREDERICO_MOURA.lng],
@@ -418,10 +504,10 @@ export function OperationalMapClient({
 
     map.on('popupopen', (event) => {
       const popup = event.popup.getElement();
-      const button = popup?.querySelector<HTMLButtonElement>('button[data-unidade-id]');
+      const button = popup?.querySelector<HTMLButtonElement>('button[data-marker-id]');
       if (!button) return;
       button.onclick = () => {
-        const id = button.dataset.unidadeId;
+        const id = button.dataset.markerId;
         if (id) onSelectRef.current?.(id);
       };
     });
@@ -441,6 +527,7 @@ export function OperationalMapClient({
       referenceMarkerRef.current = null;
       markerByIdRef.current.clear();
       unidadeByIdRef.current.clear();
+      chamadoByIdRef.current.clear();
       lastFitKeyRef.current = '';
       if (refitTimerRef.current) {
         window.clearTimeout(refitTimerRef.current);
@@ -475,22 +562,37 @@ export function OperationalMapClient({
     markersLayer.clearLayers();
     markerByIdRef.current.clear();
     unidadeByIdRef.current.clear();
+    chamadoByIdRef.current.clear();
 
-    located.forEach(({ unidade, latLng }) => {
-      const marker = L.marker(latLng, {
-        icon: resolveMarkerIcon(unidade, mapMode, categoriaFiltroId, 'normal'),
-      }).bindPopup(buildPopupHtml(unidade, mapMode, categoriaFiltroId));
+    if (view === 'chamados') {
+      locatedChamados.forEach(({ chamado, latLng }) => {
+        const marker = L.marker(latLng, {
+          icon: createUnitIcon(resolveChamadoMarkerColor(chamado.slaMapa), 'normal'),
+        }).bindPopup(buildChamadoPopupHtml(chamado));
 
-      marker.on('click', () => onSelectRef.current?.(unidade.id));
-      marker.on('mouseover', () => onHoverRef.current?.(unidade.id));
-      marker.on('mouseout', () => onHoverRef.current?.(null));
+        marker.on('click', () => onSelectRef.current?.(chamado.id));
+        marker.on('mouseover', () => onHoverRef.current?.(chamado.id));
+        marker.on('mouseout', () => onHoverRef.current?.(null));
 
-      markersLayer.addLayer(marker);
-      markerByIdRef.current.set(unidade.id, marker);
-      unidadeByIdRef.current.set(unidade.id, unidade);
-    });
+        markersLayer.addLayer(marker);
+        markerByIdRef.current.set(chamado.id, marker);
+        chamadoByIdRef.current.set(chamado.id, chamado);
+      });
+    } else {
+      locatedUnidades.forEach(({ unidade, latLng }) => {
+        const marker = L.marker(latLng, {
+          icon: resolveUnidadeMarkerIcon(unidade, mapMode, categoriaFiltroId, 'normal'),
+        }).bindPopup(buildUnidadePopupHtml(unidade, mapMode, categoriaFiltroId));
 
-    markersLayer.refreshClusters();
+        marker.on('click', () => onSelectRef.current?.(unidade.id));
+        marker.on('mouseover', () => onHoverRef.current?.(unidade.id));
+        marker.on('mouseout', () => onHoverRef.current?.(null));
+
+        markersLayer.addLayer(marker);
+        markerByIdRef.current.set(unidade.id, marker);
+        unidadeByIdRef.current.set(unidade.id, unidade);
+      });
+    }
 
     const shouldRefit = lastFitKeyRef.current !== locatedKey;
     if (shouldRefit) {
@@ -498,7 +600,7 @@ export function OperationalMapClient({
     } else {
       refreshMapSize(map);
     }
-  }, [mapReady, locatedKey, located, scheduleRefit, mapMode, categoriaFiltroId]);
+  }, [mapReady, locatedKey, locatedUnidades, locatedChamados, scheduleRefit, mapMode, categoriaFiltroId, view]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -513,7 +615,7 @@ export function OperationalMapClient({
         map.panTo(marker.getLatLng(), { animate: true });
       }
     }
-  }, [hoveredId, selectedId, updateMarkerEmphasis, mapReady, mapMode, categoriaFiltroId]);
+  }, [hoveredId, selectedId, updateMarkerEmphasis, mapReady, mapMode, categoriaFiltroId, view]);
 
   const notaLegend = [
     { label: '0–2', color: notaCorHex(1) },
@@ -522,13 +624,31 @@ export function OperationalMapClient({
     { label: '9–10', color: notaCorHex(9.5) },
   ];
 
-  const legendCounts = located.reduce(
+  const legendCounts = locatedUnidades.reduce(
     (acc, { unidade }) => {
       acc[unidade.situacao] += 1;
       return acc;
     },
     { OPERACIONAL: 0, COM_PENDENCIAS: 0, SEM_LOCALIZACAO: 0, INATIVA: 0 } as Record<UnidadeSituacao, number>,
   );
+
+  const slaCounts = (view === 'chamados' ? locatedChamados.map((i) => i.chamado) : locatedUnidades.map((i) => i.unidade)).reduce(
+    (acc, item) => {
+      if (item.slaMapa === 'FORA') acc.fora += 1;
+      else if (item.slaMapa === 'DENTRO') acc.dentro += 1;
+      else acc.sem += 1;
+      return acc;
+    },
+    { dentro: 0, fora: 0, sem: 0 },
+  );
+
+  const emptyTitle = view === 'chamados' ? 'Nenhum chamado com localização' : 'Nenhuma unidade com localização';
+  const emptyDescription =
+    totalItems > 0
+      ? view === 'chamados'
+        ? `${totalItems} chamado(s) carregado(s), mas sem coordenadas válidas para o mapa.`
+        : `${totalItems} próprio(s) carregado(s), mas sem coordenadas válidas para o mapa.`
+      : 'Ajuste os filtros ou cadastre coordenadas.';
 
   return (
     <div className="cco-map-panel w-full">
@@ -551,15 +671,45 @@ export function OperationalMapClient({
         <div className="pointer-events-none absolute top-3.5 left-3.5 z-[500]">
           <span className="inline-flex items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-3 py-1.5 text-xs font-semibold text-[var(--ink-2)] shadow-[var(--sh-sm)] backdrop-blur-md">
             <span className="mono text-[var(--brand)]">{located.length}</span> no mapa
-            {unidades.length !== located.length ? (
-              <span className="text-[var(--ink-3)]">· {unidades.length - located.length} sem GPS</span>
+            {totalItems !== located.length ? (
+              <span className="text-[var(--ink-3)]">· {totalItems - located.length} sem GPS</span>
             ) : null}
           </span>
         </div>
 
         <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-[500] min-w-[168px] rounded-[var(--r-md)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-3 shadow-[var(--sh-md)] backdrop-blur-md">
           <div className="mb-1.5 text-[10.5px] font-bold tracking-[0.05em] uppercase text-[var(--ink-3)]">Legenda</div>
-          {mapMode === 'notas' ? (
+          {view === 'chamados' || mapMode === 'situacao' ? (
+            <>
+              <div className="flex items-center gap-2 py-0.5 text-xs text-[var(--ink-2)]">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: SLA_COLORS.DENTRO }} />
+                <span className="flex-1">SLA dentro do prazo</span>
+                <b className="mono font-semibold text-[var(--ink)]">{slaCounts.dentro}</b>
+              </div>
+              <div className="flex items-center gap-2 py-0.5 text-xs text-[var(--ink-2)]">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: SLA_COLORS.FORA }} />
+                <span className="flex-1">SLA fora do prazo</span>
+                <b className="mono font-semibold text-[var(--ink)]">{slaCounts.fora}</b>
+              </div>
+              {view === 'unidades' ? (
+                (['OPERACIONAL', 'COM_PENDENCIAS', 'INATIVA'] as UnidadeSituacao[]).map((key) => (
+                  <div key={key} className="flex items-center gap-2 py-0.5 text-xs text-[var(--ink-2)]">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ background: situacaoRailColor(key) }} />
+                    <span className="flex-1">
+                      {key === 'COM_PENDENCIAS' ? 'Pendências' : key === 'OPERACIONAL' ? 'Sem pendências' : 'Inativa'}
+                    </span>
+                    <b className="mono font-semibold text-[var(--ink)]">{legendCounts[key]}</b>
+                  </div>
+                ))
+              ) : (
+                <div className="mt-1 flex items-center gap-2 py-0.5 text-xs text-[var(--ink-3)]">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#8a97a8]" />
+                  <span className="flex-1">Sem prazo SLA</span>
+                  <b className="mono font-semibold text-[var(--ink)]">{slaCounts.sem}</b>
+                </div>
+              )}
+            </>
+          ) : (
             <>
               {notaLegend.map((item) => (
                 <div key={item.label} className="flex items-center gap-2 py-0.5 text-xs text-[var(--ink-2)]">
@@ -572,14 +722,6 @@ export function OperationalMapClient({
                 <span>Sem vistoria</span>
               </div>
             </>
-          ) : (
-            (['OPERACIONAL', 'COM_PENDENCIAS', 'INATIVA'] as UnidadeSituacao[]).map((key) => (
-              <div key={key} className="flex items-center gap-2 py-0.5 text-xs text-[var(--ink-2)]">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ background: situacaoRailColor(key) }} />
-                <span className="flex-1">{key === 'COM_PENDENCIAS' ? 'Pendências' : key === 'OPERACIONAL' ? 'Operacional' : 'Inativa'}</span>
-                <b className="mono font-semibold text-[var(--ink)]">{legendCounts[key]}</b>
-              </div>
-            ))
           )}
         </div>
 
@@ -587,12 +729,8 @@ export function OperationalMapClient({
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[var(--surface)]/75 p-6">
             <div className="max-w-sm rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-5 text-center shadow-[var(--sh-md)]">
               <MapPinOff className="mx-auto mb-3 h-8 w-8 text-[var(--ink-3)]" />
-              <h3 className="text-sm font-semibold text-[var(--ink)]">Nenhuma unidade com localização</h3>
-              <p className="mt-1 text-xs text-[var(--ink-3)]">
-                {unidades.length > 0
-                  ? `${unidades.length} próprio(s) carregado(s), mas sem coordenadas válidas para o mapa.`
-                  : 'Ajuste os filtros ou cadastre coordenadas nos próprios.'}
-              </p>
+              <h3 className="text-sm font-semibold text-[var(--ink)]">{emptyTitle}</h3>
+              <p className="mt-1 text-xs text-[var(--ink-3)]">{emptyDescription}</p>
             </div>
           </div>
         ) : null}

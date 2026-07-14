@@ -47,7 +47,7 @@ export function ChamadoCoordMapEditor({
 
   useEffect(() => {
     configureLeafletIcons();
-    if (!containerRef.current || mapRef.current) return;
+    if (!containerRef.current || mapRef.current || !active) return;
 
     const lat = latitude ?? FRANCA_CENTER.lat;
     const lng = longitude ?? FRANCA_CENTER.lng;
@@ -59,7 +59,7 @@ export function ChamadoCoordMapEditor({
       maxZoom: 20,
     }).addTo(map);
 
-    const marker = L.marker([lat, lng], { draggable: editable }).addTo(map);
+    const marker = L.marker([lat, lng], { draggable: Boolean(editable) }).addTo(map);
     marker.on('dragend', () => {
       const pos = marker.getLatLng();
       onChangeRef.current?.({ latitude: pos.lat, longitude: pos.lng });
@@ -82,12 +82,16 @@ export function ChamadoCoordMapEditor({
       mapRef.current = null;
       markerRef.current = null;
     };
-  }, [editable]);
+    // latitude/longitude iniciais são capturados na montagem; atualizações subsequentes vão no efeito abaixo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, editable]);
 
   useEffect(() => {
     const map = mapRef.current;
     const marker = markerRef.current;
     if (!map || !marker || latitude == null || longitude == null) return;
+    const current = marker.getLatLng();
+    if (Math.abs(current.lat - latitude) < 1e-9 && Math.abs(current.lng - longitude) < 1e-9) return;
     marker.setLatLng([latitude, longitude]);
     map.setView([latitude, longitude], map.getZoom(), { animate: false });
   }, [latitude, longitude]);
@@ -98,5 +102,19 @@ export function ChamadoCoordMapEditor({
     invalidateMapSize(map);
   }, [active]);
 
-  return <div ref={containerRef} className="h-[320px] w-full overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]" />;
+  useEffect(() => {
+    const marker = markerRef.current;
+    if (!marker) return;
+    if (marker.dragging) {
+      if (editable) marker.dragging.enable();
+      else marker.dragging.disable();
+    }
+  }, [editable]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="h-[min(52vh,420px)] min-h-[280px] w-full overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]"
+    />
+  );
 }

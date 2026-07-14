@@ -13,15 +13,40 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { listChamadosProgramacao, updateChamadoPlanejamento } from '@/lib/api';
 import { chamadoLocalLabel } from '@/lib/chamado-geo';
-import { prioridadeVariant } from '@/lib/chamado-status';
+import { CHAMADO_STATUS_META, prioridadeVariant } from '@/lib/chamado-status';
 import { buildCalendarCells, monthBounds, toInputDate } from '@/lib/cronograma';
 import { cn } from '@/lib/cn';
-import { ChamadoProgramacaoResponse, ChamadoResumo, EquipeOpcao } from '@/lib/types';
+import { ChamadoProgramacaoResponse, ChamadoResumo, ChamadoStatus, EquipeOpcao } from '@/lib/types';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const WEEKDAYS_FULL = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
 type ViewMode = 'mensal' | 'semanal';
+type StatusFilter = 'TODOS' | ChamadoStatus;
+type PrioridadeFilter = 'TODAS' | string;
+
+const PRIORIDADE_CHIPS: Array<{ value: PrioridadeFilter; label: string }> = [
+  { value: 'TODAS', label: 'Todas' },
+  { value: 'BAIXA', label: 'Baixa' },
+  { value: 'MEDIA', label: 'Média' },
+  { value: 'ALTA', label: 'Alta' },
+  { value: 'URGENTE', label: 'Urgente' },
+];
+
+const STATUS_CHIPS: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'TODOS', label: 'Todos' },
+  ...Object.entries(CHAMADO_STATUS_META).map(([value, meta]) => ({ value: value as ChamadoStatus, label: meta.label })),
+];
+
+function matchesStatusPrioridade(
+  chamado: ChamadoResumo,
+  statusFilter: StatusFilter,
+  prioridadeFilter: PrioridadeFilter,
+) {
+  if (statusFilter !== 'TODOS' && chamado.status !== statusFilter) return false;
+  if (prioridadeFilter !== 'TODAS' && chamado.prioridade !== prioridadeFilter) return false;
+  return true;
+}
 
 function chamadoTitulo(chamado: Pick<ChamadoResumo, 'titulo' | 'descricao'>) {
   return chamado.titulo?.trim() || chamado.descricao;
@@ -55,6 +80,8 @@ export function ChamadosProgramacaoPanel({
     return start;
   });
   const [equipeFilter, setEquipeFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('TODOS');
+  const [prioridadeFilter, setPrioridadeFilter] = useState<PrioridadeFilter>('TODAS');
   const [selectedDate, setSelectedDate] = useState<string | null>(() => toInputDate(new Date()));
   const [data, setData] = useState<ChamadoProgramacaoResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,6 +142,28 @@ export function ChamadosProgramacaoPanel({
   }, [data]);
 
   const chamadosDoDia = selectedDate ? (eventosPorDia.get(selectedDate) ?? []) : [];
+
+  const pendentesFiltrados = useMemo(
+    () =>
+      (data?.pendentes ?? []).filter((chamado) =>
+        matchesStatusPrioridade(chamado, statusFilter, prioridadeFilter),
+      ),
+    [data?.pendentes, prioridadeFilter, statusFilter],
+  );
+
+  const programadosFiltrados = useMemo(
+    () =>
+      (data?.porDia ?? [])
+        .flatMap((dia) => dia.chamados)
+        .filter((chamado) => matchesStatusPrioridade(chamado, statusFilter, prioridadeFilter)),
+    [data?.porDia, prioridadeFilter, statusFilter],
+  );
+
+  useEffect(() => {
+    if (formChamadoId && !pendentesFiltrados.some((item) => item.id === formChamadoId)) {
+      setFormChamadoId('');
+    }
+  }, [formChamadoId, pendentesFiltrados]);
 
   const allChamadosMapa = useMemo(() => {
     const map = new Map<string, ChamadoResumo>();
@@ -275,7 +324,7 @@ export function ChamadosProgramacaoPanel({
       snackbar.show('A data deve ser hoje ou uma data futura.', 'warning');
       return;
     }
-    const chamado = data?.pendentes.find((item) => item.id === formChamadoId);
+    const chamado = pendentesFiltrados.find((item) => item.id === formChamadoId) ?? data?.pendentes.find((item) => item.id === formChamadoId);
     if (!chamado) return;
 
     const scheduledMonth = formDate.slice(0, 7);
@@ -352,6 +401,31 @@ export function ChamadosProgramacaoPanel({
         <Badge variant="warning">{pendentesLabel}</Badge>
       </div>
 
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="situ-chips flex flex-wrap gap-1.5">
+          {STATUS_CHIPS.map((item) => (
+            <Chip
+              key={item.value}
+              active={statusFilter === item.value}
+              onClick={() => setStatusFilter(item.value)}
+            >
+              {item.label}
+            </Chip>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {PRIORIDADE_CHIPS.map((item) => (
+            <Chip
+              key={item.value}
+              active={prioridadeFilter === item.value}
+              onClick={() => setPrioridadeFilter(item.value)}
+            >
+              {item.label}
+            </Chip>
+          ))}
+        </div>
+      </div>
+
       {error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
       {loading ? <LoadingState label="Carregando programação..." /> : null}
 
@@ -364,8 +438,8 @@ export function ChamadosProgramacaoPanel({
                 <h3 className="text-[14px] font-semibold text-[var(--ink)]">Mapa da programação</h3>
               </div>
               <ChamadosProgramacaoMap
-                programados={(data?.porDia ?? []).flatMap((dia) => dia.chamados)}
-                pendentes={data?.pendentes ?? []}
+                programados={programadosFiltrados}
+                pendentes={pendentesFiltrados}
                 selectedId={formChamadoId || null}
                 onSelect={handleProgramarFromMap}
               />
@@ -553,7 +627,7 @@ export function ChamadosProgramacaoPanel({
                   className="h-9 w-full text-xs"
                 >
                   <option value="">Chamado pendente de programação</option>
-                  {(data?.pendentes ?? []).map((chamado) => (
+                  {pendentesFiltrados.map((chamado) => (
                     <option key={chamado.id} value={chamado.id}>
                       {chamado.codigo} — {chamadoTitulo(chamado).slice(0, 48)}
                     </option>

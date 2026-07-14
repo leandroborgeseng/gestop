@@ -40,15 +40,16 @@ export const GUIDE_CONTENT: Record<string, GuideContent> = {
         t: 'Focar no que exige ação',
         s: [
           "Clique no card 'Pendências' para ver só os próprios com problemas.",
-          'No mapa, marcadores âmbar = com pendências; verdes = operacionais.',
+          'No mapa, marcadores âmbar = com pendências; verdes = sem pendências. Na visão SLA, verde/vermelho indicam prazo.',
         ],
       },
     ],
     glossario: [
-      { k: 'Situação', v: 'Estado operacional: Operacional, Com pendências, Sem localização ou Inativa.' },
+      { k: 'Situação', v: 'Estado operacional: Sem pendências, Com pendências, Sem localização ou Inativa.' },
       { k: 'NC — Não conformidade', v: 'Item reprovado durante uma vistoria.' },
       { k: 'Chamado', v: 'Demanda operacional do cidadão, vistoria ou registro interno.' },
       { k: 'Sem GPS', v: 'Próprio sem georreferência — aparece na lista, mas não no mapa.' },
+      { k: 'SLA', v: 'Prazo do chamado: verde dentro do prazo; vermelho fora do prazo.' },
     ],
   },
   dashboard: {

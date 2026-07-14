@@ -8,6 +8,12 @@ export type UnidadeTipo =
 
 export type UnidadeSituacao = 'OPERACIONAL' | 'COM_PENDENCIAS' | 'SEM_LOCALIZACAO' | 'INATIVA';
 
+export type TipoPendencia = 'CHAMADOS' | 'NAO_CONFORMIDADES' | 'VISTORIAS';
+
+export type SlaFiltro = 'DENTRO' | 'FORA';
+
+export type UnidadeSlaMapa = 'DENTRO' | 'FORA' | null;
+
 export type SecretariaOption = {
   id: string;
   nome: string;
@@ -45,12 +51,16 @@ export type UnidadeOperacional = {
   pendencias: {
     naoConformidadesAbertas: number;
     chamadosAbertos: number;
+    semVistoria?: boolean;
   };
   totais: {
     fiscalizacoes: number;
     naoConformidadesAbertas: number;
     chamadosAbertos: number;
+    chamadosSlaForaPrazo?: number;
+    semVistoria?: boolean;
   };
+  slaMapa?: UnidadeSlaMapa;
   ultimaVistoriaNota?: VistoriaNotaResumo | null;
 };
 
@@ -126,6 +136,10 @@ export type UnidadeFilters = {
   regiao?: string;
   responsavel?: string;
   responsavelEmail?: string;
+  tiposPendencia?: TipoPendencia[];
+  tiposChamadoId?: string[];
+  equipeIds?: string[];
+  sla?: SlaFiltro;
 };
 
 export type CategoriaVistoriaOption = {
@@ -146,6 +160,52 @@ export type UnidadeFiltroOpcoes = {
     secretariaSigla: string;
   }>;
   emails: string[];
+  equipes?: Array<{ id: string; nome: string; codigo?: string | null }>;
+  tiposChamado?: Array<{ id: string; nome: string }>;
+};
+
+export type ChamadosMapaFilters = {
+  search?: string;
+  status?: string[];
+  prioridade?: string[];
+  tipoChamadoId?: string[];
+  equipeIds?: string[];
+  sla?: SlaFiltro;
+  bairro?: string;
+  comUnidade?: 'TODOS' | 'COM' | 'SEM';
+};
+
+export type ChamadoMapaItem = {
+  id: string;
+  codigo: string;
+  titulo: string | null;
+  descricao: string;
+  status: string;
+  prioridade: string;
+  origem: string;
+  prazoEm: string | null;
+  previstaExecucaoEm: string | null;
+  enderecoTexto: string | null;
+  enderecoBairro: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  mapaLatitude: number | null;
+  mapaLongitude: number | null;
+  slaMapa: UnidadeSlaMapa;
+  createdAt: string;
+  secretaria: SecretariaOption;
+  unidade: {
+    id: string;
+    nome: string;
+    codigoPatrimonial: string;
+    endereco: string;
+    bairro: string | null;
+    latitude: number | null;
+    longitude: number | null;
+  } | null;
+  equipe: { id: string; nome: string } | null;
+  tipoChamado: { id: string; nome: string } | null;
+  responsavel: { id: string; nome: string } | null;
 };
 
 export type AuthUser = {
@@ -514,7 +574,7 @@ export type MobileQueuedInspection = {
   respostas: Array<{
     itemId: string;
     conformidade: 'CONFORME' | 'NAO_CONFORME' | 'NAO_APLICAVEL';
-    valorBooleano?: boolean;
+    valorBooleano?: boolean | null;
     valorTexto?: string;
     valorNumero?: number;
     comentario?: string;
@@ -639,6 +699,8 @@ export type ChamadoResumo = {
     latitude?: number | null;
     longitude?: number | null;
     raioValidacaoMetros?: number;
+    /** Secretaria cadastral do próprio (quando o chamado está vinculado a uma unidade). */
+    secretaria?: SecretariaOption | null;
   } | null;
   responsavel?: { id: string; nome: string } | null;
   equipe?: { id: string; nome: string } | null;
@@ -888,17 +950,17 @@ export type FiscalizacaoResumo = {
   observacoes?: string | null;
   createdAt: string;
   secretaria: { id: string; sigla: string; nome: string };
-  unidade: { id: string; nome: string; codigoPatrimonial: string; bairro?: string | null };
+  unidade: { id: string; nome: string; codigoPatrimonial: string; bairro?: string | null; tipo?: UnidadeTipo };
   agente: { id: string; nome: string };
   checklistVersao: {
     id: string;
     versao: number;
     checklist: { id: string; nome: string };
   };
+  nota?: VistoriaNotaResumo | null;
 };
 
 export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
-  nota?: VistoriaNotaResumo | null;
   respostas?: Array<{
     id: string;
     conformidade: string | null;

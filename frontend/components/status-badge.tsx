@@ -5,7 +5,7 @@ const statusConfig: Record<
   UnidadeSituacao,
   { label: string; role: 'ok' | 'warn' | 'muted' | 'off' }
 > = {
-  OPERACIONAL: { label: 'Operacional', role: 'ok' },
+  OPERACIONAL: { label: 'Sem pendências', role: 'ok' },
   COM_PENDENCIAS: { label: 'Com pendências', role: 'warn' },
   SEM_LOCALIZACAO: { label: 'Sem localização', role: 'muted' },
   INATIVA: { label: 'Inativa', role: 'off' },

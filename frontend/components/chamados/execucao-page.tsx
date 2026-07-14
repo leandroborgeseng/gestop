@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { CirclePlay, Map as MapIcon, MapPinned, Search } from 'lucide-react';
@@ -18,6 +18,139 @@ import { chamadoToMapPoint } from '@/lib/chamado-geo';
 import { downloadOrdensServicoLote, listChamadosEmExecucao, listEquipesExecucao } from '@/lib/api';
 import { toInputDate } from '@/lib/cronograma';
 import { ChamadosEmExecucaoGrupo, EquipeOpcaoResumo } from '@/lib/types';
+
+function EquipeFilterSelect({
+  equipes,
+  value,
+  onChange,
+  showSemEquipe,
+}: {
+  equipes: EquipeOpcaoResumo[];
+  value: string | null;
+  onChange: (value: string | null) => void;
+  showSemEquipe?: boolean;
+}) {
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+
+  const sorted = useMemo(
+    () =>
+      [...equipes].sort((a, b) =>
+        a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }),
+      ),
+    [equipes],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return sorted;
+    return sorted.filter((equipe) => {
+      const label = `${equipe.nome} ${equipe.secretaria?.sigla ?? ''} ${equipe.codigo ?? ''}`.toLowerCase();
+      return label.includes(q);
+    });
+  }, [sorted, query]);
+
+  const selectedLabel = useMemo(() => {
+    if (!value) return 'Todas as equipes';
+    if (value === 'sem-equipe') return 'Sem equipe';
+    const equipe = equipes.find((item) => item.id === value);
+    if (!equipe) return 'Todas as equipes';
+    return equipe.secretaria?.sigla ? `${equipe.nome} · ${equipe.secretaria.sigla}` : equipe.nome;
+  }, [equipes, value]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative w-full max-w-md">
+      <label htmlFor="exec-equipe-filter" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
+        Filtrar por equipe
+      </label>
+      <button
+        id="exec-equipe-filter"
+        type="button"
+        className="flex h-9 w-full items-center justify-between rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-left text-[13px] text-[var(--ink)] hover:border-[#cdd8e6] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => {
+          setOpen((current) => !current);
+          setQuery('');
+        }}
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <span className="ml-2 text-[11px] text-[var(--ink-3)]">{open ? '▲' : '▼'}</span>
+      </button>
+      {open ? (
+        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-md)]">
+          <div className="border-b border-[var(--line-2)] p-2">
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Buscar equipe…"
+              className="h-9 w-full rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none"
+              autoFocus
+            />
+          </div>
+          <ul role="listbox" className="max-h-56 overflow-y-auto p-1">
+            <li>
+              <button
+                type="button"
+                className={`flex w-full rounded-[var(--r-sm)] px-3 py-2 text-left text-[13px] ${!value ? 'bg-[var(--brand-soft)] font-semibold text-[var(--brand-hover)]' : 'hover:bg-[var(--surface-2)]'}`}
+                onClick={() => {
+                  onChange(null);
+                  setOpen(false);
+                }}
+              >
+                Todas as equipes
+              </button>
+            </li>
+            {filtered.map((equipe) => {
+              const label = equipe.secretaria?.sigla ? `${equipe.nome} · ${equipe.secretaria.sigla}` : equipe.nome;
+              return (
+                <li key={equipe.id}>
+                  <button
+                    type="button"
+                    className={`flex w-full rounded-[var(--r-sm)] px-3 py-2 text-left text-[13px] ${value === equipe.id ? 'bg-[var(--brand-soft)] font-semibold text-[var(--brand-hover)]' : 'hover:bg-[var(--surface-2)]'}`}
+                    onClick={() => {
+                      onChange(equipe.id);
+                      setOpen(false);
+                    }}
+                  >
+                    {label}
+                  </button>
+                </li>
+              );
+            })}
+            {showSemEquipe ? (
+              <li>
+                <button
+                  type="button"
+                  className={`flex w-full rounded-[var(--r-sm)] px-3 py-2 text-left text-[13px] ${value === 'sem-equipe' ? 'bg-[var(--brand-soft)] font-semibold text-[var(--brand-hover)]' : 'hover:bg-[var(--surface-2)]'}`}
+                  onClick={() => {
+                    onChange('sem-equipe');
+                    setOpen(false);
+                  }}
+                >
+                  Sem equipe
+                </button>
+              </li>
+            ) : null}
+            {filtered.length === 0 ? (
+              <li className="px-3 py-2 text-[12px] text-[var(--ink-3)]">Nenhuma equipe encontrada.</li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export function ExecucaoPage() {
   return (
@@ -243,26 +376,13 @@ function ExecucaoPageContent() {
             </div>
 
             {mostrarFiltroEquipes ? (
-              <div className="mb-3 flex flex-wrap gap-2">
-                {equipesVisiveis.length > 1 ? (
-                  <Chip active={!equipeFilter} onClick={() => setEquipeFilter(null)}>
-                    Todas as equipes
-                  </Chip>
-                ) : null}
-                {equipesVisiveis.map((equipe) => (
-                  <Chip
-                    key={equipe.id}
-                    active={equipeFilter === equipe.id}
-                    onClick={() => setEquipeFilter(equipe.id)}
-                  >
-                    {equipe.secretaria?.sigla ? `${equipe.nome} · ${equipe.secretaria.sigla}` : equipe.nome}
-                  </Chip>
-                ))}
-                {canGerenciar && temSemEquipe ? (
-                  <Chip active={equipeFilter === 'sem-equipe'} onClick={() => setEquipeFilter('sem-equipe')}>
-                    Sem equipe
-                  </Chip>
-                ) : null}
+              <div className="mb-3">
+                <EquipeFilterSelect
+                  equipes={equipesVisiveis}
+                  value={equipeFilter}
+                  onChange={setEquipeFilter}
+                  showSemEquipe={canGerenciar && temSemEquipe}
+                />
               </div>
             ) : null}
 
