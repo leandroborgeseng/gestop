@@ -1,4 +1,4 @@
-import { FRANCA_BOUNDS } from '@/lib/franca-geo';
+import { FRANCA_BOUNDS, FRANCA_CENTER, isWithinFrancaMunicipio } from '@/lib/franca-geo';
 
 export type GeocodingResult = {
   label: string;
@@ -123,8 +123,47 @@ export function pickBairro(candidates: string[]) {
   return candidates[0];
 }
 
+function normalizeForMatch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function normalizeStreetName(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+  return normalizeForMatch(value);
+}
+
+function francaViewbox() {
+  return `${FRANCA_BOUNDS.southWest.lng},${FRANCA_BOUNDS.southWest.lat},${FRANCA_BOUNDS.northEast.lng},${FRANCA_BOUNDS.northEast.lat}`;
+}
+
+function isLikelyFrancaResult(item: NominatimItem) {
+  const lat = Number(item.lat);
+  const lon = Number(item.lon);
+  if (Number.isFinite(lat) && Number.isFinite(lon) && isWithinFrancaMunicipio(lat, lon)) {
+    return true;
+  }
+  const text = normalizeForMatch(
+    [item.display_name, item.address?.city, item.address?.town, item.address?.municipality]
+      .filter(Boolean)
+      .join(' '),
+  );
+  return text.includes('franca');
+}
+
+function dedupeNominatimItems(items: NominatimItem[]) {
+  const seen = new Set<string>();
+  const result: NominatimItem[] = [];
+  for (const item of items) {
+    const key = `${Number(item.lat).toFixed(5)}|${Number(item.lon).toFixed(5)}|${normalizeForMatch(item.display_name)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
 }
 
 export function formatGeocodeLabel(parsed: Partial<ParsedAddress>, fallbackDisplayName?: string) {
@@ -342,18 +381,116 @@ async function fetchNominatim(url: string): Promise<NominatimItem[]> {
 }
 
 async function searchNominatimItems(query: string, limit = 6): Promise<NominatimItem[]> {
-  const viewbox = `${FRANCA_BOUNDS.southWest.lng},${FRANCA_BOUNDS.southWest.lat},${FRANCA_BOUNDS.northEast.lng},${FRANCA_BOUNDS.northEast.lat}`;
-  const params = new URLSearchParams({
-    q: `${query.trim()}, Franca, SP, Brasil`,
+  const cleaned = query.trim();
+  if (!cleaned) return [];
+
+  const viewbox = francaViewbox();
+  const base = {
     format: 'json',
     addressdetails: '1',
-    limit: String(limit),
+    limit: String(Math.max(limit * 2, 8)),
     countrycodes: 'br',
+  } as const;
+
+  // Preferência pela área de Franca sem corte duro (bounded=0): permite periferia e variações.
+  const softParams = new URLSearchParams({
+    ...base,
+    q: `${cleaned}, Franca, SP, Brasil`,
     viewbox,
-    bounded: '1',
+    bounded: '0',
   });
 
-  return fetchNominatim(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+  let items = await fetchNominatim(`https://nominatim.openstreetmap.org/search?${softParams.toString()}`);
+  let francaItems = items.filter(isLikelyFrancaResult);
+
+  // Fallback mais restrito se a busca ampla não trouxe Franca.
+  if (francaItems.length === 0) {
+    const hardParams = new URLSearchParams({
+      ...base,
+      q: cleaned,
+      viewbox,
+      bounded: '1',
+    });
+    items = await fetchNominatim(`https://nominatim.openstreetmap.org/search?${hardParams.toString()}`);
+    francaItems = items.filter(isLikelyFrancaResult);
+  }
+
+  // Último recurso: Photon (OSM) com bias no centro de Franca.
+  if (francaItems.length === 0) {
+    const photonItems = await searchPhotonItems(cleaned, limit);
+    return dedupeNominatimItems(photonItems).slice(0, limit);
+  }
+
+  return dedupeNominatimItems(francaItems).slice(0, limit);
+}
+
+async function searchPhotonItems(query: string, limit = 6): Promise<NominatimItem[]> {
+  const bbox = `${FRANCA_BOUNDS.southWest.lng},${FRANCA_BOUNDS.southWest.lat},${FRANCA_BOUNDS.northEast.lng},${FRANCA_BOUNDS.northEast.lat}`;
+  const params = new URLSearchParams({
+    q: `${query.trim()}, Franca`,
+    lat: String(FRANCA_CENTER.lat),
+    lon: String(FRANCA_CENTER.lng),
+    bbox,
+    limit: String(limit),
+    lang: 'pt',
+  });
+
+  try {
+    const response = await fetch(`https://photon.komoot.io/api/?${params.toString()}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) return [];
+    const payload = (await response.json()) as {
+      features?: Array<{
+        geometry?: { coordinates?: [number, number] };
+        properties?: {
+          name?: string;
+          street?: string;
+          housenumber?: string;
+          district?: string;
+          suburb?: string;
+          city?: string;
+          locality?: string;
+          county?: string;
+          state?: string;
+          country?: string;
+        };
+      }>;
+    };
+
+    return (payload.features ?? [])
+      .map((feature) => {
+        const [lon, lat] = feature.geometry?.coordinates ?? [];
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+        if (!isWithinFrancaMunicipio(lat, lon)) return null;
+        const props = feature.properties ?? {};
+        const city = props.city ?? props.locality ?? props.county ?? 'Franca';
+        if (city && !normalizeForMatch(city).includes('franca') && !normalizeForMatch(String(props.state ?? '')).includes('sao paulo')) {
+          // Ainda aceita se estiver dentro do bbox municipal.
+        }
+        const road = props.street ?? props.name ?? '';
+        const display = [road, props.housenumber, props.district ?? props.suburb, city, props.state, props.country]
+          .filter(Boolean)
+          .join(', ');
+        return {
+          display_name: display || props.name || query,
+          lat: String(lat),
+          lon: String(lon),
+          class: 'place',
+          address: {
+            road: props.street ?? props.name,
+            house_number: props.housenumber,
+            suburb: props.suburb,
+            neighbourhood: props.district,
+            city,
+            state: props.state,
+          },
+        } satisfies NominatimItem;
+      })
+      .filter((item): item is NominatimItem => Boolean(item));
+  } catch {
+    return [];
+  }
 }
 
 async function searchStructuredNominatim(
@@ -363,26 +500,32 @@ async function searchStructuredNominatim(
   bairro: string,
   limit = 5,
 ): Promise<NominatimItem[]> {
+  // Nominatim structured: `street` deve ser "número + logradouro" (não existe housenumber separado).
+  const streetParam = [houseNumber.trim(), street.trim()].filter(Boolean).join(' ');
   const params = new URLSearchParams({
     format: 'json',
     addressdetails: '1',
     limit: String(limit),
     countrycodes: 'br',
-    street,
-    city,
+    street: streetParam,
+    city: city.trim() || 'Franca',
     state: 'São Paulo',
     country: 'Brazil',
+    viewbox: francaViewbox(),
+    bounded: '0',
   });
 
-  if (houseNumber) params.set('housenumber', houseNumber);
-  if (bairro) params.set('county', bairro);
+  // Bairro vai na query livre como reforço (county no Nominatim não é bairro BR).
+  const items = await fetchNominatim(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+  const francaItems = items.filter(isLikelyFrancaResult);
+  if (francaItems.length > 0 || !bairro.trim()) return francaItems;
 
-  return fetchNominatim(`https://nominatim.openstreetmap.org/search?${params.toString()}`);
+  return searchNominatimItems(buildGeocodeQuery({ logradouro: street, numero: houseNumber, bairro, cidade: city }), limit);
 }
 
 export async function searchAddresses(query: string, limit = 6): Promise<GeocodingResult[]> {
   const trimmed = query.trim();
-  if (trimmed.length < 4) return [];
+  if (trimmed.length < 3) return [];
 
   const items = await searchNominatimItems(trimmed, limit);
 
@@ -442,16 +585,18 @@ export async function geocodeStructuredAddress(
   const houseNumber = parseHouseNumber(houseNumberRaw);
 
   if (!street) return null;
-  if (!houseNumber && !bairro && street.length < 4) return null;
+  if (!houseNumber && !bairro && street.length < 3) return null;
 
   const structured = await searchStructuredNominatim(street, houseNumberRaw, city, bairro, 5);
   let coords = resolveCoordsFromItems(structured, street, houseNumber);
 
   if (!coords) {
-    const freeText = await searchNominatimItems(buildGeocodeQuery(parts), 5);
+    const freeText = await searchNominatimItems(buildGeocodeQuery(parts), 8);
     coords = resolveCoordsFromItems(freeText, street, houseNumber);
   }
 
+  if (!coords) return null;
+  if (!isWithinFrancaMunicipio(coords.latitude, coords.longitude)) return null;
   return coords;
 }
 

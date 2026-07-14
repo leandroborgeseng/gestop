@@ -6,8 +6,12 @@ import {
   CARTO_ATTRIBUTION,
   CARTO_SUBDOMAINS,
   CARTO_VOYAGER_NO_LABELS,
+  clampToFrancaMunicipio,
+  FRANCA_BOUNDS,
   FRANCA_CENTER,
   FRANCA_DEFAULT_ZOOM,
+  FRANCA_MIN_ZOOM,
+  isWithinFrancaMunicipio,
 } from '@/lib/franca-geo';
 
 function configureLeafletIcons() {
@@ -51,8 +55,17 @@ export function ChamadoCoordMapEditor({
 
     const lat = latitude ?? FRANCA_CENTER.lat;
     const lng = longitude ?? FRANCA_CENTER.lng;
+    const maxBounds = L.latLngBounds(
+      [FRANCA_BOUNDS.southWest.lat, FRANCA_BOUNDS.southWest.lng],
+      [FRANCA_BOUNDS.northEast.lat, FRANCA_BOUNDS.northEast.lng],
+    );
 
-    const map = L.map(containerRef.current, { zoomControl: true }).setView([lat, lng], FRANCA_DEFAULT_ZOOM);
+    const map = L.map(containerRef.current, {
+      zoomControl: true,
+      minZoom: FRANCA_MIN_ZOOM,
+      maxBounds,
+      maxBoundsViscosity: 1,
+    }).setView([lat, lng], FRANCA_DEFAULT_ZOOM);
     L.tileLayer(CARTO_VOYAGER_NO_LABELS, {
       attribution: CARTO_ATTRIBUTION,
       subdomains: CARTO_SUBDOMAINS,
@@ -60,15 +73,23 @@ export function ChamadoCoordMapEditor({
     }).addTo(map);
 
     const marker = L.marker([lat, lng], { draggable: Boolean(editable) }).addTo(map);
+
+    function emitCoords(nextLat: number, nextLng: number) {
+      const next = isWithinFrancaMunicipio(nextLat, nextLng)
+        ? { latitude: nextLat, longitude: nextLng }
+        : clampToFrancaMunicipio(nextLat, nextLng);
+      marker.setLatLng([next.latitude, next.longitude]);
+      onChangeRef.current?.(next);
+    }
+
     marker.on('dragend', () => {
       const pos = marker.getLatLng();
-      onChangeRef.current?.({ latitude: pos.lat, longitude: pos.lng });
+      emitCoords(pos.lat, pos.lng);
     });
 
     if (editable) {
       map.on('click', (event) => {
-        marker.setLatLng(event.latlng);
-        onChangeRef.current?.({ latitude: event.latlng.lat, longitude: event.latlng.lng });
+        emitCoords(event.latlng.lat, event.latlng.lng);
       });
     }
 

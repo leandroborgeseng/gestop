@@ -7,9 +7,12 @@ import {
   CARTO_SUBDOMAINS,
   CARTO_VOYAGER_LABELS,
   CARTO_VOYAGER_NO_LABELS,
+  clampToFrancaMunicipio,
   FRANCA_BOUNDS,
   FRANCA_CENTER,
   FRANCA_DEFAULT_ZOOM,
+  FRANCA_MIN_ZOOM,
+  isWithinFrancaMunicipio,
 } from '@/lib/franca-geo';
 
 function configureLeafletIcons() {
@@ -35,6 +38,8 @@ export function ChamadoLocationMapPickerClient({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   useEffect(() => {
     configureLeafletIcons();
@@ -42,15 +47,17 @@ export function ChamadoLocationMapPickerClient({
 
     const initialLat = latitude ?? FRANCA_CENTER.lat;
     const initialLng = longitude ?? FRANCA_CENTER.lng;
+    const maxBounds = L.latLngBounds(
+      [FRANCA_BOUNDS.southWest.lat, FRANCA_BOUNDS.southWest.lng],
+      [FRANCA_BOUNDS.northEast.lat, FRANCA_BOUNDS.northEast.lng],
+    );
 
     const map = L.map(containerRef.current, {
       center: [initialLat, initialLng],
       zoom: latitude != null ? 16 : FRANCA_DEFAULT_ZOOM,
-      maxBounds: L.latLngBounds(
-        [FRANCA_BOUNDS.southWest.lat, FRANCA_BOUNDS.southWest.lng],
-        [FRANCA_BOUNDS.northEast.lat, FRANCA_BOUNDS.northEast.lng],
-      ),
-      maxBoundsViscosity: 0.85,
+      minZoom: FRANCA_MIN_ZOOM,
+      maxBounds,
+      maxBoundsViscosity: 1,
     });
 
     L.tileLayer(CARTO_VOYAGER_NO_LABELS, {
@@ -68,26 +75,40 @@ export function ChamadoLocationMapPickerClient({
 
     const marker = L.marker([initialLat, initialLng], { draggable: true }).addTo(map);
 
+    function emitCoords(lat: number, lng: number) {
+      const next = isWithinFrancaMunicipio(lat, lng)
+        ? { latitude: lat, longitude: lng }
+        : clampToFrancaMunicipio(lat, lng);
+      marker.setLatLng([next.latitude, next.longitude]);
+      onChangeRef.current(next);
+    }
+
     marker.on('dragend', () => {
       const pos = marker.getLatLng();
-      onChange({ latitude: pos.lat, longitude: pos.lng });
+      emitCoords(pos.lat, pos.lng);
     });
 
     map.on('click', (event) => {
-      marker.setLatLng(event.latlng);
-      onChange({ latitude: event.latlng.lat, longitude: event.latlng.lng });
+      emitCoords(event.latlng.lat, event.latlng.lng);
     });
 
     mapRef.current = map;
     markerRef.current = marker;
 
-    requestAnimationFrame(() => map.invalidateSize());
+    requestAnimationFrame(() => {
+      map.invalidateSize();
+      if (latitude == null || longitude == null) {
+        map.fitBounds(maxBounds, { padding: [12, 12], maxZoom: FRANCA_DEFAULT_ZOOM });
+      }
+    });
 
     return () => {
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
     };
+    // init only once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -101,9 +122,9 @@ export function ChamadoLocationMapPickerClient({
     <div
       className={`sigma-map-shell overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] ${className}`}
     >
-      <div ref={containerRef} className="h-full min-h-[220px] w-full" />
+      <div ref={containerRef} className="h-full min-h-[220px] w-full touch-manipulation" />
       <p className="border-t border-[var(--line-2)] px-3 py-2 text-[11px] text-[var(--ink-3)]">
-        Toque no mapa ou arraste o pin para ajustar o local exato.
+        Toque no mapa ou arraste o pin para ajustar o local em qualquer ponto do município de Franca.
       </p>
     </div>
   );

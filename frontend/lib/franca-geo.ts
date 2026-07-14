@@ -12,13 +12,35 @@ export const FRANCA_REFERENCIA_FREDERICO_MOURA = {
   bairro: 'Cidade Nova',
 } as const;
 
-/** Limites aproximados do municipio para enquadrar a cidade */
+/**
+ * Limites do município de Franca/SP (bbox da relation OSM 298530),
+ * com pequena folga para navegação de borda.
+ * south/north/west/east ≈ -20.7735 / -20.4159 / -47.5525 / -47.1456
+ */
 export const FRANCA_BOUNDS = {
-  southWest: { lat: -20.58, lng: -47.48 },
-  northEast: { lat: -20.49, lng: -47.34 },
+  southWest: { lat: -20.78, lng: -47.56 },
+  northEast: { lat: -20.41, lng: -47.14 },
 } as const;
 
-export const FRANCA_DEFAULT_ZOOM = 13;
+export const FRANCA_DEFAULT_ZOOM = 12;
+
+export const FRANCA_MIN_ZOOM = 11;
+
+export function isWithinFrancaMunicipio(latitude: number, longitude: number) {
+  return (
+    latitude >= FRANCA_BOUNDS.southWest.lat &&
+    latitude <= FRANCA_BOUNDS.northEast.lat &&
+    longitude >= FRANCA_BOUNDS.southWest.lng &&
+    longitude <= FRANCA_BOUNDS.northEast.lng
+  );
+}
+
+export function clampToFrancaMunicipio(latitude: number, longitude: number) {
+  return {
+    latitude: Math.min(Math.max(latitude, FRANCA_BOUNDS.southWest.lat), FRANCA_BOUNDS.northEast.lat),
+    longitude: Math.min(Math.max(longitude, FRANCA_BOUNDS.southWest.lng), FRANCA_BOUNDS.northEast.lng),
+  };
+}
 
 export const CARTO_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';

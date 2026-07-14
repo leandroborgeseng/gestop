@@ -28,6 +28,7 @@ import {
   reverseGeocodeAddress,
   searchAddresses,
 } from '@/lib/geocoding';
+import { isWithinFrancaMunicipio } from '@/lib/franca-geo';
 import { UnidadeOperacional } from '@/lib/types';
 
 const PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
@@ -153,7 +154,7 @@ export function AbrirChamadoForm({
   useEffect(() => {
     if (modo !== 'ENDERECO') return;
     const query = addressQuery.trim();
-    if (query.length < 4) {
+    if (query.length < 3) {
       setAddressResults([]);
       return;
     }
@@ -234,14 +235,22 @@ export function AbrirChamadoForm({
     setReverseGeocodingPin(true);
     try {
       const parsed = await reverseGeocodeAddress(lat, lng);
-      if (parsed) {
-        setLogradouro(parsed.logradouro);
-        setNumero(parsed.numero);
-        setComplemento(parsed.complemento);
-        setBairro(parsed.bairro);
-        setCidade(parsed.cidade || 'Franca');
-        setAddressQuery(composeEnderecoTexto(parsed));
-      }
+      if (!parsed) return;
+      // Não sobrescreve o que o usuário já digitou — o pin manda nas coordenadas.
+      setLogradouro((current) => current.trim() || parsed.logradouro);
+      setNumero((current) => current.trim() || parsed.numero);
+      setBairro((current) => current.trim() || parsed.bairro);
+      setCidade((current) => current.trim() || parsed.cidade || 'Franca');
+      setAddressQuery((current) =>
+        current.trim()
+          ? current
+          : composeEnderecoTexto({
+              logradouro: parsed.logradouro,
+              numero: parsed.numero,
+              complemento: '',
+              cidade: parsed.cidade || 'Franca',
+            }),
+      );
     } catch {
       // Mantém coordenadas mesmo se o reverse geocode falhar.
     } finally {
@@ -252,6 +261,7 @@ export function AbrirChamadoForm({
   function handlePinChange(coords: { latitude: number; longitude: number }) {
     setLatitude(coords.latitude);
     setLongitude(coords.longitude);
+    setError(null);
 
     if (reverseGeocodePinTimerRef.current) {
       window.clearTimeout(reverseGeocodePinTimerRef.current);
@@ -266,20 +276,31 @@ export function AbrirChamadoForm({
       setError('Informe o logradouro antes de atualizar o pin.');
       return;
     }
+    if (!bairro.trim()) {
+      setError('Informe o bairro para facilitar a localização do pin.');
+      return;
+    }
 
     setPinUpdating(true);
     setError(null);
     try {
       const coords = await geocodeStructuredAddress({ logradouro, numero, bairro, cidade });
       if (!coords) {
-        setError('Endereço não encontrado. Confira logradouro, número e bairro.');
+        setError(
+          'Endereço não localizado automaticamente. Posicione o pin manualmente no mapa dentro do município de Franca e salve.',
+        );
+        snackbar.show('Não encontramos o endereço. Mova o pin no mapa.', 'warning');
         return;
       }
       setLatitude(coords.latitude);
       setLongitude(coords.longitude);
       snackbar.show('Pin atualizado conforme o endereço informado.', 'success');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível localizar o endereço.');
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível localizar o endereço. Posicione o pin manualmente no mapa.',
+      );
     } finally {
       setPinUpdating(false);
     }
@@ -348,8 +369,22 @@ export function AbrirChamadoForm({
         setError('Informe o logradouro.');
         return;
       }
+      if (!bairro.trim()) {
+        setError('Informe o bairro.');
+        return;
+      }
+      if (!cidade.trim()) {
+        setError('Informe a cidade.');
+        return;
+      }
       if (latitude == null || longitude == null) {
-        setError('Confirme a localização no mapa ou use "Atualizar pin no mapa".');
+        setError(
+          'Defina a localização no mapa: use a busca, “Atualizar pin no mapa” ou posicione o pin manualmente.',
+        );
+        return;
+      }
+      if (!isWithinFrancaMunicipio(latitude, longitude)) {
+        setError('O pin precisa estar dentro do município de Franca.');
         return;
       }
     }
@@ -520,11 +555,14 @@ export function AbrirChamadoForm({
             </Button>
           </div>
 
-          <Field label="Buscar endereço" hint="Digite rua e número para sugerir endereços em Franca.">
+          <Field
+            label="Buscar endereço"
+            hint="Facilita a localização. Se não achar, preencha os campos e posicione o pin no mapa."
+          >
             <Input
               value={addressQuery}
               onChange={(event) => setAddressQuery(event.target.value)}
-              placeholder="Ex.: Av. Rio Amazonas"
+              placeholder="Ex.: Rua Luís Antônio de Souza"
               disabled={busy}
             />
           </Field>
@@ -546,19 +584,47 @@ export function AbrirChamadoForm({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Logradouro">
-              <Input value={logradouro} onChange={(event) => setLogradouro(event.target.value)} placeholder="Rua, avenida..." disabled={busy} required />
+              <Input
+                value={logradouro}
+                onChange={(event) => setLogradouro(event.target.value)}
+                placeholder="Rua, avenida..."
+                disabled={busy}
+                required
+              />
             </Field>
-            <Field label="Número">
-              <Input value={numero} onChange={(event) => setNumero(event.target.value)} placeholder="Ex.: 1000" disabled={busy} />
+            <Field label="Número" hint="Opcional — use complemento se não houver número.">
+              <Input
+                value={numero}
+                onChange={(event) => setNumero(event.target.value)}
+                placeholder="Ex.: 1000 ou S/N"
+                disabled={busy}
+              />
             </Field>
-            <Field label="Complemento">
-              <Input value={complemento} onChange={(event) => setComplemento(event.target.value)} placeholder="Apto, bloco, referência..." disabled={busy} />
+            <Field label="Complemento" hint="Referência, ponto conhecido, sem numeração etc.">
+              <Input
+                value={complemento}
+                onChange={(event) => setComplemento(event.target.value)}
+                placeholder="Apto, bloco, referência..."
+                disabled={busy}
+              />
             </Field>
             <Field label="Bairro">
-              <Input value={bairro} onChange={(event) => setBairro(event.target.value)} placeholder="Bairro" disabled={busy} />
+              <Input
+                value={bairro}
+                onChange={(event) => setBairro(event.target.value)}
+                placeholder="Bairro"
+                disabled={busy}
+                required
+              />
             </Field>
             <Field label="Cidade" className="sm:col-span-2">
-              <Input value={cidade} onChange={(event) => setCidade(event.target.value)} placeholder="Franca" disabled={busy} />
+              <Input
+                value={cidade}
+                onChange={(event) => setCidade(event.target.value)}
+                placeholder="Franca"
+                disabled={busy}
+                required
+              />
             </Field>
           </div>
 
@@ -572,10 +638,12 @@ export function AbrirChamadoForm({
           {latitude != null && longitude != null ? (
             <p className="mono text-[12px] text-[var(--ink-3)]">
               Pin: {latitude.toFixed(6)}, {longitude.toFixed(6)}
-              {reverseGeocodingPin ? ' · Buscando endereço do pin...' : ''}
+              {reverseGeocodingPin ? ' · Completando campos vazios pelo pin...' : ''}
             </p>
           ) : (
-            <p className="text-[12px] text-[var(--warn)]">Defina o pin no mapa ou use os botões acima.</p>
+            <p className="text-[12px] text-[var(--warn)]">
+              Defina o pin no mapa (arraste/clique), use a busca ou “Atualizar pin no mapa”.
+            </p>
           )}
 
           <ChamadoLocationMapPicker
@@ -584,7 +652,8 @@ export function AbrirChamadoForm({
             onChange={handlePinChange}
           />
           <p className="text-[11px] text-[var(--ink-3)]">
-            Ao mover o pin, logradouro, número, bairro e cidade são preenchidos automaticamente conforme a localização.
+            O pin tem prioridade na localização. Campos que você já preencheu não são sobrescritos ao mover o pin.
+            É possível abrir o chamado em qualquer ponto válido do município de Franca.
           </p>
         </div>
       ) : null}

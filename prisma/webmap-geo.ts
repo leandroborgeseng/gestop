@@ -1,7 +1,7 @@
-/** Limites aproximados de Franca/SP — alinhado com frontend/lib/franca-geo.ts */
+/** Limites do município de Franca/SP — alinhado com frontend/lib/franca-geo.ts (OSM relation 298530). */
 export const FRANCA_BOUNDS = {
-  southWest: { lat: -20.58, lng: -47.48 },
-  northEast: { lat: -20.49, lng: -47.34 },
+  southWest: { lat: -20.78, lng: -47.56 },
+  northEast: { lat: -20.41, lng: -47.14 },
 } as const;
 
 export function isWithinFrancaMunicipio(latitude: number, longitude: number) {

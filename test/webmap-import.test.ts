@@ -8,6 +8,11 @@ describe('webmap-geo', () => {
     expect(isWithinFrancaMunicipio(-20.5386, -47.4007)).toBe(true);
   });
 
+  it('aceita periferia/distrito dentro do município (bbox OSM)', () => {
+    expect(isWithinFrancaMunicipio(-20.72, -47.50)).toBe(true);
+    expect(isWithinFrancaMunicipio(-20.45, -47.20)).toBe(true);
+  });
+
   it('rejeita coordenadas fora de Franca', () => {
     expect(isWithinFrancaMunicipio(-23.55, -46.63)).toBe(false);
   });
