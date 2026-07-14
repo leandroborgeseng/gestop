@@ -37,6 +37,7 @@ type NominatimAddress = {
   town?: string;
   municipality?: string;
   village?: string;
+  state?: string;
 };
 
 type NominatimItem = {
