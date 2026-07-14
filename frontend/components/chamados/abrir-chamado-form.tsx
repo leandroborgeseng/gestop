@@ -99,6 +99,7 @@ export function AbrirChamadoForm({
   const [pickerSearch, setPickerSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pinHint, setPinHint] = useState<string | null>(null);
 
   const enderecoComposto = useMemo(
     () => composeEnderecoTexto({ logradouro, numero, complemento, cidade }),
@@ -194,6 +195,14 @@ export function AbrirChamadoForm({
     pinSyncedNumero !== null &&
     pinSyncedNumero !== numero.trim();
 
+  function extractNumeroFromLabel(label: string) {
+    const parts = label.split(',').map((part) => part.trim());
+    if (parts.length >= 2 && /^\d{1,6}[A-Za-z]?$/.test(parts[1])) {
+      return parts[1];
+    }
+    return '';
+  }
+
   function applyAddressFields(item: {
     label: string;
     latitude: number;
@@ -203,22 +212,28 @@ export function AbrirChamadoForm({
     numero?: string | null;
     cidade?: string | null;
   }) {
-    const nextNumero = item.numero ?? '';
+    const nextNumero = (item.numero ?? '').trim() || extractNumeroFromLabel(item.label);
     setLogradouro(item.logradouro ?? item.label.split(',')[0]?.trim() ?? '');
     setNumero(nextNumero);
     setBairro(item.bairro ?? '');
     setCidade(item.cidade ?? 'Franca');
     setLatitude(item.latitude);
     setLongitude(item.longitude);
-    setPinSyncedNumero(nextNumero.trim());
+    setPinSyncedNumero(nextNumero);
     setAddressQuery(item.label);
     setAddressResults([]);
     setError(null);
+    setPinHint(
+      nextNumero
+        ? null
+        : 'Sugestão sem número. Informe o número e use “Atualizar pin no mapa” para refinar a localização.',
+    );
   }
 
   async function handleCaptureGeo() {
     setGeoLoading(true);
     setError(null);
+    setPinHint(null);
     try {
       const position = await captureCurrentPosition();
       setLatitude(position.latitude);
@@ -286,6 +301,7 @@ export function AbrirChamadoForm({
     setLongitude(coords.longitude);
     setPinSyncedNumero(numero.trim());
     setError(null);
+    setPinHint(null);
 
     if (reverseGeocodePinTimerRef.current) {
       window.clearTimeout(reverseGeocodePinTimerRef.current);
@@ -303,6 +319,7 @@ export function AbrirChamadoForm({
 
     setPinUpdating(true);
     setError(null);
+    setPinHint(null);
     try {
       const result = await geocodeStructuredAddress({ logradouro, numero, bairro, cidade });
       if (!result) {
@@ -317,14 +334,15 @@ export function AbrirChamadoForm({
       setPinSyncedNumero(numero.trim());
 
       if (result.precision === 'exact') {
+        setPinHint(null);
         snackbar.show('Pin atualizado no número informado.', 'success');
       } else if (result.precision === 'approximate') {
-        setError(
+        setPinHint(
           'Localização aproximada para o número informado. Confira o pin no mapa e ajuste manualmente se necessário.',
         );
         snackbar.show('Pin aproximado — confira no mapa.', 'warning');
       } else {
-        setError(
+        setPinHint(
           numero.trim()
             ? 'Não localizamos o número exato. O pin ficou no logradouro — ajuste manualmente se preciso.'
             : 'Pin posicionado no logradouro. Informe o número e atualize novamente para mais precisão.',
@@ -389,6 +407,7 @@ export function AbrirChamadoForm({
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setPinHint(null);
 
     if (modo === 'UNIDADE' && !pickedUnidade) {
       setError('Selecione o próprio público.');
@@ -595,6 +614,7 @@ export function AbrirChamadoForm({
               O número foi alterado depois da última localização. Clique em “Atualizar pin no mapa” para recalcular.
             </p>
           ) : null}
+          {pinHint ? <p className="text-[12px] text-[var(--warn)]">{pinHint}</p> : null}
 
           <Field
             label="Buscar endereço"
