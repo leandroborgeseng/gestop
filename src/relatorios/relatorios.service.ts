@@ -7,6 +7,7 @@ import { buildTablePdf } from './relatorios.pdf';
 import { CHAMADOS_EXPORT_HEADERS, mapChamadosExportRows } from './relatorios.chamados-export';
 import { FISCALIZACOES_EXPORT_HEADERS, mapFiscalizacoesExportRows } from './relatorios.fiscalizacoes-export';
 import { formatCoordenada, loadExecucaoCoordenadas } from './relatorios.execucao-coords';
+import { loadExecucaoParticipantes } from './relatorios.execucao-participantes';
 import { UNIDADES_EXPORT_HEADERS, mapUnidadesExportRows } from './relatorios.unidades-export';
 import { buildXlsx } from './relatorios.xlsx';
 
@@ -44,20 +45,23 @@ export class RelatoriosService {
         secretaria: { select: { sigla: true } },
         unidade: { select: { codigoPatrimonial: true, nome: true } },
         responsavel: { select: { nome: true } },
+        equipe: { select: { nome: true } },
       },
     });
   }
 
   private async exportChamadosComExecucao(filtro: RelatorioFiltroDto) {
     const items = await this.exportChamados(filtro);
-    const coordenadas = await loadExecucaoCoordenadas(
-      this.prisma,
-      items.map((item) => item.id),
-    );
+    const ids = items.map((item) => item.id);
+    const [coordenadas, participantes] = await Promise.all([
+      loadExecucaoCoordenadas(this.prisma, ids),
+      loadExecucaoParticipantes(this.prisma, ids),
+    ]);
 
     return items.map((item) => ({
       ...item,
       execucao: coordenadas.get(item.id) ?? null,
+      participantesExecucao: participantes.get(item.id) ?? null,
     }));
   }
 

@@ -338,9 +338,9 @@ function CcoPageContent() {
           </div>
         ) : null}
 
-        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-stretch">
+        <div className="cco-workspace grid min-h-0 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-stretch">
           <div className="cco-list-panel flex min-h-0 flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
-            <div className="filters max-h-[min(42%,22rem)] shrink-0 space-y-2 overflow-y-auto overscroll-contain border-b border-[var(--line-2)] bg-[var(--surface)] px-3.5 py-3">
+            <div className="filters max-h-[min(48%,20rem)] shrink-0 space-y-2 overflow-y-auto overscroll-contain border-b border-[var(--line-2)] bg-[var(--surface)] px-3.5 py-3">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="h-4 w-4 shrink-0 text-[var(--brand)]" />
                 <span className="text-[13px] font-semibold text-[var(--ink)]">
@@ -706,7 +706,7 @@ function CcoPageContent() {
             )}
           </div>
 
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div className="cco-map-host flex min-h-0 min-w-0 flex-col overflow-hidden">
             <OperationalMap
               view={tab === 'chamados' ? 'chamados' : 'unidades'}
               unidades={unidades}

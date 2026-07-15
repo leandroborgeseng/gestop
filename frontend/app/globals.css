@@ -510,47 +510,71 @@ a {
   }
 }
 
+/* CCO: alturas fixas no viewport — lista e mapa não crescem com a quantidade de itens. */
 @media (min-width: 1280px) {
-  .sigma-main .cco-list-panel {
+  .sigma-main .cco-workspace {
+    height: min(640px, calc(100dvh - 17rem));
+    max-height: calc(100dvh - 17rem);
+    min-height: 360px;
+    overflow: hidden;
+  }
+
+  .sigma-main .cco-list-panel,
+  .sigma-main .cco-map-host {
     min-height: 0;
     height: 100%;
-    max-height: none;
+    max-height: 100%;
   }
 
   .sigma-main .cco-map-panel {
     min-height: 0;
     height: 100%;
+    max-height: 100%;
   }
 
   .sigma-main .cco-map-panel .sigma-map-shell {
     aspect-ratio: auto;
+    flex: 1 1 auto;
     height: 100%;
     min-height: 0;
-    max-height: none;
+    max-height: 100%;
   }
 }
 
 @media (max-width: 1279px) {
+  .sigma-main .cco-workspace {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
   .sigma-main .cco-list-panel {
-    /* Altura estável: filtros expandem/retraem; a lista fica com o restante (flex + min-h-0). */
-    height: min(62dvh, calc(100dvh - 14rem));
-    min-height: 320px;
-    max-height: min(68dvh, calc(100dvh - 12rem));
+    /* Painel com altura estável; filtros no topo, lista com rolagem no restante. */
+    height: min(52dvh, calc(100dvh - 18rem));
+    min-height: 280px;
+    max-height: min(56dvh, calc(100dvh - 16rem));
   }
 
   .sigma-main .cco-list-panel .filters {
-    max-height: min(40%, 18rem);
+    max-height: min(48%, 16rem);
   }
 
-  .sigma-main .cco-map-panel:not(.hidden) .sigma-map-shell {
-    aspect-ratio: auto;
-    max-height: min(52vh, 480px);
-    min-height: min(420px, 52vh);
+  .sigma-main .cco-map-host {
+    flex: none;
+    height: auto;
+    max-height: none;
+  }
+
+  .sigma-main .cco-map-panel {
+    height: auto;
   }
 
   .sigma-main .cco-map-panel .sigma-map-shell {
-    aspect-ratio: 16 / 10;
-    max-height: min(300px, calc(100dvh - 360px));
-    min-height: 200px;
+    aspect-ratio: auto;
+    flex: none;
+    width: 100%;
+    height: min(42vh, 380px);
+    min-height: 240px;
+    max-height: min(42vh, 380px);
   }
 }

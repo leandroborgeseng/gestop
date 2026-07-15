@@ -7,6 +7,8 @@ import { RequirePermissions } from '@/components/auth/require-permissions';
 import {
   buildRespostaPayload,
   ChecklistItemCard,
+  getResponseEvidencias,
+  newEvidenceId,
   ResponseDraft,
   validateItemResponse,
 } from '@/components/mobile/checklist-item-card';
@@ -182,10 +184,45 @@ export default function MobilePage() {
     const file = event.target.files?.[0];
     if (!file) return;
     const dataUrl = await fileToDataUrl(file);
-    updateResponse(itemId, {
-      evidenceDataUrl: dataUrl,
-      evidenceMimeType: file.type,
-      evidenceSize: file.size,
+    setResponses((current) => {
+      const previous = current[itemId] ?? { conformidade: 'CONFORME' as const, comentario: '' };
+      const evidencias = [
+        ...getResponseEvidencias(previous),
+        {
+          id: newEvidenceId(),
+          dataUrl,
+          mimeType: file.type,
+          size: file.size,
+        },
+      ];
+      return {
+        ...current,
+        [itemId]: {
+          ...previous,
+          evidencias,
+          evidenceDataUrl: undefined,
+          evidenceMimeType: undefined,
+          evidenceSize: undefined,
+        },
+      };
+    });
+  }
+
+  function handleRemoveEvidence(itemId: string, evidenceId: string) {
+    setResponses((current) => {
+      const previous = current[itemId];
+      if (!previous) return current;
+      const evidencias = getResponseEvidencias(previous).filter((item) => item.id !== evidenceId);
+      return {
+        ...current,
+        [itemId]: {
+          ...previous,
+          evidencias,
+          evidenceDataUrl: undefined,
+          evidenceMimeType: undefined,
+          evidenceSize: undefined,
+        },
+      };
     });
   }
 
@@ -404,7 +441,8 @@ export default function MobilePage() {
                       item={item}
                       value={responses[item.id]}
                       onChange={(patch) => updateResponse(item.id, patch)}
-                      onEvidence={(event) => handleEvidence(item.id, event)}
+                      onEvidence={(event) => void handleEvidence(item.id, event)}
+                      onRemoveEvidence={(evidenceId) => handleRemoveEvidence(item.id, evidenceId)}
                     />
                   ))}
                 </section>

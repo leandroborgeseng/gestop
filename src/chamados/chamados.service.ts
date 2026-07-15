@@ -631,6 +631,7 @@ export class ChamadosService {
             equipeExecutora: participantes.equipeExecutora,
             membrosExecutores: participantes.membrosExecutores,
             membrosExternos: participantes.membrosExternos,
+            participantes: participantes.participantes,
           },
         },
       });
@@ -1471,6 +1472,7 @@ export class ChamadosService {
             equipeExecutora: participantes.equipeExecutora,
             membrosExecutores: participantes.membrosExecutores,
             membrosExternos: participantes.membrosExternos,
+            participantes: participantes.participantes,
           },
         },
       });
@@ -1652,7 +1654,24 @@ export class ChamadosService {
       orderBy: [{ previstaExecucaoEm: 'asc' }, { prioridade: 'desc' }, { createdAt: 'asc' }],
       include: {
         unidade: { select: { endereco: true, bairro: true } },
-        equipe: { select: { nome: true } },
+        equipe: {
+          select: {
+            nome: true,
+            membros: {
+              select: {
+                usuario: {
+                  select: {
+                    id: true,
+                    nome: true,
+                    ativo: true,
+                    cargo: true,
+                    cargoRef: { select: { nome: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
         tipoChamado: { select: { nome: true } },
       },
     });
@@ -1677,6 +1696,15 @@ export class ChamadosService {
     return buildOrdensServicoLotePdf(
       chamados.map((item) => {
         const serialized = this.serializeChamado(item);
+        const funcionarios =
+          item.equipe?.membros
+            .filter((membro) => membro.usuario.ativo)
+            .map((membro) => ({
+              nome: membro.usuario.nome,
+              cargo: membro.usuario.cargoRef?.nome ?? membro.usuario.cargo ?? null,
+            }))
+            .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')) ?? [];
+
         return {
           codigo: item.codigo,
           tipo: item.tipoChamado?.nome ?? null,
@@ -1686,6 +1714,7 @@ export class ChamadosService {
             item.unidade?.endereco ??
             ([item.enderecoTexto, item.enderecoBairro].filter(Boolean).join(' · ') || '—'),
           equipe: item.equipe?.nome ?? null,
+          funcionarios,
           prazoSla: item.prazoEm?.toISOString() ?? null,
           fotoUrl: serialized.fotoUrl,
           abertoEm: item.createdAt.toISOString(),
@@ -2303,6 +2332,10 @@ export class ChamadosService {
       },
       membrosExecutores: membrosExecutores.map(mapUsuarioParticipante),
       membrosExternos: membrosExternosRaw.map(mapUsuarioParticipante),
+      participantes: [
+        ...membrosExecutores.map((usuario) => ({ ...mapUsuarioParticipante(usuario), origem: 'equipe' as const })),
+        ...membrosExternosRaw.map((usuario) => ({ ...mapUsuarioParticipante(usuario), origem: 'externo' as const })),
+      ],
     };
   }
 

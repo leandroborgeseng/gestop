@@ -30,7 +30,7 @@ const RELATORIOS: Array<{
 }> = [
   { tipo: 'unidades', title: 'Próprios públicos', hint: 'Cadastro, situação e localização das unidades.', icon: Building2 },
   { tipo: 'fiscalizacoes', title: 'Vistorias', hint: 'Checklists aplicados, conformidade e não conformidades.', icon: ClipboardCheck },
-  { tipo: 'chamados', title: 'Chamados', hint: 'Triagem, atendimento, prazos (SLA) e tempo de resolução.', icon: Inbox },
+  { tipo: 'chamados', title: 'Chamados', hint: 'Triagem, atendimento, prazos (SLA), participantes da execução e tempo de resolução.', icon: Inbox },
 ];
 
 export default function RelatoriosPage() {

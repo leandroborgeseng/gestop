@@ -74,3 +74,61 @@ describe('buildChamadoTimelineFromHistorico atribuição', () => {
     expect(steps[0]?.sub).toContain('Ana Paula');
   });
 });
+
+describe('buildChamadoTimelineFromHistorico execução', () => {
+  it('lista participantes da execução com cargo e externo', () => {
+    const steps = buildChamadoTimelineFromHistorico(
+      [
+        {
+          id: 'hist-exec',
+          statusAnterior: 'EM_EXECUCAO',
+          statusNovo: 'CONCLUIDO',
+          motivo: 'Execução concluída em campo.',
+          createdAt: '2026-07-15T14:00:00.000Z',
+          alteradoPor: { nome: 'Operador' },
+          metadata: {
+            tipo: 'execucao_conclusao',
+            relatorio: 'Serviço concluído.',
+            equipeExecutora: { id: 'eq-1', codigo: 'ZEL-A', nome: 'Zeladoria A' },
+            membrosExecutores: [
+              { id: 'u1', nome: 'João Silva', cargo: 'Eletricista' },
+              { id: 'u2', nome: 'Carlos Souza', cargo: 'Ajudante Geral' },
+            ],
+            membrosExternos: [{ id: 'u3', nome: 'Maria Oliveira', cargo: null }],
+          },
+        },
+      ],
+      'CONCLUIDO',
+      '2026-07-15T10:00:00.000Z',
+    );
+
+    const participantes = steps[0]?.expand?.detalhes?.find((item) => item.label === 'Participantes da execução');
+    expect(participantes?.value).toContain('• João Silva — Eletricista');
+    expect(participantes?.value).toContain('• Carlos Souza — Ajudante Geral');
+    expect(participantes?.value).toContain('• Maria Oliveira — membro externo');
+  });
+
+  it('exibe fallback quando não há participantes no metadata', () => {
+    const steps = buildChamadoTimelineFromHistorico(
+      [
+        {
+          id: 'hist-exec-2',
+          statusAnterior: 'EM_EXECUCAO',
+          statusNovo: 'CONCLUIDO',
+          motivo: 'Execução concluída em campo.',
+          createdAt: '2026-07-15T14:00:00.000Z',
+          alteradoPor: { nome: 'Operador' },
+          metadata: {
+            tipo: 'execucao_conclusao',
+            relatorio: 'Sem equipe registrada.',
+          },
+        },
+      ],
+      'CONCLUIDO',
+      '2026-07-15T10:00:00.000Z',
+    );
+
+    const participantes = steps[0]?.expand?.detalhes?.find((item) => item.label === 'Participantes da execução');
+    expect(participantes?.value).toBe('Nenhum participante informado');
+  });
+});

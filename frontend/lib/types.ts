@@ -1029,6 +1029,13 @@ export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
       id: string;
       chamado?: { id: string; codigo: string } | null;
     } | null;
+    evidencias?: Array<{
+      id: string;
+      tipo: string;
+      url: string;
+      mimeType?: string | null;
+      capturadaEm: string;
+    }>;
   }>;
   evidencias?: Array<{
     id: string;
@@ -1037,6 +1044,7 @@ export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
     mimeType?: string | null;
     capturadaEm: string;
     descricao?: string | null;
+    respostaId?: string | null;
   }>;
   naoConformidades?: Array<{
     id: string;

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
+import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
 import { cn } from '@/lib/cn';
@@ -455,6 +456,7 @@ export default function VistoriasPage() {
                               {resposta.comentario ? (
                                 <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p>
                               ) : null}
+                              <RespostaEvidencias evidencias={resposta.evidencias} altPrefix={resposta.item.titulo} />
                               {resposta.naoConformidade?.chamado ? (
                                 <p className="mt-2 text-[12px]">
                                   Chamado gerado:{' '}
@@ -490,6 +492,7 @@ export default function VistoriasPage() {
                     '—'}
                 </p>
                 {resposta.comentario ? <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p> : null}
+                <RespostaEvidencias evidencias={resposta.evidencias} altPrefix={resposta.item.titulo} />
                 {resposta.naoConformidade?.chamado ? (
                   <p className="mt-2 text-[12px]">
                     Chamado:{' '}
@@ -512,6 +515,34 @@ function DetailField({ label, children }: { label: string; children: React.React
     <div>
       <dt className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{label}</dt>
       <dd className="mt-0.5 text-[13px] font-medium text-[var(--ink-2)]">{children}</dd>
+    </div>
+  );
+}
+
+function RespostaEvidencias({
+  evidencias,
+  altPrefix,
+}: {
+  evidencias?: Array<{ id: string; url: string }>;
+  altPrefix: string;
+}) {
+  if (!evidencias?.length) return null;
+
+  return (
+    <div className="mt-2">
+      <p className="mb-1.5 text-[11px] font-semibold text-[var(--ink-3)]">
+        Evidências ({evidencias.length})
+      </p>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {evidencias.map((evidencia, index) => (
+          <ZoomableAuthenticatedImage
+            key={evidencia.id}
+            src={evidencia.url}
+            alt={`${altPrefix} — evidência ${index + 1}`}
+            className="aspect-[4/3] w-full object-cover"
+          />
+        ))}
+      </div>
     </div>
   );
 }

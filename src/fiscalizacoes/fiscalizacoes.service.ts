@@ -95,6 +95,17 @@ export class FiscalizacoesService {
                 chamado: { select: { id: true, codigo: true } },
               },
             },
+            evidencias: {
+              orderBy: { capturadaEm: 'asc' },
+              select: {
+                id: true,
+                tipo: true,
+                url: true,
+                mimeType: true,
+                capturadaEm: true,
+                metadata: true,
+              },
+            },
           },
         },
         evidencias: {
@@ -106,6 +117,7 @@ export class FiscalizacoesService {
             mimeType: true,
             capturadaEm: true,
             metadata: true,
+            respostaId: true,
           },
         },
         naoConformidades: {
@@ -133,6 +145,10 @@ export class FiscalizacoesService {
         ...resposta,
         valorNumero: resposta.valorNumero == null ? null : Number(resposta.valorNumero),
         respondidoEm: resposta.respondidoEm.toISOString(),
+        evidencias: resposta.evidencias.map((evidencia) => ({
+          ...evidencia,
+          capturadaEm: evidencia.capturadaEm.toISOString(),
+        })),
       })),
       evidencias: fiscalizacao.evidencias.map((evidencia) => ({
         ...evidencia,

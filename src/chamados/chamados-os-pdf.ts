@@ -3,6 +3,11 @@ import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
 import { formatDateBr, prioridadeLabel } from './chamados-sla';
 
+export type OsPdfFuncionario = {
+  nome: string;
+  cargo?: string | null;
+};
+
 export type OsPdfChamado = {
   codigo: string;
   tipo?: string | null;
@@ -10,6 +15,7 @@ export type OsPdfChamado = {
   descricao: string;
   endereco: string;
   equipe?: string | null;
+  funcionarios?: OsPdfFuncionario[];
   prazoSla?: string | null;
   fotoUrl?: string | null;
   abertoEm?: string | null;
@@ -34,47 +40,93 @@ function resolveLogoPath() {
   return LOGO_CANDIDATES.find((candidate) => existsSync(candidate)) ?? null;
 }
 
+function formatFuncionarioLine(item: OsPdfFuncionario) {
+  const cargo = item.cargo?.trim();
+  return cargo ? `( ) ${item.nome} — ${cargo}` : `( ) ${item.nome}`;
+}
+
 function drawOsBlock(doc: InstanceType<typeof PDFDocument>, chamado: OsPdfChamado, y: number, height: number) {
   const left = doc.page.margins.left;
   const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const contentLeft = left + 10;
+  const contentWidth = width - 20;
 
   doc.save();
   doc.rect(left, y, width, height).stroke(BORDER);
   doc.restore();
 
   let cursorY = y + 10;
-  doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND_PRIMARY).text(`Ordem de Serviço — ${chamado.codigo}`, left + 10, cursorY);
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND_PRIMARY).text(`Ordem de Serviço — ${chamado.codigo}`, contentLeft, cursorY);
   cursorY += 16;
 
   doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED);
-  doc.text(`Tipo: ${chamado.tipo ?? '—'}  ·  Prioridade: ${prioridadeLabel(chamado.prioridade)}`, left + 10, cursorY);
+  doc.text(`Tipo: ${chamado.tipo ?? '—'}  ·  Prioridade: ${prioridadeLabel(chamado.prioridade)}`, contentLeft, cursorY);
   cursorY += 12;
-  doc.text(`Equipe: ${chamado.equipe ?? '—'}  ·  Prazo SLA: ${chamado.prazoSla ? formatDateBr(chamado.prazoSla) : '—'}`, left + 10, cursorY);
+  doc.text(`Equipe: ${chamado.equipe ?? '—'}  ·  Prazo SLA: ${chamado.prazoSla ? formatDateBr(chamado.prazoSla) : '—'}`, contentLeft, cursorY);
   cursorY += 12;
   doc.text(
     `Abertura: ${chamado.abertoEm ? formatDateBr(chamado.abertoEm) : '—'}  ·  Programado: ${chamado.programadoEm ? formatDateBr(chamado.programadoEm) : '—'}`,
-    left + 10,
+    contentLeft,
     cursorY,
   );
   cursorY += 14;
 
-  doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Descrição', left + 10, cursorY);
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Descrição', contentLeft, cursorY);
   cursorY += 10;
-  doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(chamado.descricao.slice(0, 280), left + 10, cursorY, {
-    width: width - 20,
-    height: 30,
+  doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(chamado.descricao.slice(0, 220), contentLeft, cursorY, {
+    width: contentWidth,
+    height: 24,
   });
-  cursorY += 34;
+  cursorY += 28;
 
-  doc.font('Helvetica-Bold').fontSize(8).text('Endereço', left + 10, cursorY);
+  doc.font('Helvetica-Bold').fontSize(8).text('Endereço', contentLeft, cursorY);
   cursorY += 10;
-  doc.font('Helvetica').fontSize(8).text(chamado.endereco.slice(0, 120), left + 10, cursorY, { width: width - 20 });
+  doc.font('Helvetica').fontSize(8).text(chamado.endereco.slice(0, 120), contentLeft, cursorY, { width: contentWidth });
+  cursorY += 16;
 
-  const manualY = y + height - 100;
-  doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Situação', left + 10, manualY);
-  doc.font('Helvetica').fontSize(8).text('( ) Executado     ( ) Não executado', left + 10, manualY + 12);
-  doc.font('Helvetica-Bold').text('Motivo / observações', left + 10, manualY + 28);
-  doc.rect(left + 10, manualY + 42, width - 20, 50).stroke(BORDER);
+  const bottomLimit = y + height - 8;
+  const manualStart = Math.min(cursorY + 4, bottomLimit - 168);
+
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Situação', contentLeft, manualStart);
+  doc.font('Helvetica').fontSize(8).text('( ) Executado     ( ) Não executado', contentLeft, manualStart + 11);
+
+  doc.font('Helvetica-Bold').text('Motivo / observações', contentLeft, manualStart + 26);
+  doc.rect(contentLeft, manualStart + 38, contentWidth, 28).stroke(BORDER);
+
+  let teamY = manualStart + 72;
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Funcionários da equipe', contentLeft, teamY);
+  teamY += 11;
+
+  const funcionarios = chamado.funcionarios ?? [];
+  if (funcionarios.length === 0) {
+    doc.font('Helvetica-Oblique').fontSize(7.5).fillColor(TEXT_MUTED).text('Nenhum funcionário vinculado à equipe', contentLeft, teamY);
+    teamY += 11;
+  } else {
+    doc.font('Helvetica').fontSize(7.5).fillColor(TEXT_PRIMARY);
+    for (const funcionario of funcionarios.slice(0, 8)) {
+      if (teamY > bottomLimit - 52) break;
+      doc.text(formatFuncionarioLine(funcionario), contentLeft, teamY, { width: contentWidth });
+      teamY += 10;
+    }
+    if (funcionarios.length > 8) {
+      doc.font('Helvetica-Oblique').fontSize(7).fillColor(TEXT_MUTED).text(`(+ ${funcionarios.length - 8} integrante(s) — anotar no verso)`, contentLeft, teamY);
+      teamY += 10;
+    }
+  }
+
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Outros funcionários:', contentLeft, teamY);
+  teamY += 11;
+  doc.font('Helvetica').fontSize(7.5).fillColor(TEXT_PRIMARY);
+  doc.text('1) ________________________  2) ________________________  3) ________________________', contentLeft, teamY, {
+    width: contentWidth,
+  });
+  teamY += 14;
+
+  doc.font('Helvetica-Bold').fontSize(8).text('Assinatura do responsável pela execução:', contentLeft, teamY);
+  teamY += 11;
+  doc.font('Helvetica').fontSize(8).text('________________________________', contentLeft, teamY);
+  teamY += 12;
+  doc.text('Nome: ________________________________', contentLeft, teamY);
 }
 
 export function buildOrdensServicoLotePdf(chamados: OsPdfChamado[], options?: OsPdfOptions): Promise<Buffer> {
@@ -88,6 +140,7 @@ export function buildOrdensServicoLotePdf(chamados: OsPdfChamado[], options?: Os
 
     const left = doc.page.margins.left;
     const usableHeight = doc.page.height - doc.page.margins.top - doc.page.margins.bottom;
+    // Mantém 2 OS/página; bloco um pouco mais alto para acomodar equipe/assinatura.
     const blockHeight = (usableHeight - 8) / 2;
 
     chamados.forEach((chamado, index) => {

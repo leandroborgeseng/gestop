@@ -168,23 +168,56 @@ function isAtribuicaoMotivo(motivo: string | null | undefined) {
   );
 }
 
-function formatParticipanteLabel(value: unknown): string | null {
-  if (typeof value === 'string' && value.trim()) return value.trim();
-  if (!value || typeof value !== 'object') return null;
-  const item = value as { nome?: unknown; cargo?: unknown; secretaria?: { sigla?: unknown } | null };
-  if (typeof item.nome !== 'string' || !item.nome.trim()) return null;
-  const parts = [item.nome.trim()];
-  if (typeof item.cargo === 'string' && item.cargo.trim()) parts.push(item.cargo.trim());
-  if (typeof item.secretaria?.sigla === 'string' && item.secretaria.sigla.trim()) {
-    parts.push(item.secretaria.sigla.trim());
+function formatParticipanteLinha(
+  value: unknown,
+  opts?: { externo?: boolean },
+): string | null {
+  if (typeof value === 'string' && value.trim()) {
+    return opts?.externo ? `• ${value.trim()} — membro externo` : `• ${value.trim()}`;
   }
-  return parts.join(' · ');
+  if (!value || typeof value !== 'object') return null;
+  const item = value as {
+    nome?: unknown;
+    cargo?: unknown;
+    origem?: unknown;
+  };
+  if (typeof item.nome !== 'string' || !item.nome.trim()) return null;
+  const nome = item.nome.trim();
+  const isExterno = opts?.externo || item.origem === 'externo';
+  const cargo = typeof item.cargo === 'string' && item.cargo.trim() ? item.cargo.trim() : null;
+  if (isExterno) {
+    return cargo ? `• ${nome} — ${cargo} (membro externo)` : `• ${nome} — membro externo`;
+  }
+  return cargo ? `• ${nome} — ${cargo}` : `• ${nome}`;
 }
 
-function formatParticipantesList(values: unknown): string | null {
-  if (!Array.isArray(values) || values.length === 0) return null;
-  const labels = values.map(formatParticipanteLabel).filter((item): item is string => Boolean(item));
-  return labels.length > 0 ? labels.join('\n') : null;
+function buildParticipantesExecucaoDetalhe(metadata: Record<string, unknown>): { label: string; value: string } {
+  const linhas: string[] = [];
+
+  const equipe = Array.isArray(metadata.membrosExecutores) ? metadata.membrosExecutores : [];
+  for (const item of equipe) {
+    const linha = formatParticipanteLinha(item, { externo: false });
+    if (linha) linhas.push(linha);
+  }
+
+  const externos = Array.isArray(metadata.membrosExternos) ? metadata.membrosExternos : [];
+  for (const item of externos) {
+    const linha = formatParticipanteLinha(item, { externo: true });
+    if (linha) linhas.push(linha);
+  }
+
+  // Formato unificado gravado em conclusões mais novas.
+  if (linhas.length === 0 && Array.isArray(metadata.participantes)) {
+    for (const item of metadata.participantes) {
+      const linha = formatParticipanteLinha(item);
+      if (linha) linhas.push(linha);
+    }
+  }
+
+  return {
+    label: 'Participantes da execução',
+    value: linhas.length > 0 ? linhas.join('\n') : 'Nenhum participante informado',
+  };
 }
 
 function buildExecucaoConclusaoStep(
@@ -229,15 +262,7 @@ function buildExecucaoConclusaoStep(
     });
   }
 
-  const membrosEquipe = formatParticipantesList(metadata.membrosExecutores);
-  if (membrosEquipe) {
-    detalhes.push({ label: 'Membros da equipe', value: membrosEquipe });
-  }
-
-  const membrosExternos = formatParticipantesList(metadata.membrosExternos);
-  if (membrosExternos) {
-    detalhes.push({ label: 'Membros externos', value: membrosExternos });
-  }
+  detalhes.push(buildParticipantesExecucaoDetalhe(metadata));
 
   const expandContent = {
     descricao: relatorio || undefined,
@@ -252,7 +277,11 @@ function buildExecucaoConclusaoStep(
 
   return {
     id: entry.id,
-    title: impedimento ? 'Execução impedida em campo' : 'Execução concluída em campo',
+    title: impedimento
+      ? 'Execução impedida em campo'
+      : metadata.tipo === 'execucao_manual'
+        ? 'Execução lançada manualmente'
+        : 'Execução concluída em campo',
     date: formatTimelineDate(entry.createdAt),
     sub: entry.alteradoPor?.nome,
     done: true,
@@ -383,13 +412,14 @@ export function buildChamadoTimelineFromHistorico(
       };
     }
 
-    if (tipo === 'execucao_conclusao') {
+    if (tipo === 'execucao_conclusao' || tipo === 'execucao_manual') {
       return buildExecucaoConclusaoStep(entry, metadata, isLast, currentStatus);
     }
 
     if (
       entry.statusNovo === 'CONCLUIDO' &&
-      entry.motivo === 'Execução concluída em campo.'
+      (entry.motivo === 'Execução concluída em campo.' ||
+        entry.motivo?.startsWith('Execução lançada manualmente.'))
     ) {
       return buildExecucaoConclusaoStep(entry, metadata, isLast, currentStatus);
     }
