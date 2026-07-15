@@ -9,6 +9,10 @@ export type PdfTableOptions = {
   rows: string[][];
   /** Pesos relativos das colunas (soma ~1). Se omitido, colunas iguais. */
   columnWeights?: number[];
+  /** Quando true, não limita altura da linha nem usa ellipsis (textos longos quebram). */
+  wrapFully?: boolean;
+  /** Linhas de totalização exibidas após a tabela. */
+  summaryLines?: string[];
 };
 
 const BRAND_PRIMARY = '#0066cc';
@@ -44,13 +48,15 @@ function measureTextHeight(
   text: string,
   width: number,
   font: 'Helvetica' | 'Helvetica-Bold',
+  wrapFully = false,
 ) {
   doc.font(font).fontSize(FONT_SIZE);
   const height = doc.heightOfString(String(text ?? ''), {
     width: Math.max(width, 8),
     lineGap: 1,
   });
-  return Math.min(Math.max(height + CELL_PADDING * 2, MIN_ROW_HEIGHT), MAX_ROW_HEIGHT);
+  const padded = Math.max(height + CELL_PADDING * 2, MIN_ROW_HEIGHT);
+  return wrapFully ? padded : Math.min(padded, MAX_ROW_HEIGHT);
 }
 
 function drawInstitutionalHeader(
@@ -90,11 +96,12 @@ function drawTableHeader(
   headers: string[],
   y: number,
   columnWidths: number[],
+  wrapFully = false,
 ) {
   const left = doc.page.margins.left;
   const rowHeight = Math.max(
     ...headers.map((header, index) =>
-      measureTextHeight(doc, header, columnWidths[index] - CELL_PADDING * 2, 'Helvetica-Bold'),
+      measureTextHeight(doc, header, columnWidths[index] - CELL_PADDING * 2, 'Helvetica-Bold', wrapFully),
     ),
   );
 
@@ -124,12 +131,13 @@ function drawTableRow(
   y: number,
   columnWidths: number[],
   zebra: boolean,
+  wrapFully = false,
 ) {
   const left = doc.page.margins.left;
   const normalized = columnWidths.map((_, index) => String(row[index] ?? ''));
   const rowHeight = Math.max(
     ...normalized.map((cell, index) =>
-      measureTextHeight(doc, cell, columnWidths[index] - CELL_PADDING * 2, 'Helvetica'),
+      measureTextHeight(doc, cell, columnWidths[index] - CELL_PADDING * 2, 'Helvetica', wrapFully),
     ),
   );
 
@@ -151,7 +159,7 @@ function drawTableRow(
       .text(cell, x + CELL_PADDING, y + CELL_PADDING, {
         width: width - CELL_PADDING * 2,
         lineGap: 1,
-        ellipsis: true,
+        ...(wrapFully ? {} : { ellipsis: true }),
       });
 
     x += width;
@@ -164,6 +172,7 @@ export function buildTablePdf(options: PdfTableOptions): Promise<Buffer> {
   return new Promise((resolvePromise, reject) => {
     const doc = new PDFDocument({ margin: 36, size: 'A4', layout: 'landscape' });
     const chunks: Buffer[] = [];
+    const wrapFully = Boolean(options.wrapFully);
 
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     doc.on('end', () => resolvePromise(Buffer.concat(chunks)));
@@ -176,23 +185,42 @@ export function buildTablePdf(options: PdfTableOptions): Promise<Buffer> {
     const columnWidths = resolveColumnWidths(usableWidth, options.headers.length, options.columnWeights);
     let y = doc.y;
 
-    y += drawTableHeader(doc, options.headers, y, columnWidths);
+    y += drawTableHeader(doc, options.headers, y, columnWidths, wrapFully);
 
     options.rows.forEach((row, rowIndex) => {
       const previewHeight = Math.max(
         ...row.map((cell, index) =>
-          measureTextHeight(doc, String(cell ?? ''), columnWidths[index] - CELL_PADDING * 2, 'Helvetica'),
+          measureTextHeight(doc, String(cell ?? ''), columnWidths[index] - CELL_PADDING * 2, 'Helvetica', wrapFully),
         ),
       );
 
       if (y + previewHeight > doc.page.height - doc.page.margins.bottom) {
         doc.addPage({ layout: 'landscape', margin: 36 });
         y = doc.page.margins.top;
-        y += drawTableHeader(doc, options.headers, y, columnWidths);
+        y += drawTableHeader(doc, options.headers, y, columnWidths, wrapFully);
       }
 
-      y += drawTableRow(doc, row, y, columnWidths, rowIndex % 2 === 1);
+      y += drawTableRow(doc, row, y, columnWidths, rowIndex % 2 === 1, wrapFully);
     });
+
+    if (options.summaryLines?.length) {
+      const needed = options.summaryLines.length * 12 + 24;
+      if (y + needed > doc.page.height - doc.page.margins.bottom) {
+        doc.addPage({ layout: 'landscape', margin: 36 });
+        y = doc.page.margins.top;
+      }
+      y += 14;
+      doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND_PRIMARY).text('Totalizadores', doc.page.margins.left, y);
+      y = doc.y + 4;
+      doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY);
+      for (const line of options.summaryLines) {
+        doc.text(line, doc.page.margins.left, y, {
+          width: usableWidth,
+          lineGap: 1,
+        });
+        y = doc.y + 2;
+      }
+    }
 
     doc.end();
   });

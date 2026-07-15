@@ -1006,7 +1006,7 @@ export function getAlertasOperacionais() {
 
 async function downloadRelatorio(
   formato: 'csv' | 'pdf' | 'xlsx',
-  tipo: 'unidades' | 'chamados' | 'fiscalizacoes',
+  tipo: 'unidades' | 'chamados' | 'fiscalizacoes' | 'chamados-produtividade',
   params: Record<string, string> = {},
 ) {
   const token = getStoredAuth()?.accessToken;
@@ -1075,21 +1075,21 @@ async function downloadRelatorio(
 }
 
 export function downloadRelatorioCsv(
-  tipo: 'unidades' | 'chamados' | 'fiscalizacoes',
+  tipo: 'unidades' | 'chamados' | 'fiscalizacoes' | 'chamados-produtividade',
   params: Record<string, string> = {},
 ) {
   return downloadRelatorio('csv', tipo, params);
 }
 
 export function downloadRelatorioPdf(
-  tipo: 'unidades' | 'chamados' | 'fiscalizacoes',
+  tipo: 'unidades' | 'chamados' | 'fiscalizacoes' | 'chamados-produtividade',
   params: Record<string, string> = {},
 ) {
   return downloadRelatorio('pdf', tipo, params);
 }
 
 export function downloadRelatorioXlsx(
-  tipo: 'unidades' | 'chamados' | 'fiscalizacoes',
+  tipo: 'unidades' | 'chamados' | 'fiscalizacoes' | 'chamados-produtividade',
   params: Record<string, string> = {},
 ) {
   return downloadRelatorio('xlsx', tipo, params);

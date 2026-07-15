@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
-import { ChamadoStatus, Prisma } from '@prisma/client';
+import { ChamadoPrioridade, ChamadoStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RelatorioFiltroDto } from './relatorios.dto';
 import { buildCsv, formatIsoDate } from './relatorios.csv';
 import { buildTablePdf } from './relatorios.pdf';
 import { CHAMADOS_EXPORT_HEADERS, mapChamadosExportRows } from './relatorios.chamados-export';
+import {
+  CHAMADOS_PRODUTIVIDADE_HEADERS,
+  computeProdutividadeTotais,
+  formatProdutividadeSummaryLines,
+  mapChamadosProdutividadeExportRows,
+} from './relatorios.chamados-produtividade';
 import { FISCALIZACOES_EXPORT_HEADERS, mapFiscalizacoesExportRows } from './relatorios.fiscalizacoes-export';
 import { formatCoordenada, loadExecucaoCoordenadas } from './relatorios.execucao-coords';
 import { loadExecucaoParticipantes } from './relatorios.execucao-participantes';
@@ -127,6 +133,78 @@ export class RelatoriosService {
     return this.exportChamadosComExecucao(filtro).then((items) =>
       buildXlsx('Chamados', [...CHAMADOS_EXPORT_HEADERS], mapChamadosExportRows(items)),
     );
+  }
+
+  private async exportChamadosProdutividade(filtro: RelatorioFiltroDto) {
+    const items = await this.prisma.chamado.findMany({
+      where: this.chamadoProdutividadeWhere(filtro),
+      orderBy: [{ concluidoEm: 'asc' }, { codigo: 'asc' }],
+      include: {
+        secretaria: { select: { sigla: true } },
+        unidade: { select: { nome: true, endereco: true } },
+        tipoChamado: { select: { nome: true } },
+      },
+    });
+
+    const participantes = await loadExecucaoParticipantes(
+      this.prisma,
+      items.map((item) => item.id),
+    );
+
+    return items.map((item) => ({
+      ...item,
+      participantesExecucao: participantes.get(item.id) ?? null,
+    }));
+  }
+
+  chamadosProdutividadeCsv(filtro: RelatorioFiltroDto) {
+    return this.exportChamadosProdutividade(filtro).then((items) => {
+      const rows = mapChamadosProdutividadeExportRows(items);
+      const summary = formatProdutividadeSummaryLines(computeProdutividadeTotais(items));
+      const body = buildCsv([...CHAMADOS_PRODUTIVIDADE_HEADERS], rows);
+      if (!summary.length) return body;
+      return `${body}\n\n${summary.map((line) => `"${line.replace(/"/g, '""')}"`).join('\n')}`;
+    });
+  }
+
+  chamadosProdutividadeXlsx(filtro: RelatorioFiltroDto) {
+    return this.exportChamadosProdutividade(filtro).then((items) =>
+      buildXlsx(
+        'Produtividade',
+        [...CHAMADOS_PRODUTIVIDADE_HEADERS],
+        mapChamadosProdutividadeExportRows(items),
+        {
+          wrapText: true,
+          summaryLines: formatProdutividadeSummaryLines(computeProdutividadeTotais(items)),
+        },
+      ),
+    );
+  }
+
+  chamadosProdutividadePdf(filtro: RelatorioFiltroDto) {
+    return this.exportChamadosProdutividade(filtro).then((items) => {
+      const totais = computeProdutividadeTotais(items);
+      return buildTablePdf({
+        title: 'SIGMA — Chamados concluídos (produtividade)',
+        subtitle: `Gerado em ${new Date().toLocaleString('pt-BR')} · período por data de conclusão`,
+        headers: [
+          'Código',
+          'Título/descrição',
+          'Conclusão',
+          'Equipe',
+          'Funcionários',
+          'Cargos',
+          'SLA',
+          'Sec.',
+          'Local',
+          'Tipo',
+        ],
+        columnWeights: [0.08, 0.16, 0.09, 0.1, 0.12, 0.1, 0.08, 0.05, 0.14, 0.08],
+        wrapFully: true,
+        summaryLines: formatProdutividadeSummaryLines(totais),
+        rows: mapChamadosProdutividadeExportRows(items).map((row) => row.map((cell) => String(cell ?? ''))),
+      });
+    });
   }
 
   ordensServicoCsv(filtro: RelatorioFiltroDto) {
@@ -287,9 +365,33 @@ export class RelatoriosService {
     return {
       ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
       ...(filtro.status ? { status: filtro.status as ChamadoStatus } : {}),
+      ...(filtro.tipoChamadoId ? { tipoChamadoId: filtro.tipoChamadoId } : {}),
+      ...(filtro.prioridade ? { prioridade: filtro.prioridade as ChamadoPrioridade } : {}),
+      ...(filtro.equipeId === 'sem-equipe'
+        ? { equipeId: null }
+        : filtro.equipeId
+          ? { equipeId: filtro.equipeId }
+          : {}),
       ...(filtro.from || filtro.to
         ? {
             createdAt: {
+              ...(filtro.from ? { gte: new Date(filtro.from) } : {}),
+              ...(filtro.to ? { lte: new Date(`${filtro.to}T23:59:59.999Z`) } : {}),
+            },
+          }
+        : {}),
+    };
+  }
+
+  /** Período por data de conclusão; somente chamados CONCLUIDO. */
+  private chamadoProdutividadeWhere(filtro: RelatorioFiltroDto): Prisma.ChamadoWhereInput {
+    return {
+      status: ChamadoStatus.CONCLUIDO,
+      ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
+      ...(filtro.tipoChamadoId ? { tipoChamadoId: filtro.tipoChamadoId } : {}),
+      ...(filtro.from || filtro.to
+        ? {
+            concluidoEm: {
               ...(filtro.from ? { gte: new Date(filtro.from) } : {}),
               ...(filtro.to ? { lte: new Date(`${filtro.to}T23:59:59.999Z`) } : {}),
             },

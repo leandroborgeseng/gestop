@@ -66,6 +66,29 @@ export class RelatoriosController {
     return streamXlsx(buffer, 'sigma-chamados.xlsx');
   }
 
+  @Get('export/chamados-produtividade.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="sigma-chamados-produtividade.csv"')
+  exportChamadosProdutividadeCsv(@Query() filtro: RelatorioFiltroDto) {
+    return this.relatoriosService.chamadosProdutividadeCsv(filtro);
+  }
+
+  @Get('export/chamados-produtividade.pdf')
+  async exportChamadosProdutividadePdf(@Query() filtro: RelatorioFiltroDto) {
+    const buffer = await this.relatoriosService.chamadosProdutividadePdf(filtro);
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: 'attachment; filename="sigma-chamados-produtividade.pdf"',
+      length: buffer.length,
+    });
+  }
+
+  @Get('export/chamados-produtividade.xlsx')
+  async exportChamadosProdutividadeXlsx(@Query() filtro: RelatorioFiltroDto) {
+    const buffer = await this.relatoriosService.chamadosProdutividadeXlsx(filtro);
+    return streamXlsx(buffer, 'sigma-chamados-produtividade.xlsx');
+  }
+
   @Get('export/unidades.xlsx')
   async exportUnidadesXlsx(@Query('secretariaId') secretariaId?: string) {
     const buffer = await this.relatoriosService.unidadesXlsx(secretariaId);

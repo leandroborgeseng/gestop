@@ -94,7 +94,7 @@ function drawOsBlock(doc: InstanceType<typeof PDFDocument>, chamado: OsPdfChamad
   doc.rect(contentLeft, manualStart + 38, contentWidth, 28).stroke(BORDER);
 
   let teamY = manualStart + 72;
-  doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Funcionários da equipe', contentLeft, teamY);
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Equipe executora / Funcionários da equipe', contentLeft, teamY);
   teamY += 11;
 
   const funcionarios = chamado.funcionarios ?? [];
