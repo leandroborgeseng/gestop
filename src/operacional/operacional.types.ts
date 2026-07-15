@@ -28,11 +28,17 @@ export type UnidadeListQuery = {
   sla?: SlaFiltro;
 };
 
+export type VistoriaAtrasadaResumo = {
+  proximaChecagemEm: string;
+  checklistNome: string;
+};
+
 export type UnidadeResumoCounts = {
   fiscalizacoes: number;
   naoConformidadesAbertas: number;
   chamadosAbertos: number;
   chamadosSlaForaPrazo: number;
+  /** True quando há cronograma ativo com próxima checagem vencida (não realizada). */
   semVistoria: boolean;
 };
 
@@ -72,6 +78,8 @@ export type UnidadeOperacional = {
     naoConformidadesAbertas: number;
     chamadosAbertos: number;
     semVistoria: boolean;
+    /** Detalhe da vistoria programada mais antiga em atraso (quando semVistoria). */
+    vistoriaAtrasada?: VistoriaAtrasadaResumo | null;
   };
   totais: UnidadeResumoCounts;
   /** Verde/vermelho no mapa quando há chamado aberto com prazo. */

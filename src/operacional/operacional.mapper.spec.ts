@@ -77,7 +77,7 @@ describe('mapeamento operacional de unidades', () => {
     expect(unidade.slaMapa).toBe('FORA');
   });
 
-  it('considera sem vistoria quando tiposPendencia inclui VISTORIAS', () => {
+  it('considera vistoria atrasada (semVistoria) quando tiposPendencia inclui VISTORIAS', () => {
     expect(
       deriveUnidadeSituacao({
         ativo: true,

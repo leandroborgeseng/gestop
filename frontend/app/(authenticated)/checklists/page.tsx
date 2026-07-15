@@ -18,6 +18,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { cn } from '@/lib/cn';
+import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { listAdminSecretarias, listChecklists, saveChecklist } from '@/lib/api';
 import { formatChecklistVinculo } from '@/lib/unidade-tipo';
 import { AdminSecretaria, ChecklistModel } from '@/lib/types';
@@ -41,6 +42,7 @@ function tipoBadgeVariant(tipo: string): 'info' | 'warning' | 'neutral' {
 
 export default function ChecklistsPage() {
   const router = useRouter();
+  const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
   const [checklists, setChecklists] = useState<ChecklistModel[]>([]);
   const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
@@ -93,7 +95,7 @@ export default function ChecklistsPage() {
         icon={ClipboardList}
         title="Checklists"
         description="Modelos versionados aplicados pelos agentes em vistoria. Publique versões sem quebrar histórico."
-        backHref="/cco"
+        backHref={backHref}
         action={
           <Button variant="filled" size="md" className="gap-1.5" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />

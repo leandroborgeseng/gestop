@@ -200,7 +200,7 @@ function DesktopSidebar({
   );
 }
 
-function DesktopTopbar({ syncPending }: { syncPending: number }) {
+function DesktopTopbar({ syncPending, permissions }: { syncPending: number; permissions: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const { openGuide } = useGuide();
@@ -229,7 +229,7 @@ function DesktopTopbar({ syncPending }: { syncPending: number }) {
   function submitSearch() {
     const trimmed = query.trim();
     if (!trimmed) return;
-    router.push(resolveGlobalSearchRoute(trimmed));
+    router.push(resolveGlobalSearchRoute(trimmed, permissions));
   }
 
   useEffect(() => {
@@ -428,6 +428,14 @@ export function MobileBottomNav({
                 onClick={() => onMoreOpen(false)}
               />
             ))}
+          <Link
+            href="/conta"
+            onClick={() => onMoreOpen(false)}
+            className="flex w-full items-center gap-3 rounded-[var(--r-md)] px-4 py-2.5 text-[13.5px] font-medium text-[var(--ink-2)] hover:bg-[var(--surface-2)]"
+          >
+            <KeyRound className="h-5 w-5 text-[var(--brand)]" />
+            Minha conta
+          </Link>
           <button
             type="button"
             onClick={openGuide}
@@ -486,7 +494,7 @@ export function AppShell({
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <MobileAppBar userName={user.nome} syncPending={syncPending} />
-        <DesktopTopbar syncPending={syncPending} />
+        <DesktopTopbar syncPending={syncPending} permissions={permissions} />
         <main className="sigma-main relative z-0 flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
         <MobileBottomNav user={user} badges={navBadges} moreOpen={moreOpen} onMoreOpen={setMoreOpen} />
       </div>

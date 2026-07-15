@@ -29,10 +29,12 @@ export function ChamadoMapaList({
 }) {
   if (chamados.length === 0) {
     return (
-      <EmptyState
-        title="Nenhum chamado encontrado"
-        description="Ajuste os filtros de status, prioridade, equipe ou SLA."
-      />
+      <div className="flex min-h-0 flex-1 items-center justify-center p-4">
+        <EmptyState
+          title="Nenhum chamado encontrado"
+          description="Ajuste os filtros de status, prioridade, equipe ou SLA."
+        />
+      </div>
     );
   }
 

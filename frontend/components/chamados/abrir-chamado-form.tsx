@@ -623,7 +623,7 @@ export function AbrirChamadoForm({
             <Input
               value={addressQuery}
               onChange={(event) => setAddressQuery(event.target.value)}
-              placeholder="Ex.: Rua Luís Antônio de Souza"
+              placeholder="Ex.: Rua Frederico Moura"
               disabled={busy}
             />
           </Field>

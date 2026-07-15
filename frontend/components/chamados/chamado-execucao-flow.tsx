@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -163,9 +164,22 @@ function ExecucaoParticipantesBlock({
 }
 
 function EvidenceLightbox({ src, onClose }: { src: string; onClose: () => void }) {
-  return (
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 p-4"
+      className="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-black/80 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
       role="dialog"
       aria-modal="true"
       aria-label="Visualizar evidência"
@@ -179,10 +193,11 @@ function EvidenceLightbox({ src, onClose }: { src: string; onClose: () => void }
       >
         <X className="h-5 w-5" />
       </button>
-      <div className="max-h-[85vh] w-full max-w-4xl" onClick={(event) => event.stopPropagation()}>
+      <div className="max-h-[min(85dvh,calc(100dvh-5rem))] w-full max-w-4xl overflow-auto" onClick={(event) => event.stopPropagation()}>
         <AuthenticatedImage src={src} alt="Evidência ampliada" className="mx-auto max-h-[80vh] w-auto rounded-[var(--r-md)] object-contain" />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

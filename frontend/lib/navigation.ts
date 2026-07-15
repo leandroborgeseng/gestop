@@ -1,3 +1,4 @@
+import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
   BarChart3,
@@ -11,11 +12,11 @@ import {
   Megaphone,
   Plug,
   Settings,
-  type LucideIcon,
 } from 'lucide-react';
 
-import type { NavBadgeKey } from '@/lib/nav-badges';
 import { isMatrixPermissionKey, navItemAllowedByMatrix } from '@/lib/permissions-matrix';
+
+export type NavBadgeKey = 'chamados' | 'integracoes';
 
 export type NavItem = {
   id: string;
@@ -173,14 +174,31 @@ export function getMobileNav(permissions: string[]) {
 
   const primary = MOBILE_BAR_CORE.map((id) => visibleById.get(id)).filter(Boolean) as NavItem[];
 
-  if (visible.length <= primary.length) {
-    return { primary, secondary: [], hasMore: false };
-  }
-
   const primaryIds = new Set(primary.map((item) => item.id));
   const secondary = visible.filter((item) => !primaryIds.has(item.id));
 
-  return { primary, secondary, hasMore: secondary.length > 0 };
+  // Menu "Mais" é nativo da conta (perfil, secretaria, sair) — sempre disponível.
+  return { primary, secondary, hasMore: true };
+}
+
+/** Primeira rota operacional permitida na ordem dos menus; fallback `/conta` se nada for liberado. */
+export function getDefaultAuthenticatedHref(permissions: string[]): string {
+  const first = getVisibleNavItems(permissions)[0];
+  return first?.href ?? '/conta';
+}
+
+export function hasOperationalNavAccess(permissions: string[]): boolean {
+  return getVisibleNavItems(permissions).length > 0;
+}
+
+/** Usa a rota preferida se o perfil tiver acesso; senão, a primeira tela permitida. */
+export function resolvePreferredHref(permissions: string[], preferredHref: string): string {
+  const visible = getVisibleNavItems(permissions);
+  const allowed = visible.some(
+    (item) => preferredHref === item.href || preferredHref.startsWith(`${item.href}/`),
+  );
+  if (allowed) return preferredHref;
+  return getDefaultAuthenticatedHref(permissions);
 }
 
 export function isNavActive(pathname: string, href: string) {

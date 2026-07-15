@@ -20,6 +20,7 @@ import { checklistAppliesToUnidade } from '@/lib/checklist-matching';
 import { getStoredAuth, deactivateCronograma, getCalendarioChecagens, getSecretarias, getUnidades, listChecklists, listCronogramas, saveCronograma } from '@/lib/api';
 import { CRONOGRAMA_FREQUENCIAS, CRONOGRAMA_FREQUENCIA_LABELS, monthBounds, toInputDate } from '@/lib/cronograma';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
+import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import {
   CalendarioChecagemResponse,
   ChecklistModel,
@@ -30,6 +31,7 @@ import {
 } from '@/lib/types';
 
 export default function CronogramaPage() {
+  const backHref = useSafeBackHref('/cco');
   const [month, setMonth] = useState(() => new Date());
   const [secretariaId, setSecretariaId] = useState('');
   const [unidadeId, setUnidadeId] = useState('');
@@ -170,7 +172,8 @@ export default function CronogramaPage() {
         icon={CalendarDays}
         title="Cronograma de checagens"
         description="Defina a periodicidade de vistoria por próprio e acompanhe o calendário de checagens realizadas, agendadas e atrasadas."
-        backHref="/cco"
+        backHref={backHref}
+        className={canManage ? 'pb-32 lg:pb-5' : undefined}
       >
         <TipBanner id="cronograma-checagens">
           Cadastre a periodicidade por próprio + checklist. Após cada vistoria, a próxima data avança automaticamente.

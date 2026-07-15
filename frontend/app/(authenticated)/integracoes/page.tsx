@@ -12,9 +12,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { listIntegracoesEventos, retrySyncFalhas, sendIntegrationNotification } from '@/lib/api';
+import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { IntegracoesEventos } from '@/lib/types';
 
 export default function IntegracoesPage() {
+  const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
   const [eventos, setEventos] = useState<IntegracoesEventos | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,7 +77,7 @@ export default function IntegracoesPage() {
         icon={Plug}
         title="Integrações"
         description="Webhooks, sincronização de vistoria e status dos serviços conectados."
-        backHref="/cco"
+        backHref={backHref}
       >
         <TipBanner id="integracoes-sync">
           Falhas de sync de vistoria aparecem aqui. Use Retentar para reenfileirar eventos pendentes ou envie uma notificação de teste.

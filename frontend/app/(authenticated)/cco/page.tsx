@@ -235,8 +235,11 @@ function CcoPageContent() {
       {
         id: 'pendencias' as const,
         title: 'Pendências',
-        value: (resumo?.naoConformidadesAbertas ?? 0) + (resumo?.chamadosAbertos ?? 0),
-        hint: 'NC + chamados abertos',
+        value:
+          (resumo?.naoConformidadesAbertas ?? 0) +
+          (resumo?.chamadosAbertos ?? 0) +
+          (resumo?.vistoriasAtrasadas ?? 0),
+        hint: 'NC + chamados + vistorias atrasadas',
         icon: AlertTriangle,
         deltaTone: 'warn' as const,
       },
@@ -295,7 +298,7 @@ function CcoPageContent() {
             <Badge variant="ok">RBAC ativo</Badge>
           </div>
         }
-        className="min-h-0"
+        className="min-h-0 overflow-y-auto xl:overflow-hidden"
       >
         <TipBanner id="cco-map-list-sync">
           <b className="text-[var(--brand-hover)]">Mapa e lista trabalham juntos.</b> Filtre ou passe o mouse na lista
@@ -335,9 +338,9 @@ function CcoPageContent() {
           </div>
         ) : null}
 
-        <div className="grid shrink-0 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-start">
-          <div className="cco-list-panel flex max-h-[min(1840px,calc(100dvh-120px))] min-h-[260px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
-            <div className="filters shrink-0 space-y-2 border-b border-[var(--line-2)] bg-[var(--surface)] px-3.5 py-3">
+        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-stretch">
+          <div className="cco-list-panel flex min-h-0 flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+            <div className="filters max-h-[min(42%,22rem)] shrink-0 space-y-2 overflow-y-auto overscroll-contain border-b border-[var(--line-2)] bg-[var(--surface)] px-3.5 py-3">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal className="h-4 w-4 shrink-0 text-[var(--brand)]" />
                 <span className="text-[13px] font-semibold text-[var(--ink)]">
@@ -680,7 +683,9 @@ function CcoPageContent() {
             </div>
 
             {loading && (tab === 'proprios' ? unidades.length === 0 : chamados.length === 0) ? (
-              <LoadingState label={tab === 'proprios' ? 'Carregando próprios...' : 'Carregando chamados...'} />
+              <div className="flex min-h-0 flex-1 items-center justify-center p-4">
+                <LoadingState label={tab === 'proprios' ? 'Carregando próprios...' : 'Carregando chamados...'} />
+              </div>
             ) : tab === 'proprios' ? (
               <UnidadeList
                 embedded
@@ -701,17 +706,19 @@ function CcoPageContent() {
             )}
           </div>
 
-          <OperationalMap
-            view={tab === 'chamados' ? 'chamados' : 'unidades'}
-            unidades={unidades}
-            chamados={chamados}
-            selectedId={selectedId}
-            hoveredId={hoveredId}
-            mapMode={tab === 'chamados' ? 'situacao' : mapMode}
-            categoriaFiltroId={categoriaFiltroId || null}
-            onSelect={selectItem}
-            onHover={handleMapHover}
-          />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <OperationalMap
+              view={tab === 'chamados' ? 'chamados' : 'unidades'}
+              unidades={unidades}
+              chamados={chamados}
+              selectedId={selectedId}
+              hoveredId={hoveredId}
+              mapMode={tab === 'chamados' ? 'situacao' : mapMode}
+              categoriaFiltroId={categoriaFiltroId || null}
+              onSelect={selectItem}
+              onHover={handleMapHover}
+            />
+          </div>
         </div>
 
         {tab === 'proprios' ? (

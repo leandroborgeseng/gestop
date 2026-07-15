@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowUpRight, X } from 'lucide-react';
 import { ChamadoMapaItem } from '@/lib/types';
 import { CHAMADO_STATUS_META, prazoInfo } from '@/lib/chamado-status';
@@ -16,22 +18,37 @@ export function ChamadoMapaDrawer({
   open: boolean;
   onClose: () => void;
 }) {
-  if (!open || !chamado) return null;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
+  if (!open || !chamado || !mounted) return null;
 
   const statusMeta = CHAMADO_STATUS_META[chamado.status];
   const prazo = prazoInfo(chamado.prazoEm, chamado.status);
   const titulo = chamado.titulo?.trim() || chamado.descricao;
 
-  return (
+  return createPortal(
     <>
       <button
         type="button"
         aria-label="Fechar detalhe do chamado"
-        className="fixed inset-0 z-[700] bg-black/25"
+        className="fixed inset-0 z-[100] bg-black/25"
         onClick={onClose}
       />
-      <aside className="fixed inset-y-0 right-0 z-[710] flex w-full max-w-md flex-col border-l border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-lg)]">
-        <div className="flex items-start gap-3 border-b border-[var(--line-2)] px-4 py-3.5">
+      <aside className="fixed inset-y-0 right-0 z-[110] flex h-dvh max-h-dvh w-full max-w-md flex-col border-l border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-lg)]">
+        <div className="flex shrink-0 items-start gap-3 border-b border-[var(--line-2)] px-4 py-3.5">
           <div className="min-w-0 flex-1">
             <div className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{chamado.codigo}</div>
             <h2 className="mt-0.5 text-[15px] font-semibold text-[var(--ink)]">{titulo}</h2>
@@ -50,7 +67,7 @@ export function ChamadoMapaDrawer({
           </IconButton>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 text-[13px]">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-[13px]">
           <div>
             <div className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Local</div>
             <p className="mt-1 text-[var(--ink-2)]">
@@ -83,7 +100,7 @@ export function ChamadoMapaDrawer({
           </div>
         </div>
 
-        <div className="border-t border-[var(--line-2)] p-4">
+        <div className="shrink-0 border-t border-[var(--line-2)] p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           <Link
             href={`/chamados?id=${chamado.id}`}
             className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[var(--r-md)] bg-[var(--brand)] px-4 text-[13px] font-semibold text-white hover:bg-[var(--brand-hover)]"
@@ -93,6 +110,7 @@ export function ChamadoMapaDrawer({
           </Link>
         </div>
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }

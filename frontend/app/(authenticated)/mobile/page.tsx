@@ -27,6 +27,7 @@ import { filterChecklistsForUnidade } from '@/lib/checklist-matching';
 import { migrateLegacyQueueIfNeeded, readMobileQueue, writeMobileQueue } from '@/lib/mobile-queue';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { getMobileFieldPackage, syncMobileInspection } from '@/lib/api';
+import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { readCachedFieldPackage, writeCachedFieldPackage } from '@/lib/mobile-field-cache';
 import { useEffectiveOnline } from '@/lib/use-effective-online';
 import { registerServiceWorker, requestNotificationPermission, showLocalNotification } from '@/lib/pwa';
@@ -37,6 +38,7 @@ import { cn } from '@/lib/cn';
 const DEVICE_KEY = 'gestop.mobile.device';
 
 export default function MobilePage() {
+  const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
   const [fieldPackage, setFieldPackage] = useState<MobileFieldPackage | null>(null);
   const [queue, setQueue] = useState<MobileQueuedInspection[]>([]);
@@ -267,7 +269,7 @@ export default function MobilePage() {
         icon={Smartphone}
         title="Vistoria em campo"
         description="Preencha a vistoria com GPS real. Online, o envio é imediato; offline, salve na fila para sincronizar depois."
-        backHref="/cco"
+        backHref={backHref}
         action={
           <div className="flex flex-wrap gap-2">
             <Button variant="tonal" size="sm" disabled={downloading} onClick={() => void downloadFieldPackage(true)}>

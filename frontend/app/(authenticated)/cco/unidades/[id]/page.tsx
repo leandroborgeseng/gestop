@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { getUnidadeDetalhe } from '@/lib/api';
+import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { UnidadeDetalhe } from '@/lib/types';
 import { PageShell } from '@/components/layout/page-shell';
 import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
@@ -25,6 +26,7 @@ import { ErrorState, LoadingState } from '@/components/ui-states';
 
 export default function UnidadeDetalhePage() {
   const params = useParams<{ id: string }>();
+  const backHref = useSafeBackHref('/cco');
   const [unidade, setUnidade] = useState<UnidadeDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export default function UnidadeDetalhePage() {
       title={unidade?.nome ?? 'Detalhe do próprio'}
       description={unidade ? `${unidade.tipo} · ${unidade.secretaria.sigla}` : 'Carregando informações da unidade'}
       icon={Building2}
-      backHref="/cco"
+      backHref={backHref}
     >
       <TipBanner id="unidade-detalhe">
         Visão completa do patrimônio: vistorias, não conformidades e chamados vinculados a este próprio.
@@ -126,6 +128,20 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
         />
         <MetricCard icon={Megaphone} title="Chamados" value={unidade.pendencias.chamadosAbertos} hint="abertos" />
       </section>
+
+      {unidade.pendencias.semVistoria && unidade.pendencias.vistoriaAtrasada ? (
+        <Card elevation={1} className="border-[var(--warn)]/30 bg-[var(--warn-bg)]">
+          <CardContent className="py-4">
+            <p className="text-[13px] font-semibold text-[var(--warn)]">Vistoria programada atrasada</p>
+            <p className="mt-1 text-[13px] text-[var(--ink-2)]">
+              {unidade.pendencias.vistoriaAtrasada.checklistNome}
+              {' · '}
+              prevista para{' '}
+              {new Date(unidade.pendencias.vistoriaAtrasada.proximaChecagemEm).toLocaleDateString('pt-BR')}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <section className="grid gap-6 lg:grid-cols-2">
         <Card elevation={1}>

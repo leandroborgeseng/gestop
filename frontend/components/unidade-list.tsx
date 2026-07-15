@@ -26,10 +26,12 @@ export function UnidadeList({
 
   if (unidades.length === 0) {
     return (
-      <EmptyState
-        title="Nenhum próprio encontrado"
-        description="Ajuste os filtros ou cadastre novos próprios na administração."
-      />
+      <div className="flex min-h-0 flex-1 items-center justify-center p-4">
+        <EmptyState
+          title="Nenhum próprio encontrado"
+          description="Ajuste os filtros ou cadastre novos próprios na administração."
+        />
+      </div>
     );
   }
 
@@ -135,8 +137,15 @@ export function UnidadeList({
                     </span>
                   ) : null}
                   {unidade.pendencias.semVistoria ? (
-                    <span className="mono inline-flex items-center rounded-md bg-[var(--muted-bg)] px-1 py-0.5 text-[11px] font-bold text-[var(--muted)]">
-                      Sem vist.
+                    <span
+                      className="mono inline-flex items-center rounded-md bg-[var(--muted-bg)] px-1 py-0.5 text-[11px] font-bold text-[var(--muted)]"
+                      title={
+                        unidade.pendencias.vistoriaAtrasada
+                          ? `${unidade.pendencias.vistoriaAtrasada.checklistNome} · prevista ${new Date(unidade.pendencias.vistoriaAtrasada.proximaChecagemEm).toLocaleDateString('pt-BR')}`
+                          : 'Vistoria programada atrasada'
+                      }
+                    >
+                      Vist. atrasada
                     </span>
                   ) : null}
                 </span>

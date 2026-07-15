@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { X, ZoomIn } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { AuthenticatedImage } from '@/components/ui/authenticated-image';
@@ -17,6 +18,11 @@ export function ZoomableAuthenticatedImage({
   previewClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -55,34 +61,37 @@ export function ZoomableAuthenticatedImage({
         </span>
       </button>
 
-      {open ? (
-        <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/85 p-4 backdrop-blur-[2px]"
-          role="dialog"
-          aria-modal="true"
-          aria-label={alt}
-          onClick={() => setOpen(false)}
-        >
-          <button
-            type="button"
-            className="absolute top-4 right-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
-            aria-label="Fechar visualização"
-            onClick={() => setOpen(false)}
-          >
-            <X className="h-5 w-5" />
-          </button>
-          <div
-            className="max-h-[92vh] max-w-[min(96vw,1100px)] overflow-auto"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <AuthenticatedImage
-              src={src}
-              alt={alt}
-              className={cn('max-h-[92vh] w-full object-contain', previewClassName)}
-            />
-          </div>
-        </div>
-      ) : null}
+      {open && mounted
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[2px]"
+              role="dialog"
+              aria-modal="true"
+              aria-label={alt}
+              onClick={() => setOpen(false)}
+            >
+              <button
+                type="button"
+                className="absolute top-4 right-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
+                aria-label="Fechar visualização"
+                onClick={() => setOpen(false)}
+              >
+                <X className="h-5 w-5" />
+              </button>
+              <div
+                className="max-h-[min(92dvh,calc(100dvh-5rem))] max-w-[min(96vw,1100px)] overflow-auto"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <AuthenticatedImage
+                  src={src}
+                  alt={alt}
+                  className={cn('max-h-[min(92dvh,calc(100dvh-5rem))] w-full object-contain', previewClassName)}
+                />
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }

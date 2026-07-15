@@ -15,6 +15,7 @@ import {
   resolveUnidadeSecretariaFilter,
 } from '../auth/secretaria-scope';
 import { computeVistoriaNotas } from '../domain/vistoria-nota';
+import { startOfDay } from '../cronograma/cronograma.rules';
 import { PrismaService } from '../prisma/prisma.service';
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import {
@@ -28,6 +29,7 @@ import {
 import {
   ChamadoMapaItem,
   ChamadosMapaQuery,
+  VistoriaAtrasadaResumo,
   TipoPendencia,
   UnidadeListQuery,
   UnidadeVistoriaNotaResumo,
@@ -64,6 +66,7 @@ export class OperacionalService {
       naoConformidadesAbertas,
       chamadosAbertos,
       eventosSyncPendentes,
+      cronogramasAtrasados,
     ] = await Promise.all([
       this.prisma.unidadePublica.count({ where: { ...unidadeWhere, ativo: true } }),
       !scopeIds
@@ -81,6 +84,15 @@ export class OperacionalService {
       this.prisma.offlineSyncEvent.count({
         where: { status: { in: ['PENDENTE', 'PROCESSANDO', 'CONFLITO', 'FALHOU'] } },
       }),
+      this.prisma.cronogramaChecagem.findMany({
+        where: {
+          ativo: true,
+          proximaChecagemEm: { lt: startOfDay(new Date()) },
+          unidade: { ...unidadeWhere, ativo: true },
+        },
+        distinct: ['unidadeId'],
+        select: { unidadeId: true },
+      }),
     ]);
 
     return {
@@ -90,6 +102,7 @@ export class OperacionalService {
       fiscalizacoesConcluidas,
       naoConformidadesAbertas,
       chamadosAbertos,
+      vistoriasAtrasadas: cronogramasAtrasados.length,
       eventosSyncPendentes,
     };
   }
@@ -286,12 +299,14 @@ export class OperacionalService {
     });
 
     const notasPorUnidade = await this.loadUltimasNotasPorUnidade(unidades.map((unidade) => unidade.id));
+    const vistoriasAtrasadas = await this.loadVistoriasAtrasadasPorUnidade(unidades.map((unidade) => unidade.id));
 
     const mapped = unidades.map((unidade) => {
       const chamadosSlaForaPrazo = unidade.chamados.filter((chamado) =>
         isChamadoForaPrazo(chamado.prazoEm),
       ).length;
-      const semVistoria = unidade._count.fiscalizacoes === 0;
+      const vistoriaAtrasada = vistoriasAtrasadas.get(unidade.id) ?? null;
+      const semVistoria = vistoriaAtrasada !== null;
       const countsForSituacao = {
         fiscalizacoes: unidade._count.fiscalizacoes,
         naoConformidadesAbertas: usesNc ? unidade._count.naoConformidades : 0,
@@ -320,6 +335,7 @@ export class OperacionalService {
           naoConformidadesAbertas: unidade._count.naoConformidades,
           chamadosAbertos: unidade._count.chamados,
           semVistoria,
+          vistoriaAtrasada,
         },
         totais: {
           fiscalizacoes: unidade._count.fiscalizacoes,
@@ -587,7 +603,9 @@ export class OperacionalService {
     }
 
     const chamadosSlaForaPrazo = unidade.chamados.filter((chamado) => isChamadoForaPrazo(chamado.prazoEm)).length;
-    const semVistoria = unidade._count.fiscalizacoes === 0;
+    const vistoriaAtrasada =
+      (await this.loadVistoriasAtrasadasPorUnidade([id])).get(id) ?? null;
+    const semVistoria = vistoriaAtrasada !== null;
 
     const resumo = mapUnidadeOperacional(
       unidade as UnidadeBaseRecord,
@@ -604,6 +622,11 @@ export class OperacionalService {
 
     return {
       ...resumo,
+      pendencias: {
+        ...resumo.pendencias,
+        semVistoria,
+        vistoriaAtrasada,
+      },
       secretaria: unidade.secretaria,
       ultimasFiscalizacoes: unidade.fiscalizacoes.map((fiscalizacao) => ({
         ...fiscalizacao,
@@ -688,6 +711,37 @@ export class OperacionalService {
           }
         : {}),
     };
+  }
+
+  private async loadVistoriasAtrasadasPorUnidade(unidadeIds: string[]) {
+    const map = new Map<string, VistoriaAtrasadaResumo>();
+    if (unidadeIds.length === 0) return map;
+
+    // Alinhado a resolveEventoTipo do cronograma: atrasada = próxima data < início do dia de hoje.
+    const hoje = startOfDay(new Date());
+    const atrasados = await this.prisma.cronogramaChecagem.findMany({
+      where: {
+        ativo: true,
+        unidadeId: { in: unidadeIds },
+        proximaChecagemEm: { lt: hoje },
+      },
+      orderBy: { proximaChecagemEm: 'asc' },
+      select: {
+        unidadeId: true,
+        proximaChecagemEm: true,
+        checklist: { select: { nome: true } },
+      },
+    });
+
+    for (const item of atrasados) {
+      if (map.has(item.unidadeId)) continue;
+      map.set(item.unidadeId, {
+        proximaChecagemEm: item.proximaChecagemEm.toISOString(),
+        checklistNome: item.checklist.nome,
+      });
+    }
+
+    return map;
   }
 
   private async loadUltimasNotasPorUnidade(unidadeIds: string[]) {

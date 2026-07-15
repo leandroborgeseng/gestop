@@ -18,6 +18,7 @@ import { chamadoToMapPoint } from '@/lib/chamado-geo';
 import { downloadOrdensServicoLote, listChamadosEmExecucao, listEquipesExecucao } from '@/lib/api';
 import { toInputDate } from '@/lib/cronograma';
 import { ChamadosEmExecucaoGrupo, EquipeOpcaoResumo } from '@/lib/types';
+import { useSafeBackHref } from '@/lib/use-safe-back-href';
 
 function EquipeFilterSelect({
   equipes,
@@ -163,6 +164,7 @@ export function ExecucaoPage() {
 function ExecucaoPageContent() {
   const router = useRouter();
   const canGerenciar = useCanGerenciarChamados();
+  const backHref = useSafeBackHref(canGerenciar ? '/chamados' : '/cco');
   const [grupos, setGrupos] = useState<ChamadosEmExecucaoGrupo[]>([]);
   const [equipesVisiveis, setEquipesVisiveis] = useState<EquipeOpcaoResumo[]>([]);
   const [equipeFilter, setEquipeFilter] = useState<string | null>(null);
@@ -261,7 +263,7 @@ function ExecucaoPageContent() {
         icon={CirclePlay}
         title="Execução"
         description="Chamados em execução no mapa e na fila de campo. Selecione um item para registrar check-in, serviço e evidências."
-        backHref={canGerenciar ? '/chamados' : '/cco'}
+        backHref={backHref}
         className="min-h-0"
         action={
           canGerenciar ? (

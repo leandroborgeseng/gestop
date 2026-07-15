@@ -27,6 +27,8 @@ export type OperacionalResumo = {
   fiscalizacoesConcluidas: number;
   naoConformidadesAbertas: number;
   chamadosAbertos: number;
+  /** Próprios com vistoria programada atrasada no cronograma. */
+  vistoriasAtrasadas?: number;
   eventosSyncPendentes: number;
 };
 
@@ -51,7 +53,12 @@ export type UnidadeOperacional = {
   pendencias: {
     naoConformidadesAbertas: number;
     chamadosAbertos: number;
+    /** True quando há vistoria programada no cronograma com data prevista vencida. */
     semVistoria?: boolean;
+    vistoriaAtrasada?: {
+      proximaChecagemEm: string;
+      checklistNome: string;
+    } | null;
   };
   totais: {
     fiscalizacoes: number;

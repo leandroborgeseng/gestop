@@ -12,9 +12,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { PushNotificationsPanel } from '@/components/dashboard/push-notifications-panel';
 import { getAlertasOperacionais, getDashboard, listAuditoria } from '@/lib/api';
+import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { AlertasOperacionais, AuditoriaEvento, DashboardData } from '@/lib/types';
 
 export default function DashboardPage() {
+  const backHref = useSafeBackHref('/cco');
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [alertas, setAlertas] = useState<AlertasOperacionais | null>(null);
   const [auditoria, setAuditoria] = useState<AuditoriaEvento[]>([]);
@@ -46,7 +48,7 @@ export default function DashboardPage() {
         icon={BarChart3}
         title="Dashboard operacional"
         description="Indicadores consolidados, alertas operacionais e trilha recente de auditoria."
-        backHref="/cco"
+        backHref={backHref}
       >
         <TipBanner id="dashboard-alertas">
           KPIs refletem o estado atual do sistema. Alertas operacionais destacam chamados atrasados, sem triagem e falhas de sync.

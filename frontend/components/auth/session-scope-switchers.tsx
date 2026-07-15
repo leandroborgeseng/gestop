@@ -3,11 +3,20 @@
 import { useState } from 'react';
 import { switchPerfilAtivo, switchSecretariaAtiva } from '@/lib/api';
 import type { AuthUser } from '@/lib/types';
+import { getDefaultAuthenticatedHref, getVisibleNavItems, isNavActive } from '@/lib/navigation';
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 
-async function afterSessionSwitch() {
-  window.location.assign('/cco');
+function afterSessionSwitch(user: AuthUser) {
+  const currentPath = window.location.pathname;
+  const stillAllowed = getVisibleNavItems(user.permissoes).some((item) =>
+    isNavActive(currentPath, item.href),
+  );
+  if (stillAllowed) {
+    window.location.assign(`${currentPath}${window.location.search}`);
+    return;
+  }
+  window.location.assign(getDefaultAuthenticatedHref(user.permissoes));
 }
 
 export function SessionScopeSwitchers({
@@ -42,8 +51,8 @@ export function SessionScopeSwitchers({
     setError(null);
     setSwitching(true);
     try {
-      await switchPerfilAtivo(perfilId);
-      await afterSessionSwitch();
+      const nextUser = await switchPerfilAtivo(perfilId);
+      afterSessionSwitch(nextUser);
     } catch (err) {
       setSwitching(false);
       setError(err instanceof Error ? err.message : 'Falha ao trocar perfil.');
@@ -57,8 +66,8 @@ export function SessionScopeSwitchers({
     setError(null);
     setSwitching(true);
     try {
-      await switchSecretariaAtiva(nextId);
-      await afterSessionSwitch();
+      const nextUser = await switchSecretariaAtiva(nextId);
+      afterSessionSwitch(nextUser);
     } catch (err) {
       setSwitching(false);
       setError(err instanceof Error ? err.message : 'Falha ao trocar secretaria.');

@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useSessionUser } from '@/components/auth/session-context';
 import { getStoredAuth } from '@/lib/api';
+import { getDefaultAuthenticatedHref, hasOperationalNavAccess, isNavActive } from '@/lib/navigation';
 import { ErrorState } from '@/components/ui-states';
 
 export function RequirePermissions({
@@ -16,9 +17,11 @@ export function RequirePermissions({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const sessionUser = useSessionUser();
   const permissionKey = useMemo(() => `${match}:${permissions.slice().sort().join('|')}`, [match, permissions]);
   const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [noAccessMessage, setNoAccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = getStoredAuth();
@@ -36,6 +39,7 @@ export function RequirePermissions({
 
     if (permissions.length === 0) {
       setAllowed(true);
+      setNoAccessMessage(null);
       return;
     }
 
@@ -46,20 +50,36 @@ export function RequirePermissions({
         : permissions.every((permission) => userPermissions.includes(permission));
 
     if (!hasAccess) {
-      router.replace('/cco?reason=denied');
+      if (!hasOperationalNavAccess(userPermissions)) {
+        setAllowed(false);
+        setNoAccessMessage(
+          'Não há nenhuma funcionalidade liberada para o perfil atual. Procure o administrador do sistema.',
+        );
+        return;
+      }
+
+      const fallback = getDefaultAuthenticatedHref(userPermissions);
+      // Evita loop se a rota de fallback for a mesma que acabou de negar.
+      if (!isNavActive(pathname, fallback)) {
+        router.replace(fallback);
+        return;
+      }
+
       setAllowed(false);
+      setNoAccessMessage('Seu perfil não tem permissão para acessar esta área.');
       return;
     }
 
     setAllowed(true);
-  }, [router, permissionKey, permissions, match, sessionUser]);
+    setNoAccessMessage(null);
+  }, [router, pathname, permissionKey, permissions, match, sessionUser]);
 
   if (allowed === null) {
     return null;
   }
 
   if (!allowed) {
-    return <ErrorState message="Seu perfil não tem permissão para acessar esta área." />;
+    return <ErrorState message={noAccessMessage ?? 'Seu perfil não tem permissão para acessar esta área.'} />;
   }
 
   return children;

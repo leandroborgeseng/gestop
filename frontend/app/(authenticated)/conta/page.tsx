@@ -11,8 +11,10 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { changePassword } from '@/lib/api';
+import { useSafeBackHref } from '@/lib/use-safe-back-href';
 
 export default function ContaPage() {
+  const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -52,7 +54,7 @@ export default function ContaPage() {
       icon={KeyRound}
       title="Minha conta"
       description="Altere sua senha de acesso ao SIGMA."
-      backHref="/cco"
+      backHref={backHref}
     >
       <TipBanner id="conta-senha">
         Use uma senha com pelo menos 12 caracteres. Após alterar, faça login novamente em outros dispositivos se necessário.

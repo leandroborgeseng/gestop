@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -39,6 +40,11 @@ export function UnidadeDrawer({
   const [detalhe, setDetalhe] = useState<UnidadeDetalhe | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open || !unidade) {
@@ -75,29 +81,34 @@ export function UnidadeDrawer({
       if (event.key === 'Escape') onClose();
     }
 
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
   }, [open, onClose]);
 
-  if (!open || !unidade) return null;
+  if (!open || !unidade || !mounted) return null;
 
   const ncCount = detalhe?.pendenciasDetalhadas.naoConformidades.length ?? unidade.pendencias.naoConformidadesAbertas;
   const chamadosCount = detalhe?.pendenciasDetalhadas.chamados.length ?? unidade.pendencias.chamadosAbertos;
   const fiscCount = detalhe?.ultimasFiscalizacoes.length ?? unidade.totais.fiscalizacoes;
 
-  return (
+  return createPortal(
     <>
       <button
         type="button"
         aria-label="Fechar detalhe"
-        className="fixed inset-0 z-40 bg-[rgba(15,23,42,0.35)] backdrop-blur-[1px]"
+        className="fixed inset-0 z-[100] bg-[rgba(15,23,42,0.35)] backdrop-blur-[1px]"
         onClick={onClose}
       />
 
       <aside
         role="dialog"
         aria-label={`Detalhe ${unidade.nome}`}
-        className="fixed top-0 right-0 z-50 flex h-dvh w-full max-w-[min(440px,calc(100%-2.5rem))] flex-col border-l border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-lg)] lg:max-w-[440px]"
+        className="fixed top-0 right-0 z-[110] flex h-dvh max-h-dvh w-full max-w-[min(440px,calc(100%-2.5rem))] flex-col border-l border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-lg)] lg:max-w-[440px]"
       >
         <header className="shrink-0 border-b border-[var(--line-2)] p-4">
           <div className="flex items-start justify-between gap-3">
@@ -128,7 +139,7 @@ export function UnidadeDrawer({
           />
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {loading ? <LoadingState label="Carregando detalhe..." /> : null}
           {error ? <ErrorState message={error} onRetry={() => void getUnidadeDetalhe(unidade.id).then(setDetalhe)} /> : null}
 
@@ -148,7 +159,8 @@ export function UnidadeDrawer({
           ) : null}
         </div>
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }
 
@@ -170,6 +182,18 @@ function GeralTab({
         <StatCard label="Não conf." value={unidade.pendencias.naoConformidadesAbertas} tone="warn" />
         <StatCard label="Chamados" value={unidade.pendencias.chamadosAbertos} tone="brand" />
       </div>
+
+      {unidade.pendencias.semVistoria && unidade.pendencias.vistoriaAtrasada ? (
+        <div className="rounded-[var(--r-md)] border border-[var(--warn)]/30 bg-[var(--warn-bg)] px-3 py-2.5 text-[12.5px] text-[var(--ink)]">
+          <p className="font-semibold text-[var(--warn)]">Vistoria programada atrasada</p>
+          <p className="mt-1 text-[var(--ink-2)]">
+            {unidade.pendencias.vistoriaAtrasada.checklistNome}
+            {' · '}
+            prevista para{' '}
+            {new Date(unidade.pendencias.vistoriaAtrasada.proximaChecagemEm).toLocaleDateString('pt-BR')}
+          </p>
+        </div>
+      ) : null}
 
       <dl className="grid gap-3 text-[13px]">
         <MetaField label="Secretaria" value={`${unidade.secretaria.sigla} — ${unidade.secretaria.nome}`} />

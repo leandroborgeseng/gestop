@@ -2,6 +2,8 @@
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/cn';
 import { IconButton } from '@/components/ui/icon-button';
 
@@ -20,14 +22,31 @@ export function Sheet({
   footer?: React.ReactNode;
   className?: string;
 }) {
-  return (
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [open]);
+
+  if (!mounted) return null;
+
+  return createPortal(
     <AnimatePresence>
       {open ? (
         <>
           <motion.button
             type="button"
             aria-label="Fechar"
-            className="fixed inset-0 z-40 bg-[var(--md-on-surface)]/40 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[100] bg-[var(--md-on-surface)]/40 backdrop-blur-[2px]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -39,7 +58,9 @@ export function Sheet({
             aria-modal="true"
             aria-label={title}
             className={cn(
-              'fixed inset-x-0 bottom-0 z-50 flex max-h-[min(92dvh,100dvh)] flex-col overflow-hidden rounded-t-[var(--md-shape-xl)] bg-[var(--md-surface)] shadow-[var(--md-elevation-5)] md:inset-x-auto md:bottom-auto md:left-1/2 md:top-1/2 md:max-h-[88vh] md:w-full md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[var(--md-shape-xl)]',
+              // Portal no body + z acima da bottom nav (z-40). Mobile: altura útil da tela
+              // com rolagem interna; desktop: modal centrado como antes.
+              'fixed inset-x-0 bottom-0 z-[110] flex max-h-[min(92dvh,calc(100dvh-0.75rem))] flex-col overflow-hidden rounded-t-[var(--md-shape-xl)] bg-[var(--md-surface)] shadow-[var(--md-elevation-5)] md:inset-x-auto md:bottom-auto md:left-1/2 md:top-1/2 md:max-h-[88vh] md:w-full md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[var(--md-shape-xl)]',
               className,
             )}
             initial={{ y: '100%', opacity: 0.8 }}
@@ -70,6 +91,7 @@ export function Sheet({
           </motion.div>
         </>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

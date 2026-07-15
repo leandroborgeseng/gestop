@@ -6,6 +6,7 @@ import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
+import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -70,6 +71,7 @@ const tipos: UnidadeTipo[] = ['ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO',
 const regioes: RegiaoUnidade[] = ['NORTE', 'SUL', 'LESTE', 'OESTE', 'CENTRO'];
 
 export default function AdminPage() {
+  const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
   const [tab, setTab] = useState<Tab>('secretarias');
   const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
@@ -141,7 +143,7 @@ export default function AdminPage() {
         icon={Building2}
         title="Cadastros e acesso"
         description="Gestão de secretarias, próprios e usuários — com controles de LGPD."
-        backHref="/cco"
+        backHref={backHref}
       >
         <TipBanner id="admin-cadastros">
           Alterações em secretarias, próprios e usuários são registradas na trilha de auditoria. Use a aba Importação para sincronizar o webmap QGIS.

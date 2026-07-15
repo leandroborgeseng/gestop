@@ -7,6 +7,7 @@ import { LockKeyhole } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { SIGMA_NAME, SIGMA_TAGLINE } from '@/lib/brand';
 import { login } from '@/lib/api';
+import { getDefaultAuthenticatedHref } from '@/lib/navigation';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -68,8 +69,8 @@ function LoginContent() {
     setError(null);
 
     try {
-      await login(email, password, remember);
-      router.replace('/cco');
+      const data = await login(email, password, remember);
+      router.replace(getDefaultAuthenticatedHref(data.user.permissoes));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha inesperada no login.');
     } finally {

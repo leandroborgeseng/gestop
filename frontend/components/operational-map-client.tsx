@@ -651,11 +651,11 @@ export function OperationalMapClient({
       : 'Ajuste os filtros ou cadastre coordenadas.';
 
   return (
-    <div className="cco-map-panel w-full">
+    <div className="cco-map-panel flex h-full min-h-0 w-full flex-col">
       <div
         ref={shellRef}
         className={[
-          'sigma-map-shell relative w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
+          'sigma-map-shell relative min-h-0 w-full flex-1 overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
           fullscreenMode === 'fallback' ? 'sigma-map-fullscreen fixed inset-0 z-[9999]' : '',
         ].join(' ')}
       >

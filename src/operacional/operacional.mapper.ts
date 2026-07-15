@@ -149,6 +149,7 @@ export function mapUnidadeOperacional(
       naoConformidadesAbertas: counts.naoConformidadesAbertas,
       chamadosAbertos: counts.chamadosAbertos,
       semVistoria: counts.semVistoria,
+      vistoriaAtrasada: null,
     },
     totais: counts,
     slaMapa: resolveUnidadeSlaMapa(counts.chamadosAbertos, counts.chamadosSlaForaPrazo),

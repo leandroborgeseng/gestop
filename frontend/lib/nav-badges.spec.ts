@@ -46,11 +46,25 @@ describe('buildNavBadges', () => {
 });
 
 describe('resolveGlobalSearchRoute', () => {
-  it('envia codigos de chamado para a lista de chamados', () => {
-    expect(resolveGlobalSearchRoute('CH-2026-000001')).toBe('/chamados?search=CH-2026-000001');
+  it('envia codigos de chamado para a lista de chamados quando permitido', () => {
+    expect(resolveGlobalSearchRoute('CH-2026-000001', ['chamados.gerenciar'])).toBe(
+      '/chamados?search=CH-2026-000001',
+    );
   });
 
-  it('envia busca generica para a CCO', () => {
-    expect(resolveGlobalSearchRoute('Escola Municipal')).toBe('/cco?search=Escola%20Municipal');
+  it('envia busca generica para a CCO quando permitido', () => {
+    expect(resolveGlobalSearchRoute('Escola Municipal', ['dashboard.visualizar'])).toBe(
+      '/cco?search=Escola%20Municipal',
+    );
+  });
+
+  it('nao força CCO quando o perfil não tem acesso', () => {
+    expect(resolveGlobalSearchRoute('Escola Municipal', ['chamados.executar'])).toBe(
+      '/chamados?search=Escola%20Municipal',
+    );
+  });
+
+  it('usa a primeira tela permitida quando a busca está vazia', () => {
+    expect(resolveGlobalSearchRoute('', ['chamados.executar'])).toBe('/execucao');
   });
 });

@@ -37,6 +37,7 @@ import { downloadChamadoPdf, getChamado, listChamadoEquipes, listChamados, listT
 import { cn } from '@/lib/cn';
 import { chamadoLocalLabel } from '@/lib/chamado-geo';
 import { toInputDate } from '@/lib/cronograma';
+import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import {
   CHAMADO_STATUS_META,
   buildChamadoTimelineFromHistorico,
@@ -95,6 +96,7 @@ export default function ChamadosPage() {
 
 function ChamadosPageContent() {
   const searchParams = useSearchParams();
+  const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
   const [chamados, setChamados] = useState<ChamadoResumo[]>([]);
   const [chamadosTotal, setChamadosTotal] = useState(0);
@@ -384,7 +386,7 @@ function ChamadosPageContent() {
         icon={Megaphone}
         title="Chamados"
         description="Triagem, atendimento e acompanhamento — abertos via QR Code, vistoria, app de vistoria e registro interno."
-        backHref="/cco"
+        backHref={backHref}
         action={
           <Link href="/chamados/novo">
             <Button variant="filled" size="md" className="gap-1.5">

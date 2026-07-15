@@ -1,6 +1,11 @@
 import type { AlertasOperacionais, OperacionalResumo } from '@/lib/types';
+import {
+  getDefaultAuthenticatedHref,
+  getVisibleNavItems,
+  type NavBadgeKey,
+} from '@/lib/navigation';
 
-export type NavBadgeKey = 'chamados' | 'integracoes';
+export type { NavBadgeKey };
 
 export type NavBadges = Partial<Record<NavBadgeKey, number>>;
 
@@ -24,14 +29,30 @@ export function buildNavBadges(
   return badges;
 }
 
-export function resolveGlobalSearchRoute(query: string): string {
+export function resolveGlobalSearchRoute(query: string, permissions: string[] = []): string {
   const trimmed = query.trim();
-  if (!trimmed) return '/cco';
+  const home = getDefaultAuthenticatedHref(permissions);
+  if (!trimmed) return home;
 
   const upper = trimmed.toUpperCase();
-  if (upper.startsWith('CH-') || upper.startsWith('CH') || upper.startsWith('OS-') || upper.startsWith('OS')) {
+  const isChamadoCode =
+    upper.startsWith('CH-') || upper.startsWith('CH') || upper.startsWith('OS-') || upper.startsWith('OS');
+
+  const visible = getVisibleNavItems(permissions);
+  const canChamados = visible.some((item) => item.id === 'chamados' || item.id === 'execucao');
+  const canCco = visible.some((item) => item.id === 'cco');
+
+  if (isChamadoCode && canChamados) {
     return `/chamados?search=${encodeURIComponent(trimmed)}`;
   }
 
-  return `/cco?search=${encodeURIComponent(trimmed)}`;
+  if (canCco) {
+    return `/cco?search=${encodeURIComponent(trimmed)}`;
+  }
+
+  if (canChamados) {
+    return `/chamados?search=${encodeURIComponent(trimmed)}`;
+  }
+
+  return home;
 }
