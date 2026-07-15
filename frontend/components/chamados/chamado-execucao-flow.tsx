@@ -27,6 +27,7 @@ import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { useCanGerenciarChamados, useCanLancarExecucaoManual } from '@/components/auth/session-context';
+import { MembroExternoPicker } from '@/components/chamados/membro-externo-picker';
 import {
   addChamadoExecucaoEvidencia,
   checkinChamadoExecucao,
@@ -67,29 +68,24 @@ function ExecucaoParticipantesBlock({
   equipes,
   equipeExecutoraId,
   selectedMembroIds,
-  membrosExternos,
-  membroExternoInput,
+  membroExternoIds,
   disabled,
   onEquipeChange,
   onToggleMembro,
-  onMembroExternoInput,
-  onAddMembroExterno,
-  onRemoveMembroExterno,
+  onMembroExternosChange,
 }: {
   equipes: EquipeOpcao[];
   equipeExecutoraId: string;
   selectedMembroIds: string[];
-  membrosExternos: string[];
-  membroExternoInput: string;
+  membroExternoIds: string[];
   disabled?: boolean;
   onEquipeChange: (equipeId: string) => void;
   onToggleMembro: (usuarioId: string, checked: boolean) => void;
-  onMembroExternoInput: (value: string) => void;
-  onAddMembroExterno: () => void;
-  onRemoveMembroExterno: (nome: string) => void;
+  onMembroExternosChange: (ids: string[]) => void;
 }) {
   const equipeSelecionada = equipes.find((item) => item.id === equipeExecutoraId);
   const membros = equipeSelecionada?.membros.map((item) => item.usuario).filter((usuario) => usuario.ativo) ?? [];
+  const equipeMembroIds = membros.map((usuario) => usuario.id);
 
   return (
     <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)] p-4">
@@ -132,33 +128,12 @@ function ExecucaoParticipantesBlock({
         )}
       </div>
 
-      <div>
-        <p className="mb-2 text-[12px] font-semibold text-[var(--ink-2)]">Membro externo à equipe (opcional)</p>
-        <div className="flex gap-2">
-          <input
-            value={membroExternoInput}
-            onChange={(event) => onMembroExternoInput(event.target.value)}
-            placeholder="Nome de quem ajudou na execução"
-            disabled={disabled}
-            className="h-9 min-w-0 flex-1 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px]"
-          />
-          <Button type="button" variant="outlined" size="sm" disabled={disabled || !membroExternoInput.trim()} onClick={onAddMembroExterno}>
-            Incluir
-          </Button>
-        </div>
-        {membrosExternos.length > 0 ? (
-          <ul className="mt-2 space-y-1">
-            {membrosExternos.map((nome) => (
-              <li key={nome} className="flex items-center justify-between gap-2 text-[12px] text-[var(--ink-2)]">
-                <span>{nome}</span>
-                <button type="button" className="text-[var(--danger)]" onClick={() => onRemoveMembroExterno(nome)} disabled={disabled}>
-                  Remover
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
+      <MembroExternoPicker
+        selectedIds={membroExternoIds}
+        excludeIds={[...equipeMembroIds, ...selectedMembroIds]}
+        disabled={disabled}
+        onChange={(ids) => onMembroExternosChange(ids)}
+      />
     </div>
   );
 }
@@ -226,23 +201,21 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   const [equipesOpcoes, setEquipesOpcoes] = useState<EquipeOpcao[]>([]);
   const [equipeExecutoraId, setEquipeExecutoraId] = useState('');
   const [selectedMembroIds, setSelectedMembroIds] = useState<string[]>([]);
-  const [membrosExternos, setMembrosExternos] = useState<string[]>([]);
-  const [membroExternoInput, setMembroExternoInput] = useState('');
+  const [membroExternoIds, setMembroExternoIds] = useState<string[]>([]);
   const [manualAnexos, setManualAnexos] = useState<Array<{ dataUrl: string; mimeType: string; nome: string }>>([]);
 
   function applyEquipeExecutora(equipeId: string, equipes: EquipeOpcao[]) {
     setEquipeExecutoraId(equipeId);
     const equipe = equipes.find((item) => item.id === equipeId);
     setSelectedMembroIds(equipe?.membros.filter((item) => item.usuario.ativo).map((item) => item.usuario.id) ?? []);
-    setMembrosExternos([]);
-    setMembroExternoInput('');
+    setMembroExternoIds([]);
   }
 
   function participantesPayload() {
     return {
       equipeExecutoraId,
       membroIds: selectedMembroIds,
-      membrosExternos: membrosExternos.length > 0 ? membrosExternos : undefined,
+      membroExternoIds: membroExternoIds.length > 0 ? membroExternoIds : undefined,
     };
   }
 
@@ -251,7 +224,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
       setError('Selecione a equipe que executou o chamado.');
       return false;
     }
-    if (selectedMembroIds.length === 0 && membrosExternos.length === 0) {
+    if (selectedMembroIds.length === 0 && membroExternoIds.length === 0) {
       setError('Selecione ao menos um membro que participou da execução.');
       return false;
     }
@@ -733,23 +706,18 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                       equipes={equipesOpcoes}
                       equipeExecutoraId={equipeExecutoraId}
                       selectedMembroIds={selectedMembroIds}
-                      membrosExternos={membrosExternos}
-                      membroExternoInput={membroExternoInput}
+                      membroExternoIds={membroExternoIds}
                       disabled={busy}
                       onEquipeChange={(equipeId) => applyEquipeExecutora(equipeId, equipesOpcoes)}
-                      onToggleMembro={(usuarioId, checked) =>
+                      onToggleMembro={(usuarioId, checked) => {
                         setSelectedMembroIds((current) =>
                           checked ? [...current, usuarioId] : current.filter((id) => id !== usuarioId),
-                        )
-                      }
-                      onMembroExternoInput={setMembroExternoInput}
-                      onAddMembroExterno={() => {
-                        const nome = membroExternoInput.trim();
-                        if (!nome || membrosExternos.includes(nome)) return;
-                        setMembrosExternos((current) => [...current, nome]);
-                        setMembroExternoInput('');
+                        );
+                        if (checked) {
+                          setMembroExternoIds((current) => current.filter((id) => id !== usuarioId));
+                        }
                       }}
-                      onRemoveMembroExterno={(nome) => setMembrosExternos((current) => current.filter((item) => item !== nome))}
+                      onMembroExternosChange={setMembroExternoIds}
                     />
                     <div>
                       <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -955,23 +923,18 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
               equipes={equipesOpcoes}
               equipeExecutoraId={equipeExecutoraId}
               selectedMembroIds={selectedMembroIds}
-              membrosExternos={membrosExternos}
-              membroExternoInput={membroExternoInput}
+              membroExternoIds={membroExternoIds}
               disabled={busy}
               onEquipeChange={(equipeId) => applyEquipeExecutora(equipeId, equipesOpcoes)}
-              onToggleMembro={(usuarioId, checked) =>
+              onToggleMembro={(usuarioId, checked) => {
                 setSelectedMembroIds((current) =>
                   checked ? [...current, usuarioId] : current.filter((id) => id !== usuarioId),
-                )
-              }
-              onMembroExternoInput={setMembroExternoInput}
-              onAddMembroExterno={() => {
-                const nome = membroExternoInput.trim();
-                if (!nome || membrosExternos.includes(nome)) return;
-                setMembrosExternos((current) => [...current, nome]);
-                setMembroExternoInput('');
+                );
+                if (checked) {
+                  setMembroExternoIds((current) => current.filter((id) => id !== usuarioId));
+                }
               }}
-              onRemoveMembroExterno={(nome) => setMembrosExternos((current) => current.filter((item) => item !== nome))}
+              onMembroExternosChange={setMembroExternoIds}
             />
 
             <div>

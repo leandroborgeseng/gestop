@@ -38,6 +38,7 @@ import {
   PublicUnidadeChamado,
   SecretariaOption,
   UnidadeDetalhe,
+  UsuarioExecucaoOpcao,
   UnidadeFilters,
   UnidadeFiltroOpcoes,
   UnidadeOperacional,
@@ -759,6 +760,11 @@ export function listEquipesExecucao() {
   return request<EquipeOpcaoResumo[]>('/chamados/equipes/execucao');
 }
 
+export function listUsuariosAtivosExecucao(search?: string) {
+  const query = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  return request<UsuarioExecucaoOpcao[]>(`/chamados/usuarios/ativos${query}`);
+}
+
 export function updateChamadoAtribuicao(
   id: string,
   payload: { equipeId?: string; responsavelId?: string | null; motivo?: string },
@@ -962,7 +968,7 @@ export function concluirChamadoExecucao(
     checkin: { latitude: number; longitude: number; precisaoMetros: number };
     equipeExecutoraId: string;
     membroIds: string[];
-    membrosExternos?: string[];
+    membroExternoIds?: string[];
     impedimento?: boolean;
     impedimentoMotivo?: string;
   },
@@ -981,7 +987,7 @@ export function registrarChamadoExecucaoManual(
     relatorio: string;
     equipeExecutoraId: string;
     membroIds: string[];
-    membrosExternos?: string[];
+    membroExternoIds?: string[];
     anexos?: Array<{ dataUrl: string; mimeType?: string; nome?: string }>;
     impedimento?: boolean;
     impedimentoMotivo?: string;

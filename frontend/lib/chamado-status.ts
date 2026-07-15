@@ -168,6 +168,25 @@ function isAtribuicaoMotivo(motivo: string | null | undefined) {
   );
 }
 
+function formatParticipanteLabel(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (!value || typeof value !== 'object') return null;
+  const item = value as { nome?: unknown; cargo?: unknown; secretaria?: { sigla?: unknown } | null };
+  if (typeof item.nome !== 'string' || !item.nome.trim()) return null;
+  const parts = [item.nome.trim()];
+  if (typeof item.cargo === 'string' && item.cargo.trim()) parts.push(item.cargo.trim());
+  if (typeof item.secretaria?.sigla === 'string' && item.secretaria.sigla.trim()) {
+    parts.push(item.secretaria.sigla.trim());
+  }
+  return parts.join(' · ');
+}
+
+function formatParticipantesList(values: unknown): string | null {
+  if (!Array.isArray(values) || values.length === 0) return null;
+  const labels = values.map(formatParticipanteLabel).filter((item): item is string => Boolean(item));
+  return labels.length > 0 ? labels.join('\n') : null;
+}
+
 function buildExecucaoConclusaoStep(
   entry: ChamadoHistoricoEntry,
   metadata: Record<string, unknown>,
@@ -197,6 +216,27 @@ function buildExecucaoConclusaoStep(
     detalhes.push({ label: 'Evidências registradas', value: `${anexos.length} foto(s)` });
   } else if (typeof metadata.evidenciasCount === 'number' && metadata.evidenciasCount > 0) {
     detalhes.push({ label: 'Evidências registradas', value: `${metadata.evidenciasCount} foto(s)` });
+  }
+
+  const equipe =
+    metadata.equipeExecutora && typeof metadata.equipeExecutora === 'object'
+      ? (metadata.equipeExecutora as { nome?: string; codigo?: string | null })
+      : null;
+  if (equipe?.nome) {
+    detalhes.push({
+      label: 'Equipe executora',
+      value: equipe.codigo ? `${equipe.codigo} · ${equipe.nome}` : equipe.nome,
+    });
+  }
+
+  const membrosEquipe = formatParticipantesList(metadata.membrosExecutores);
+  if (membrosEquipe) {
+    detalhes.push({ label: 'Membros da equipe', value: membrosEquipe });
+  }
+
+  const membrosExternos = formatParticipantesList(metadata.membrosExternos);
+  if (membrosExternos) {
+    detalhes.push({ label: 'Membros externos', value: membrosExternos });
   }
 
   const expandContent = {

@@ -401,6 +401,24 @@ export type EquipeOpcao = EquipeOpcaoResumo & {
   }>;
 };
 
+export type UsuarioExecucaoOpcao = {
+  id: string;
+  nome: string;
+  email: string;
+  cpf: string | null;
+  cargo: string | null;
+  cargoRef?: { id: string; nome: string } | null;
+  secretaria?: SecretariaOption | null;
+};
+
+export type ExecucaoParticipanteResumo = {
+  id: string;
+  nome: string;
+  email?: string;
+  cargo?: string | null;
+  secretaria?: { id: string; nome: string; sigla: string } | null;
+};
+
 export type WebmapImportGithub = {
   repo: string;
   branch: string;

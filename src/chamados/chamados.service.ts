@@ -199,6 +199,38 @@ export class ChamadosService {
     });
   }
 
+  /** Usuários ativos de qualquer Secretaria para seleção de membro externo na execução. */
+  async listUsuariosAtivosParaExecucao(search?: string) {
+    const q = search?.trim();
+    const digits = q?.replace(/\D/g, '') ?? '';
+
+    return this.prisma.usuario.findMany({
+      where: {
+        ativo: true,
+        ...(q
+          ? {
+              OR: [
+                { nome: { contains: q, mode: 'insensitive' } },
+                { email: { contains: q, mode: 'insensitive' } },
+                ...(digits.length >= 3 ? [{ cpf: { contains: digits } }] : []),
+              ],
+            }
+          : {}),
+      },
+      orderBy: { nome: 'asc' },
+      take: 80,
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        cpf: true,
+        cargo: true,
+        cargoRef: { select: { id: true, nome: true } },
+        secretaria: { select: { id: true, nome: true, sigla: true } },
+      },
+    });
+  }
+
   async listProgramacao(from: string, to: string, user: JwtPayload, equipeId?: string) {
     if (!from?.trim() || !to?.trim()) {
       throw new BadRequestException('Informe o intervalo from e to (YYYY-MM-DD).');
@@ -2194,7 +2226,7 @@ export class ChamadosService {
   private async resolveExecucaoParticipantes(dto: {
     equipeExecutoraId: string;
     membroIds: string[];
-    membrosExternos?: string[];
+    membroExternoIds?: string[];
   }) {
     const equipe = await this.prisma.equipe.findFirst({
       where: { id: dto.equipeExecutoraId.trim(), ativo: true },
@@ -2204,10 +2236,12 @@ export class ChamadosService {
       throw new BadRequestException('Equipe executora não encontrada ou inativa.');
     }
 
-    const membrosExternos = (dto.membrosExternos ?? []).map((item) => item.trim()).filter(Boolean);
     const membroIds = [...new Set((dto.membroIds ?? []).map((item) => item.trim()).filter(Boolean))];
+    const membroExternoIds = [
+      ...new Set((dto.membroExternoIds ?? []).map((item) => item.trim()).filter(Boolean)),
+    ].filter((id) => !membroIds.includes(id));
 
-    if (membroIds.length === 0 && membrosExternos.length === 0) {
+    if (membroIds.length === 0 && membroExternoIds.length === 0) {
       throw new BadRequestException('Selecione ao menos um membro que participou da execução.');
     }
 
@@ -2216,12 +2250,50 @@ export class ChamadosService {
         ? []
         : await this.prisma.usuario.findMany({
             where: { id: { in: membroIds }, ativo: true },
-            select: { id: true, nome: true },
+            select: {
+              id: true,
+              nome: true,
+              email: true,
+              cargo: true,
+              cargoRef: { select: { nome: true } },
+              secretaria: { select: { id: true, nome: true, sigla: true } },
+            },
           });
 
     if (membrosExecutores.length !== membroIds.length) {
       throw new BadRequestException('Um ou mais membros selecionados não foram encontrados ou estão inativos.');
     }
+
+    const membrosExternosRaw =
+      membroExternoIds.length === 0
+        ? []
+        : await this.prisma.usuario.findMany({
+            where: { id: { in: membroExternoIds }, ativo: true },
+            select: {
+              id: true,
+              nome: true,
+              email: true,
+              cargo: true,
+              cargoRef: { select: { nome: true } },
+              secretaria: { select: { id: true, nome: true, sigla: true } },
+            },
+          });
+
+    if (membrosExternosRaw.length !== membroExternoIds.length) {
+      throw new BadRequestException(
+        'Um ou mais membros externos não foram encontrados ou estão inativos. Cadastre/ative o usuário antes de registrar a execução.',
+      );
+    }
+
+    const mapUsuarioParticipante = (usuario: (typeof membrosExecutores)[number]) => ({
+      id: usuario.id,
+      nome: usuario.nome,
+      email: usuario.email,
+      cargo: usuario.cargoRef?.nome ?? usuario.cargo ?? null,
+      secretaria: usuario.secretaria
+        ? { id: usuario.secretaria.id, nome: usuario.secretaria.nome, sigla: usuario.secretaria.sigla }
+        : null,
+    });
 
     return {
       equipeExecutora: {
@@ -2229,8 +2301,8 @@ export class ChamadosService {
         codigo: equipe.codigo,
         nome: equipe.nome,
       },
-      membrosExecutores,
-      membrosExternos,
+      membrosExecutores: membrosExecutores.map(mapUsuarioParticipante),
+      membrosExternos: membrosExternosRaw.map(mapUsuarioParticipante),
     };
   }
 

@@ -64,6 +64,12 @@ export class ChamadosController {
     return this.chamadosService.listEquipesParaExecucao(user);
   }
 
+  @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar', 'chamados.execucao_manual')
+  @Get('usuarios/ativos')
+  listUsuariosAtivos(@Query('search') search?: string) {
+    return this.chamadosService.listUsuariosAtivosParaExecucao(search);
+  }
+
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')
   @Get('em-execucao')
   listEmExecucaoPorEquipe(

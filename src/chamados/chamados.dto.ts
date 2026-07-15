@@ -289,7 +289,7 @@ export class ChamadoExecucaoConcluirDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  membrosExternos?: string[];
+  membroExternoIds?: string[];
 
   @IsOptional()
   @IsBoolean()
@@ -319,7 +319,7 @@ export class ChamadoExecucaoManualDto {
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  membrosExternos?: string[];
+  membroExternoIds?: string[];
 
   @IsOptional()
   @IsArray()
