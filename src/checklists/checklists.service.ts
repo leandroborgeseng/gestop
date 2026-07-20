@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { AuditAction, ChecklistVersaoStatus, Prisma } from '@prisma/client';
+import { AuditAction, ChecklistFinalidade, ChecklistVersaoStatus, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChecklistDto, ChecklistVersionDto } from './checklists.dto';
@@ -22,31 +22,25 @@ const checklistInclude = {
     orderBy: { versao: 'desc' as const },
     include: { itens: { orderBy: { ordem: 'asc' as const } } },
   },
-};
+} satisfies Prisma.ChecklistInclude;
+
+type ChecklistWithRelations = Prisma.ChecklistGetPayload<{ include: typeof checklistInclude }>;
 
 @Injectable()
 export class ChecklistsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private get db() {
-    return this.prisma as PrismaService & {
-      checklistTipoChamado: {
-        deleteMany: (args: unknown) => Promise<unknown>;
-      };
-    };
-  }
-
   listChecklists() {
     return this.prisma.checklist.findMany({
       orderBy: [{ ativo: 'desc' }, { nome: 'asc' }],
-      include: checklistInclude as never,
+      include: checklistInclude,
     });
   }
 
-  async getChecklist(id: string) {
+  async getChecklist(id: string): Promise<ChecklistWithRelations> {
     const checklist = await this.prisma.checklist.findUnique({
       where: { id },
-      include: checklistInclude as never,
+      include: checklistInclude,
     });
 
     if (!checklist) {
@@ -61,7 +55,7 @@ export class ChecklistsService {
     const binding = normalizeChecklistBinding(dto);
     await this.ensureUnidadeAtiva(binding.unidadeId);
     await this.ensureTiposChamadoAtivos(binding.tipoChamadoIds);
-    const finalidade = binding.finalidade ?? 'VISTORIA';
+    const finalidade = (binding.finalidade ?? ChecklistFinalidade.VISTORIA) as ChecklistFinalidade;
 
     const checklist = await this.prisma.checklist.create({
       data: {
@@ -80,15 +74,15 @@ export class ChecklistsService {
             estrutura: {},
           },
         },
-        ...(finalidade === 'CHAMADO' && binding.tipoChamadoIds?.length
+        ...(finalidade === ChecklistFinalidade.CHAMADO && binding.tipoChamadoIds?.length
           ? {
               tiposChamado: {
                 create: binding.tipoChamadoIds.map((tipoChamadoId) => ({ tipoChamadoId })),
               },
             }
           : {}),
-      } as never,
-      include: checklistInclude as never,
+      },
+      include: checklistInclude,
     });
 
     await this.audit(user, AuditAction.CREATE, 'Checklist', checklist.id, null, checklist);
@@ -101,9 +95,9 @@ export class ChecklistsService {
     await this.ensureUnidadeAtiva(binding.unidadeId);
     await this.ensureTiposChamadoAtivos(binding.tipoChamadoIds);
     const before = await this.getChecklist(id);
-    const finalidade = binding.finalidade ?? 'VISTORIA';
+    const finalidade = (binding.finalidade ?? ChecklistFinalidade.VISTORIA) as ChecklistFinalidade;
 
-    await this.db.checklistTipoChamado.deleteMany({ where: { checklistId: id } });
+    await this.prisma.checklistTipoChamado.deleteMany({ where: { checklistId: id } });
     const checklist = await this.prisma.checklist.update({
       where: { id },
       data: {
@@ -115,15 +109,15 @@ export class ChecklistsService {
         unidadeId: binding.unidadeId || null,
         unidadeTipo: binding.unidadeTipo || null,
         ativo: binding.ativo ?? true,
-        ...(finalidade === 'CHAMADO' && binding.tipoChamadoIds?.length
+        ...(finalidade === ChecklistFinalidade.CHAMADO && binding.tipoChamadoIds?.length
           ? {
               tiposChamado: {
                 create: binding.tipoChamadoIds.map((tipoChamadoId) => ({ tipoChamadoId })),
               },
             }
           : {}),
-      } as never,
-      include: checklistInclude as never,
+      },
+      include: checklistInclude,
     });
 
     await this.audit(user, AuditAction.UPDATE, 'Checklist', id, before, checklist);
@@ -185,7 +179,7 @@ export class ChecklistsService {
   async updateVersion(versionId: string, dto: ChecklistVersionDto, user: JwtPayload) {
     const version = await this.prisma.checklistVersao.findUnique({
       where: { id: versionId },
-      include: { itens: true, checklist: { select: { finalidade: true } } as never },
+      include: { itens: true, checklist: { select: { finalidade: true } } },
     });
 
     if (!version) {
@@ -198,7 +192,7 @@ export class ChecklistsService {
       throw new BadRequestException(error instanceof Error ? error.message : 'Versao bloqueada');
     }
 
-    const finalidadeChamado = (version.checklist as { finalidade?: string }).finalidade === 'CHAMADO';
+    const finalidadeChamado = version.checklist.finalidade === ChecklistFinalidade.CHAMADO;
 
     try {
       assertValidChecklistVersion(dto, { finalidadeChamado });
@@ -249,7 +243,7 @@ export class ChecklistsService {
   async publishVersion(versionId: string, user: JwtPayload) {
     const version = await this.prisma.checklistVersao.findUnique({
       where: { id: versionId },
-      include: { itens: true, checklist: { select: { finalidade: true } } as never },
+      include: { itens: true, checklist: { select: { finalidade: true } } },
     });
 
     if (!version) {
@@ -264,7 +258,7 @@ export class ChecklistsService {
       throw new BadRequestException('Nao e possivel publicar checklist sem itens');
     }
 
-    const finalidadeChamado = (version.checklist as { finalidade?: string }).finalidade === 'CHAMADO';
+    const finalidadeChamado = version.checklist.finalidade === ChecklistFinalidade.CHAMADO;
 
     try {
       assertValidChecklistVersion(

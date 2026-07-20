@@ -141,8 +141,6 @@ function drawAnexo(
     try {
       doc.image(anexo.imageBuffer, left + 8, y, {
         fit: [width - 16, maxH],
-        align: 'left',
-        valign: 'top',
       });
       // pdfkit não retorna altura facilmente; estima por fit
       y += Math.min(maxH, 180) + 8;

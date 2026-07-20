@@ -3,7 +3,6 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
-  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -11,7 +10,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { ChecklistEscopo, ChecklistItemTipo, UnidadeTipo } from '@prisma/client';
+import { ChecklistEscopo, ChecklistFinalidade, ChecklistItemTipo, UnidadeTipo } from '@prisma/client';
 
 export class ChecklistDto {
   @IsString()
@@ -23,8 +22,8 @@ export class ChecklistDto {
   descricao?: string;
 
   @IsOptional()
-  @IsIn(['VISTORIA', 'CHAMADO'])
-  finalidade?: 'VISTORIA' | 'CHAMADO';
+  @IsEnum(ChecklistFinalidade)
+  finalidade?: ChecklistFinalidade;
 
   @IsEnum(ChecklistEscopo)
   escopo!: ChecklistEscopo;

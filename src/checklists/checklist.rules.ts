@@ -1,4 +1,4 @@
-import { ChecklistVersaoStatus, ChecklistEscopo } from '@prisma/client';
+import { ChecklistVersaoStatus, ChecklistEscopo, ChecklistFinalidade } from '@prisma/client';
 import { ChecklistDto, ChecklistVersionDto } from './checklists.dto';
 import { assertValidChecklistVersionItems, normalizeChecklistItemOpcoes } from './checklist-item.rules';
 
@@ -25,8 +25,8 @@ export function normalizeItemCode(code: string) {
 }
 
 export function validateChecklistEscopo(dto: ChecklistDto) {
-  const finalidade = dto.finalidade ?? 'VISTORIA';
-  if (finalidade === 'CHAMADO') {
+  const finalidade = dto.finalidade ?? ChecklistFinalidade.VISTORIA;
+  if (finalidade === ChecklistFinalidade.CHAMADO) {
     if (!dto.tipoChamadoIds?.length) {
       throw new Error('Vincule o checklist a ao menos um tipo de chamado.');
     }
@@ -47,8 +47,8 @@ export function validateChecklistEscopo(dto: ChecklistDto) {
 }
 
 export function normalizeChecklistBinding(dto: ChecklistDto): ChecklistDto {
-  const finalidade = dto.finalidade ?? 'VISTORIA';
-  if (finalidade === 'CHAMADO') {
+  const finalidade = dto.finalidade ?? ChecklistFinalidade.VISTORIA;
+  if (finalidade === ChecklistFinalidade.CHAMADO) {
     return {
       ...dto,
       finalidade,

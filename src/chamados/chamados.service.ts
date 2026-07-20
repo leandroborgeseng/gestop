@@ -2162,7 +2162,7 @@ export class ChamadosService {
         finalidade: 'CHAMADO',
         tiposChamado: { some: { tipoChamadoId } },
         versoes: { some: { status: 'PUBLICADA' } },
-      } as never,
+      },
       include: {
         versoes: {
           where: { status: 'PUBLICADA' },
