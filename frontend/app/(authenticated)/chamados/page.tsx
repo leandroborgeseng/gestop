@@ -422,7 +422,7 @@ function ChamadosPageContent() {
 
         {view === 'triagem' && chamadosTotal > 0 ? (
           <p className="mb-3 text-[12px] text-[var(--ink-3)]">
-            Exibindo {chamados.length} de {chamadosTotal} chamados
+            Exibindo {filtered.length} de {chamadosTotal} chamados
             {hasMoreChamados ? ' — carregue mais para ver a lista completa' : ''}.
           </p>
         ) : null}
