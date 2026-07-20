@@ -77,9 +77,9 @@ export function ChamadosFiltrosPanel({
     return () => mq.removeEventListener('change', sync);
   }, []);
 
-  const statusTodos = value.statuses === 'TODOS';
-  const selectedStatuses = statusTodos ? null : value.statuses;
-  const statusCount = selectedStatuses?.size ?? 0;
+  const selectedStatuses = value.statuses === 'TODOS' ? null : value.statuses;
+  const statusTodos = selectedStatuses == null;
+  const statusCount = selectedStatuses ? selectedStatuses.size : 0;
 
   const summary = useMemo(() => {
     const equipe =
