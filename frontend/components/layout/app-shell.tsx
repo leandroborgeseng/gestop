@@ -114,25 +114,17 @@ function DesktopSidebar({
         )}
       >
         <div className={cn('flex min-w-0 items-center gap-2.5', collapsed ? 'justify-center' : 'flex-1')}>
-          {collapsed ? (
-            <Image
-              src="/franca-mark.png"
-              alt="Prefeitura de Franca"
-              width={28}
-              height={49}
-              className="h-10 w-auto max-h-10 object-contain object-center"
-              priority
-            />
-          ) : (
-            <Image
-              src="/franca-lockup.png"
-              alt="Prefeitura de Franca"
-              width={160}
-              height={69}
-              className="h-9 w-auto max-w-[150px] object-contain object-left"
-              priority
-            />
-          )}
+          <Image
+            src="/franca-mark.png"
+            alt="Prefeitura de Franca"
+            width={36}
+            height={48}
+            className={cn(
+              'shrink-0 object-contain object-center',
+              collapsed ? 'h-10 w-auto max-h-10' : 'h-11 w-auto max-h-11',
+            )}
+            priority
+          />
           {!collapsed ? (
             <div className="min-w-0 leading-tight">
               <div className="text-[17px] font-bold tracking-[-0.02em] text-[var(--ink)]">{SIGMA_NAME}</div>
@@ -317,8 +309,8 @@ export function MobileAppBar({ userName, syncPending }: { userName: string; sync
           <Image
             src="/franca-mark.png"
             alt=""
-            width={28}
-            height={49}
+            width={32}
+            height={42}
             className="h-9 w-auto max-h-9 object-contain object-center"
           />
           <div className="min-w-0 border-l border-[var(--line-2)] pl-3">
