@@ -11,6 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import {
+  PASSWORD_MIN_LENGTH_NEW,
+  PASSWORD_POLICY_HINT,
+  validatePasswordPolicy,
+} from '@/lib/password-policy';
 
 export default function RedefinirSenhaPage() {
   return (
@@ -51,6 +56,12 @@ function RedefinirSenhaContent() {
       return;
     }
 
+    const policyError = validatePasswordPolicy(newPassword);
+    if (policyError) {
+      setError(policyError);
+      return;
+    }
+
     setLoading(true);
     try {
       await resetPasswordWithToken(token, newPassword);
@@ -67,18 +78,18 @@ function RedefinirSenhaContent() {
       icon={KeyRound}
       chipLabel="Nova credencial"
       title="Redefinir senha"
-      description="Escolha uma senha forte com pelo menos 12 caracteres."
+      description={PASSWORD_POLICY_HINT}
     >
       {error ? <Alert variant="error" className="mb-4">{error}</Alert> : null}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        <Field label="Nova senha">
+        <Field label="Nova senha" hint={PASSWORD_POLICY_HINT}>
           <Input
             type="password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             autoComplete="new-password"
-            minLength={12}
+            minLength={PASSWORD_MIN_LENGTH_NEW}
             required
           />
         </Field>
@@ -88,7 +99,7 @@ function RedefinirSenhaContent() {
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             autoComplete="new-password"
-            minLength={12}
+            minLength={PASSWORD_MIN_LENGTH_NEW}
             required
           />
         </Field>

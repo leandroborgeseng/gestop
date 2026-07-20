@@ -13,7 +13,7 @@ import {
   RefreshCw,
   Search,
 } from 'lucide-react';
-import { SIGMA_NAME, SIGMA_SHORT_TAGLINE } from '@/lib/brand';
+import { SIGMA_NAME, SIGMA_TAGLINE } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { getAlertasOperacionais, getResumoOperacional, logout } from '@/lib/api';
 import type { AuthUser } from '@/lib/types';
@@ -114,11 +114,29 @@ function DesktopSidebar({
         )}
       >
         <div className={cn('flex min-w-0 items-center gap-2.5', collapsed ? 'justify-center' : 'flex-1')}>
-          <Image src="/franca-mark.png" alt="Prefeitura de Franca" width={30} height={36} className="h-9 w-[30px] object-contain" priority />
+          {collapsed ? (
+            <Image
+              src="/franca-mark.png"
+              alt="Prefeitura de Franca"
+              width={28}
+              height={49}
+              className="h-10 w-auto max-h-10 object-contain object-center"
+              priority
+            />
+          ) : (
+            <Image
+              src="/franca-lockup.png"
+              alt="Prefeitura de Franca"
+              width={160}
+              height={69}
+              className="h-9 w-auto max-w-[150px] object-contain object-left"
+              priority
+            />
+          )}
           {!collapsed ? (
             <div className="min-w-0 leading-tight">
               <div className="text-[17px] font-bold tracking-[-0.02em] text-[var(--ink)]">{SIGMA_NAME}</div>
-              <div className="text-[11px] font-medium text-[var(--ink-3)]">{SIGMA_SHORT_TAGLINE}</div>
+              <div className="text-[10px] leading-snug font-medium text-[var(--ink-3)]">{SIGMA_TAGLINE}</div>
             </div>
           ) : null}
         </div>
@@ -296,7 +314,13 @@ export function MobileAppBar({ userName, syncPending }: { userName: string; sync
     <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur-md lg:hidden">
       <div className="flex min-h-[58px] items-center justify-between gap-3 px-4 py-2">
         <div className="flex min-w-0 items-center gap-3">
-          <Image src="/franca-mark.png" alt="" width={28} height={34} className="h-8 w-7 object-contain" />
+          <Image
+            src="/franca-mark.png"
+            alt=""
+            width={28}
+            height={49}
+            className="h-9 w-auto max-h-9 object-contain object-center"
+          />
           <div className="min-w-0 border-l border-[var(--line-2)] pl-3">
             <p className="text-sm font-bold text-[var(--ink)]">{SIGMA_NAME}</p>
             <p className="truncate text-xs text-[var(--ink-3)]">{userName}</p>

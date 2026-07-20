@@ -12,6 +12,11 @@ import { Input } from '@/components/ui/input';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { changePassword } from '@/lib/api';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
+import {
+  PASSWORD_MIN_LENGTH_NEW,
+  PASSWORD_POLICY_HINT,
+  validatePasswordPolicy,
+} from '@/lib/password-policy';
 
 export default function ContaPage() {
   const backHref = useSafeBackHref('/cco');
@@ -30,6 +35,12 @@ export default function ContaPage() {
 
     if (newPassword !== confirmPassword) {
       setError('A confirmação da nova senha não confere.');
+      return;
+    }
+
+    const policyError = validatePasswordPolicy(newPassword);
+    if (policyError) {
+      setError(policyError);
       return;
     }
 
@@ -57,7 +68,7 @@ export default function ContaPage() {
       backHref={backHref}
     >
       <TipBanner id="conta-senha">
-        Use uma senha com pelo menos 12 caracteres. Após alterar, faça login novamente em outros dispositivos se necessário.
+        {PASSWORD_POLICY_HINT} Após alterar, faça login novamente em outros dispositivos se necessário.
       </TipBanner>
 
       <Card elevation={1} className="mx-auto max-w-lg">
@@ -72,11 +83,23 @@ export default function ContaPage() {
             <Field label="Senha atual">
               <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
             </Field>
-            <Field label="Nova senha">
-              <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} minLength={12} required />
+            <Field label="Nova senha" hint={PASSWORD_POLICY_HINT}>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                minLength={PASSWORD_MIN_LENGTH_NEW}
+                required
+              />
             </Field>
             <Field label="Confirmar nova senha">
-              <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} minLength={12} required />
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                minLength={PASSWORD_MIN_LENGTH_NEW}
+                required
+              />
             </Field>
             <Button type="submit" variant="filled" disabled={loading}>
               {loading ? 'Salvando...' : 'Salvar nova senha'}

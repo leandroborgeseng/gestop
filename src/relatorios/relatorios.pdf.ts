@@ -170,7 +170,8 @@ function drawTableRow(
 
 export function buildTablePdf(options: PdfTableOptions): Promise<Buffer> {
   return new Promise((resolvePromise, reject) => {
-    const doc = new PDFDocument({ margin: 36, size: 'A4', layout: 'landscape' });
+    const pageOptions = { size: 'A4' as const, layout: 'landscape' as const, margin: 36 };
+    const doc = new PDFDocument(pageOptions);
     const chunks: Buffer[] = [];
     const wrapFully = Boolean(options.wrapFully);
 
@@ -185,6 +186,15 @@ export function buildTablePdf(options: PdfTableOptions): Promise<Buffer> {
     const columnWidths = resolveColumnWidths(usableWidth, options.headers.length, options.columnWeights);
     let y = doc.y;
 
+    const startNewTablePage = () => {
+      doc.addPage(pageOptions);
+      // Garante as mesmas margens/área útil da 1ª página em todas as quebras.
+      const left = doc.page.margins.left;
+      doc.x = left;
+      y = doc.page.margins.top;
+      y += drawTableHeader(doc, options.headers, y, columnWidths, wrapFully);
+    };
+
     y += drawTableHeader(doc, options.headers, y, columnWidths, wrapFully);
 
     options.rows.forEach((row, rowIndex) => {
@@ -195,9 +205,7 @@ export function buildTablePdf(options: PdfTableOptions): Promise<Buffer> {
       );
 
       if (y + previewHeight > doc.page.height - doc.page.margins.bottom) {
-        doc.addPage({ layout: 'landscape', margin: 36 });
-        y = doc.page.margins.top;
-        y += drawTableHeader(doc, options.headers, y, columnWidths, wrapFully);
+        startNewTablePage();
       }
 
       y += drawTableRow(doc, row, y, columnWidths, rowIndex % 2 === 1, wrapFully);
@@ -206,7 +214,8 @@ export function buildTablePdf(options: PdfTableOptions): Promise<Buffer> {
     if (options.summaryLines?.length) {
       const needed = options.summaryLines.length * 12 + 24;
       if (y + needed > doc.page.height - doc.page.margins.bottom) {
-        doc.addPage({ layout: 'landscape', margin: 36 });
+        doc.addPage(pageOptions);
+        doc.x = doc.page.margins.left;
         y = doc.page.margins.top;
       }
       y += 14;

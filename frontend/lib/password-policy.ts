@@ -1,7 +1,5 @@
 export const PASSWORD_MAX_LENGTH = 128;
 export const PASSWORD_MIN_LENGTH_NEW = 8;
-/** Login aceita senhas legadas até o usuário trocar para a política nova. */
-export const PASSWORD_MIN_LENGTH_LOGIN = 6;
 
 export const PASSWORD_POLICY_HINT =
   'A senha deve conter no mínimo 8 caracteres, pelo menos uma letra maiúscula e pelo menos um caractere especial.';
@@ -35,7 +33,6 @@ export function describePasswordPolicyIssues(issues: PasswordPolicyIssue[]): str
   return issues.map((issue) => labels[issue]).join('; ');
 }
 
-/** Retorna mensagem de erro ou null se a senha atender à política. */
 export function validatePasswordPolicy(password: string): string | null {
   const issues = collectPasswordPolicyIssues(password);
   if (issues.length === 0) return null;

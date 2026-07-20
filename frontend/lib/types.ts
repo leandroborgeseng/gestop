@@ -596,6 +596,10 @@ export type ChecklistModel = {
 
 export type MobileFieldPackage = {
   downloadedAt: string;
+  secretariaEscopo?: {
+    ativaId: string | null;
+    todas: boolean;
+  };
   unidades: Array<{
     id: string;
     nome: string;

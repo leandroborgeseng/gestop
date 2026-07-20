@@ -2,6 +2,7 @@ import { ChecklistEscopo, Prisma } from '@prisma/client';
 
 export function buildFieldPackageChecklistWhere(
   secretariaId?: string | null,
+  secretariaIds?: string[],
 ): Prisma.ChecklistWhereInput {
   const orConditions: Prisma.ChecklistWhereInput[] = [
     { escopo: ChecklistEscopo.GLOBAL },
@@ -15,6 +16,15 @@ export function buildFieldPackageChecklistWhere(
       {
         escopo: ChecklistEscopo.UNIDADE,
         unidade: { secretariaId, ativo: true },
+      },
+    );
+  } else if (secretariaIds?.length) {
+    orConditions.push(
+      { escopo: ChecklistEscopo.SECRETARIA, secretariaId: { in: secretariaIds } },
+      { escopo: ChecklistEscopo.UNIDADE_TIPO, secretariaId: { in: secretariaIds } },
+      {
+        escopo: ChecklistEscopo.UNIDADE,
+        unidade: { secretariaId: { in: secretariaIds }, ativo: true },
       },
     );
   } else {

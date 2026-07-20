@@ -13,6 +13,11 @@ import {
   Severidade,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
+import {
+  resolveSecretariaScopeId,
+  resolveSecretariaScopeIds,
+  resolveUnidadeSecretariaFilter,
+} from '../auth/secretaria-scope';
 import { ChamadosService } from '../chamados/chamados.service';
 import { CronogramaService } from '../cronograma/cronograma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -34,15 +39,19 @@ export class MobileService {
   ) {}
 
   async getFieldPackage(user: JwtPayload) {
-    const usuario = await this.prisma.usuario.findUnique({
-      where: { id: user.sub },
-      select: { secretariaId: true },
-    });
+    const scopeIds = resolveSecretariaScopeIds(user);
+    const activeSecretariaId = resolveSecretariaScopeId(user) ?? null;
+    const unidadeScope = resolveUnidadeSecretariaFilter(user);
 
-    const unidadeWhere = {
+    const unidadeWhere: Prisma.UnidadePublicaWhereInput = {
       ativo: true,
-      ...(usuario?.secretariaId ? { secretariaId: usuario.secretariaId } : {}),
+      ...unidadeScope,
     };
+
+    const checklistWhere = buildFieldPackageChecklistWhere(
+      activeSecretariaId,
+      !activeSecretariaId && scopeIds ? scopeIds : undefined,
+    );
 
     const [unidades, checklists] = await Promise.all([
       this.prisma.unidadePublica.findMany({
@@ -62,7 +71,7 @@ export class MobileService {
         },
       }),
       this.prisma.checklist.findMany({
-        where: buildFieldPackageChecklistWhere(usuario?.secretariaId),
+        where: checklistWhere,
         orderBy: { nome: 'asc' },
         include: {
           versoes: {
@@ -77,6 +86,10 @@ export class MobileService {
 
     return {
       downloadedAt: new Date().toISOString(),
+      secretariaEscopo: {
+        ativaId: activeSecretariaId,
+        todas: scopeIds === undefined,
+      },
       unidades: unidades.map((unidade) => ({
         ...unidade,
         latitude: Number(unidade.latitude),

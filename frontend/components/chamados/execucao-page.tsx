@@ -264,7 +264,7 @@ function ExecucaoPageContent() {
         title="Execução"
         description="Chamados em execução no mapa e na fila de campo. Selecione um item para registrar check-in, serviço e evidências."
         backHref={backHref}
-        className="min-h-0"
+        className="min-h-0 overflow-y-auto xl:overflow-hidden"
         action={
           canGerenciar ? (
             <Link href="/chamados">
@@ -308,7 +308,7 @@ function ExecucaoPageContent() {
 
         {!loading && totalEmExecucao > 0 && chamados.length > 0 ? (
           <>
-            <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2">
               <Badge variant="warning">{chamados.length} em execução</Badge>
               <Badge variant="neutral">{mapPoints.length} no mapa</Badge>
               {equipeLabel && equipesVisiveis.length !== 1 ? <Badge variant="brand">{equipeLabel}</Badge> : null}
@@ -317,7 +317,7 @@ function ExecucaoPageContent() {
               ) : null}
             </div>
 
-            <div className="mb-3 flex flex-wrap items-center gap-2 xl:hidden">
+            <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2 xl:hidden">
               <Chip active={mobilePanel === 'mapa'} onClick={() => setMobilePanel('mapa')}>
                 <span className="inline-flex items-center gap-1.5">
                   <MapIcon className="h-3.5 w-3.5" />
@@ -332,7 +332,7 @@ function ExecucaoPageContent() {
               </Chip>
             </div>
 
-            <div className="mb-3 flex flex-wrap items-end gap-2">
+            <div className="mb-3 flex shrink-0 flex-wrap items-end gap-2">
               <Chip active={filtroHoje} onClick={() => setFiltroHoje((value) => !value)}>
                 Hoje
               </Chip>
@@ -378,7 +378,7 @@ function ExecucaoPageContent() {
             </div>
 
             {mostrarFiltroEquipes ? (
-              <div className="mb-3">
+              <div className="mb-3 shrink-0">
                 <EquipeFilterSelect
                   equipes={equipesVisiveis}
                   value={equipeFilter}
@@ -388,9 +388,9 @@ function ExecucaoPageContent() {
               </div>
             ) : null}
 
-            <div className="grid shrink-0 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-stretch">
+            <div className="cco-workspace grid min-h-0 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-stretch">
               <section
-                className={`cco-list-panel flex max-h-[min(360px,calc(100dvh-300px))] min-h-[220px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] xl:max-h-[min(460px,calc(100dvh-300px))] ${mobilePanel === 'lista' ? 'flex' : 'hidden xl:flex'}`}
+                className={`cco-list-panel flex min-h-0 flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] ${mobilePanel === 'lista' ? 'flex' : 'hidden xl:flex'}`}
               >
                 <div className="filters shrink-0 border-b border-[var(--line-2)] px-3.5 py-3">
                   <div className="mb-2 flex items-center gap-2">
@@ -416,22 +416,24 @@ function ExecucaoPageContent() {
                 />
               </section>
 
-              <section
-                className={`cco-map-panel min-h-[min(420px,52vh)] ${mobilePanel === 'mapa' ? 'block' : 'hidden xl:block'}`}
+              <div
+                className={`cco-map-host flex min-h-0 min-w-0 flex-col overflow-hidden ${mobilePanel === 'mapa' ? 'flex' : 'hidden xl:flex'}`}
               >
-                <div className="mb-2 hidden items-center gap-2 xl:flex">
+                <div className="mb-2 hidden shrink-0 items-center gap-2 xl:flex">
                   <MapIcon className="h-4 w-4 text-[var(--brand)]" />
                   <span className="text-[13px] font-semibold text-[var(--ink)]">Mapa operacional</span>
                   <span className="text-[12px] text-[var(--ink-3)]">— clique no pin para executar</span>
                 </div>
-                <ChamadosExecucaoMap
-                  pontos={mapPoints}
-                  selectedId={selectedId}
-                  hoveredId={hoveredId}
-                  onSelect={openExecucao}
-                  onHover={setHoveredId}
-                />
-              </section>
+                <section className="cco-map-panel min-h-0 flex-1 overflow-hidden">
+                  <ChamadosExecucaoMap
+                    pontos={mapPoints}
+                    selectedId={selectedId}
+                    hoveredId={hoveredId}
+                    onSelect={openExecucao}
+                    onHover={setHoveredId}
+                  />
+                </section>
+              </div>
             </div>
           </>
         ) : null}

@@ -173,7 +173,7 @@ export default function CronogramaPage() {
         title="Cronograma de checagens"
         description="Defina a periodicidade de vistoria por próprio e acompanhe o calendário de checagens realizadas, agendadas e atrasadas."
         backHref={backHref}
-        className={canManage ? 'pb-32 lg:pb-5' : undefined}
+        className={canManage ? 'pb-[calc(5.75rem+env(safe-area-inset-bottom)+5.5rem)] lg:pb-5' : undefined}
       >
         <TipBanner id="cronograma-checagens">
           Cadastre a periodicidade por próprio + checklist. Após cada vistoria, a próxima data avança automaticamente.

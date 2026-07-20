@@ -1,7 +1,8 @@
-/** Marca SIGMA — Sistema Integrado de Gestão de Manutenção de Ativos */
+/** Marca SIGMA — Sistema Integrado de Gestão de Manutenção e Ativos */
 export const SIGMA_NAME = 'SIGMA';
-export const SIGMA_TAGLINE = 'Sistema Integrado de Gestão de Manutenção de Ativos';
-export const SIGMA_SHORT_TAGLINE = 'Gestão de manutenção de ativos';
+export const SIGMA_TAGLINE = 'Sistema Integrado de Gestão de Manutenção e Ativos';
+/** Alias legado — preferir SIGMA_TAGLINE (nome completo). */
+export const SIGMA_SHORT_TAGLINE = SIGMA_TAGLINE;
 
 /** Tokens de marca alinhados ao designSystem.md (servicePortal + legacyPortal). */
 export const brandColors = {

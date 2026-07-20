@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditAction, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
-import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH_NEW } from '../auth/password-policy';
+import { validatePasswordPolicy } from '../auth/password-policy';
 import { hashPassword } from '../auth/password';
 import { resolveAuditUsuarioId } from '../audit/audit.util';
 import { PrismaService } from '../prisma/prisma.service';
@@ -470,10 +470,11 @@ export class AdminService {
       throw new BadRequestException('Senha inicial obrigatoria em producao.');
     }
 
-    if (senha && (senha.length < PASSWORD_MIN_LENGTH_NEW || senha.length > PASSWORD_MAX_LENGTH)) {
-      throw new BadRequestException(
-        `Senha deve ter entre ${PASSWORD_MIN_LENGTH_NEW} e ${PASSWORD_MAX_LENGTH} caracteres.`,
-      );
+    if (senha) {
+      const policyError = validatePasswordPolicy(senha);
+      if (policyError) {
+        throw new BadRequestException(policyError);
+      }
     }
 
     const cpf = normalizeCpf(dto.cpf);
@@ -523,6 +524,13 @@ export class AdminService {
     const cpf = normalizeCpf(dto.cpf);
     if (cpf && !isValidCpf(cpf)) {
       throw new BadRequestException('CPF inválido.');
+    }
+
+    if (dto.senha?.trim()) {
+      const policyError = validatePasswordPolicy(dto.senha);
+      if (policyError) {
+        throw new BadRequestException(policyError);
+      }
     }
 
     const cargoFields = await this.resolveUsuarioCargoFields(dto);

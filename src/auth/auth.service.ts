@@ -6,7 +6,7 @@ import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveJwtSecret } from '../config/env';
 import { hashPassword, verifyPassword } from './password';
-import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH_NEW } from './password-policy';
+import { PASSWORD_MAX_LENGTH, validatePasswordPolicy } from './password-policy';
 import { JwtPayload, signJwt } from './jwt';
 
 const SECRETARIA_SELECT = {
@@ -420,12 +420,9 @@ export class AuthService {
       throw new UnauthorizedException('Senha atual invalida');
     }
 
-    if (newPassword.trim().length < PASSWORD_MIN_LENGTH_NEW) {
-      throw new BadRequestException(`Nova senha deve ter pelo menos ${PASSWORD_MIN_LENGTH_NEW} caracteres.`);
-    }
-
-    if (newPassword.length > PASSWORD_MAX_LENGTH) {
-      throw new BadRequestException(`Nova senha deve ter no maximo ${PASSWORD_MAX_LENGTH} caracteres.`);
+    const policyError = validatePasswordPolicy(newPassword);
+    if (policyError) {
+      throw new BadRequestException(policyError);
     }
 
     await this.prisma.usuario.update({
@@ -477,12 +474,9 @@ export class AuthService {
   }
 
   async resetPasswordWithToken(token: string, newPassword: string) {
-    if (newPassword.trim().length < PASSWORD_MIN_LENGTH_NEW) {
-      throw new BadRequestException(`Nova senha deve ter pelo menos ${PASSWORD_MIN_LENGTH_NEW} caracteres.`);
-    }
-
-    if (newPassword.length > PASSWORD_MAX_LENGTH) {
-      throw new BadRequestException(`Nova senha deve ter no maximo ${PASSWORD_MAX_LENGTH} caracteres.`);
+    const policyError = validatePasswordPolicy(newPassword);
+    if (policyError) {
+      throw new BadRequestException(policyError);
     }
 
     const tokenHash = createHash('sha256').update(token.trim()).digest('hex');

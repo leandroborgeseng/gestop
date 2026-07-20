@@ -673,6 +673,13 @@ export function VersionEditor({
     onPublish(prepared);
   }
 
+  function handleAddItem() {
+    setItems((current) => [
+      ...current,
+      emptyItem(current.length + 1, isChamado ? '' : defaultCategoriaId, isChamado),
+    ]);
+  }
+
   return (
     <Card elevation={1}>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
@@ -681,7 +688,7 @@ export function VersionEditor({
           <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">Somente rascunhos podem ser editados.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="tonal" size="sm" onClick={() => setItems((current) => [...current, emptyItem(current.length + 1, isChamado ? '' : defaultCategoriaId, isChamado)])}>
+          <Button variant="tonal" size="sm" onClick={handleAddItem}>
             Adicionar item
           </Button>
           <Button variant="filled" size="sm" onClick={handleSave}>
@@ -797,6 +804,11 @@ export function VersionEditor({
             ) : null}
           </div>
         ))}
+        <div className="flex justify-start pt-1">
+          <Button variant="tonal" size="sm" onClick={handleAddItem}>
+            Adicionar item
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

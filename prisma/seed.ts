@@ -96,7 +96,7 @@ async function main() {
   }
 
   if (isProduction && initialPassword && initialPassword.length < 12) {
-    throw new Error('INITIAL_ADMIN_PASSWORD deve ter pelo menos 12 caracteres.');
+    throw new Error('INITIAL_ADMIN_PASSWORD deve ter pelo menos 8 caracteres.');
   }
 
   const defaultPasswordHash = hashPassword(initialPassword ?? 'Gestop@123', isProduction ? undefined : 'gestop-dev-seed-salt');

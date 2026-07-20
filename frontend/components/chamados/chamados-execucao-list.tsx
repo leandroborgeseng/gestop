@@ -31,7 +31,7 @@ export function ChamadosExecucaoList({
   }
 
   return (
-    <div className="unit-list divide-y divide-[var(--line-2)] overflow-y-auto">
+    <div className="unit-list min-h-0 flex-1 divide-y divide-[var(--line-2)] overflow-y-auto overscroll-contain">
       {chamados.map((chamado) => {
         const active = selectedId === chamado.id || hoveredId === chamado.id;
         const st = CHAMADO_STATUS_META[chamado.status] ?? { label: chamado.status, badge: 'neutral' as const };

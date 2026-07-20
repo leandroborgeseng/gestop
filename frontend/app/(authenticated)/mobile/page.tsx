@@ -34,6 +34,7 @@ import { readCachedFieldPackage, writeCachedFieldPackage } from '@/lib/mobile-fi
 import { useEffectiveOnline } from '@/lib/use-effective-online';
 import { prepareOfflineShell, registerServiceWorker, requestNotificationPermission, showLocalNotification } from '@/lib/pwa';
 import { PwaInstallBanner } from '@/components/mobile/pwa-install-banner';
+import { useSessionUser } from '@/components/auth/session-context';
 import { MobileFieldPackage, MobileQueuedInspection } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
@@ -42,6 +43,8 @@ const DEVICE_KEY = 'gestop.mobile.device';
 export default function MobilePage() {
   const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
+  const sessionUser = useSessionUser();
+  const secretariaEscopoKey = `${sessionUser?.secretaria?.id ?? 'todas'}|${sessionUser?.secretariaEscopoTodas ? '1' : '0'}`;
   const [fieldPackage, setFieldPackage] = useState<MobileFieldPackage | null>(null);
   const [queue, setQueue] = useState<MobileQueuedInspection[]>([]);
   const { online, browserOnline, refreshConnectivity } = useEffectiveOnline();
@@ -120,14 +123,29 @@ export default function MobilePage() {
       .then(() => readMobileQueue())
       .then(setQueue)
       .catch(() => setQueue([]));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
 
     void (async () => {
+      setLoading(true);
+      setError(null);
+
       let cachedPackage: MobileFieldPackage | null = null;
       try {
         cachedPackage = await readCachedFieldPackage();
-        if (cachedPackage) {
-          setFieldPackage(cachedPackage);
-          setCachedAt(cachedPackage.downloadedAt);
+        if (
+          cachedPackage &&
+          (!cachedPackage.secretariaEscopo ||
+            (cachedPackage.secretariaEscopo.ativaId ?? null) === (sessionUser?.secretaria?.id ?? null))
+        ) {
+          if (!cancelled) {
+            setFieldPackage(cachedPackage);
+            setCachedAt(cachedPackage.downloadedAt);
+          }
+        } else {
+          cachedPackage = null;
         }
       } catch {
         // cache opcional
@@ -135,18 +153,32 @@ export default function MobilePage() {
 
       try {
         const payload = await getMobileFieldPackage();
+        if (cancelled) return;
         setFieldPackage(payload);
         await writeCachedFieldPackage(payload);
         setCachedAt(payload.downloadedAt);
       } catch (err) {
-        if (!cachedPackage) {
+        if (!cancelled && !cachedPackage) {
           setError(err instanceof Error ? err.message : 'Falha ao baixar pacote de vistoria.');
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
-  }, []);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [secretariaEscopoKey, sessionUser?.secretaria?.id]);
+
+  useEffect(() => {
+    if (!fieldPackage) return;
+    if (unidadeId && !fieldPackage.unidades.some((unidade) => unidade.id === unidadeId)) {
+      setUnidadeId('');
+      setChecklistId('');
+      setResponses({});
+    }
+  }, [fieldPackage, unidadeId]);
 
   useEffect(() => {
     if (!online || queueRef.current.length === 0) return;
@@ -390,7 +422,9 @@ export default function MobilePage() {
                       <option value="">Selecione</option>
                       {fieldPackage.unidades.map((unidade) => (
                         <option key={unidade.id} value={unidade.id}>
-                          {unidade.nome} · {formatUnidadeTipo(unidade.tipo)}
+                          {fieldPackage.secretariaEscopo?.todas
+                            ? `${unidade.secretaria.sigla} · ${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`
+                            : `${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`}
                         </option>
                       ))}
                     </Select>

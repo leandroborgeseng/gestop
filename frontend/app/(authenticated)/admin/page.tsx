@@ -64,6 +64,11 @@ import { REGIAO_UNIDADE_LABELS, RegiaoUnidade } from '@/lib/regiao-unidade';
 import { PermissoesMatrizPanel } from '@/components/admin/permissoes-matriz-panel';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { formatUnidadeOrigem, getLockedFields, getUnidadeMetadata, isQgisImported } from '@/lib/unidade-metadata';
+import {
+  PASSWORD_MIN_LENGTH_NEW,
+  PASSWORD_POLICY_HINT,
+  validatePasswordPolicy,
+} from '@/lib/password-policy';
 
 type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'cargos' | 'tipos-chamado' | 'categorias-vistoria' | 'permissoes' | 'importacao';
 
@@ -661,11 +666,14 @@ function usuarioPayloadFromForm(
 
   if (editingId) {
     if (senha) {
+      const policyError = validatePasswordPolicy(senha);
+      if (policyError) throw new Error(policyError);
       payload.senha = senha;
     }
   } else {
-    if (!senha || senha.length < 12) {
-      throw new Error('Informe uma senha inicial com pelo menos 12 caracteres.');
+    const policyError = validatePasswordPolicy(senha);
+    if (policyError) {
+      throw new Error(policyError);
     }
     payload.senha = senha;
   }
@@ -871,12 +879,16 @@ function UsuariosPanel({
                 ))}
             </Select>
           </Field>
-          <Field label={editing ? 'Nova senha (opcional)' : 'Senha inicial (mín. 12 caracteres)'} tooltip="Mínimo de 12 caracteres. Em edição, deixe em branco para manter a senha atual.">
+          <Field
+            label={editing ? 'Nova senha (opcional)' : `Senha inicial (mín. ${PASSWORD_MIN_LENGTH_NEW} caracteres)`}
+            tooltip={PASSWORD_POLICY_HINT}
+            hint={PASSWORD_POLICY_HINT}
+          >
             <Input
               name="senha"
               type="password"
               autoComplete="new-password"
-              minLength={editing ? undefined : 12}
+              minLength={editing ? undefined : PASSWORD_MIN_LENGTH_NEW}
               required={!editing}
               placeholder={editing ? 'Deixe em branco para manter a atual' : 'Defina uma senha forte'}
             />
