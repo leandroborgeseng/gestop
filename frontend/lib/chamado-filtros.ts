@@ -4,7 +4,8 @@ import { prazoInfo } from '@/lib/chamado-status';
 export type SlaFilter = 'TODOS' | 'DENTRO' | 'FORA' | 'SEM';
 
 export function chamadoMatchesStatusMulti(chamado: ChamadoResumo, statuses: Set<ChamadoStatus> | 'TODOS') {
-  if (statuses === 'TODOS' || statuses.size === 0) return true;
+  if (statuses === 'TODOS') return true;
+  if (statuses.size === 0) return true;
   return statuses.has(chamado.status);
 }
 
