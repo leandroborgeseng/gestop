@@ -34,19 +34,41 @@ function sortedRanking(map: Map<string, RankingItem>): RankingItem[] {
   return [...map.values()].sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'pt-BR'));
 }
 
+/** Cruza o status do filtro geral com o status do card (evita override silencioso). */
+function resolveCardStatus(
+  filtroStatus: string | undefined,
+  cardStatus: ChamadoStatus | ChamadoStatus[],
+): ChamadoStatus | { in: ChamadoStatus[] } | null {
+  const allowed = Array.isArray(cardStatus) ? cardStatus : [cardStatus];
+  if (!filtroStatus) {
+    return Array.isArray(cardStatus) ? { in: cardStatus } : cardStatus;
+  }
+  if (!allowed.includes(filtroStatus as ChamadoStatus)) return null;
+  return filtroStatus as ChamadoStatus;
+}
+
 @Injectable()
 export class MonitoramentoService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getDashboard(filtro: DashboardFiltroDto = {}) {
     const { from, to } = periodBounds(filtro);
+    // Base sem status: cada card aplica o próprio status cruzado com o filtro.
+    const { status: _filtroStatus, ...filtroSemStatus } = filtro;
+    const chamadoWhereBase = this.chamadoWhere(filtroSemStatus, from, to, 'createdAt');
     const chamadoWhere = this.chamadoWhere(filtro, from, to, 'createdAt');
     const chamadoConcluidoWhere = this.chamadoWhere(
-      { ...filtro, status: ChamadoStatus.CONCLUIDO },
+      { ...filtroSemStatus, status: ChamadoStatus.CONCLUIDO },
       from,
       to,
       'concluidoEm',
     );
+
+    const statusAbertos = resolveCardStatus(filtro.status, [...CHAMADO_OPEN_STATUSES]);
+    const statusAtendimento = resolveCardStatus(filtro.status, ChamadoStatus.EM_ATENDIMENTO);
+    const statusExecucao = resolveCardStatus(filtro.status, ChamadoStatus.EM_EXECUCAO);
+    const statusImpedido = resolveCardStatus(filtro.status, ChamadoStatus.IMPEDIDO);
+    const statusConcluido = resolveCardStatus(filtro.status, ChamadoStatus.CONCLUIDO);
 
     const [
       totalUnidades,
@@ -86,19 +108,21 @@ export class MonitoramentoService {
           ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
         },
       }),
-      this.prisma.chamado.count({
-        where: { ...chamadoWhere, status: { in: CHAMADO_OPEN_STATUSES } },
-      }),
-      this.prisma.chamado.count({
-        where: { ...chamadoWhere, status: ChamadoStatus.EM_ATENDIMENTO },
-      }),
-      this.prisma.chamado.count({
-        where: { ...chamadoWhere, status: ChamadoStatus.EM_EXECUCAO },
-      }),
-      this.prisma.chamado.count({
-        where: { ...chamadoWhere, status: ChamadoStatus.IMPEDIDO },
-      }),
-      this.prisma.chamado.count({ where: chamadoConcluidoWhere }),
+      statusAbertos
+        ? this.prisma.chamado.count({ where: { ...chamadoWhereBase, status: statusAbertos } })
+        : Promise.resolve(0),
+      statusAtendimento
+        ? this.prisma.chamado.count({ where: { ...chamadoWhereBase, status: statusAtendimento } })
+        : Promise.resolve(0),
+      statusExecucao
+        ? this.prisma.chamado.count({ where: { ...chamadoWhereBase, status: statusExecucao } })
+        : Promise.resolve(0),
+      statusImpedido
+        ? this.prisma.chamado.count({ where: { ...chamadoWhereBase, status: statusImpedido } })
+        : Promise.resolve(0),
+      statusConcluido
+        ? this.prisma.chamado.count({ where: chamadoConcluidoWhere })
+        : Promise.resolve(0),
       this.prisma.offlineSyncEvent.count({
         where: { status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.CONFLITO, OfflineSyncStatus.FALHOU] } },
       }),

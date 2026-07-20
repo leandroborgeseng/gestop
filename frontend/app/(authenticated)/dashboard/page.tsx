@@ -324,13 +324,6 @@ export default function DashboardPage() {
                 hint="no período filtrado"
                 icon={ClipboardCheck}
               />
-              <MetricCard
-                title="Sync pendente"
-                value={dashboard.indicadores.syncPendentes}
-                hint="eventos offline"
-                icon={DatabaseZap}
-                deltaTone={dashboard.indicadores.syncPendentes > 0 ? 'warn' : undefined}
-              />
             </section>
 
             <section className="mb-2">
@@ -378,6 +371,16 @@ export default function DashboardPage() {
               <p className="mt-1 text-[13px] text-[var(--ink-3)]">
                 Informações gerais não filtradas — não sofrem impacto dos filtros aplicados acima.
               </p>
+            </div>
+
+            <div className="mb-6 max-w-sm">
+              <MetricCard
+                title="Sync pendente"
+                value={dashboard.indicadores.syncPendentes}
+                hint="eventos offline (não filtrado)"
+                icon={DatabaseZap}
+                deltaTone={dashboard.indicadores.syncPendentes > 0 ? 'warn' : undefined}
+              />
             </div>
 
             <section className="grid gap-6 lg:grid-cols-2">
