@@ -44,7 +44,8 @@ export function deriveLegacyPermissionKeys(matrixKeys: Set<string>): Set<string>
 
   const hasPrefix = (prefix: string) => [...matrixKeys].some((key) => key.startsWith(`matriz.${prefix}.`));
 
-  if (hasPrefix('chamados') || hasPrefix('execucao')) {
+  // Gerenciar/triagem só com permissões da tela Chamados — Execução sozinha não libera Triagem.
+  if (hasPrefix('chamados')) {
     legacy.add(LEGACY_CHAMADOS_GERENCIAR);
   }
   if (hasPrefix('execucao') || matrixKeys.has(permissionMatrixKey('chamados', 'execucao_manual', 'executar'))) {

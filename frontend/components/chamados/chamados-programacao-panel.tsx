@@ -7,49 +7,55 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
+import { ChamadosFiltrosPanel, ChamadosFiltrosValue } from '@/components/chamados/chamados-filtros-panel';
 import { ChamadosProgramacaoMap } from '@/components/chamados/chamados-programacao-map';
 import { ChamadoProgramacaoDialog } from '@/components/chamados/chamado-programacao-dialog';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { listChamadosProgramacao, updateChamadoPlanejamento } from '@/lib/api';
-import { chamadoLocalLabel } from '@/lib/chamado-geo';
+import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
+import {
+  chamadoMatchesSla,
+  chamadoMatchesStatusMulti,
+  collectSecretariasFromChamados,
+} from '@/lib/chamado-filtros';
 import { CHAMADO_STATUS_META, prioridadeVariant } from '@/lib/chamado-status';
 import { buildCalendarCells, monthBounds, toInputDate } from '@/lib/cronograma';
 import { cn } from '@/lib/cn';
-import { ChamadoProgramacaoResponse, ChamadoResumo, ChamadoStatus, EquipeOpcao } from '@/lib/types';
+import { ChamadoProgramacaoResponse, ChamadoResumo, EquipeOpcao, TipoChamadoOpcao } from '@/lib/types';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const WEEKDAYS_FULL = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
 type ViewMode = 'mensal' | 'semanal';
-type StatusFilter = 'TODOS' | ChamadoStatus;
-type PrioridadeFilter = 'TODAS' | string;
 
-const PRIORIDADE_CHIPS: Array<{ value: PrioridadeFilter; label: string }> = [
-  { value: 'TODAS', label: 'Todas' },
-  { value: 'BAIXA', label: 'Baixa' },
-  { value: 'MEDIA', label: 'Média' },
-  { value: 'ALTA', label: 'Alta' },
-  { value: 'URGENTE', label: 'Urgente' },
-];
+const DEFAULT_FILTROS: ChamadosFiltrosValue = {
+  statuses: 'TODOS',
+  prioridade: 'TODAS',
+  sla: 'TODOS',
+  equipeId: '',
+  secretariaProprioId: '',
+  secretariaExecucaoId: '',
+  tipoChamadoId: '',
+};
 
-const STATUS_CHIPS: Array<{ value: StatusFilter; label: string }> = [
-  { value: 'TODOS', label: 'Todos' },
-  ...Object.entries(CHAMADO_STATUS_META).map(([value, meta]) => ({ value: value as ChamadoStatus, label: meta.label })),
-];
-
-function matchesStatusPrioridade(
-  chamado: ChamadoResumo,
-  statusFilter: StatusFilter,
-  prioridadeFilter: PrioridadeFilter,
-) {
-  if (statusFilter !== 'TODOS' && chamado.status !== statusFilter) return false;
-  if (prioridadeFilter !== 'TODAS' && chamado.prioridade !== prioridadeFilter) return false;
+function matchesFiltros(chamado: ChamadoResumo, filtros: ChamadosFiltrosValue) {
+  if (!chamadoMatchesStatusMulti(chamado, filtros.statuses)) return false;
+  if (filtros.prioridade !== 'TODAS' && chamado.prioridade !== filtros.prioridade) return false;
+  if (!chamadoMatchesSla(chamado, filtros.sla)) return false;
+  if (filtros.equipeId === 'sem-equipe') {
+    if (chamado.equipe?.id) return false;
+  } else if (filtros.equipeId && chamado.equipe?.id !== filtros.equipeId) {
+    return false;
+  }
+  if (filtros.secretariaProprioId && chamado.unidade?.secretaria?.id !== filtros.secretariaProprioId) {
+    return false;
+  }
+  if (filtros.secretariaExecucaoId && chamado.secretaria?.id !== filtros.secretariaExecucaoId) {
+    return false;
+  }
+  if (filtros.tipoChamadoId && chamado.tipoChamado?.id !== filtros.tipoChamadoId) return false;
   return true;
-}
-
-function chamadoTitulo(chamado: Pick<ChamadoResumo, 'titulo' | 'descricao'>) {
-  return chamado.titulo?.trim() || chamado.descricao;
 }
 
 function isoDateNoon(dateKey: string) {
@@ -62,9 +68,11 @@ function monthKey(date: Date) {
 
 export function ChamadosProgramacaoPanel({
   equipes,
+  tiposChamado,
   onScheduled,
 }: {
   equipes: EquipeOpcao[];
+  tiposChamado: TipoChamadoOpcao[];
   onScheduled?: () => void;
 }) {
   const snackbar = useSnackbar();
@@ -79,9 +87,7 @@ export function ChamadosProgramacaoPanel({
     start.setDate(today.getDate() - day);
     return start;
   });
-  const [equipeFilter, setEquipeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('TODOS');
-  const [prioridadeFilter, setPrioridadeFilter] = useState<PrioridadeFilter>('TODAS');
+  const [filtros, setFiltros] = useState<ChamadosFiltrosValue>(DEFAULT_FILTROS);
   const [selectedDate, setSelectedDate] = useState<string | null>(() => toInputDate(new Date()));
   const [data, setData] = useState<ChamadoProgramacaoResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -112,7 +118,7 @@ export function ChamadosProgramacaoPanel({
       const response = await listChamadosProgramacao({
         from: toInputDate(bounds.start),
         to: toInputDate(bounds.end),
-        equipeId: equipeFilter || undefined,
+        // Equipe filtrada no cliente junto com os demais filtros da sanfona.
       });
       if (seq !== requestSeq.current) return;
       setData(response);
@@ -123,7 +129,7 @@ export function ChamadosProgramacaoPanel({
     } finally {
       if (seq === requestSeq.current) setLoading(false);
     }
-  }, [bounds.end, bounds.start, equipeFilter]);
+  }, [bounds.end, bounds.start]);
 
   useEffect(() => {
     void load();
@@ -133,30 +139,53 @@ export function ChamadosProgramacaoPanel({
     if (selectedDate) setFormDate(selectedDate);
   }, [selectedDate]);
 
+  const pool = useMemo(() => {
+    const map = new Map<string, ChamadoResumo>();
+    for (const chamado of (data?.porDia ?? []).flatMap((dia) => dia.chamados)) {
+      map.set(chamado.id, chamado);
+    }
+    for (const chamado of data?.pendentes ?? []) {
+      map.set(chamado.id, chamado);
+    }
+    return Array.from(map.values());
+  }, [data]);
+
+  const secretariasDisponiveis = useMemo(() => collectSecretariasFromChamados(pool), [pool]);
+  const showSemSla = useMemo(() => pool.some((item) => !item.prazoEm), [pool]);
+
+  const statusCounts = useMemo(() => {
+    const next: Record<string, number> = { TODOS: pool.length };
+    for (const key of Object.keys(CHAMADO_STATUS_META)) next[key] = 0;
+    for (const item of pool) {
+      if (next[item.status] != null) next[item.status] += 1;
+    }
+    return next;
+  }, [pool]);
+
   const eventosPorDia = useMemo(() => {
     const map = new Map<string, ChamadoResumo[]>();
     for (const dia of data?.porDia ?? []) {
-      map.set(dia.data, dia.chamados);
+      map.set(
+        dia.data,
+        dia.chamados.filter((chamado) => matchesFiltros(chamado, filtros)),
+      );
     }
     return map;
-  }, [data]);
+  }, [data, filtros]);
 
   const chamadosDoDia = selectedDate ? (eventosPorDia.get(selectedDate) ?? []) : [];
 
   const pendentesFiltrados = useMemo(
-    () =>
-      (data?.pendentes ?? []).filter((chamado) =>
-        matchesStatusPrioridade(chamado, statusFilter, prioridadeFilter),
-      ),
-    [data?.pendentes, prioridadeFilter, statusFilter],
+    () => (data?.pendentes ?? []).filter((chamado) => matchesFiltros(chamado, filtros)),
+    [data?.pendentes, filtros],
   );
 
   const programadosFiltrados = useMemo(
     () =>
       (data?.porDia ?? [])
         .flatMap((dia) => dia.chamados)
-        .filter((chamado) => matchesStatusPrioridade(chamado, statusFilter, prioridadeFilter)),
-    [data?.porDia, prioridadeFilter, statusFilter],
+        .filter((chamado) => matchesFiltros(chamado, filtros)),
+    [data?.porDia, filtros],
   );
 
   useEffect(() => {
@@ -362,9 +391,6 @@ export function ChamadosProgramacaoPanel({
 
   const cells = buildCalendarCells(month);
   const monthLabel = month.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-  const pendentesLabel = data?.pendentesTruncados
-    ? `${data.pendentes.length} de ${data.totalPendentes} aguardando data`
-    : `${data?.totalPendentes ?? 0} aguardando data`;
 
   return (
     <div className="space-y-4">
@@ -377,54 +403,20 @@ export function ChamadosProgramacaoPanel({
             Semanal
           </Chip>
         </div>
-        <div className="min-w-[220px] flex-1">
-          <label htmlFor="prog-equipe" className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">
-            Filtrar por equipe
-          </label>
-          <Select
-            id="prog-equipe"
-            value={equipeFilter}
-            onChange={(event) => setEquipeFilter(event.target.value)}
-            className="h-9 w-full max-w-md text-xs"
-          >
-            <option value="">Todas as equipes</option>
-            {equipes.map((equipe) => (
-              <option key={equipe.id} value={equipe.id}>
-                {equipe.nome}
-                {equipe.secretaria?.sigla ? ` · ${equipe.secretaria.sigla}` : ''}
-              </option>
-            ))}
-            <option value="sem-equipe">Sem equipe atribuída</option>
-          </Select>
-        </div>
-        <Badge variant="neutral">{data?.totalProgramados ?? 0} programados no mês</Badge>
-        <Badge variant="warning">{pendentesLabel}</Badge>
+        <Badge variant="neutral">{programadosFiltrados.length} programados no período</Badge>
+        <Badge variant="warning">{pendentesFiltrados.length} aguardando data</Badge>
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="situ-chips flex flex-wrap gap-1.5">
-          {STATUS_CHIPS.map((item) => (
-            <Chip
-              key={item.value}
-              active={statusFilter === item.value}
-              onClick={() => setStatusFilter(item.value)}
-            >
-              {item.label}
-            </Chip>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {PRIORIDADE_CHIPS.map((item) => (
-            <Chip
-              key={item.value}
-              active={prioridadeFilter === item.value}
-              onClick={() => setPrioridadeFilter(item.value)}
-            >
-              {item.label}
-            </Chip>
-          ))}
-        </div>
-      </div>
+      <ChamadosFiltrosPanel
+        value={filtros}
+        onChange={setFiltros}
+        statusCounts={statusCounts}
+        equipes={equipes}
+        tiposChamado={tiposChamado}
+        secretariasProprio={secretariasDisponiveis.proprio}
+        secretariasExecucao={secretariasDisponiveis.execucao}
+        showSemSla={showSemSla}
+      />
 
       {error ? <ErrorState message={error} onRetry={() => void load()} /> : null}
       {loading ? <LoadingState label="Carregando programação..." /> : null}

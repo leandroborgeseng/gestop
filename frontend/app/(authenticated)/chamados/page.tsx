@@ -22,6 +22,8 @@ import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
 import { ChamadoHistoricoForm } from '@/components/chamados/chamado-historico-form';
 import { ChamadoAberturaSection } from '@/components/chamados/chamado-abertura-section';
+import { ChamadoDescricaoExpandivel } from '@/components/chamados/chamado-descricao-expandivel';
+import { ChamadosFiltrosPanel, ChamadosFiltrosValue } from '@/components/chamados/chamados-filtros-panel';
 import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { PageShell } from '@/components/layout/page-shell';
@@ -35,7 +37,12 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { downloadChamadoPdf, getChamado, listChamadoEquipes, listChamados, listTiposChamadoOpcoes, notificarChamadoEquipe, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
 import { cn } from '@/lib/cn';
-import { chamadoLocalLabel } from '@/lib/chamado-geo';
+import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
+import {
+  chamadoMatchesSla,
+  chamadoMatchesStatusMulti,
+  collectSecretariasFromChamados,
+} from '@/lib/chamado-filtros';
 import { toInputDate } from '@/lib/cronograma';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import {
@@ -48,30 +55,21 @@ import {
 } from '@/lib/chamado-status';
 import { ChamadoDetalhe, ChamadoOrigem, ChamadoResumo, ChamadoStatus, EquipeOpcao, TipoChamadoOpcao } from '@/lib/types';
 
-type StatusFilter = 'TODOS' | ChamadoStatus;
-type PrioridadeFilter = 'TODAS' | string;
 type ChamadosView = 'triagem' | 'programacao';
 
 const TRIAGEM_PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
 
-const PRIORIDADE_CHIPS: Array<{ value: PrioridadeFilter; label: string }> = [
-  { value: 'TODAS', label: 'Todas' },
-  { value: 'BAIXA', label: 'Baixa' },
-  { value: 'MEDIA', label: 'Média' },
-  { value: 'ALTA', label: 'Alta' },
-  { value: 'URGENTE', label: 'Urgente' },
-];
-
 const CHAMADOS_PAGE_SIZE = 50;
 
-const STATUS_CHIPS: Array<{ value: StatusFilter; label: string }> = [
-  { value: 'TODOS', label: 'Todos' },
-  ...Object.entries(CHAMADO_STATUS_META).map(([value, meta]) => ({ value: value as ChamadoStatus, label: meta.label })),
-];
-
-function chamadoTitulo(chamado: Pick<ChamadoResumo, 'titulo' | 'descricao'>) {
-  return chamado.titulo?.trim() || chamado.descricao;
-}
+const DEFAULT_FILTROS: ChamadosFiltrosValue = {
+  statuses: 'TODOS',
+  prioridade: 'TODAS',
+  sla: 'TODOS',
+  equipeId: '',
+  secretariaProprioId: '',
+  secretariaExecucaoId: '',
+  tipoChamadoId: '',
+};
 
 function origemMeta(origem: ChamadoOrigem) {
   switch (origem) {
@@ -108,9 +106,7 @@ function ChamadosPageContent() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<StatusFilter>('TODOS');
-  const [prioridade, setPrioridade] = useState<PrioridadeFilter>('TODAS');
-  const [equipeFilter, setEquipeFilter] = useState('');
+  const [filtros, setFiltros] = useState<ChamadosFiltrosValue>(DEFAULT_FILTROS);
   const [view, setView] = useState<ChamadosView>('triagem');
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
 
@@ -213,11 +209,9 @@ function ChamadosPageContent() {
       .finally(() => setLoading(false));
   }
 
-  const prioridades = useMemo(() => {
-    const set = new Set<string>();
-    for (const chamado of chamados) set.add(chamado.prioridade);
-    return Array.from(set).sort();
-  }, [chamados]);
+  const secretariasDisponiveis = useMemo(() => collectSecretariasFromChamados(chamados), [chamados]);
+
+  const showSemSla = useMemo(() => chamados.some((item) => !item.prazoEm), [chamados]);
 
   const counts = useMemo(() => {
     const next: Record<string, number> = { TODOS: chamados.length };
@@ -231,18 +225,29 @@ function ChamadosPageContent() {
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return chamados.filter((item) => {
-      if (filter !== 'TODOS' && item.status !== filter) return false;
-      if (prioridade !== 'TODAS' && item.prioridade !== prioridade) return false;
-      if (equipeFilter === 'sem-equipe') {
+      if (!chamadoMatchesStatusMulti(item, filtros.statuses)) return false;
+      if (filtros.prioridade !== 'TODAS' && item.prioridade !== filtros.prioridade) return false;
+      if (!chamadoMatchesSla(item, filtros.sla)) return false;
+      if (filtros.equipeId === 'sem-equipe') {
         if (item.equipe?.id) return false;
-      } else if (equipeFilter && item.equipe?.id !== equipeFilter) {
+      } else if (filtros.equipeId && item.equipe?.id !== filtros.equipeId) {
         return false;
+      }
+      if (filtros.secretariaProprioId && item.unidade?.secretaria?.id !== filtros.secretariaProprioId) {
+        return false;
+      }
+      if (filtros.secretariaExecucaoId && item.secretaria?.id !== filtros.secretariaExecucaoId) {
+        return false;
+      }
+      if (filtros.tipoChamadoId) {
+        if (item.tipoChamado?.id !== filtros.tipoChamadoId) return false;
       }
       if (!query) return true;
       const haystack = [
         item.codigo,
         item.titulo,
         item.descricao,
+        item.tipoChamado?.nome,
         item.unidade?.nome,
         item.unidade?.codigoPatrimonial,
         item.enderecoTexto,
@@ -255,7 +260,7 @@ function ChamadosPageContent() {
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [chamados, equipeFilter, filter, prioridade, search]);
+  }, [chamados, filtros, search]);
 
   const selected = useMemo(() => {
     if (selectedId) {
@@ -412,7 +417,7 @@ function ChamadosPageContent() {
         </div>
 
         {view === 'programacao' ? (
-          <ChamadosProgramacaoPanel equipes={equipes} />
+          <ChamadosProgramacaoPanel equipes={equipes} tiposChamado={tiposChamado} />
         ) : null}
 
         {view === 'triagem' && chamadosTotal > 0 ? (
@@ -437,45 +442,17 @@ function ChamadosPageContent() {
         ) : null}
 
         {view === 'triagem' ? (
-          <div className="mb-4 flex shrink-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="situ-chips flex flex-wrap gap-1.5">
-              {STATUS_CHIPS.map((item) => (
-                <Chip
-                  key={item.value}
-                  active={filter === item.value}
-                  count={counts[item.value] ?? 0}
-                  onClick={() => setFilter(item.value)}
-                >
-                  {item.label}
-                </Chip>
-              ))}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="min-w-[160px]">
-                <Select
-                  value={equipeFilter}
-                  onChange={(event) => setEquipeFilter(event.target.value)}
-                  className="h-8 w-full text-xs"
-                  aria-label="Filtrar por equipe"
-                >
-                  <option value="">Todas as equipes</option>
-                  {equipes.map((equipe) => (
-                    <option key={equipe.id} value={equipe.id}>
-                      {equipe.nome}
-                      {equipe.secretaria?.sigla ? ` · ${equipe.secretaria.sigla}` : ''}
-                    </option>
-                  ))}
-                  <option value="sem-equipe">Sem equipe</option>
-                </Select>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {PRIORIDADE_CHIPS.map((item) => (
-                  <Chip key={item.value} active={prioridade === item.value} onClick={() => setPrioridade(item.value)}>
-                    {item.label}
-                  </Chip>
-                ))}
-              </div>
-            </div>
+          <div className="mb-4 shrink-0">
+            <ChamadosFiltrosPanel
+              value={filtros}
+              onChange={setFiltros}
+              statusCounts={counts}
+              equipes={equipes}
+              tiposChamado={tiposChamado}
+              secretariasProprio={secretariasDisponiveis.proprio}
+              secretariasExecucao={secretariasDisponiveis.execucao}
+              showSemSla={showSemSla}
+            />
           </div>
         ) : null}
 
@@ -500,7 +477,11 @@ function ChamadosPageContent() {
                 {filtered.length === 0 ? (
                   <EmptyState
                     title="Nenhum chamado"
-                    description={filter === 'TODOS' ? 'Nenhum chamado registrado ainda.' : 'Nenhum chamado neste filtro.'}
+                    description={
+                      filtros.statuses === 'TODOS'
+                        ? 'Nenhum chamado registrado ainda.'
+                        : 'Nenhum chamado neste filtro.'
+                    }
                   />
                 ) : (
                   filtered.map((chamado) => {
@@ -742,9 +723,7 @@ function ChamadoDetailPanel({
             </div>
           </div>
           <h2 className="mt-3 text-[17px] font-semibold leading-snug text-[var(--ink)]">{chamadoTitulo(resumo)}</h2>
-          {resumo.titulo && resumo.titulo !== resumo.descricao ? (
-            <p className="mt-2 text-[13px] text-[var(--ink-3)]">{resumo.descricao}</p>
-          ) : null}
+          <ChamadoDescricaoExpandivel className="mt-2" descricao={resumo.descricao} />
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--ink-3)]">
             <span className="inline-flex items-center gap-1.5">
               <Building2 className="h-3.5 w-3.5" />

@@ -30,6 +30,11 @@ enum ChecklistEscopo {
   UNIDADE
 }
 
+enum ChecklistFinalidade {
+  VISTORIA
+  CHAMADO
+}
+
 enum ChecklistVersaoStatus {
   RASCUNHO
   PUBLICADA
@@ -393,6 +398,7 @@ model TipoChamado {
   updatedAt      DateTime @updatedAt
 
   chamados Chamado[]
+  checklists ChecklistTipoChamado[]
 
   @@index([ativo])
 }
@@ -455,25 +461,40 @@ model CategoriaVistoria {
 }
 
 model Checklist {
-  id            String          @id @default(uuid())
+  id            String              @id @default(uuid())
   secretariaId  String?
   unidadeId     String?
   nome          String
   descricao     String?
-  escopo        ChecklistEscopo @default(GLOBAL)
+  finalidade    ChecklistFinalidade @default(VISTORIA)
+  escopo        ChecklistEscopo     @default(GLOBAL)
   unidadeTipo   UnidadeTipo?
-  ativo         Boolean         @default(true)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  ativo         Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
 
-  secretaria Secretaria?      @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
-  unidade    UnidadePublica?  @relation(fields: [unidadeId], references: [id], onDelete: SetNull)
-  versoes    ChecklistVersao[]
-  cronogramas CronogramaChecagem[]
+  secretaria   Secretaria?            @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
+  unidade      UnidadePublica?        @relation(fields: [unidadeId], references: [id], onDelete: SetNull)
+  versoes      ChecklistVersao[]
+  cronogramas  CronogramaChecagem[]
+  tiposChamado ChecklistTipoChamado[]
 
   @@index([secretariaId])
   @@index([escopo])
+  @@index([finalidade])
   @@index([ativo])
+}
+
+model ChecklistTipoChamado {
+  checklistId   String
+  tipoChamadoId String
+  createdAt     DateTime @default(now())
+
+  checklist   Checklist   @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+  tipoChamado TipoChamado @relation(fields: [tipoChamadoId], references: [id], onDelete: Cascade)
+
+  @@id([checklistId, tipoChamadoId])
+  @@index([tipoChamadoId])
 }
 
 model ChecklistVersao {

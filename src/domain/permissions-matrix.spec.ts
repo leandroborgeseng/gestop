@@ -24,6 +24,13 @@ describe('permissions-matrix', () => {
     expect(legacy.has('chamados.executar')).toBe(true);
   });
 
+  it('não libera triagem (chamados.gerenciar) só com permissões de Execução', () => {
+    const matrix = new Set([permissionMatrixKey('execucao', 'checkin', 'executar')]);
+    const legacy = deriveLegacyPermissionKeys(matrix);
+    expect(legacy.has('chamados.gerenciar')).toBe(false);
+    expect(legacy.has('chamados.executar')).toBe(true);
+  });
+
   it('resolve matriz efetiva a partir de legado quando não há chaves matriz', () => {
     const effective = resolveEffectiveMatrixKeys(['chamados.gerenciar']);
     expect(effective.has(permissionMatrixKey('chamados', 'abrir_chamado', 'inserir'))).toBe(true);

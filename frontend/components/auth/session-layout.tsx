@@ -47,6 +47,13 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
         setChecking(false);
       })
       .catch(() => {
+        // Rede/offline: mantém sessão local para PWA de vistoria. 401 já limpa o storage.
+        const stillStored = getStoredAuth();
+        if (stillStored) {
+          setAuth(stillStored);
+          setChecking(false);
+          return;
+        }
         redirectToLogin();
       });
 

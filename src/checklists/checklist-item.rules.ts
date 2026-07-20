@@ -193,12 +193,16 @@ export function validateChecklistItemOpcoes(
   return null;
 }
 
-export function assertValidChecklistVersionItems(itens: ChecklistItemDto[]) {
+export function assertValidChecklistVersionItems(
+  itens: ChecklistItemDto[],
+  options?: { requireCategoria?: boolean; finalidadeChamado?: boolean },
+) {
   if (itens.length === 0) {
     throw new Error('Informe ao menos um item na versao do checklist.');
   }
 
   const codes = new Set<string>();
+  const requireCategoria = options?.requireCategoria !== false && !options?.finalidadeChamado;
 
   for (const item of itens) {
     if (!item.titulo?.trim()) {
@@ -215,12 +219,16 @@ export function assertValidChecklistVersionItems(itens: ChecklistItemDto[]) {
     }
     codes.add(normalizedCode);
 
+    if (options?.finalidadeChamado && item.tipo === ChecklistItemTipo.ESCALA_LIKERT) {
+      throw new Error(`Item "${item.titulo.trim()}": escala Likert nao e permitida em checklist de chamado.`);
+    }
+
     const opcoesError = validateChecklistItemOpcoes(item.tipo, item.opcoes, item.titulo, item.codigo);
     if (opcoesError) {
       throw new Error(opcoesError);
     }
 
-    if (!item.categoriaVistoriaId?.trim()) {
+    if (requireCategoria && !item.categoriaVistoriaId?.trim()) {
       throw new Error(`Item "${item.titulo.trim() || item.codigo}": selecione a categoria de vistoria.`);
     }
   }

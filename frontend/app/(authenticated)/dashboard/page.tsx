@@ -1,38 +1,136 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle, BarChart3, Building2, ClipboardCheck, DatabaseZap, MapPin, Megaphone, ShieldAlert } from 'lucide-react';
+import {
+  AlertTriangle,
+  BarChart3,
+  Building2,
+  ClipboardCheck,
+  DatabaseZap,
+  MapPin,
+  Megaphone,
+  ShieldAlert,
+} from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
+import { useSessionUser } from '@/components/auth/session-context';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { MetricCard } from '@/components/metric-card';
-import { Alert } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ErrorState, LoadingState } from '@/components/ui-states';
+import { DashboardAnalysisCard } from '@/components/dashboard/dashboard-analysis-card';
 import { PushNotificationsPanel } from '@/components/dashboard/push-notifications-panel';
-import { getAlertasOperacionais, getDashboard, listAuditoria } from '@/lib/api';
+import { Alert } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+import { ErrorState, LoadingState } from '@/components/ui-states';
+import {
+  getAlertasOperacionais,
+  getDashboard,
+  getOpcoesFiltroUnidades,
+  getSecretarias,
+  listAuditoria,
+} from '@/lib/api';
+import { CHAMADO_STATUS_META } from '@/lib/chamado-status';
+import { hasChamadosGerenciar } from '@/lib/navigation';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
-import { AlertasOperacionais, AuditoriaEvento, DashboardData } from '@/lib/types';
+import type {
+  AlertasOperacionais,
+  AuditoriaEvento,
+  DashboardData,
+  SecretariaOption,
+  UnidadeFiltroOpcoes,
+} from '@/lib/types';
+
+const PRIORIDADES = [
+  { value: 'BAIXA', label: 'Baixa' },
+  { value: 'MEDIA', label: 'Média' },
+  { value: 'ALTA', label: 'Alta' },
+  { value: 'URGENTE', label: 'Urgente' },
+] as const;
+
+function currentMonthBounds() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  const iso = (d: Date) => d.toISOString().slice(0, 10);
+  return { from: iso(from), to: iso(to) };
+}
 
 export default function DashboardPage() {
   const backHref = useSafeBackHref('/cco');
+  const user = useSessionUser();
+  const canChamados = hasChamadosGerenciar(user?.permissoes ?? []);
+  const month = useMemo(() => currentMonthBounds(), []);
+
+  const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
+  const [opcoes, setOpcoes] = useState<UnidadeFiltroOpcoes | null>(null);
+  const [from, setFrom] = useState(month.from);
+  const [to, setTo] = useState(month.to);
+  const [secretariaId, setSecretariaId] = useState('');
+  const [equipeId, setEquipeId] = useState('');
+  const [cargo, setCargo] = useState('');
+  const [tipoChamadoId, setTipoChamadoId] = useState('');
+  const [prioridade, setPrioridade] = useState('');
+  const [status, setStatus] = useState('');
+
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [alertas, setAlertas] = useState<AlertasOperacionais | null>(null);
   const [auditoria, setAuditoria] = useState<AuditoriaEvento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const buildParams = useCallback(() => {
+    const params: Record<string, string> = {};
+    if (from) params.from = from;
+    if (to) params.to = to;
+    if (secretariaId) params.secretariaId = secretariaId;
+    if (equipeId) params.equipeId = equipeId;
+    if (cargo.trim()) params.cargo = cargo.trim();
+    if (tipoChamadoId) params.tipoChamadoId = tipoChamadoId;
+    if (prioridade) params.prioridade = prioridade;
+    if (status) params.status = status;
+    return params;
+  }, [from, to, secretariaId, equipeId, cargo, tipoChamadoId, prioridade, status]);
+
+  const loadDashboard = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [dash, alerts] = await Promise.all([getDashboard(buildParams()), getAlertasOperacionais()]);
+      setDashboard(dash);
+      setAlertas(alerts);
+      try {
+        setAuditoria(await listAuditoria());
+      } catch {
+        setAuditoria([]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar dashboard.');
+    } finally {
+      setLoading(false);
+    }
+  }, [buildParams]);
+
   useEffect(() => {
-    Promise.all([getDashboard(), listAuditoria(), getAlertasOperacionais()])
-      .then(([dash, audit, alerts]) => {
-        setDashboard(dash);
-        setAuditoria(audit);
-        setAlertas(alerts);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar dashboard.'))
-      .finally(() => setLoading(false));
+    getSecretarias().then(setSecretarias).catch(() => setSecretarias([]));
+    getOpcoesFiltroUnidades()
+      .then(setOpcoes)
+      .catch(() => setOpcoes(null));
   }, []);
+
+  useEffect(() => {
+    void loadDashboard();
+  }, [loadDashboard]);
+
+  const cargosDisponiveis = useMemo(() => {
+    const fromAnalise = dashboard?.analise?.produtividadePorCargo.map((item) => item.label) ?? [];
+    return [...new Set(fromAnalise.filter((item) => item && item !== 'Sem cargo'))].sort((a, b) =>
+      a.localeCompare(b, 'pt-BR'),
+    );
+  }, [dashboard?.analise?.produtividadePorCargo]);
 
   const hasAlertas =
     alertas &&
@@ -41,17 +139,20 @@ export default function DashboardPage() {
       alertas.resumo.syncFalhas > 0 ||
       alertas.resumo.chamadosUrgentes > 0);
 
+  const analise = dashboard?.analise;
+
   return (
     <RequirePermissions permissions={['dashboard.visualizar']}>
       <PageShell
         kicker="Monitoramento"
         icon={BarChart3}
         title="Dashboard operacional"
-        description="Indicadores consolidados, alertas operacionais e trilha recente de auditoria."
+        description="Indicadores filtráveis, análise de produtividade dos chamados e acompanhamento geral do sistema."
         backHref={backHref}
       >
         <TipBanner id="dashboard-alertas">
-          KPIs refletem o estado atual do sistema. Alertas operacionais destacam chamados atrasados, sem triagem e falhas de sync.
+          Os filtros do topo recalculam os cards e a análise de chamados. As seções finais de pendências e auditoria
+          permanecem sem filtro.
         </TipBanner>
 
         {error ? (
@@ -59,7 +160,104 @@ export default function DashboardPage() {
             <ErrorState message={error} />
           </div>
         ) : null}
-        {loading ? <LoadingState label="Carregando indicadores..." /> : null}
+
+        <Card elevation={1} className="mb-6">
+          <CardContent className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Field label="De">
+              <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+            </Field>
+            <Field label="Até">
+              <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+            </Field>
+            <Field label="Secretaria">
+              <Select value={secretariaId} onChange={(e) => setSecretariaId(e.target.value)}>
+                <option value="">Todas</option>
+                {secretarias.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.sigla} — {item.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Equipe">
+              <Select value={equipeId} onChange={(e) => setEquipeId(e.target.value)}>
+                <option value="">Todas</option>
+                <option value="sem-equipe">Sem equipe atribuída</option>
+                {(opcoes?.equipes ?? []).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Cargo">
+              <Select value={cargo} onChange={(e) => setCargo(e.target.value)}>
+                <option value="">Todos</option>
+                {cargosDisponiveis.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Tipo de chamado">
+              <Select value={tipoChamadoId} onChange={(e) => setTipoChamadoId(e.target.value)}>
+                <option value="">Todos</option>
+                {(opcoes?.tiposChamado ?? []).map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Prioridade">
+              <Select value={prioridade} onChange={(e) => setPrioridade(e.target.value)}>
+                <option value="">Todas</option>
+                {PRIORIDADES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Status">
+              <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="">Todos</option>
+                {Object.entries(CHAMADO_STATUS_META).map(([value, meta]) => (
+                  <option key={value} value={value}>
+                    {meta.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <div className="flex items-end gap-2 sm:col-span-2 xl:col-span-4">
+              <Button variant="filled" size="sm" onClick={() => void loadDashboard()} disabled={loading}>
+                {loading ? 'Atualizando...' : 'Aplicar filtros'}
+              </Button>
+              <Button
+                variant="outlined"
+                size="sm"
+                onClick={() => {
+                  setFrom(month.from);
+                  setTo(month.to);
+                  setSecretariaId('');
+                  setEquipeId('');
+                  setCargo('');
+                  setTipoChamadoId('');
+                  setPrioridade('');
+                  setStatus('');
+                }}
+              >
+                Limpar
+              </Button>
+              <p className="ml-auto text-[12px] text-[var(--ink-3)]">
+                Período padrão: mês atual · produtividade usa data de conclusão
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {loading && !dashboard ? <LoadingState label="Carregando indicadores..." /> : null}
 
         {dashboard ? (
           <>
@@ -72,17 +270,19 @@ export default function DashboardPage() {
                   Alertas operacionais
                 </p>
                 <p className="mt-2 text-[13px] text-[var(--ink-2)]">
-                  {alertas!.resumo.chamadosAtrasados} chamados atrasados · {alertas!.resumo.chamadosSemTriagem} sem triagem ·{' '}
-                  {alertas!.resumo.chamadosUrgentes} urgentes · {alertas!.resumo.syncFalhas} falhas de sync
+                  {alertas!.resumo.chamadosAtrasados} chamados atrasados · {alertas!.resumo.chamadosSemTriagem} sem
+                  triagem · {alertas!.resumo.chamadosUrgentes} urgentes · {alertas!.resumo.syncFalhas} falhas de sync
                 </p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <Link
-                    href="/chamados"
-                    className="inline-flex h-8 items-center rounded-[var(--r-md)] bg-[var(--brand)] px-3 text-[12.5px] font-semibold text-white shadow-[var(--sh-sm)] hover:bg-[var(--brand-hover)]"
-                  >
-                    Ver chamados
-                  </Link>
-                </div>
+                {canChamados ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link
+                      href="/chamados"
+                      className="inline-flex h-8 items-center rounded-[var(--r-md)] bg-[var(--brand)] px-3 text-[12.5px] font-semibold text-white shadow-[var(--sh-sm)] hover:bg-[var(--brand-hover)]"
+                    >
+                      Ver chamados
+                    </Link>
+                  </div>
+                ) : null}
               </Alert>
             ) : null}
 
@@ -119,6 +319,12 @@ export default function DashboardPage() {
                 deltaTone={dashboard.indicadores.chamados.impedidos > 0 ? 'warn' : undefined}
               />
               <MetricCard
+                title="Concluídos"
+                value={dashboard.indicadores.chamados.concluidos}
+                hint="no período filtrado"
+                icon={ClipboardCheck}
+              />
+              <MetricCard
                 title="Sync pendente"
                 value={dashboard.indicadores.syncPendentes}
                 hint="eventos offline"
@@ -127,12 +333,59 @@ export default function DashboardPage() {
               />
             </section>
 
+            <section className="mb-2">
+              <h2 className="text-[15px] font-semibold text-[var(--ink)]">Análise de chamados</h2>
+              <p className="mt-1 text-[13px] text-[var(--ink-3)]">
+                Produtividade com base no log de conclusão · {analise?.totalConcluidosAnalisados ?? 0} chamado(s)
+                concluído(s) no filtro
+              </p>
+            </section>
+
+            <section className="mb-8 grid gap-4 lg:grid-cols-2">
+              <DashboardAnalysisCard
+                title="Produtividade por funcionário"
+                hint="Participantes do evento de conclusão (equipe + externos)"
+                items={analise?.produtividadePorFuncionario ?? []}
+                emptyLabel="Sem funcionário"
+              />
+              <DashboardAnalysisCard
+                title="Produtividade por equipe"
+                hint="Equipe registrada na conclusão, não a atribuição atual"
+                items={analise?.produtividadePorEquipe ?? []}
+                emptyLabel="Sem equipe"
+              />
+              <DashboardAnalysisCard
+                title="Produtividade por cargo"
+                hint="Cargos dos participantes da execução"
+                items={analise?.produtividadePorCargo ?? []}
+                emptyLabel="Sem cargo"
+              />
+              <DashboardAnalysisCard
+                title="Chamados por tipo"
+                items={analise?.chamadosPorTipo ?? []}
+                emptyLabel="Sem tipo"
+              />
+              <DashboardAnalysisCard
+                title="Chamados por Secretaria"
+                hint="Sigla da Secretaria responsável"
+                items={analise?.chamadosPorSecretaria ?? []}
+                emptyLabel="Sem Secretaria"
+              />
+            </section>
+
+            <div className="mb-4 border-t border-[var(--line)] pt-6">
+              <h2 className="text-[15px] font-semibold text-[var(--ink)]">Acompanhamento geral do sistema</h2>
+              <p className="mt-1 text-[13px] text-[var(--ink-3)]">
+                Informações gerais não filtradas — não sofrem impacto dos filtros aplicados acima.
+              </p>
+            </div>
+
             <section className="grid gap-6 lg:grid-cols-2">
               <Card elevation={1}>
                 <CardHeader>
                   <CardTitle className="text-[var(--ink)]">Pendências por secretaria</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 pt-0">
+                <CardContent className="max-h-[420px] space-y-2 overflow-y-auto pt-0">
                   {dashboard.pendenciasPorSecretaria.length === 0 ? (
                     <p className="py-4 text-[13px] text-[var(--ink-3)]">Nenhuma pendência registrada.</p>
                   ) : null}
@@ -152,7 +405,7 @@ export default function DashboardPage() {
                 <CardHeader>
                   <CardTitle className="text-[var(--ink)]">Últimos eventos de auditoria</CardTitle>
                 </CardHeader>
-                <CardContent className="max-h-[520px] space-y-2 overflow-auto pt-0">
+                <CardContent className="max-h-[420px] space-y-2 overflow-auto pt-0">
                   {auditoria.length === 0 ? (
                     <p className="py-4 text-[13px] text-[var(--ink-3)]">Nenhum evento recente.</p>
                   ) : null}

@@ -604,8 +604,10 @@ export function changePassword(currentPassword: string, newPassword: string) {
   });
 }
 
-export function getDashboard() {
-  return request<DashboardData>('/monitoramento/dashboard');
+export function getDashboard(params: Record<string, string> = {}) {
+  const query = new URLSearchParams(params);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return request<DashboardData>(`/monitoramento/dashboard${suffix}`);
 }
 
 export function listAuditoria() {
@@ -684,6 +686,7 @@ export function createPublicChamado(
   codigoPatrimonial: string,
   payload: {
     descricao: string;
+    tipoChamadoId: string;
     solicitanteNome?: string;
     solicitanteEmail?: string;
     solicitanteTelefone?: string;
@@ -695,6 +698,10 @@ export function createPublicChamado(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+export function listPublicTiposChamado() {
+  return publicRequest<TipoChamadoOpcao[]>('/public/tipos-chamado');
 }
 
 export function listChamados(params?: { limit?: number; offset?: number }) {
@@ -722,6 +729,7 @@ export function createChamado(payload: {
   longitude?: number;
   enderecoTexto?: string;
   enderecoBairro?: string;
+  tipoChamadoId: string;
   descricao: string;
   prioridade?: string;
   origem?: string;
@@ -971,6 +979,15 @@ export function concluirChamadoExecucao(
     membroExternoIds?: string[];
     impedimento?: boolean;
     impedimentoMotivo?: string;
+    checklistRespostas?: Array<{
+      itemId: string;
+      naoSeAplica?: boolean;
+      valorBooleano?: boolean | null;
+      valorTexto?: string;
+      valorNumero?: number;
+      comentario?: string;
+      evidenciaUrls?: string[];
+    }>;
   },
 ) {
   return request<ChamadoResumo>(`/chamados/${id}/execucao/concluir`, {

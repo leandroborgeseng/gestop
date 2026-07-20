@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { DeleteObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { formatEvidenceLimitMb, resolveMaxEvidenceBytes } from './storage.constants';
 import { buildStoragePublicUrl } from './storage-url';
 import { resolveStorageLocalDir } from './storage.health';
@@ -62,6 +62,50 @@ export class StorageService {
 
   async deleteStoredObjects(storageKeys: string[]) {
     await Promise.all(storageKeys.map((key) => this.deleteStoredObject(key)));
+  }
+
+  /** Lê bytes de um objeto armazenado (local ou S3) para embutir em PDF etc. */
+  async readObjectBuffer(
+    storageKey: string,
+    fallbackMimeType?: string | null,
+  ): Promise<{ buffer: Buffer; mimeType: string } | null> {
+    const normalizedKey = storageKey.trim();
+    if (!normalizedKey) return null;
+
+    const driver = process.env.STORAGE_DRIVER?.trim() || 'local';
+
+    try {
+      if (driver === 's3') {
+        const bucket = process.env.S3_BUCKET?.trim();
+        if (!bucket) return null;
+        const client = this.getS3Client();
+        const response = await client.send(
+          new GetObjectCommand({
+            Bucket: bucket,
+            Key: normalizedKey,
+          }),
+        );
+        const bytes = await response.Body?.transformToByteArray();
+        if (!bytes?.length) return null;
+        return {
+          buffer: Buffer.from(bytes),
+          mimeType: response.ContentType || fallbackMimeType || 'application/octet-stream',
+        };
+      }
+
+      const root = resolveStorageLocalDir();
+      const buffer = await readFile(join(root, normalizedKey));
+      if (!buffer.length) return null;
+      return {
+        buffer,
+        mimeType: fallbackMimeType || mimeFromExtension(normalizedKey) || 'application/octet-stream',
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao ler objeto ${normalizedKey}: ${error instanceof Error ? error.message : 'erro desconhecido'}`,
+      );
+      return null;
+    }
   }
 
   private async storeBuffer(buffer: Buffer, mimeType: string, prefix: string): Promise<StoredObject> {
@@ -174,6 +218,16 @@ function extensionFromMime(mimeType: string) {
     default:
       return '.bin';
   }
+}
+
+function mimeFromExtension(storageKey: string) {
+  const lower = storageKey.toLowerCase();
+  if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
+  if (lower.endsWith('.png')) return 'image/png';
+  if (lower.endsWith('.webp')) return 'image/webp';
+  if (lower.endsWith('.heic')) return 'image/heic';
+  if (lower.endsWith('.pdf')) return 'application/pdf';
+  return null;
 }
 
 function buildPublicUrl(storageKey: string) {

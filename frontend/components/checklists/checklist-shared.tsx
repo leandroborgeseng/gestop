@@ -23,6 +23,7 @@ import {
   ChecklistItemTipo,
   ChecklistModel,
   ChecklistVersao,
+  TipoChamadoOpcao,
   UnidadeTipo,
 } from '@/lib/types';
 import { LikertScale } from '@/components/checklists/likert-scale';
@@ -183,33 +184,42 @@ export function ChecklistBindingFields({
 
 export function CreateChecklistForm({
   secretarias,
+  tiposChamado = [],
   onSubmit,
   onCancel,
   formId = 'create-checklist-form',
   hideActions = false,
 }: {
   secretarias: AdminSecretaria[];
+  tiposChamado?: TipoChamadoOpcao[];
   onSubmit: (payload: Record<string, unknown>) => void;
   onCancel?: () => void;
   formId?: string;
   hideActions?: boolean;
 }) {
+  const [finalidade, setFinalidade] = useState<'VISTORIA' | 'CHAMADO'>('VISTORIA');
   const [escopo, setEscopo] = useState<ChecklistEscopo>('UNIDADE_TIPO');
+  const [tipoChamadoIds, setTipoChamadoIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
     const form = new FormData(event.currentTarget);
-    const selectedEscopo = String(form.get('escopo')) as ChecklistEscopo;
+    const selectedEscopo = String(form.get('escopo') || 'GLOBAL') as ChecklistEscopo;
     const unidadeTipo = String(form.get('unidadeTipo') || '');
 
-    if (selectedEscopo === 'UNIDADE_TIPO' && !unidadeTipo) {
+    if (finalidade === 'CHAMADO' && tipoChamadoIds.length === 0) {
+      setFormError('Selecione ao menos um tipo de chamado.');
+      return;
+    }
+
+    if (finalidade === 'VISTORIA' && selectedEscopo === 'UNIDADE_TIPO' && !unidadeTipo) {
       setFormError('Selecione o tipo de próprio para vincular o checklist.');
       return;
     }
 
-    if (selectedEscopo === 'SECRETARIA' && !String(form.get('secretariaId') || '')) {
+    if (finalidade === 'VISTORIA' && selectedEscopo === 'SECRETARIA' && !String(form.get('secretariaId') || '')) {
       setFormError('Selecione a secretaria para vincular o checklist.');
       return;
     }
@@ -217,13 +227,17 @@ export function CreateChecklistForm({
     onSubmit({
       nome: String(form.get('nome')),
       descricao: String(form.get('descricao') || ''),
-      escopo: selectedEscopo,
-      secretariaId: String(form.get('secretariaId') || ''),
-      unidadeTipo: unidadeTipo || undefined,
+      finalidade,
+      escopo: finalidade === 'CHAMADO' ? 'GLOBAL' : selectedEscopo,
+      secretariaId: finalidade === 'CHAMADO' ? '' : String(form.get('secretariaId') || ''),
+      unidadeTipo: finalidade === 'CHAMADO' ? undefined : unidadeTipo || undefined,
+      tipoChamadoIds: finalidade === 'CHAMADO' ? tipoChamadoIds : undefined,
       ativo: true,
     });
     event.currentTarget.reset();
+    setFinalidade('VISTORIA');
     setEscopo('UNIDADE_TIPO');
+    setTipoChamadoIds([]);
   }
 
   return (
@@ -234,7 +248,43 @@ export function CreateChecklistForm({
       <Field label="Descrição">
         <Input name="descricao" />
       </Field>
-      <ChecklistBindingFields escopo={escopo} onEscopoChange={setEscopo} secretarias={secretarias} />
+      <Field label="Finalidade do checklist" hint="Vistoria mantém notas/NC. Chamado é complementar na execução.">
+        <Select
+          value={finalidade}
+          onChange={(event) => setFinalidade(event.target.value as 'VISTORIA' | 'CHAMADO')}
+        >
+          <option value="VISTORIA">Vistoria</option>
+          <option value="CHAMADO">Chamado</option>
+        </Select>
+      </Field>
+      {finalidade === 'VISTORIA' ? (
+        <ChecklistBindingFields escopo={escopo} onEscopoChange={setEscopo} secretarias={secretarias} />
+      ) : (
+        <Field label="Tipo de chamado" hint="O checklist será aplicado na execução desses tipos.">
+          <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-2">
+            {tiposChamado.map((tipo) => {
+              const checked = tipoChamadoIds.includes(tipo.id);
+              return (
+                <label key={tipo.id} className="flex items-center gap-2 text-[13px] text-[var(--ink)]">
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      setTipoChamadoIds((current) =>
+                        checked ? current.filter((id) => id !== tipo.id) : [...current, tipo.id],
+                      )
+                    }
+                  />
+                  {tipo.nome}
+                </label>
+              );
+            })}
+            {tiposChamado.length === 0 ? (
+              <p className="text-[12px] text-[var(--ink-3)]">Nenhum tipo de chamado cadastrado.</p>
+            ) : null}
+          </div>
+        </Field>
+      )}
       {formError ? <p className="md-body-md text-red-700">{formError}</p> : null}
       {hideActions ? null : (
         <div className="flex flex-wrap gap-2 pt-2">
@@ -488,15 +538,19 @@ export function ArchivedVersionsPanel({
 export function VersionEditor({
   version,
   categorias,
+  finalidade = 'VISTORIA',
   onSave,
   onPublish,
 }: {
   version: ChecklistVersao;
   categorias: AdminCategoriaVistoria[];
+  finalidade?: 'VISTORIA' | 'CHAMADO';
   onSave: (items: Array<Omit<ItemDraft, 'draftKey'>>) => void;
   onPublish: (items: Array<Omit<ItemDraft, 'draftKey'>>) => void;
 }) {
+  const isChamado = finalidade === 'CHAMADO';
   const defaultCategoriaId = categorias.find((item) => item.ativo)?.id ?? categorias[0]?.id ?? '';
+  const availableTipos = isChamado ? tiposItem.filter((tipo) => tipo !== 'ESCALA_LIKERT') : tiposItem;
   const [items, setItems] = useState<ItemDraft[]>(
     version.itens.length
       ? version.itens.map((item) => ({
@@ -506,18 +560,20 @@ export function VersionEditor({
           titulo: item.titulo,
           tipo: item.tipo,
           obrigatorio: item.obrigatorio,
-          geraNaoConformidade: item.geraNaoConformidade,
+          geraNaoConformidade: isChamado ? false : item.geraNaoConformidade,
           exigeEvidencia: item.exigeEvidencia,
-          categoriaVistoriaId: item.categoriaVistoriaId ?? defaultCategoriaId,
+          categoriaVistoriaId: isChamado ? '' : item.categoriaVistoriaId ?? defaultCategoriaId,
           opcoes: item.opcoes ?? defaultOpcoesForTipo(item.tipo),
         }))
-      : [emptyItem(1, defaultCategoriaId)],
+      : [emptyItem(1, isChamado ? '' : defaultCategoriaId, isChamado)],
   );
   const [editorError, setEditorError] = useState<string | null>(null);
 
   function prepareItems() {
     return items.map(({ draftKey: _draftKey, ...item }) => ({
       ...item,
+      geraNaoConformidade: isChamado ? false : item.geraNaoConformidade,
+      categoriaVistoriaId: isChamado ? '' : item.categoriaVistoriaId,
       opcoes: serializeItemOpcoes(item.tipo, item.opcoes),
     }));
   }
@@ -529,7 +585,9 @@ export function VersionEditor({
       if (opcoesError) return opcoesError;
       if (!item.titulo.trim()) return `Item #${item.ordem}: informe o título.`;
       if (!item.codigo.trim()) return `Item #${item.ordem}: informe o código.`;
-      if (!item.categoriaVistoriaId?.trim()) return `Item #${item.ordem}: selecione a categoria de vistoria.`;
+      if (!isChamado && !item.categoriaVistoriaId?.trim()) {
+        return `Item #${item.ordem}: selecione a categoria de vistoria.`;
+      }
       const normalizedCode = item.codigo.trim().toUpperCase();
       if (codes.has(normalizedCode)) return `Código duplicado na versão: ${item.codigo}`;
       codes.add(normalizedCode);
@@ -567,7 +625,7 @@ export function VersionEditor({
           <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">Somente rascunhos podem ser editados.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button variant="tonal" size="sm" onClick={() => setItems((current) => [...current, emptyItem(current.length + 1, defaultCategoriaId)])}>
+          <Button variant="tonal" size="sm" onClick={() => setItems((current) => [...current, emptyItem(current.length + 1, isChamado ? '' : defaultCategoriaId, isChamado)])}>
             Adicionar item
           </Button>
           <Button variant="filled" size="sm" onClick={handleSave}>
@@ -601,27 +659,29 @@ export function VersionEditor({
                   value={item.tipo}
                   onChange={(e) => updateItem(items, setItems, index, { tipo: e.target.value as ChecklistItemTipo })}
                 >
-                  {tiposItem.map((tipo) => (
+                  {availableTipos.map((tipo) => (
                     <option key={tipo} value={tipo}>
                       {TIPO_ITEM_LABEL[tipo]}
                     </option>
                   ))}
                 </Select>
               </Field>
-              <Field label="Categoria de vistoria">
-                <Select
-                  value={item.categoriaVistoriaId}
-                  onChange={(e) => updateItem(items, setItems, index, { categoriaVistoriaId: e.target.value })}
-                  required
-                >
-                  <option value="">Selecione</option>
-                  {categorias.filter((categoria) => categoria.ativo).map((categoria) => (
-                    <option key={categoria.id} value={categoria.id}>
-                      {categoria.nome}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
+              {!isChamado ? (
+                <Field label="Categoria de vistoria">
+                  <Select
+                    value={item.categoriaVistoriaId}
+                    onChange={(e) => updateItem(items, setItems, index, { categoriaVistoriaId: e.target.value })}
+                    required
+                  >
+                    <option value="">Selecione</option>
+                    {categorias.filter((categoria) => categoria.ativo).map((categoria) => (
+                      <option key={categoria.id} value={categoria.id}>
+                        {categoria.nome}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ) : null}
               <label className="flex min-h-11 items-center gap-2 md-label-lg">
                 <input
                   type="checkbox"
@@ -630,14 +690,16 @@ export function VersionEditor({
                 />
                 Obrigatório
               </label>
-              <label className="flex min-h-11 items-center gap-2 md-label-lg">
-                <input
-                  type="checkbox"
-                  checked={item.geraNaoConformidade}
-                  onChange={(e) => updateItem(items, setItems, index, { geraNaoConformidade: e.target.checked })}
-                />
-                Gera Chamado NC
-              </label>
+              {!isChamado ? (
+                <label className="flex min-h-11 items-center gap-2 md-label-lg">
+                  <input
+                    type="checkbox"
+                    checked={item.geraNaoConformidade}
+                    onChange={(e) => updateItem(items, setItems, index, { geraNaoConformidade: e.target.checked })}
+                  />
+                  Gera Chamado NC
+                </label>
+              ) : null}
               <label className="flex min-h-11 items-center gap-2 md-label-lg">
                 <input
                   type="checkbox"
@@ -994,7 +1056,7 @@ function TextoOpcoesEditor({
   );
 }
 
-function emptyItem(ordem: number, categoriaVistoriaId = ''): ItemDraft {
+function emptyItem(ordem: number, categoriaVistoriaId = '', forChamado = false): ItemDraft {
   return {
     draftKey: createDraftKey(),
     ordem,
@@ -1002,8 +1064,8 @@ function emptyItem(ordem: number, categoriaVistoriaId = ''): ItemDraft {
     titulo: '',
     tipo: 'BOOLEANO',
     obrigatorio: true,
-    geraNaoConformidade: true,
-    exigeEvidencia: true,
+    geraNaoConformidade: forChamado ? false : true,
+    exigeEvidencia: forChamado ? false : true,
     categoriaVistoriaId,
     opcoes: defaultOpcoesForTipo('BOOLEANO'),
   };

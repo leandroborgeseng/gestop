@@ -35,6 +35,9 @@ export class CreateChamadoDto {
   @MinLength(10)
   descricao!: string;
 
+  @IsUUID()
+  tipoChamadoId!: string;
+
   @IsOptional()
   @IsEnum(ChamadoPrioridade)
   prioridade?: ChamadoPrioridade;
@@ -64,6 +67,9 @@ export class PublicCreateChamadoDto {
   @IsString()
   @MinLength(10)
   descricao!: string;
+
+  @IsUUID()
+  tipoChamadoId!: string;
 
   @IsOptional()
   @IsString()
@@ -299,6 +305,42 @@ export class ChamadoExecucaoConcluirDto {
   @IsString()
   @MinLength(5)
   impedimentoMotivo?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChamadoExecucaoChecklistRespostaDto)
+  checklistRespostas?: ChamadoExecucaoChecklistRespostaDto[];
+}
+
+export class ChamadoExecucaoChecklistRespostaDto {
+  @IsString()
+  itemId!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  naoSeAplica?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  valorBooleano?: boolean | null;
+
+  @IsOptional()
+  @IsString()
+  valorTexto?: string;
+
+  @IsOptional()
+  @IsNumber()
+  valorNumero?: number;
+
+  @IsOptional()
+  @IsString()
+  comentario?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  evidenciaUrls?: string[];
 }
 
 export class ChamadoExecucaoManualDto {

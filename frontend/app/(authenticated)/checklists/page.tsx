@@ -19,9 +19,9 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { cn } from '@/lib/cn';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
-import { listAdminSecretarias, listChecklists, saveChecklist } from '@/lib/api';
+import { listAdminSecretarias, listChecklists, listTiposChamadoOpcoes, saveChecklist } from '@/lib/api';
 import { formatChecklistVinculo } from '@/lib/unidade-tipo';
-import { AdminSecretaria, ChecklistModel } from '@/lib/types';
+import { AdminSecretaria, ChecklistModel, TipoChamadoOpcao } from '@/lib/types';
 
 const TIPO_LABEL: Record<string, string> = {
   BOOLEANO: 'Sim/Não',
@@ -46,6 +46,7 @@ export default function ChecklistsPage() {
   const snackbar = useSnackbar();
   const [checklists, setChecklists] = useState<ChecklistModel[]>([]);
   const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
+  const [tiposChamado, setTiposChamado] = useState<TipoChamadoOpcao[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -55,9 +56,14 @@ export default function ChecklistsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextChecklists, nextSecretarias] = await Promise.all([listChecklists(), listAdminSecretarias()]);
+      const [nextChecklists, nextSecretarias, nextTipos] = await Promise.all([
+        listChecklists(),
+        listAdminSecretarias(),
+        listTiposChamadoOpcoes().catch(() => [] as TipoChamadoOpcao[]),
+      ]);
       setChecklists(nextChecklists);
       setSecretarias(nextSecretarias);
+      setTiposChamado(nextTipos);
       setSelectedId((current) => current ?? nextChecklists[0]?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar checklists.');
@@ -94,7 +100,7 @@ export default function ChecklistsPage() {
         kicker="Modelos de vistoria"
         icon={ClipboardList}
         title="Checklists"
-        description="Modelos versionados aplicados pelos agentes em vistoria. Publique versões sem quebrar histórico."
+        description="Modelos versionados para vistoria e perguntas complementares na execução de chamados."
         backHref={backHref}
         action={
           <Button variant="filled" size="md" className="gap-1.5" onClick={() => setCreateOpen(true)}>
@@ -199,6 +205,7 @@ export default function ChecklistsPage() {
             >
               <CreateChecklistForm
                 secretarias={secretarias}
+                tiposChamado={tiposChamado}
                 onSubmit={(payload) => void handleCreate(payload)}
                 onCancel={() => setCreateOpen(false)}
                 hideActions

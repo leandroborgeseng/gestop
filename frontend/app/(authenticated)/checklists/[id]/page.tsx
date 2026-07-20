@@ -164,6 +164,7 @@ export default function ChecklistDetalhePage() {
               <VersionEditor
                 version={draft}
                 categorias={categorias}
+                finalidade={checklist.finalidade === 'CHAMADO' ? 'CHAMADO' : 'VISTORIA'}
                 onSave={(items) =>
                   mutate(
                     () =>

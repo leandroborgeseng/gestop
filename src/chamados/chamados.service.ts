@@ -3,6 +3,7 @@ import {
   AuditAction,
   ChamadoModoLocalizacao,
   ChamadoOrigem,
+  ChamadoPrioridade,
   ChamadoStatus,
   EvidenciaTipo,
   NaoConformidadeStatus,
@@ -37,7 +38,11 @@ import {
   ChamadoExecucaoManualDto,
 } from './chamados.dto';
 import { buildOrdensServicoLotePdf } from './chamados-os-pdf';
-import { buildChamadoDetalhePdf } from './chamados-detail-pdf';
+import {
+  buildChamadoDetalhePdf,
+  isPdfRenderableImage,
+  type ChamadoDetalhePdfAnexo,
+} from './chamados-detail-pdf';
 import { sendChamadoEquipeNotificacao } from './chamados-notificacao';
 import {
   buildAtribuicaoAlteracoes,
@@ -334,6 +339,131 @@ export class ChamadosService {
 
   async exportChamadoPdf(id: string, user: JwtPayload) {
     const detail = await this.getChamado(id, user);
+    const usedEvidenciaIds = new Set<string>();
+
+    const resolveAnexo = async (
+      evidencia: {
+        id: string;
+        mimeType?: string | null;
+        storageKey?: string | null;
+        capturadaEm?: string | null;
+        descricao?: string | null;
+        url?: string;
+      },
+      legenda: string,
+      usuarioNome?: string | null,
+    ): Promise<ChamadoDetalhePdfAnexo> => {
+      usedEvidenciaIds.add(evidencia.id);
+      const mimeType = evidencia.mimeType ?? null;
+      const storageKey = evidencia.storageKey ?? extractStorageKeyFromUrl(evidencia.url ?? null);
+      const base: ChamadoDetalhePdfAnexo = {
+        id: evidencia.id,
+        legenda,
+        mimeType,
+        nomeArquivo: evidencia.descricao?.trim() || storageKey?.split('/').pop() || null,
+        capturadaEm: evidencia.capturadaEm ?? null,
+        usuarioNome: usuarioNome ?? null,
+        imageBuffer: null,
+        renderError: null,
+      };
+
+      if (!isPdfRenderableImage(mimeType)) {
+        return base;
+      }
+      if (!storageKey) {
+        return { ...base, renderError: 'Arquivo anexado não renderizável no PDF' };
+      }
+
+      const loaded = await this.storageService.readObjectBuffer(storageKey, mimeType);
+      if (!loaded?.buffer.length) {
+        return { ...base, renderError: 'Arquivo anexado não renderizável no PDF' };
+      }
+      return { ...base, imageBuffer: loaded.buffer, mimeType: loaded.mimeType || mimeType };
+    };
+
+    const historico = await Promise.all(
+      detail.historico.map(async (entry) => {
+        const tipo = typeof entry.metadata?.tipo === 'string' ? entry.metadata.tipo : null;
+        const defaultLegenda =
+          tipo === 'execucao_conclusao' || tipo === 'execucao_manual'
+            ? 'Evidência da execução'
+            : 'Anexo do registro de histórico';
+        const anexos = await Promise.all(
+          (entry.anexos ?? []).map((anexo) =>
+            resolveAnexo(
+              anexo as {
+                id: string;
+                mimeType?: string | null;
+                storageKey?: string | null;
+                capturadaEm?: string | null;
+                descricao?: string | null;
+                url?: string;
+              },
+              defaultLegenda,
+              entry.alteradoPor?.nome,
+            ),
+          ),
+        );
+        return {
+          statusAnterior: entry.statusAnterior,
+          statusNovo: entry.statusNovo,
+          motivo: entry.motivo,
+          metadata: (entry.metadata ?? {}) as Record<string, unknown>,
+          createdAt: entry.createdAt,
+          alteradoPor: entry.alteradoPor,
+          anexos,
+        };
+      }),
+    );
+
+    let fotoAbertura: ChamadoDetalhePdfAnexo | null = null;
+    const fotoStorageKey =
+      (detail as { fotoStorageKey?: string | null }).fotoStorageKey ??
+      extractStorageKeyFromUrl(detail.fotoUrl ?? null);
+    if (fotoStorageKey || detail.fotoUrl) {
+      const mimeGuess =
+        fotoStorageKey?.toLowerCase().endsWith('.png')
+          ? 'image/png'
+          : fotoStorageKey?.toLowerCase().endsWith('.webp')
+            ? 'image/webp'
+            : 'image/jpeg';
+      const loaded = fotoStorageKey
+        ? await this.storageService.readObjectBuffer(fotoStorageKey, mimeGuess)
+        : null;
+      fotoAbertura = {
+        id: 'foto-abertura',
+        legenda: 'Foto anexada na abertura',
+        mimeType: loaded?.mimeType ?? mimeGuess,
+        nomeArquivo: fotoStorageKey?.split('/').pop() ?? null,
+        capturadaEm: toIsoString(detail.createdAt),
+        usuarioNome: detail.registradoPor?.nome ?? null,
+        imageBuffer: loaded?.buffer ?? null,
+        renderError: loaded?.buffer ? null : 'Arquivo anexado não renderizável no PDF',
+      };
+    }
+
+    const todasEvidencias = await this.prisma.evidencia.findMany({
+      where: { chamadoId: id },
+      orderBy: { capturadaEm: 'asc' },
+    });
+    const anexosSoltos = await Promise.all(
+      todasEvidencias
+        .filter((item) => !usedEvidenciaIds.has(item.id))
+        .map((item) => {
+          const serialized = this.serializeEvidencia(item);
+          const origem =
+            item.metadata && typeof item.metadata === 'object' && item.metadata !== null && 'origem' in item.metadata
+              ? String((item.metadata as { origem?: string }).origem ?? '')
+              : '';
+          const legenda =
+            origem === 'execucao_campo' || origem === 'execucao_manual'
+              ? 'Evidência da execução'
+              : origem === 'nao_conformidade'
+                ? 'Evidência de não conformidade'
+                : 'Anexo do chamado';
+          return resolveAnexo(serialized, legenda);
+        }),
+    );
 
     return buildChamadoDetalhePdf({
       codigo: detail.codigo,
@@ -360,14 +490,9 @@ export class ChamadosService {
       tipoChamado: detail.tipoChamado,
       registradoPor: detail.registradoPor,
       naoConformidade: detail.naoConformidade,
-      historico: detail.historico.map((entry) => ({
-        statusAnterior: entry.statusAnterior,
-        statusNovo: entry.statusNovo,
-        motivo: entry.motivo,
-        metadata: (entry.metadata ?? {}) as Record<string, unknown>,
-        createdAt: entry.createdAt,
-        alteradoPor: entry.alteradoPor,
-      })),
+      fotoAbertura,
+      historico,
+      anexosSoltos,
     });
   }
 
@@ -405,6 +530,7 @@ export class ChamadosService {
       });
 
     const unidadeExec = await this.resolveUnidadeExecucao(chamado);
+    const checklistComplementar = await this.findChecklistComplementarExecucao(chamado.tipoChamadoId);
 
     return {
       ...this.serializeChamado(chamado),
@@ -416,6 +542,7 @@ export class ChamadosService {
         ? parseExecucaoCheckinMetadata(execucaoCheckin.metadata, execucaoCheckin.createdAt)
         : null,
       unidadeExecucao: unidadeExec,
+      checklistComplementar,
     };
   }
 
@@ -582,6 +709,12 @@ export class ChamadosService {
 
     const participantes = await this.resolveExecucaoParticipantes(dto);
 
+    const checklistRespostas = await this.validateAndNormalizeChecklistRespostasExecucao(
+      before.tipoChamadoId,
+      dto.checklistRespostas,
+      dto.impedimento === true,
+    );
+
     const nextStatus = dto.impedimento ? ChamadoStatus.IMPEDIDO : ChamadoStatus.CONCLUIDO;
     if (dto.impedimento && !dto.impedimentoMotivo?.trim()) {
       throw new BadRequestException('Informe o motivo do impedimento.');
@@ -632,6 +765,7 @@ export class ChamadosService {
             membrosExecutores: participantes.membrosExecutores,
             membrosExternos: participantes.membrosExternos,
             participantes: participantes.participantes,
+            checklistComplementar: checklistRespostas,
           },
         },
       });
@@ -750,6 +884,15 @@ export class ChamadosService {
     const location = await this.resolveCreateLocation(dto, user.sub);
     assertSecretariaNoEscopo(user, location.secretariaId);
 
+    const tipo = await this.prisma.tipoChamado.findFirst({
+      where: { id: dto.tipoChamadoId.trim(), ativo: true },
+    });
+    if (!tipo) throw new BadRequestException('Tipo de chamado não encontrado ou inativo.');
+
+    const prioridade = dto.prioridade ?? ChamadoPrioridade.MEDIA;
+    const abertoEm = new Date();
+    const prazoEm = calcularPrazoSla(abertoEm, prioridade, tipo);
+
     let fotoStorageKey: string | undefined;
     let fotoUrl: string | undefined;
     let fotoMimeType: string | undefined;
@@ -770,8 +913,11 @@ export class ChamadosService {
           modoLocalizacao: dto.modoLocalizacao,
           enderecoTexto: location.enderecoTexto,
           enderecoBairro: location.enderecoBairro,
+          titulo: tipo.nome,
+          tipoChamadoId: tipo.id,
           descricao: dto.descricao.trim(),
-          prioridade: dto.prioridade,
+          prioridade,
+          prazoEm,
           origem: dto.origem ?? ChamadoOrigem.INTERNO,
           solicitanteNome: dto.solicitanteNome?.trim(),
           solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
@@ -810,6 +956,14 @@ export class ChamadosService {
     });
     if (!unidade) throw new NotFoundException('QR Code invalido ou proprio inativo.');
 
+    const tipo = await this.prisma.tipoChamado.findFirst({
+      where: { id: dto.tipoChamadoId.trim(), ativo: true },
+    });
+    if (!tipo) throw new BadRequestException('Tipo de chamado não encontrado ou inativo.');
+
+    const abertoEm = new Date();
+    const prazoEm = calcularPrazoSla(abertoEm, ChamadoPrioridade.MEDIA, tipo);
+
     let fotoStorageKey: string | undefined;
     let fotoUrl: string | undefined;
     let fotoMimeType: string | undefined;
@@ -827,7 +981,10 @@ export class ChamadosService {
           codigo: buildChamadoCode(sequence),
           secretariaId: unidade.secretariaId,
           unidadeId: unidade.id,
+          titulo: tipo.nome,
+          tipoChamadoId: tipo.id,
           descricao: dto.descricao.trim(),
+          prazoEm,
           origem: ChamadoOrigem.QR_CODE,
           solicitanteNome: dto.solicitanteNome?.trim(),
           solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
@@ -1227,7 +1384,13 @@ export class ChamadosService {
     const chamado = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.chamado.update({
         where: { id },
-        data: { tipoChamadoId, prioridade, prazoEm },
+        data: {
+          tipoChamadoId,
+          prioridade,
+          prazoEm,
+          // Título principal acompanha o tipo selecionado na triagem.
+          titulo: tipoNovoRecord?.nome ?? null,
+        },
         include: this.includeRelations(),
       });
 
@@ -1243,6 +1406,8 @@ export class ChamadosService {
             tipo: 'triagem_update',
             tipoChamadoId,
             tipoChamadoAnteriorId: before.tipoChamadoId,
+            tipoChamadoNome: tipoNovoRecord?.nome ?? null,
+            tipoChamadoAnteriorNome: before.tipoChamado?.nome ?? null,
             prioridade,
             prioridadeAnterior: before.prioridade,
             prazoEm: prazoEm?.toISOString() ?? null,
@@ -1988,6 +2153,142 @@ export class ChamadosService {
     };
   }
 
+  private async findChecklistComplementarExecucao(tipoChamadoId: string | null) {
+    if (!tipoChamadoId) return null;
+
+    const checklist = await this.prisma.checklist.findFirst({
+      where: {
+        ativo: true,
+        finalidade: 'CHAMADO',
+        tiposChamado: { some: { tipoChamadoId } },
+        versoes: { some: { status: 'PUBLICADA' } },
+      } as never,
+      include: {
+        versoes: {
+          where: { status: 'PUBLICADA' },
+          take: 1,
+          orderBy: { versao: 'desc' },
+          include: { itens: { where: { ativo: true }, orderBy: { ordem: 'asc' } } },
+        },
+      },
+    });
+
+    const versao = checklist?.versoes[0];
+    if (!checklist || !versao) return null;
+
+    return {
+      checklistId: checklist.id,
+      checklistNome: checklist.nome,
+      checklistVersaoId: versao.id,
+      versao: versao.versao,
+      itens: versao.itens.map((item) => ({
+        id: item.id,
+        ordem: item.ordem,
+        codigo: item.codigo,
+        titulo: item.titulo,
+        tipo: item.tipo,
+        obrigatorio: item.obrigatorio,
+        exigeEvidencia: item.exigeEvidencia,
+        opcoes: item.opcoes,
+      })),
+    };
+  }
+
+  private async validateAndNormalizeChecklistRespostasExecucao(
+    tipoChamadoId: string | null,
+    respostas: ChamadoExecucaoConcluirDto['checklistRespostas'],
+    impedimento: boolean,
+  ) {
+    const checklist = await this.findChecklistComplementarExecucao(tipoChamadoId);
+    if (!checklist) {
+      if (respostas?.length) {
+        throw new BadRequestException('Este chamado nao possui checklist complementar de execucao.');
+      }
+      return null;
+    }
+
+    // Impedimento dispensa perguntas complementares.
+    if (impedimento) {
+      return {
+        checklistId: checklist.checklistId,
+        checklistVersaoId: checklist.checklistVersaoId,
+        checklistNome: checklist.checklistNome,
+        dispensadoPorImpedimento: true,
+        respostas: [],
+      };
+    }
+
+    const byItem = new Map((respostas ?? []).map((item) => [item.itemId, item]));
+    const normalized = [];
+
+    for (const item of checklist.itens) {
+      const resposta = byItem.get(item.id);
+      const naoSeAplica = Boolean(resposta?.naoSeAplica);
+
+      if (naoSeAplica) {
+        normalized.push({
+          itemId: item.id,
+          codigo: item.codigo,
+          titulo: item.titulo,
+          tipo: item.tipo,
+          naoSeAplica: true,
+          valorBooleano: null,
+          valorTexto: null,
+          valorNumero: null,
+          comentario: resposta?.comentario?.trim() || null,
+          evidenciaUrls: [],
+        });
+        continue;
+      }
+
+      if (item.obrigatorio && !resposta) {
+        throw new BadRequestException(`Responda a pergunta obrigatoria: ${item.titulo}`);
+      }
+
+      if (!resposta) continue;
+
+      const valorTexto = resposta.valorTexto?.trim() || null;
+      const valorNumero = resposta.valorNumero ?? null;
+      const valorBooleano = resposta.valorBooleano ?? null;
+      const evidenciaUrls = (resposta.evidenciaUrls ?? []).map((url) => url.trim()).filter(Boolean);
+
+      const hasValue =
+        valorBooleano != null ||
+        Boolean(valorTexto) ||
+        valorNumero != null ||
+        evidenciaUrls.length > 0;
+
+      if (item.obrigatorio && !hasValue) {
+        throw new BadRequestException(`Responda a pergunta obrigatoria: ${item.titulo}`);
+      }
+
+      if (item.exigeEvidencia && evidenciaUrls.length === 0) {
+        throw new BadRequestException(`Anexe a evidencia exigida para: ${item.titulo}`);
+      }
+
+      normalized.push({
+        itemId: item.id,
+        codigo: item.codigo,
+        titulo: item.titulo,
+        tipo: item.tipo,
+        naoSeAplica: false,
+        valorBooleano,
+        valorTexto,
+        valorNumero,
+        comentario: resposta.comentario?.trim() || null,
+        evidenciaUrls,
+      });
+    }
+
+    return {
+      checklistId: checklist.checklistId,
+      checklistVersaoId: checklist.checklistVersaoId,
+      checklistNome: checklist.checklistNome,
+      dispensadoPorImpedimento: false,
+      respostas: normalized,
+    };
+  }
+
   private async assertUsuarioPodeExecutarChamado(
     chamado: { equipeId: string | null; secretariaId: string },
     user: JwtPayload,
@@ -2121,6 +2422,7 @@ export class ChamadosService {
       id: evidencia.id,
       tipo: evidencia.tipo,
       url: resolveStoragePublicUrl(storageKey, evidencia.url) ?? evidencia.url,
+      storageKey,
       mimeType: evidencia.mimeType,
       tamanhoBytes: evidencia.tamanhoBytes,
       latitude: evidencia.latitude != null ? Number(evidencia.latitude) : null,

@@ -25,6 +25,14 @@ export function normalizeItemCode(code: string) {
 }
 
 export function validateChecklistEscopo(dto: ChecklistDto) {
+  const finalidade = dto.finalidade ?? 'VISTORIA';
+  if (finalidade === 'CHAMADO') {
+    if (!dto.tipoChamadoIds?.length) {
+      throw new Error('Vincule o checklist a ao menos um tipo de chamado.');
+    }
+    return;
+  }
+
   if (dto.escopo === ChecklistEscopo.UNIDADE_TIPO && !dto.unidadeTipo) {
     throw new Error('Informe o tipo de proprio para checklists com escopo por tipo.');
   }
@@ -39,11 +47,26 @@ export function validateChecklistEscopo(dto: ChecklistDto) {
 }
 
 export function normalizeChecklistBinding(dto: ChecklistDto): ChecklistDto {
+  const finalidade = dto.finalidade ?? 'VISTORIA';
+  if (finalidade === 'CHAMADO') {
+    return {
+      ...dto,
+      finalidade,
+      escopo: ChecklistEscopo.GLOBAL,
+      secretariaId: undefined,
+      unidadeId: undefined,
+      unidadeTipo: undefined,
+      tipoChamadoIds: Array.from(new Set((dto.tipoChamadoIds ?? []).map((id) => id.trim()).filter(Boolean))),
+    };
+  }
+
   const base = {
     ...dto,
+    finalidade,
     secretariaId: dto.secretariaId || undefined,
     unidadeId: dto.unidadeId || undefined,
     unidadeTipo: dto.unidadeTipo || undefined,
+    tipoChamadoIds: undefined,
   };
 
   switch (dto.escopo) {
@@ -60,8 +83,14 @@ export function normalizeChecklistBinding(dto: ChecklistDto): ChecklistDto {
   }
 }
 
-export function assertValidChecklistVersion(dto: ChecklistVersionDto) {
-  assertValidChecklistVersionItems(dto.itens);
+export function assertValidChecklistVersion(
+  dto: ChecklistVersionDto,
+  options?: { finalidadeChamado?: boolean },
+) {
+  assertValidChecklistVersionItems(dto.itens, {
+    finalidadeChamado: options?.finalidadeChamado,
+    requireCategoria: !options?.finalidadeChamado,
+  });
 }
 
 export { normalizeChecklistItemOpcoes };

@@ -29,6 +29,8 @@ export function buildFieldPackageChecklistWhere(
 
   return {
     ativo: true,
+    // Exclui checklists de execução de chamado do pacote do app Vistoria.
+    NOT: { finalidade: 'CHAMADO' as never },
     versoes: { some: { status: 'PUBLICADA' } },
     OR: orConditions,
   };

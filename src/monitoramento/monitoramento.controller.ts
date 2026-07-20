@@ -1,7 +1,8 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { RequirePermissions } from '../auth/permissions';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { DashboardFiltroDto } from './monitoramento.dto';
 import { MonitoramentoService } from './monitoramento.service';
 
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -11,8 +12,8 @@ export class MonitoramentoController {
 
   @RequirePermissions('dashboard.visualizar')
   @Get('dashboard')
-  getDashboard() {
-    return this.monitoramentoService.getDashboard();
+  getDashboard(@Query() filtro: DashboardFiltroDto) {
+    return this.monitoramentoService.getDashboard(filtro);
   }
 
   @RequirePermissions('auditoria.visualizar')

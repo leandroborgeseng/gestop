@@ -552,6 +552,7 @@ export type WebmapSyncAllResult = {
 };
 
 export type ChecklistEscopo = 'GLOBAL' | 'SECRETARIA' | 'UNIDADE_TIPO' | 'UNIDADE';
+export type ChecklistFinalidade = 'VISTORIA' | 'CHAMADO';
 export type ChecklistVersaoStatus = 'RASCUNHO' | 'PUBLICADA' | 'ARQUIVADA';
 export type ChecklistItemTipo = 'TEXTO' | 'NUMERO' | 'BOOLEANO' | 'MULTIPLA_ESCOLHA' | 'ESCALA_LIKERT' | 'FOTO' | 'ASSINATURA' | 'DATA';
 
@@ -583,10 +584,12 @@ export type ChecklistModel = {
   secretariaId?: string | null;
   nome: string;
   descricao?: string | null;
+  finalidade?: ChecklistFinalidade;
   escopo: ChecklistEscopo;
   unidadeTipo?: UnidadeTipo | null;
   ativo: boolean;
   secretaria?: SecretariaOption | null;
+  tiposChamado?: Array<{ tipoChamado: { id: string; nome: string; ativo?: boolean } }>;
   versoes: ChecklistVersao[];
 };
 
@@ -802,6 +805,22 @@ export type ChamadoExecucaoDetalhe = ChamadoDetalhe & {
     endereco: string;
     bairro?: string | null;
   } | null;
+  checklistComplementar?: {
+    checklistId: string;
+    checklistNome: string;
+    checklistVersaoId: string;
+    versao: number;
+    itens: Array<{
+      id: string;
+      ordem: number;
+      codigo: string;
+      titulo: string;
+      tipo: string;
+      obrigatorio: boolean;
+      exigeEvidencia: boolean;
+      opcoes?: unknown;
+    }>;
+  } | null;
 };
 
 export type ChamadoMapPoint = {
@@ -832,7 +851,24 @@ export type PublicUnidadeChamado = {
   secretaria: SecretariaOption;
 };
 
+export type DashboardRankingItem = {
+  chave: string;
+  label: string;
+  detalhe?: string | null;
+  total: number;
+};
+
 export type DashboardData = {
+  filtrosAplicados?: {
+    from: string | null;
+    to: string | null;
+    secretariaId: string | null;
+    equipeId: string | null;
+    cargo: string | null;
+    tipoChamadoId: string | null;
+    prioridade: string | null;
+    status: string | null;
+  };
   indicadores: {
     totalUnidades: number;
     fiscalizacoes: number;
@@ -845,6 +881,14 @@ export type DashboardData = {
       concluidos: number;
     };
     syncPendentes: number;
+  };
+  analise?: {
+    produtividadePorFuncionario: DashboardRankingItem[];
+    produtividadePorEquipe: DashboardRankingItem[];
+    produtividadePorCargo: DashboardRankingItem[];
+    chamadosPorTipo: DashboardRankingItem[];
+    chamadosPorSecretaria: DashboardRankingItem[];
+    totalConcluidosAnalisados: number;
   };
   pendenciasPorSecretaria: Array<{
     id: string;

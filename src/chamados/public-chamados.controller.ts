@@ -8,6 +8,12 @@ export class PublicChamadosController {
   constructor(private readonly chamadosService: ChamadosService) {}
 
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
+  @Get('tipos-chamado')
+  listTiposChamado() {
+    return this.chamadosService.listTiposChamadoAtivos();
+  }
+
+  @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Get('unidades/:codigo')
   getUnidade(@Param('codigo') codigo: string) {
     return this.chamadosService.getUnidadePublicaByCodigo(codigo);

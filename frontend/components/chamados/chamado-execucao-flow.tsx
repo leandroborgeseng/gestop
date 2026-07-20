@@ -29,6 +29,12 @@ import { ErrorState, LoadingState } from '@/components/ui-states';
 import { useCanGerenciarChamados, useCanLancarExecucaoManual } from '@/components/auth/session-context';
 import { MembroExternoPicker } from '@/components/chamados/membro-externo-picker';
 import {
+  ChamadoExecucaoChecklistSection,
+  ChecklistRespostaDraft,
+  toChecklistRespostasPayload,
+  validateChecklistRespostasDraft,
+} from '@/components/chamados/chamado-execucao-checklist';
+import {
   addChamadoExecucaoEvidencia,
   checkinChamadoExecucao,
   concluirChamadoExecucao,
@@ -203,6 +209,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   const [selectedMembroIds, setSelectedMembroIds] = useState<string[]>([]);
   const [membroExternoIds, setMembroExternoIds] = useState<string[]>([]);
   const [manualAnexos, setManualAnexos] = useState<Array<{ dataUrl: string; mimeType: string; nome: string }>>([]);
+  const [checklistRespostas, setChecklistRespostas] = useState<Record<string, ChecklistRespostaDraft>>({});
 
   function applyEquipeExecutora(equipeId: string, equipes: EquipeOpcao[]) {
     setEquipeExecutoraId(equipeId);
@@ -273,8 +280,18 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
 
   const execucaoPreenchida = useMemo(() => {
     if (impedimento) return impedimentoMotivo.trim().length >= 5;
-    return relatorio.trim().length >= 10 && evidencias.length >= 1;
-  }, [impedimento, impedimentoMotivo, relatorio, evidencias.length]);
+    if (relatorio.trim().length < 10 || evidencias.length < 1) return false;
+    return (
+      validateChecklistRespostasDraft(detail?.checklistComplementar, checklistRespostas, impedimento) == null
+    );
+  }, [
+    impedimento,
+    impedimentoMotivo,
+    relatorio,
+    evidencias.length,
+    detail?.checklistComplementar,
+    checklistRespostas,
+  ]);
 
   async function resolvePosition(options?: { allowFallback?: boolean }) {
     const fallback =
@@ -406,6 +423,15 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
       setError('Anexe ao menos uma foto como evidência da execução.');
       return false;
     }
+    const checklistError = validateChecklistRespostasDraft(
+      detail?.checklistComplementar,
+      checklistRespostas,
+      impedimento,
+    );
+    if (checklistError) {
+      setError(checklistError);
+      return false;
+    }
     return true;
   }
 
@@ -453,6 +479,9 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
         ...participantesPayload(),
         impedimento,
         impedimentoMotivo: impedimento ? impedimentoMotivo.trim() : undefined,
+        checklistRespostas: detail.checklistComplementar
+          ? toChecklistRespostasPayload(checklistRespostas)
+          : undefined,
       });
       snackbar.show(impedimento ? 'Impedimento registrado.' : 'Execução concluída com sucesso.', 'success');
       router.push('/execucao');
@@ -871,6 +900,15 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                 </p>
               )}
             </div>
+
+            {detail.checklistComplementar && !impedimento ? (
+              <ChamadoExecucaoChecklistSection
+                checklist={detail.checklistComplementar}
+                respostas={checklistRespostas}
+                onChange={setChecklistRespostas}
+                disabled={busy}
+              />
+            ) : null}
 
             <div className="flex flex-wrap gap-2">
               <Button variant="ghost" onClick={() => setStep('chegada')}>

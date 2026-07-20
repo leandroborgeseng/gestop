@@ -14,13 +14,14 @@ import {
   X,
 } from 'lucide-react';
 import { ChamadoLocationMapPicker } from '@/components/chamados/chamado-location-map-picker';
+import { TipoChamadoSelect } from '@/components/chamados/tipo-chamado-select';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
-import { createChamado, getSecretarias, getUnidades } from '@/lib/api';
+import { createChamado, getSecretarias, getUnidades, listTiposChamadoOpcoes } from '@/lib/api';
 import { captureCurrentPosition } from '@/lib/geolocation';
 import {
   composeEnderecoTexto,
@@ -29,7 +30,7 @@ import {
   searchAddresses,
 } from '@/lib/geocoding';
 import { isWithinFrancaMunicipio } from '@/lib/franca-geo';
-import { UnidadeOperacional } from '@/lib/types';
+import { TipoChamadoOpcao, UnidadeOperacional } from '@/lib/types';
 
 const PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
 type ModoLocalizacao = 'UNIDADE' | 'ENDERECO';
@@ -53,6 +54,8 @@ export function AbrirChamadoForm({
 
   const [modo, setModo] = useState<ModoLocalizacao>(initialUnidadeId ? 'UNIDADE' : 'ENDERECO');
   const [descricao, setDescricao] = useState('');
+  const [tipoChamadoId, setTipoChamadoId] = useState('');
+  const [tiposChamado, setTiposChamado] = useState<TipoChamadoOpcao[]>([]);
   const [prioridade, setPrioridade] = useState<(typeof PRIORIDADES)[number]>('MEDIA');
   const [solicitanteNome, setSolicitanteNome] = useState('');
   const [secretariaId, setSecretariaId] = useState('');
@@ -109,6 +112,9 @@ export function AbrirChamadoForm({
   useEffect(() => {
     getSecretarias()
       .then((items) => setSecretarias(items))
+      .catch(() => undefined);
+    listTiposChamadoOpcoes()
+      .then((items) => setTiposChamado(items))
       .catch(() => undefined);
   }, []);
 
@@ -419,6 +425,11 @@ export function AbrirChamadoForm({
       return;
     }
 
+    if (!tipoChamadoId) {
+      setError('Selecione o tipo de chamado.');
+      return;
+    }
+
     if (modo === 'ENDERECO') {
       if (!logradouro.trim()) {
         setError('Informe o logradouro.');
@@ -454,6 +465,7 @@ export function AbrirChamadoForm({
         longitude: modo === 'ENDERECO' ? longitude ?? undefined : undefined,
         enderecoTexto: modo === 'ENDERECO' ? enderecoComposto : undefined,
         enderecoBairro: modo === 'ENDERECO' ? bairro.trim() || undefined : undefined,
+        tipoChamadoId,
         descricao: descricao.trim(),
         prioridade,
         origem: 'MANUAL',
@@ -737,7 +749,16 @@ export function AbrirChamadoForm({
 
       {(modo === 'UNIDADE' ? pickedUnidade : true) ? (
         <>
-          <Field label="Descrição" hint="Mínimo 10 caracteres.">
+          <Field label="Tipo de chamado" hint="Obrigatório. Será usado como título principal do chamado.">
+            <TipoChamadoSelect
+              value={tipoChamadoId}
+              onChange={setTipoChamadoId}
+              tipos={tiposChamado}
+              disabled={busy}
+              required
+            />
+          </Field>
+          <Field label="Descrição" hint="Mínimo 10 caracteres. Detalha a ocorrência (não é o título).">
             <textarea
               className={textareaClass}
               value={descricao}
@@ -806,6 +827,7 @@ export function AbrirChamadoForm({
           disabled={
             busy ||
             (modo === 'UNIDADE' && !pickedUnidade) ||
+            !tipoChamadoId ||
             !secretariaId ||
             descricao.trim().length < 10
           }

@@ -4,46 +4,26 @@ import { FormEvent, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import {
-  Building2,
-  Camera,
-  CheckCircle2,
-  Droplets,
-  Lightbulb,
-  MapPin,
-  Megaphone,
-  Shield,
-  Sparkles,
-  X,
-} from 'lucide-react';
+import { Building2, Camera, CheckCircle2, MapPin, Megaphone, Shield, X } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/cn';
+import { TipoChamadoSelect } from '@/components/chamados/tipo-chamado-select';
 import { LoadingState } from '@/components/ui-states';
-import { createPublicChamado, getPublicUnidade } from '@/lib/api';
-import { ChamadoResumo, PublicUnidadeChamado } from '@/lib/types';
-
-const CATEGORIAS = [
-  { id: 'INFRA', label: 'Infraestrutura', icon: Building2 },
-  { id: 'LIMPEZA', label: 'Limpeza', icon: Sparkles },
-  { id: 'ILUMINACAO', label: 'Iluminação', icon: Lightbulb },
-  { id: 'AGUA', label: 'Água/esgoto', icon: Droplets },
-  { id: 'SEGURANCA', label: 'Segurança', icon: Shield },
-] as const;
-
-type CategoriaId = (typeof CATEGORIAS)[number]['id'];
+import { createPublicChamado, getPublicUnidade, listPublicTiposChamado } from '@/lib/api';
+import { ChamadoResumo, PublicUnidadeChamado, TipoChamadoOpcao } from '@/lib/types';
 
 export default function ChamadoPublicoPage() {
   const params = useParams<{ codigo: string }>();
   const codigo = decodeURIComponent(params.codigo ?? '');
 
   const [unidade, setUnidade] = useState<PublicUnidadeChamado | null>(null);
+  const [tiposChamado, setTiposChamado] = useState<TipoChamadoOpcao[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chamado, setChamado] = useState<ChamadoResumo | null>(null);
 
-  const [categoria, setCategoria] = useState<CategoriaId | null>(null);
+  const [tipoChamadoId, setTipoChamadoId] = useState('');
   const [descricao, setDescricao] = useState('');
   const [solicitanteNome, setSolicitanteNome] = useState('');
   const [solicitanteEmail, setSolicitanteEmail] = useState('');
@@ -54,28 +34,29 @@ export default function ChamadoPublicoPage() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    getPublicUnidade(codigo)
-      .then(setUnidade)
+    Promise.all([getPublicUnidade(codigo), listPublicTiposChamado()])
+      .then(([unidadeData, tipos]) => {
+        setUnidade(unidadeData);
+        setTiposChamado(tipos);
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'QR Code inválido ou próprio inativo.'))
       .finally(() => setLoading(false));
   }, [codigo]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!categoria) {
-      setError('Selecione uma categoria para o chamado.');
+    if (!tipoChamadoId) {
+      setError('Selecione o tipo de chamado.');
       return;
     }
 
     setSubmitting(true);
     setError(null);
 
-    const categoriaLabel = CATEGORIAS.find((item) => item.id === categoria)?.label ?? categoria;
-    const descricaoCompleta = `[${categoriaLabel}] ${descricao.trim()}`;
-
     try {
       const created = await createPublicChamado(codigo, {
-        descricao: descricaoCompleta,
+        tipoChamadoId,
+        descricao: descricao.trim(),
         solicitanteNome: solicitanteNome || undefined,
         solicitanteEmail: solicitanteEmail || undefined,
         solicitanteTelefone: solicitanteTelefone || undefined,
@@ -121,65 +102,42 @@ export default function ChamadoPublicoPage() {
           </div>
         </header>
 
-        {loading ? (
-          <div className="p-6">
-            <LoadingState label="Carregando próprio público..." />
-          </div>
-        ) : null}
-
-        {!loading && error && !unidade ? (
-          <div className="p-6">
-            <Alert variant="error">{error}</Alert>
-          </div>
-        ) : null}
+        {loading ? <LoadingState label="Carregando próprio..." /> : null}
 
         {!loading && unidade && !chamado ? (
           <>
-            <div className="relative z-[2] mx-3.5 -mt-3 rounded-[14px] bg-[var(--surface)] p-3.5 shadow-[var(--sh-md)]">
-              <p className="text-[10.5px] font-bold tracking-wide text-[var(--brand)] uppercase">{unidade.codigoPatrimonial}</p>
-              <h1 className="mt-1 text-[16px] font-bold text-[var(--ink)]">{unidade.nome}</h1>
-              <p className="mt-1 flex items-start gap-1.5 text-[12px] text-[var(--ink-3)]">
-                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                {unidade.endereco}
-                {unidade.bairro ? ` · ${unidade.bairro}` : ''}
-              </p>
-              <p className="mt-1 text-[12px] text-[var(--ink-3)]">
-                {unidade.secretaria.nome} ({unidade.secretaria.sigla})
-              </p>
+            <div className="border-b border-[var(--line-2)] px-4 py-3.5">
+              <div className="flex items-start gap-2.5">
+                <Building2 className="mt-0.5 h-4 w-4 shrink-0 text-[var(--brand)]" />
+                <div>
+                  <p className="text-[14px] font-semibold text-[var(--ink)]">{unidade.nome}</p>
+                  <p className="mt-0.5 flex items-start gap-1 text-[12px] text-[var(--ink-3)]">
+                    <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+                    {unidade.endereco}
+                    {unidade.bairro ? ` · ${unidade.bairro}` : ''}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <form onSubmit={handleSubmit} className="px-3.5 pt-4 pb-5">
               <p className="mb-4 px-0.5 text-[13px] leading-snug text-[var(--ink-2)]">
-                Descreva o problema encontrado neste próprio. A equipe da prefeitura receberá sua solicitação para triagem.
+                Selecione o tipo de chamado e descreva o problema. A equipe da prefeitura receberá sua solicitação para
+                triagem.
               </p>
 
               {error ? <Alert variant="error" className="mb-4">{error}</Alert> : null}
 
-              <fieldset className="mb-4">
-                <legend className="mb-2 block text-[12.5px] font-semibold text-[var(--ink-2)]">Categoria</legend>
-                <div className="grid grid-cols-2 gap-2">
-                  {CATEGORIAS.map((item) => {
-                    const Icon = item.icon;
-                    const active = categoria === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setCategoria(item.id)}
-                        className={cn(
-                          'flex flex-col items-center gap-1.5 rounded-xl border-[1.5px] px-2 py-3 text-[12px] font-semibold transition-colors',
-                          active
-                            ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand-hover)]'
-                            : 'border-[var(--line)] bg-[var(--surface)] text-[var(--ink-2)] hover:bg-[var(--surface-2)]',
-                        )}
-                      >
-                        <Icon className={cn('h-5 w-5', active ? 'text-[var(--brand)]' : 'text-[var(--brand)]')} />
-                        {item.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
+              <label className="mb-4 block">
+                <span className="mb-1.5 block text-[12.5px] font-semibold text-[var(--ink-2)]">Tipo de chamado</span>
+                <TipoChamadoSelect
+                  value={tipoChamadoId}
+                  onChange={setTipoChamadoId}
+                  tipos={tiposChamado}
+                  disabled={submitting}
+                  required
+                />
+              </label>
 
               <label className="mb-4 block">
                 <span className="mb-1.5 block text-[12.5px] font-semibold text-[var(--ink-2)]">Descrição do problema</span>
@@ -268,7 +226,7 @@ export default function ChamadoPublicoPage() {
                 type="submit"
                 variant="filled"
                 className="h-[50px] w-full gap-2 rounded-[13px] text-[14.5px] font-bold"
-                disabled={submitting || !categoria}
+                disabled={submitting || !tipoChamadoId}
               >
                 <Megaphone className="h-4 w-4" />
                 {submitting ? 'Enviando...' : 'Registrar chamado'}
@@ -298,13 +256,11 @@ export default function ChamadoPublicoPage() {
               href={`/chamado/protocolo/${encodeURIComponent(chamado.codigo)}`}
               className="mt-4 text-[13px] font-semibold text-[var(--brand)] hover:underline"
             >
-              Acompanhar andamento do protocolo
+              Acompanhar protocolo
             </Link>
           </div>
         ) : null}
       </div>
-
-      <p className="mt-5 text-center text-[12px] text-[var(--ink-3)]">Prefeitura Municipal de Franca · SIGMA</p>
     </main>
   );
 }
@@ -313,7 +269,7 @@ function readFileAsDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
-    reader.onerror = reject;
+    reader.onerror = () => reject(new Error('Falha ao ler a imagem.'));
     reader.readAsDataURL(file);
   });
 }

@@ -3,11 +3,79 @@
 export function registerServiceWorker() {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
 
-  window.addEventListener('load', () => {
+  const register = () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {
       // Falha silenciosa: PWA e opcional.
     });
+  };
+
+  if (document.readyState === 'complete') {
+    register();
+  } else {
+    window.addEventListener('load', register, { once: true });
+  }
+}
+
+/** Coleta URLs do shell já carregado (HTML + /_next/static) e pede ao SW para cachear. */
+export async function prepareOfflineShell() {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+
+  registerServiceWorker();
+  const registration = await navigator.serviceWorker.register('/sw.js').catch(() => null);
+  if (!registration) return;
+
+  await navigator.serviceWorker.ready;
+
+  const urls = new Set<string>(['/mobile', '/icon.svg', '/manifest.webmanifest', window.location.pathname]);
+
+  for (const entry of performance.getEntriesByType('resource') as PerformanceResourceTiming[]) {
+    try {
+      const resourceUrl = new URL(entry.name);
+      if (resourceUrl.origin !== window.location.origin) continue;
+      if (
+        resourceUrl.pathname.startsWith('/_next/static/') ||
+        resourceUrl.pathname === '/icon.svg' ||
+        resourceUrl.pathname === '/manifest.webmanifest' ||
+        resourceUrl.pathname === '/mobile'
+      ) {
+        urls.add(resourceUrl.href);
+      }
+    } catch {
+      // ignora
+    }
+  }
+
+  document.querySelectorAll('script[src], link[rel="stylesheet"][href], link[rel="preload"][href]').forEach((node) => {
+    const el = node as HTMLScriptElement | HTMLLinkElement;
+    const href = 'src' in el && el.src ? el.src : 'href' in el ? el.href : '';
+    if (!href) return;
+    try {
+      const resourceUrl = new URL(href, window.location.origin);
+      if (resourceUrl.origin === window.location.origin) {
+        urls.add(resourceUrl.href);
+      }
+    } catch {
+      // ignora
+    }
   });
+
+  // Garante HTML fresco do shell de vistoria
+  try {
+    const shellResponse = await fetch('/mobile', { credentials: 'same-origin', cache: 'reload' });
+    if (shellResponse.ok) {
+      urls.add('/mobile');
+      const html = await shellResponse.text();
+      const srcMatches = html.matchAll(/(?:src|href)="(\/_next\/static\/[^"]+)"/g);
+      for (const match of srcMatches) {
+        urls.add(match[1]);
+      }
+    }
+  } catch {
+    // mantém o que já estiver na página
+  }
+
+  const worker = registration.active ?? registration.waiting ?? registration.installing;
+  worker?.postMessage({ type: 'CACHE_URLS', urls: [...urls] });
 }
 
 export function subscribePwaUpdates(onUpdate: () => void) {

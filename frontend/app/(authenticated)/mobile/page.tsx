@@ -32,7 +32,7 @@ import { getMobileFieldPackage, syncMobileInspection } from '@/lib/api';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { readCachedFieldPackage, writeCachedFieldPackage } from '@/lib/mobile-field-cache';
 import { useEffectiveOnline } from '@/lib/use-effective-online';
-import { registerServiceWorker, requestNotificationPermission, showLocalNotification } from '@/lib/pwa';
+import { prepareOfflineShell, registerServiceWorker, requestNotificationPermission, showLocalNotification } from '@/lib/pwa';
 import { PwaInstallBanner } from '@/components/mobile/pwa-install-banner';
 import { MobileFieldPackage, MobileQueuedInspection } from '@/lib/types';
 import { cn } from '@/lib/cn';
@@ -95,7 +95,11 @@ export default function MobilePage() {
       setFieldPackage(payload);
       await writeCachedFieldPackage(payload);
       setCachedAt(payload.downloadedAt);
-      if (showToast) snackbar.show('Pacote de vistoria baixado para uso offline.', 'success');
+      // Prepara shell PWA (HTML + /_next/static) para abrir sem internet.
+      await prepareOfflineShell().catch(() => undefined);
+      if (showToast) {
+        snackbar.show('Pacote e aplicativo preparados para uso offline.', 'success');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao baixar pacote de vistoria.');
     } finally {
@@ -107,6 +111,10 @@ export default function MobilePage() {
   useEffect(() => {
     registerServiceWorker();
     requestNotificationPermission().catch(() => undefined);
+    // Ao abrir online, reforça o cache do shell para o próximo uso offline.
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      void prepareOfflineShell().catch(() => undefined);
+    }
 
     migrateLegacyQueueIfNeeded()
       .then(() => readMobileQueue())
@@ -309,16 +317,18 @@ export default function MobilePage() {
         backHref={backHref}
         action={
           <div className="flex flex-wrap gap-2">
-            <Button variant="tonal" size="sm" disabled={downloading} onClick={() => void downloadFieldPackage(true)}>
+            <Button variant="tonal" size="sm" disabled={downloading || !online} onClick={() => void downloadFieldPackage(true)}>
               <RefreshCcw className={cn('mr-1.5 h-4 w-4', downloading && 'animate-spin')} />
               {downloading ? 'Baixando...' : 'Baixar dados offline'}
             </Button>
-            <Link href="/vistorias">
-              <Button variant="outlined" size="sm">
-                <ClipboardList className="mr-1.5 h-4 w-4" />
-                Consultar vistorias
-              </Button>
-            </Link>
+            {online ? (
+              <Link href="/vistorias">
+                <Button variant="outlined" size="sm">
+                  <ClipboardList className="mr-1.5 h-4 w-4" />
+                  Consultar vistorias
+                </Button>
+              </Link>
+            ) : null}
           </div>
         }
       >
@@ -332,8 +342,8 @@ export default function MobilePage() {
 
           <TipBanner id="mobile-offline-queue">
             {online
-              ? 'Com conexão ativa, a vistoria é enviada diretamente ao concluir.'
-              : 'Sem sinal? Salve na fila offline — as vistorias sincronizam automaticamente ao reconectar.'}
+              ? 'Use “Baixar dados offline” para salvar o pacote e preparar o PWA. Depois disso, o app abre sem internet.'
+              : 'Modo Offline ativo. Use os próprios e checklists do pacote baixado; a vistoria entra na fila e sincroniza ao reconectar.'}
           </TipBanner>
 
           {error ? <ErrorState message={error} /> : null}

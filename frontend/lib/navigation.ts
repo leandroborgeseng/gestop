@@ -14,7 +14,7 @@ import {
   Settings,
 } from 'lucide-react';
 
-import { isMatrixPermissionKey, navItemAllowedByMatrix } from '@/lib/permissions-matrix';
+import { isMatrixPermissionKey, navItemAllowedByMatrix, screenHasVisualizarAccess } from '@/lib/permissions-matrix';
 
 export type NavBadgeKey = 'chamados' | 'integracoes';
 
@@ -226,6 +226,11 @@ export function isNavActive(pathname: string, href: string) {
 }
 
 export function hasChamadosGerenciar(permissions: string[]) {
+  // Com matriz ativa, Triagem/Chamados exige visualizar da tela chamados — não basta Execução.
+  const hasMatrix = permissions.some(isMatrixPermissionKey);
+  if (hasMatrix) {
+    return screenHasVisualizarAccess('chamados', permissions);
+  }
   return permissions.includes('chamados.gerenciar');
 }
 

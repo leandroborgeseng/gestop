@@ -13,6 +13,20 @@ const LOGO_CANDIDATES = [
   resolve(process.cwd(), 'frontend/public/prefeitura-franca-logo.png'),
 ];
 
+const IMAGE_MIMES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']);
+
+export type ChamadoDetalhePdfAnexo = {
+  id: string;
+  legenda: string;
+  mimeType?: string | null;
+  nomeArquivo?: string | null;
+  capturadaEm?: string | null;
+  usuarioNome?: string | null;
+  /** Quando presente, a imagem é embutida no PDF. */
+  imageBuffer?: Buffer | null;
+  renderError?: string | null;
+};
+
 export type ChamadoDetalhePdfHistorico = {
   statusAnterior: string | null;
   statusNovo: string;
@@ -20,6 +34,7 @@ export type ChamadoDetalhePdfHistorico = {
   metadata: Record<string, unknown>;
   createdAt: string;
   alteradoPor?: { nome: string } | null;
+  anexos?: ChamadoDetalhePdfAnexo[];
 };
 
 export type ChamadoDetalhePdfInput = {
@@ -50,8 +65,15 @@ export type ChamadoDetalhePdfInput = {
     descricao: string;
     item: { codigo: string; titulo: string };
   } | null;
+  fotoAbertura?: ChamadoDetalhePdfAnexo | null;
   historico: ChamadoDetalhePdfHistorico[];
+  anexosSoltos?: ChamadoDetalhePdfAnexo[];
 };
+
+export function isPdfRenderableImage(mimeType?: string | null) {
+  if (!mimeType) return false;
+  return IMAGE_MIMES.has(mimeType.toLowerCase());
+}
 
 function resolveLogoPath() {
   return LOGO_CANDIDATES.find((candidate) => existsSync(candidate)) ?? null;
@@ -81,6 +103,74 @@ function ensureSpace(doc: InstanceType<typeof PDFDocument>, y: number, needed: n
   return marginTop;
 }
 
+function extensionLabel(mimeType?: string | null, nomeArquivo?: string | null) {
+  if (nomeArquivo?.includes('.')) {
+    return nomeArquivo.split('.').pop()?.toUpperCase() ?? 'ARQUIVO';
+  }
+  if (!mimeType) return 'ARQUIVO';
+  const part = mimeType.split('/')[1];
+  return (part ?? 'arquivo').toUpperCase();
+}
+
+function drawAnexo(
+  doc: InstanceType<typeof PDFDocument>,
+  anexo: ChamadoDetalhePdfAnexo,
+  left: number,
+  width: number,
+  y: number,
+  marginTop: number,
+) {
+  y = ensureSpace(doc, y, 24, marginTop);
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text(anexo.legenda, left + 8, y, { width: width - 8 });
+  y += 10;
+
+  const metaParts = [
+    anexo.capturadaEm ? new Date(anexo.capturadaEm).toLocaleString('pt-BR') : null,
+    anexo.usuarioNome ? `Por: ${anexo.usuarioNome}` : null,
+    anexo.mimeType ? extensionLabel(anexo.mimeType, anexo.nomeArquivo) : null,
+  ].filter(Boolean);
+  if (metaParts.length) {
+    doc.font('Helvetica').fontSize(7).fillColor(TEXT_MUTED).text(metaParts.join(' · '), left + 8, y, { width: width - 8 });
+    y += 10;
+  }
+
+  const isImage = isPdfRenderableImage(anexo.mimeType);
+  if (isImage && anexo.imageBuffer?.length) {
+    const maxH = 220;
+    y = ensureSpace(doc, y, Math.min(maxH, 160) + 8, marginTop);
+    try {
+      doc.image(anexo.imageBuffer, left + 8, y, {
+        fit: [width - 16, maxH],
+        align: 'left',
+        valign: 'top',
+      });
+      // pdfkit não retorna altura facilmente; estima por fit
+      y += Math.min(maxH, 180) + 8;
+    } catch {
+      doc.font('Helvetica-Oblique').fontSize(8).fillColor(TEXT_MUTED).text('Arquivo anexado não renderizável no PDF', left + 8, y);
+      y += 12;
+    }
+    return y;
+  }
+
+  if (isImage && anexo.renderError) {
+    doc.font('Helvetica-Oblique').fontSize(8).fillColor(TEXT_MUTED).text(anexo.renderError, left + 8, y);
+    y += 12;
+    return y;
+  }
+
+  const fileLabel = anexo.nomeArquivo?.trim() || `Arquivo ${extensionLabel(anexo.mimeType, anexo.nomeArquivo)}`;
+  doc
+    .font('Helvetica')
+    .fontSize(8)
+    .fillColor(TEXT_PRIMARY)
+    .text(`Arquivo anexado: ${fileLabel}${anexo.mimeType ? ` (${anexo.mimeType})` : ''}`, left + 8, y, {
+      width: width - 8,
+    });
+  y += 12;
+  return y;
+}
+
 export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise<Buffer> {
   return new Promise((resolvePromise, reject) => {
     const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'portrait' });
@@ -88,6 +178,7 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
     const left = doc.page.margins.left;
     const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     let y = doc.page.margins.top;
+    const marginTop = doc.page.margins.top;
 
     doc.on('data', (chunk: Buffer) => chunks.push(chunk));
     doc.on('end', () => resolvePromise(Buffer.concat(chunks)));
@@ -104,9 +195,17 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
     doc.font('Helvetica').fontSize(10).fillColor(TEXT_MUTED).text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, left, y);
     y += 22;
 
-    const titulo = chamado.titulo?.trim() || chamado.descricao;
+    const titulo =
+      chamado.tipoChamado?.nome?.trim() || chamado.titulo?.trim() || 'Sem tipo de chamado';
     doc.font('Helvetica-Bold').fontSize(12).fillColor(TEXT_PRIMARY).text(titulo.slice(0, 200), left, y, { width });
-    y += doc.heightOfString(titulo.slice(0, 200), { width }) + 10;
+    y += doc.heightOfString(titulo.slice(0, 200), { width }) + 6;
+    const descricao = chamado.descricao?.trim();
+    if (descricao && descricao !== titulo) {
+      doc.font('Helvetica').fontSize(9).fillColor(TEXT_MUTED).text(descricao.slice(0, 800), left, y, { width });
+      y += doc.heightOfString(descricao.slice(0, 800), { width }) + 10;
+    } else {
+      y += 4;
+    }
 
     const infoRows: Array<[string, string]> = [
       ['Status', chamadoStatusLabel(chamado.status)],
@@ -147,21 +246,29 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
     y += 14;
 
     for (const [label, value] of infoRows) {
-      y = ensureSpace(doc, y, 14, doc.page.margins.top);
+      y = ensureSpace(doc, y, 14, marginTop);
       doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_MUTED).text(`${label}:`, left, y, { width: 120 });
       doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(value, left + 122, y, { width: width - 122 });
       y += Math.max(12, doc.heightOfString(value, { width: width - 122 }) + 2);
     }
 
     y += 8;
-    y = ensureSpace(doc, y, 40, doc.page.margins.top);
+    y = ensureSpace(doc, y, 40, marginTop);
     doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Descrição', left, y);
     y += 10;
     doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(chamado.descricao, left, y, { width });
     y += doc.heightOfString(chamado.descricao, { width }) + 12;
 
+    if (chamado.fotoAbertura) {
+      y = ensureSpace(doc, y, 24, marginTop);
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(TEXT_PRIMARY).text('Foto anexada na abertura', left, y);
+      y += 14;
+      y = drawAnexo(doc, chamado.fotoAbertura, left, width, y, marginTop);
+      y += 6;
+    }
+
     if (chamado.naoConformidade) {
-      y = ensureSpace(doc, y, 36, doc.page.margins.top);
+      y = ensureSpace(doc, y, 36, marginTop);
       doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('Origem (NC)', left, y);
       y += 10;
       doc
@@ -176,12 +283,12 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
       y += doc.heightOfString(`${chamado.naoConformidade.descricao}`, { width }) + 12;
     }
 
-    y = ensureSpace(doc, y, 24, doc.page.margins.top);
+    y = ensureSpace(doc, y, 24, marginTop);
     doc.font('Helvetica-Bold').fontSize(11).fillColor(TEXT_PRIMARY).text('Linha do tempo', left, y);
     y += 14;
 
     for (const entry of chamado.historico) {
-      y = ensureSpace(doc, y, 48, doc.page.margins.top);
+      y = ensureSpace(doc, y, 48, marginTop);
       doc.save();
       doc.rect(left, y, width, 1).fill(BORDER);
       doc.restore();
@@ -206,13 +313,13 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
         ? (entry.metadata.alteracoes as Array<{ label: string; de: string; para: string }>)
         : [];
       for (const alt of alteracoes) {
-        y = ensureSpace(doc, y, 12, doc.page.margins.top);
+        y = ensureSpace(doc, y, 12, marginTop);
         doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(`${alt.label}: ${alt.de} → ${alt.para}`, left + 8, y, { width: width - 8 });
         y += doc.heightOfString(`${alt.label}: ${alt.de} → ${alt.para}`, { width: width - 8 }) + 2;
       }
 
       if (typeof entry.metadata.descricao === 'string' && entry.metadata.descricao.trim()) {
-        y = ensureSpace(doc, y, 14, doc.page.margins.top);
+        y = ensureSpace(doc, y, 14, marginTop);
         doc.font('Helvetica-Bold').fontSize(8).text('Detalhe:', left + 8, y);
         y += 10;
         doc.font('Helvetica').fontSize(8).text(entry.metadata.descricao.trim(), left + 8, y, { width: width - 8 });
@@ -220,14 +327,69 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
       }
 
       if (typeof entry.metadata.relatorio === 'string' && entry.metadata.relatorio.trim()) {
-        y = ensureSpace(doc, y, 14, doc.page.margins.top);
+        y = ensureSpace(doc, y, 14, marginTop);
         doc.font('Helvetica-Bold').fontSize(8).text('Relatório:', left + 8, y);
         y += 10;
         doc.font('Helvetica').fontSize(8).text(entry.metadata.relatorio.trim(), left + 8, y, { width: width - 8 });
         y += doc.heightOfString(entry.metadata.relatorio.trim(), { width: width - 8 }) + 4;
       }
 
+      const checklistMeta = entry.metadata.checklistComplementar as
+        | {
+            checklistNome?: string;
+            respostas?: Array<{
+              titulo?: string;
+              naoSeAplica?: boolean;
+              valorBooleano?: boolean | null;
+              valorTexto?: string | null;
+              valorNumero?: number | null;
+              comentario?: string | null;
+            }>;
+          }
+        | null
+        | undefined;
+      if (checklistMeta?.respostas?.length) {
+        y = ensureSpace(doc, y, 16, marginTop);
+        doc
+          .font('Helvetica-Bold')
+          .fontSize(8)
+          .text(`Perguntas complementares${checklistMeta.checklistNome ? ` — ${checklistMeta.checklistNome}` : ''}:`, left + 8, y, {
+            width: width - 8,
+          });
+        y += 12;
+        for (const resposta of checklistMeta.respostas) {
+          const valor = resposta.naoSeAplica
+            ? 'Não se aplica'
+            : resposta.valorBooleano === true
+              ? 'Sim'
+              : resposta.valorBooleano === false
+                ? 'Não'
+                : resposta.valorTexto?.trim() ||
+                  (resposta.valorNumero != null ? String(resposta.valorNumero) : '—');
+          const line = `${resposta.titulo ?? 'Pergunta'}: ${valor}${
+            resposta.comentario?.trim() ? ` (${resposta.comentario.trim()})` : ''
+          }`;
+          y = ensureSpace(doc, y, 12, marginTop);
+          doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(line, left + 8, y, { width: width - 8 });
+          y += doc.heightOfString(line, { width: width - 8 }) + 2;
+        }
+        y += 4;
+      }
+
+      for (const anexo of entry.anexos ?? []) {
+        y = drawAnexo(doc, anexo, left, width, y, marginTop);
+      }
+
       y += 8;
+    }
+
+    if (chamado.anexosSoltos?.length) {
+      y = ensureSpace(doc, y, 28, marginTop);
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(TEXT_PRIMARY).text('Anexos e evidências', left, y);
+      y += 14;
+      for (const anexo of chamado.anexosSoltos) {
+        y = drawAnexo(doc, anexo, left, width, y, marginTop);
+      }
     }
 
     doc.end();

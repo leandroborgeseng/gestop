@@ -24,7 +24,16 @@ export function formatChecklistEscopo(escopo: ChecklistEscopo) {
   return CHECKLIST_ESCOPO_LABELS[escopo] ?? escopo;
 }
 
-export function formatChecklistVinculo(checklist: Pick<ChecklistModel, 'escopo' | 'unidadeTipo' | 'secretaria'>) {
+export function formatChecklistVinculo(
+  checklist: Pick<ChecklistModel, 'escopo' | 'unidadeTipo' | 'secretaria' | 'finalidade' | 'tiposChamado'>,
+) {
+  if (checklist.finalidade === 'CHAMADO') {
+    const tipos = checklist.tiposChamado?.map((item) => item.tipoChamado.nome).filter(Boolean) ?? [];
+    if (tipos.length === 0) return 'Chamado (sem tipos)';
+    if (tipos.length <= 2) return `Chamado · ${tipos.join(', ')}`;
+    return `Chamado · ${tipos.slice(0, 2).join(', ')} +${tipos.length - 2}`;
+  }
+
   if (checklist.escopo === 'UNIDADE_TIPO' && checklist.unidadeTipo) {
     const tipo = formatUnidadeTipo(checklist.unidadeTipo);
     return checklist.secretaria ? `${tipo} · ${checklist.secretaria.sigla}` : tipo;

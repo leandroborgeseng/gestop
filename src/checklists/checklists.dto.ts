@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -21,6 +22,10 @@ export class ChecklistDto {
   @IsString()
   descricao?: string;
 
+  @IsOptional()
+  @IsIn(['VISTORIA', 'CHAMADO'])
+  finalidade?: 'VISTORIA' | 'CHAMADO';
+
   @IsEnum(ChecklistEscopo)
   escopo!: ChecklistEscopo;
 
@@ -35,6 +40,11 @@ export class ChecklistDto {
   @IsOptional()
   @IsEnum(UnidadeTipo)
   unidadeTipo?: UnidadeTipo;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tipoChamadoIds?: string[];
 
   @IsOptional()
   @IsBoolean()
@@ -73,8 +83,9 @@ export class ChecklistItemDto {
   @IsOptional()
   opcoes?: unknown;
 
+  @IsOptional()
   @IsString()
-  categoriaVistoriaId!: string;
+  categoriaVistoriaId?: string | null;
 }
 
 export class ChecklistVersionDto {

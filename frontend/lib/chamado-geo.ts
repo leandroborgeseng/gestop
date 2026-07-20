@@ -1,7 +1,13 @@
 import { ChamadoMapPoint, ChamadoResumo } from '@/lib/types';
 
-export function chamadoTitulo(chamado: Pick<ChamadoResumo, 'titulo' | 'descricao'>) {
-  return chamado.titulo?.trim() || chamado.descricao;
+export function chamadoTitulo(
+  chamado: Pick<ChamadoResumo, 'titulo' | 'descricao' | 'tipoChamado'>,
+) {
+  return (
+    chamado.tipoChamado?.nome?.trim() ||
+    chamado.titulo?.trim() ||
+    (chamado.descricao?.trim() ? chamado.descricao.trim() : 'Sem tipo de chamado')
+  );
 }
 
 export function chamadoLocalLabel(

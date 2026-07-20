@@ -4,8 +4,15 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSessionUser } from '@/components/auth/session-context';
 import { getStoredAuth } from '@/lib/api';
-import { getDefaultAuthenticatedHref, hasOperationalNavAccess, isNavActive } from '@/lib/navigation';
+import { getDefaultAuthenticatedHref, hasChamadosGerenciar, hasOperationalNavAccess, isNavActive } from '@/lib/navigation';
 import { ErrorState } from '@/components/ui-states';
+
+function permissionSatisfied(required: string, userPermissions: string[]) {
+  if (required === 'chamados.gerenciar') {
+    return hasChamadosGerenciar(userPermissions);
+  }
+  return userPermissions.includes(required);
+}
 
 export function RequirePermissions({
   permissions = [],
@@ -46,8 +53,8 @@ export function RequirePermissions({
     const userPermissions = user.permissoes;
     const hasAccess =
       match === 'any'
-        ? permissions.some((permission) => userPermissions.includes(permission))
-        : permissions.every((permission) => userPermissions.includes(permission));
+        ? permissions.some((permission) => permissionSatisfied(permission, userPermissions))
+        : permissions.every((permission) => permissionSatisfied(permission, userPermissions));
 
     if (!hasAccess) {
       if (!hasOperationalNavAccess(userPermissions)) {
