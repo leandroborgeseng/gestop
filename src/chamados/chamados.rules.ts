@@ -8,6 +8,20 @@ export function buildChamadoTitleFromNc(itemTitle: string) {
   return `Corrigir não conformidade: ${itemTitle}`;
 }
 
+/** Título principal exibido: tipo → titulo persistido → descrição → fallback. */
+export function resolveChamadoTituloDisplay(item: {
+  titulo?: string | null;
+  descricao?: string | null;
+  tipoChamado?: { nome?: string | null } | null;
+}) {
+  return (
+    item.tipoChamado?.nome?.trim() ||
+    item.titulo?.trim() ||
+    item.descricao?.trim() ||
+    'Sem tipo de chamado'
+  );
+}
+
 export function shouldGenerateChamadoFromNc(input: { naoConformidadeId: string; chamadoId?: string | null }) {
   return Boolean(input.naoConformidadeId) && !input.chamadoId;
 }

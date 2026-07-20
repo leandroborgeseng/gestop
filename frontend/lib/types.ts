@@ -125,6 +125,7 @@ export type UnidadeDetalhe = UnidadeOperacional & {
       status: string;
       createdAt: string;
       prazoEm: string | null;
+      tipoChamado?: { id: string; nome: string } | null;
       responsavel: {
         id: string;
         nome: string;

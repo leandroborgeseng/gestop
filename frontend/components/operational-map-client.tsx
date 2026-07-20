@@ -19,6 +19,7 @@ import {
 import { hasPlottableCoordinates, toLatLngTuple } from '@/lib/geo-coordinates';
 import { escapeHtml } from '@/lib/security';
 import { ChamadoMapaItem, UnidadeOperacional, UnidadeSituacao, UnidadeSlaMapa } from '@/lib/types';
+import { chamadoTitulo } from '@/lib/chamado-geo';
 import { formatNotaBr, notaCorHex, resolveNotaExibicao } from '@/lib/vistoria-nota';
 import { MapViewControls } from '@/components/map/map-view-controls';
 import { situacaoRailColor } from '@/components/status-badge';
@@ -147,7 +148,7 @@ function buildUnidadePopupHtml(unidade: UnidadeOperacional, mapMode: CcoMapMode,
 }
 
 function buildChamadoPopupHtml(chamado: ChamadoMapaItem) {
-  const titulo = escapeHtml(chamado.titulo?.trim() || chamado.descricao);
+  const titulo = escapeHtml(chamadoTitulo(chamado));
   const local = escapeHtml(
     chamado.unidade?.nome ??
       chamado.enderecoTexto ??

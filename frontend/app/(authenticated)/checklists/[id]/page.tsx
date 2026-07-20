@@ -22,17 +22,19 @@ import {
   listAdminCategoriasVistoria,
   listAdminSecretarias,
   listChecklists,
+  listTiposChamadoOpcoes,
   publishChecklistVersion,
   saveChecklist,
   updateChecklistVersion,
 } from '@/lib/api';
-import { AdminCategoriaVistoria, AdminSecretaria, ChecklistModel } from '@/lib/types';
+import { AdminCategoriaVistoria, AdminSecretaria, ChecklistModel, TipoChamadoOpcao } from '@/lib/types';
 import { formatChecklistVinculo } from '@/lib/unidade-tipo';
 
 export default function ChecklistDetalhePage() {
   const params = useParams<{ id: string }>();
   const [checklist, setChecklist] = useState<ChecklistModel | null>(null);
   const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
+  const [tiposChamado, setTiposChamado] = useState<TipoChamadoOpcao[]>([]);
   const [categorias, setCategorias] = useState<AdminCategoriaVistoria[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,14 +57,16 @@ export default function ChecklistDetalhePage() {
     setLoading(true);
     setError(null);
     try {
-      const [checklists, nextSecretarias, nextCategorias] = await Promise.all([
+      const [checklists, nextSecretarias, nextCategorias, nextTipos] = await Promise.all([
         listChecklists(),
         listAdminSecretarias(),
         listAdminCategoriasVistoria(),
+        listTiposChamadoOpcoes().catch(() => [] as TipoChamadoOpcao[]),
       ]);
       const found = checklists.find((item) => item.id === params.id) ?? null;
       setSecretarias(nextSecretarias);
       setCategorias(nextCategorias);
+      setTiposChamado(nextTipos);
       if (!found) {
         setChecklist(null);
         setError('Checklist não encontrado.');
@@ -126,6 +130,7 @@ export default function ChecklistDetalhePage() {
             <ChecklistHeader
               checklist={checklist}
               secretarias={secretarias}
+              tiposChamado={tiposChamado}
               onNewVersion={() => mutate(() => createChecklistVersion(checklist.id), 'Nova versão em rascunho criada.')}
               onDeactivate={() => mutate(() => deactivateChecklist(checklist.id), 'Checklist inativado.')}
               onUpdateBinding={(payload) =>

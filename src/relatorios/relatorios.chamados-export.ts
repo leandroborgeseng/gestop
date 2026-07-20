@@ -4,6 +4,7 @@ import {
   formatParticipantesExport,
   type ExecucaoParticipantesResumo,
 } from './relatorios.execucao-participantes';
+import { resolveChamadoTituloDisplay } from '../chamados/chamados.rules';
 
 type ChamadoExportItem = {
   codigo: string;
@@ -21,6 +22,7 @@ type ChamadoExportItem = {
   enderecoTexto?: string | null;
   responsavel: { nome: string } | null;
   equipe?: { nome: string } | null;
+  tipoChamado?: { nome: string } | null;
   execucao?: ExecucaoCoordenadas | null;
   participantesExecucao?: ExecucaoParticipantesResumo | null;
 };
@@ -70,7 +72,7 @@ export function mapChamadosExportRows(items: ChamadoExportItem[]) {
       item.secretaria.sigla,
       chamadoUnidadeCodigo(item),
       chamadoUnidadeNome(item),
-      item.titulo ?? '',
+      resolveChamadoTituloDisplay(item),
       item.descricao,
       item.responsavel?.nome ?? '',
       item.equipe?.nome ?? '',

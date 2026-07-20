@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { MapPin, Users } from 'lucide-react';
+import { chamadoTitulo } from '@/lib/chamado-geo';
 import { ChamadoMapaItem } from '@/lib/types';
 import { CHAMADO_STATUS_META, prazoInfo, prioridadeVariant } from '@/lib/chamado-status';
 import { cn } from '@/lib/cn';
@@ -90,7 +91,7 @@ export function ChamadoMapaList({
                   </Badge>
                 </span>
                 <span className="mt-0.5 block truncate text-[13.5px] font-semibold text-[var(--ink)]">
-                  {chamado.titulo?.trim() || chamado.descricao}
+                  {chamadoTitulo(chamado)}
                 </span>
                 <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px] text-[var(--ink-3)]">
                   <span className="font-semibold text-[var(--ink-2)]">{chamado.secretaria.sigla}</span>

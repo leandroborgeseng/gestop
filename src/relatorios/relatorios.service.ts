@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ChamadoPrioridade, ChamadoStatus, Prisma } from '@prisma/client';
+import { resolveChamadoTituloDisplay } from '../chamados/chamados.rules';
 import { PrismaService } from '../prisma/prisma.service';
 import { RelatorioFiltroDto } from './relatorios.dto';
 import { buildCsv, formatIsoDate } from './relatorios.csv';
@@ -52,6 +53,7 @@ export class RelatoriosService {
         unidade: { select: { codigoPatrimonial: true, nome: true } },
         responsavel: { select: { nome: true } },
         equipe: { select: { nome: true } },
+        tipoChamado: { select: { nome: true } },
       },
     });
   }
@@ -84,6 +86,7 @@ export class RelatoriosService {
         secretaria: { select: { sigla: true } },
         unidade: { select: { codigoPatrimonial: true, nome: true } },
         responsavel: { select: { nome: true } },
+        tipoChamado: { select: { nome: true } },
       },
     });
   }
@@ -234,7 +237,7 @@ export class RelatoriosService {
           item.secretaria.sigla,
           chamadoUnidadeCodigo(item),
           chamadoUnidadeNome(item),
-          item.titulo ?? '',
+          resolveChamadoTituloDisplay(item),
           item.descricao,
           item.responsavel?.nome ?? '',
           formatIsoDate(item.prazoEm),
@@ -302,7 +305,7 @@ export class RelatoriosService {
           item.prioridade,
           item.secretaria.sigla,
           chamadoUnidadeNome(item),
-          item.titulo ?? item.descricao,
+          resolveChamadoTituloDisplay(item),
           item.responsavel?.nome ?? '',
           formatIsoDate(item.prazoEm),
           formatCoordenada(item.execucao?.latitude),

@@ -337,31 +337,56 @@ export function ChecklistModelCard({ checklist, onClick }: { checklist: Checklis
 export function ChecklistHeader({
   checklist,
   secretarias,
+  tiposChamado = [],
   onNewVersion,
   onDeactivate,
   onUpdateBinding,
 }: {
   checklist: ChecklistModel;
   secretarias: AdminSecretaria[];
+  tiposChamado?: TipoChamadoOpcao[];
   onNewVersion: () => void;
   onDeactivate: () => void;
   onUpdateBinding: (payload: Record<string, unknown>) => void;
 }) {
+  const isChamado = checklist.finalidade === 'CHAMADO';
   const [editOpen, setEditOpen] = useState(false);
   const [escopo, setEscopo] = useState<ChecklistEscopo>(checklist.escopo);
+  const [tipoChamadoIds, setTipoChamadoIds] = useState<string[]>(
+    () => checklist.tiposChamado?.map((item) => item.tipoChamado.id) ?? [],
+  );
   const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (editOpen) {
       setEscopo(checklist.escopo);
+      setTipoChamadoIds(checklist.tiposChamado?.map((item) => item.tipoChamado.id) ?? []);
       setFormError(null);
     }
-  }, [editOpen, checklist.escopo]);
+  }, [editOpen, checklist.escopo, checklist.tiposChamado]);
 
   function submitBinding(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
     const form = new FormData(event.currentTarget);
+
+    if (isChamado) {
+      if (tipoChamadoIds.length === 0) {
+        setFormError('Selecione ao menos um tipo de chamado.');
+        return;
+      }
+      onUpdateBinding({
+        nome: checklist.nome,
+        descricao: checklist.descricao ?? '',
+        finalidade: 'CHAMADO',
+        escopo: 'GLOBAL',
+        tipoChamadoIds,
+        ativo: checklist.ativo,
+      });
+      setEditOpen(false);
+      return;
+    }
+
     const selectedEscopo = String(form.get('escopo')) as ChecklistEscopo;
     const unidadeTipo = String(form.get('unidadeTipo') || '');
 
@@ -378,6 +403,7 @@ export function ChecklistHeader({
     onUpdateBinding({
       nome: checklist.nome,
       descricao: checklist.descricao ?? '',
+      finalidade: 'VISTORIA',
       escopo: selectedEscopo,
       secretariaId: String(form.get('secretariaId') || ''),
       unidadeTipo: unidadeTipo || undefined,
@@ -391,10 +417,13 @@ export function ChecklistHeader({
       <Card elevation={1}>
         <CardContent className="flex flex-wrap items-start justify-between gap-4 p-5">
           <div>
-            <Chip variant={checklist.ativo ? 'brand' : 'default'} className="gap-1.5">
-              <ClipboardList className="h-3.5 w-3.5" />
-              {checklist.ativo ? 'Ativo' : 'Inativo'}
-            </Chip>
+            <div className="flex flex-wrap gap-2">
+              <Chip variant={checklist.ativo ? 'brand' : 'default'} className="gap-1.5">
+                <ClipboardList className="h-3.5 w-3.5" />
+                {checklist.ativo ? 'Ativo' : 'Inativo'}
+              </Chip>
+              <Chip variant="default">{isChamado ? 'Finalidade: Chamado' : 'Finalidade: Vistoria'}</Chip>
+            </div>
             <h2 className="md-headline-md mt-3 text-[var(--md-on-surface)]">{checklist.nome}</h2>
             <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
               {checklist.descricao || 'Sem descrição'} · {formatChecklistVinculo(checklist)}
@@ -415,14 +444,41 @@ export function ChecklistHeader({
       </Card>
       <Sheet open={editOpen} onClose={() => setEditOpen(false)} title="Vínculo do checklist">
         <form onSubmit={submitBinding} className="space-y-4">
-          <ChecklistBindingFields
-            key={`${checklist.id}-${checklist.unidadeTipo ?? ''}-${checklist.secretariaId ?? ''}`}
-            escopo={escopo}
-            onEscopoChange={setEscopo}
-            secretarias={secretarias}
-            defaultSecretariaId={checklist.secretariaId ?? ''}
-            defaultUnidadeTipo={checklist.unidadeTipo ?? ''}
-          />
+          {isChamado ? (
+            <Field label="Tipo de chamado" hint="O checklist será aplicado na execução desses tipos.">
+              <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-2">
+                {tiposChamado.map((tipo) => {
+                  const checked = tipoChamadoIds.includes(tipo.id);
+                  return (
+                    <label key={tipo.id} className="flex items-center gap-2 text-[13px] text-[var(--ink)]">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          setTipoChamadoIds((current) =>
+                            checked ? current.filter((id) => id !== tipo.id) : [...current, tipo.id],
+                          )
+                        }
+                      />
+                      {tipo.nome}
+                    </label>
+                  );
+                })}
+                {tiposChamado.length === 0 ? (
+                  <p className="text-[12px] text-[var(--ink-3)]">Nenhum tipo de chamado cadastrado.</p>
+                ) : null}
+              </div>
+            </Field>
+          ) : (
+            <ChecklistBindingFields
+              key={`${checklist.id}-${checklist.unidadeTipo ?? ''}-${checklist.secretariaId ?? ''}`}
+              escopo={escopo}
+              onEscopoChange={setEscopo}
+              secretarias={secretarias}
+              defaultSecretariaId={checklist.secretariaId ?? ''}
+              defaultUnidadeTipo={checklist.unidadeTipo ?? ''}
+            />
+          )}
           {formError ? <p className="md-body-md text-red-700">{formError}</p> : null}
           <div className="flex flex-wrap gap-2 pt-2">
             <Button type="submit" variant="filled" className="flex-1">
@@ -715,16 +771,19 @@ export function VersionEditor({
             {item.tipo === 'MULTIPLA_ESCOLHA' ? (
               <MultiplaEscolhaEditor
                 opcoes={item.opcoes}
+                simplified={isChamado}
                 onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
               />
             ) : null}
             {item.tipo === 'BOOLEANO' ? (
-              <BooleanoOpcoesEditor
-                opcoes={item.opcoes}
-                onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
-              />
+              isChamado ? null : (
+                <BooleanoOpcoesEditor
+                  opcoes={item.opcoes}
+                  onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
+                />
+              )
             ) : null}
-            {item.tipo === 'ESCALA_LIKERT' ? (
+            {item.tipo === 'ESCALA_LIKERT' && !isChamado ? (
               <LikertOpcoesEditor
                 opcoes={item.opcoes}
                 onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
@@ -746,23 +805,31 @@ export function VersionEditor({
 function MultiplaEscolhaEditor({
   opcoes,
   onChange,
+  simplified = false,
 }: {
   opcoes: unknown;
   onChange: (opcoes: unknown) => void;
+  simplified?: boolean;
 }) {
   const config = parseMultiplaEscolhaOpcoes(opcoes);
   const notas = config.notas ?? config.opcoes.map(() => null as number | null);
 
   function commit(nextOpcoes: string[], nextNotas: Array<number | null>) {
-    onChange({ ...config, opcoes: nextOpcoes, notas: nextNotas });
+    onChange({
+      ...config,
+      opcoes: nextOpcoes,
+      ...(simplified ? {} : { notas: nextNotas }),
+    });
   }
 
   return (
     <div className="space-y-3 border-t border-[var(--md-outline-variant)] pt-3">
       <p className="md-title-sm text-[var(--md-on-surface)]">Opções de múltipla escolha</p>
-      <p className="text-[13px] text-[var(--md-on-surface-variant)]">
-        Nota opcional por opção (0 a 10). Se uma tiver nota, todas devem ter.
-      </p>
+      {!simplified ? (
+        <p className="text-[13px] text-[var(--md-on-surface-variant)]">
+          Nota opcional por opção (0 a 10). Se uma tiver nota, todas devem ter.
+        </p>
+      ) : null}
       <div className="space-y-2">
         {config.opcoes.map((opcao, optionIndex) => (
           <div key={optionIndex} className="flex flex-wrap items-end gap-2">
@@ -777,22 +844,24 @@ function MultiplaEscolhaEditor({
                 }}
               />
             </Field>
-            <Field label="Nota (0–10)" className="w-28 shrink-0">
-              <Input
-                type="number"
-                min={0}
-                max={10}
-                step={0.1}
-                value={notas[optionIndex] ?? ''}
-                placeholder="—"
-                onChange={(e) => {
-                  const nextNotas = [...notas];
-                  const raw = e.target.value.trim();
-                  nextNotas[optionIndex] = raw === '' ? null : Number(raw);
-                  commit(config.opcoes, nextNotas);
-                }}
-              />
-            </Field>
+            {!simplified ? (
+              <Field label="Nota (0–10)" className="w-28 shrink-0">
+                <Input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step={0.1}
+                  value={notas[optionIndex] ?? ''}
+                  placeholder="—"
+                  onChange={(e) => {
+                    const nextNotas = [...notas];
+                    const raw = e.target.value.trim();
+                    nextNotas[optionIndex] = raw === '' ? null : Number(raw);
+                    commit(config.opcoes, nextNotas);
+                  }}
+                />
+              </Field>
+            ) : null}
             {config.opcoes.length > 2 ? (
               <Button
                 type="button"
@@ -826,7 +895,7 @@ function MultiplaEscolhaEditor({
       <Field label="Modo de exibição" className="mt-3 max-w-md">
         <Select
           value={config.modoExibicao}
-          onChange={(e) => onChange({ ...config, notas, modoExibicao: e.target.value })}
+          onChange={(e) => onChange({ ...config, ...(simplified ? {} : { notas }), modoExibicao: e.target.value })}
         >
           {(Object.keys(MULTIPLA_ESCOLHA_MODO_LABELS) as Array<keyof typeof MULTIPLA_ESCOLHA_MODO_LABELS>).map((modo) => (
             <option key={modo} value={modo}>

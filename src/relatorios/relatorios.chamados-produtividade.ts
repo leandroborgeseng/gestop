@@ -1,4 +1,5 @@
 import { ChamadoStatus } from '@prisma/client';
+import { resolveChamadoTituloDisplay } from '../chamados/chamados.rules';
 import { formatIsoDate } from './relatorios.csv';
 import {
   type ExecucaoParticipantesResumo,
@@ -75,7 +76,7 @@ export function mapChamadoProdutividadeRow(item: ChamadoProdutividadeItem) {
 
   return {
     codigo: item.codigo,
-    tituloDescricao: (item.titulo?.trim() || item.descricao || '—').trim(),
+    tituloDescricao: resolveChamadoTituloDisplay(item),
     concluidoEm: formatIsoDate(item.concluidoEm),
     equipe: formatted.equipe || 'Sem equipe',
     funcionarios: formatted.nomes || 'Sem funcionário',

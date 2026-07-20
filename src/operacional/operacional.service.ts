@@ -574,6 +574,7 @@ export class OperacionalService {
             status: true,
             createdAt: true,
             prazoEm: true,
+            tipoChamado: { select: { id: true, nome: true } },
             responsavel: {
               select: {
                 id: true,

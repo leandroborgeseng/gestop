@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
+import { chamadoTitulo } from '@/lib/chamado-geo';
 import { UnidadeDetalhe, UnidadeOperacional } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { cn } from '@/lib/cn';
@@ -331,7 +332,7 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
           </span>
           <div className="min-w-0 flex-1">
             <p className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{chamado.codigo}</p>
-            <p className="text-[13px] font-semibold text-[var(--ink)]">{chamado.titulo ?? chamado.descricao}</p>
+            <p className="text-[13px] font-semibold text-[var(--ink)]">{chamadoTitulo(chamado)}</p>
             <p className="mt-0.5 text-[11px] text-[var(--ink-3)]">
               {chamado.status} · {chamado.responsavel?.nome ?? 'Sem responsável'}
             </p>

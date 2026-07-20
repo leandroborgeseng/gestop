@@ -264,6 +264,51 @@ function buildExecucaoConclusaoStep(
 
   detalhes.push(buildParticipantesExecucaoDetalhe(metadata));
 
+  const checklistComplementar =
+    metadata.checklistComplementar && typeof metadata.checklistComplementar === 'object'
+      ? (metadata.checklistComplementar as {
+          checklistNome?: string;
+          dispensadoPorImpedimento?: boolean;
+          respostas?: Array<{
+            titulo?: string;
+            naoSeAplica?: boolean;
+            valorBooleano?: boolean | null;
+            valorTexto?: string | null;
+            valorNumero?: number | null;
+            comentario?: string | null;
+          }>;
+        })
+      : null;
+
+  if (checklistComplementar?.dispensadoPorImpedimento) {
+    detalhes.push({
+      label: 'Checklist complementar',
+      value: checklistComplementar.checklistNome
+        ? `${checklistComplementar.checklistNome} · dispensado por impedimento`
+        : 'Dispensado por impedimento',
+    });
+  } else if (checklistComplementar?.respostas?.length) {
+    detalhes.push({
+      label: checklistComplementar.checklistNome
+        ? `Perguntas complementares (${checklistComplementar.checklistNome})`
+        : 'Perguntas complementares da execução',
+      value: checklistComplementar.respostas
+        .map((resposta) => {
+          const valor = resposta.naoSeAplica
+            ? 'Não se aplica'
+            : resposta.valorBooleano === true
+              ? 'Sim'
+              : resposta.valorBooleano === false
+                ? 'Não'
+                : resposta.valorTexto?.trim() ||
+                  (resposta.valorNumero != null ? String(resposta.valorNumero) : '—');
+          const comentario = resposta.comentario?.trim();
+          return `${resposta.titulo ?? 'Pergunta'}: ${valor}${comentario ? ` (${comentario})` : ''}`;
+        })
+        .join(' · '),
+    });
+  }
+
   const expandContent = {
     descricao: relatorio || undefined,
     detalhes: detalhes.length ? detalhes : undefined,

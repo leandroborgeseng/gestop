@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { getUnidadeDetalhe } from '@/lib/api';
+import { chamadoTitulo } from '@/lib/chamado-geo';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { UnidadeDetalhe } from '@/lib/types';
 import { PageShell } from '@/components/layout/page-shell';
@@ -246,7 +247,7 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
                 <Chip variant="brand" className="mb-2">
                   {chamado.codigo} · {chamado.status} · {chamado.prioridade}
                 </Chip>
-                <p className="text-[14px] font-semibold text-[var(--ink)]">{chamado.titulo ?? chamado.descricao}</p>
+                <p className="text-[14px] font-semibold text-[var(--ink)]">{chamadoTitulo(chamado)}</p>
                 <p className="mt-1 text-[13px] text-[var(--ink-3)]">
                   Responsável: {chamado.responsavel?.nome ?? 'não atribuído'}
                 </p>

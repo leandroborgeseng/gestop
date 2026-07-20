@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUpRight, X } from 'lucide-react';
 import { ChamadoMapaItem } from '@/lib/types';
+import { chamadoTitulo } from '@/lib/chamado-geo';
 import { CHAMADO_STATUS_META, prazoInfo } from '@/lib/chamado-status';
 import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
@@ -37,7 +38,7 @@ export function ChamadoMapaDrawer({
 
   const statusMeta = CHAMADO_STATUS_META[chamado.status];
   const prazo = prazoInfo(chamado.prazoEm, chamado.status);
-  const titulo = chamado.titulo?.trim() || chamado.descricao;
+  const titulo = chamadoTitulo(chamado);
 
   return createPortal(
     <>
