@@ -78,7 +78,8 @@ export function ChamadosFiltrosPanel({
   }, []);
 
   const statusTodos = value.statuses === 'TODOS';
-  const statusCount = statusTodos ? 0 : value.statuses.size;
+  const selectedStatuses = statusTodos ? null : value.statuses;
+  const statusCount = selectedStatuses?.size ?? 0;
 
   const summary = useMemo(() => {
     const equipe =
@@ -151,7 +152,9 @@ export function ChamadosFiltrosPanel({
             <div className="situ-chips flex flex-wrap gap-1.5">
               {STATUS_CHIPS.map((item) => {
                 const active =
-                  item.value === 'TODOS' ? statusTodos : !statusTodos && value.statuses.has(item.value);
+                  item.value === 'TODOS'
+                    ? statusTodos
+                    : Boolean(selectedStatuses?.has(item.value));
                 return (
                   <Chip
                     key={item.value}
