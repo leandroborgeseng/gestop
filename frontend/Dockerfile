@@ -24,14 +24,16 @@ RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
 
 COPY --from=builder /app/public ./public
-# prepare-standalone.mjs achata para .next/standalone/server.js antes deste COPY
+# prepare-standalone.mjs achata server.js e embute start-standalone no standalone
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# Redundante com o bundle do prepare, mas garante npm start (Coolify) e CMD
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/start-standalone.mjs ./start-standalone.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/start-standalone.mjs ./scripts/start-standalone.mjs
 
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
-# Preferencial: ./server.js (standalone copiado para /app). Fallback via script.
+# Preferencial: ./server.js (standalone em /app). Coolify pode sobrescrever com npm start.
 CMD ["node", "start-standalone.mjs"]

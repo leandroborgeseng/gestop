@@ -164,6 +164,7 @@ Para acessar no host, adicione temporariamente `ports: ["3000:3000"]` / `["3001:
 | Build sem espaço | `docker system prune` no host Coolify |
 | Import webmap lento | Rede outbound no host; ou `WEBMAP_AUTO_IMPORT_ON_START=false` e importe pela UI |
 | `sh: next: not found` / crash loop no web | App Nixpacks ainda em `next start`. Redeploy com `npm start` (resolve standalone) **ou** use Compose/`frontend/Dockerfile` |
+| `Cannot find module '.../scripts/start-standalone.mjs'` | Imagem runner sem o script (Coolify rodou `npm start`). O `frontend/Dockerfile` + `prepare-standalone` embutem o script em `/app/scripts/` e `/app/`. Redeploy. |
 | `Cannot find module '.../.next/standalone/server.js'` | Start fixo apontando para path errado (ex.: Dockerfile com CMD Nixpacks). Use `npm start` / `node start-standalone.mjs`. Preferir o serviço **web** do Compose. |
 
 ### Variáveis que derrubam a API se erradas/ausentes
@@ -190,7 +191,8 @@ Só se precisar escalar api/web separados:
 1. App **api**: Dockerfile na raiz + Postgres (ou DB gerenciado) + volume `/data`
 2. App **web**: `frontend/Dockerfile` (**Dockerfile**, não Nixpacks) + `BACKEND_INTERNAL_URL` apontando para a URL interna/pública da api  
    - CMD esperado: `node start-standalone.mjs` (resolve `./server.js` após COPY do standalone)  
-   - Se o painel mostrar `npm start` / `next start` / `node .next/standalone/server.js` com builder Dockerfile, o start command customizado está errado → limpe o override ou use Nixpacks abaixo
+   - `npm start` também funciona na imagem Docker (`scripts/start-standalone.mjs` + `./server.js` em `/app`)  
+   - Evite override para `next start` ou `node .next/standalone/server.js` com builder Dockerfile
 
 **Atenção — dois recursos Coolify:** se ainda existir um app Nixpacks separado (crashando) **e** o Compose, aponte o domínio só para o serviço **web** do Compose e pause/remova o app Nixpacks duplicado.
 

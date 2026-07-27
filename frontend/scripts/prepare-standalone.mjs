@@ -10,9 +10,11 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
@@ -96,6 +98,24 @@ if (!existsSync(serverJs)) {
 mkdirSync(join(standaloneRoot, '.next'), { recursive: true });
 cpSync('public', join(standaloneRoot, 'public'), { recursive: true });
 cpSync('.next/static', join(standaloneRoot, '.next/static'), { recursive: true });
+
+// Coolify/Docker: COPY standalone → /app; npm start precisa do script no bundle
+const startScript = resolve('scripts/start-standalone.mjs');
+if (!existsSync(startScript)) {
+  console.error('prepare-standalone: scripts/start-standalone.mjs ausente.');
+  process.exit(1);
+}
+mkdirSync(join(standaloneRoot, 'scripts'), { recursive: true });
+cpSync(startScript, join(standaloneRoot, 'scripts', 'start-standalone.mjs'));
+cpSync(startScript, join(standaloneRoot, 'start-standalone.mjs'));
+
+const pkgPath = join(standaloneRoot, 'package.json');
+if (existsSync(pkgPath)) {
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+  pkg.scripts = { ...(pkg.scripts || {}), start: 'node ./scripts/start-standalone.mjs' };
+  writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
+}
+
 console.log(
-  'prepare-standalone: public + .next/static em .next/standalone (server.js OK)',
+  'prepare-standalone: public + .next/static + start-standalone em .next/standalone (server.js OK)',
 );
