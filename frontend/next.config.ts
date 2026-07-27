@@ -6,6 +6,8 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Evita .next/standalone/<pasta>/server.js quando há lockfile na raiz do monorepo
+  outputFileTracingRoot: rootDir,
   turbopack: {
     root: rootDir,
   },

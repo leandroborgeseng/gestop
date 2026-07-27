@@ -163,7 +163,8 @@ Para acessar no host, adicione temporariamente `ports: ["3000:3000"]` / `["3001:
 | CORS | `CORS_ORIGINS` = URL exata do web (https, sem barra) |
 | Build sem espaço | `docker system prune` no host Coolify |
 | Import webmap lento | Rede outbound no host; ou `WEBMAP_AUTO_IMPORT_ON_START=false` e importe pela UI |
-| `sh: next: not found` / crash loop no web | App Nixpacks ainda em `next start`. Redeploy com `node .next/standalone/server.js` (já no repo) **ou** use Compose/`frontend/Dockerfile` (`CMD node server.js`) |
+| `sh: next: not found` / crash loop no web | App Nixpacks ainda em `next start`. Redeploy com `npm start` (resolve standalone) **ou** use Compose/`frontend/Dockerfile` |
+| `Cannot find module '.../.next/standalone/server.js'` | Start fixo apontando para path errado (ex.: Dockerfile com CMD Nixpacks). Use `npm start` / `node start-standalone.mjs`. Preferir o serviço **web** do Compose. |
 
 ### Variáveis que derrubam a API se erradas/ausentes
 
@@ -188,20 +189,25 @@ Só se precisar escalar api/web separados:
 
 1. App **api**: Dockerfile na raiz + Postgres (ou DB gerenciado) + volume `/data`
 2. App **web**: `frontend/Dockerfile` (**Dockerfile**, não Nixpacks) + `BACKEND_INTERNAL_URL` apontando para a URL interna/pública da api  
-   - CMD esperado: `node server.js` (standalone)  
-   - Se o painel mostrar `npm start` / `next start`, o builder está errado → mude para Dockerfile ou veja Nixpacks abaixo
+   - CMD esperado: `node start-standalone.mjs` (resolve `./server.js` após COPY do standalone)  
+   - Se o painel mostrar `npm start` / `next start` / `node .next/standalone/server.js` com builder Dockerfile, o start command customizado está errado → limpe o override ou use Nixpacks abaixo
+
+**Atenção — dois recursos Coolify:** se ainda existir um app Nixpacks separado (crashando) **e** o Compose, aponte o domínio só para o serviço **web** do Compose e pause/remova o app Nixpacks duplicado.
 
 ### Se o web for app Nixpacks (root = `frontend/`)
 
 Não use `next start` — em produção o binário `next` pode sumir do PATH (`sh: next: not found`).
+Não use path fixo `node .next/standalone/server.js` se o builder for Dockerfile (lá o arquivo fica em `/app/server.js`).
 
 O build gera `.next/standalone` (`output: 'standalone'`) e o start é:
 
 ```bash
-node .next/standalone/server.js
+npm start
 ```
 
-Arquivos: `frontend/nixpacks.toml`, `frontend/railway.toml`, `frontend/package.json` (`npm start` já aponta para o standalone).
+(`scripts/start-standalone.mjs` resolve `server.js` em Docker flat, Nixpacks ou path aninhado.)
+
+Arquivos: `frontend/nixpacks.toml`, `frontend/railway.toml`, `frontend/package.json`.
 
 Defina `HOSTNAME=0.0.0.0` e `BACKEND_INTERNAL_URL` (URL da api).
 

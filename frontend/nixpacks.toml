@@ -11,7 +11,8 @@ cmds = ["npm ci"]
 cmds = ["npm run build"]
 
 [start]
-cmd = "node .next/standalone/server.js"
+# Resolve server.js em .next/standalone/ (ou aninhado / Docker flatten)
+cmd = "npm start"
 
 [variables]
 HOSTNAME = "0.0.0.0"
