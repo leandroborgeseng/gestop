@@ -7,12 +7,20 @@ if [ -z "$DATABASE_URL" ]; then
   exit 1
 fi
 
-# JWT: falha cedo com mensagem clara (evita migrate+seed e so depois crash no Nest)
+# JWT: logar apenas se esta definido + comprimento — nunca o valor
 jwt_len=$(printf '%s' "$JWT_SECRET" | wc -c | tr -d ' ')
+if [ -z "$JWT_SECRET" ]; then
+  echo "JWT_SECRET: nao definido (length=0)"
+else
+  echo "JWT_SECRET: definido (length=$jwt_len)"
+fi
+
+# JWT: falha cedo com mensagem clara (evita migrate+seed e so depois crash no Nest)
 case "$JWT_SECRET" in
   ''|'change_me_jwt_secret'|'troque-este-segredo-em-producao'*|'Defina JWT_SECRET'*|'change-me'|'gestop-dev-secret-change-me')
     echo "ERRO: JWT_SECRET ausente, fraco ou placeholder."
-    echo "No Coolify (Environment), defina JWT_SECRET como Build Variable:"
+    echo "No Coolify (Environment), defina JWT_SECRET como variavel de RUNTIME"
+    echo "(nao no .env de interpolacao do compose com valor vazio — isso sobrescreve)."
     echo "  openssl rand -base64 48"
     echo "Minimo: 32 caracteres aleatorios. Redeploy apos salvar."
     exit 1
@@ -39,7 +47,11 @@ fi
 if [ -z "$INITIAL_ADMIN_PASSWORD" ]; then
   echo "AVISO: INITIAL_ADMIN_PASSWORD vazia."
   echo "No 1o deploy (banco vazio) o seed usara fallback temporario Gestop@123 — troque depois."
-  echo "Defina INITIAL_ADMIN_PASSWORD (>=12 chars) como Build Variable no Coolify."
+  echo "Defina INITIAL_ADMIN_PASSWORD (>=12 chars) no Coolify Environment (runtime)."
+  echo "Nao deixe INITIAL_ADMIN_PASSWORD= vazio no .env do compose — sobrescreve a injecao."
+else
+  admin_len=$(printf '%s' "$INITIAL_ADMIN_PASSWORD" | wc -c | tr -d ' ')
+  echo "INITIAL_ADMIN_PASSWORD: definida (length=$admin_len)"
 fi
 
 # Coolify detectavel mesmo se o painel nao injetar COOLIFY_*

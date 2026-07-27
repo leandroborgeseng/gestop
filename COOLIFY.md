@@ -50,32 +50,43 @@ Browser → web:3000  →  proxy /api-gestop|/api-sigma  →  api:3001
 
 Aba **Environment** — copie de [`.env.coolify.example`](.env.coolify.example).
 
-> **Crítico:** marque como **Available at Buildtime** (Build Variable): `POSTGRES_PASSWORD`, `JWT_SECRET`, `INITIAL_ADMIN_PASSWORD` (1º deploy).
+> **Armadilha clássica Coolify + Compose:** se o YAML tiver `JWT_SECRET: ${JWT_SECRET:-}` e a variável **não** estiver no `.env` de interpolação do compose, o Compose expandirá para **string vazia** e **sobrescreverá** o segredo que o Coolify injeta em runtime. Resultado: entrypoint sai em ~2s → `api Error` → `dependency failed`.
 >
-> Sem `JWT_SECRET` válido (≥32 chars) a **api** aborta no entrypoint e o compose marca `unhealthy` → o **web** nunca sobe.
+> Por isso o compose **não lista** `JWT_SECRET`, `INITIAL_ADMIN_PASSWORD` nem outros segredos em `environment:`. Defina-os **só** no Coolify Environment (runtime).
+>
+> **Buildtime (obrigatório para interpolar `DATABASE_URL`):** `POSTGRES_PASSWORD` (e opcionalmente `POSTGRES_USER` / `POSTGRES_DB`).
+>
+> Sem `JWT_SECRET` válido (≥32 chars) a **api** aborta no entrypoint. O **web** sobe mesmo assim (`depends_on: service_started`); use `/api/health/backend` para ver o status da API.
 
 ```env
+# Buildtime + Runtime (compose .env — interpolação)
 POSTGRES_PASSWORD=senha-forte-unica
+
+# Só Runtime no Coolify Environment (NÃO deixe em branco no .env do compose)
 JWT_SECRET=...                    # openssl rand -base64 48  (OBRIGATÓRIO)
 INITIAL_ADMIN_PASSWORD=...        # min. 12 caracteres — 1º seed (recomendado)
+
 RUN_SEED=false
 STORAGE_DRIVER=local
 STORAGE_LOCAL_DIR=/data/gestop-evidencias
 BACKEND_INTERNAL_URL=http://api:3001
+WEBMAP_AUTO_IMPORT_ON_START=false
 ```
 
-| Variável | Build + Runtime | Notas |
-|----------|-----------------|-------|
-| `POSTGRES_PASSWORD` | ✅ ambos | **Não mude** depois do 1º deploy (volume `pgdata`) |
-| `JWT_SECRET` | ✅ ambos | **Obrigatório** ≥ 32 chars; sem default no compose |
-| `INITIAL_ADMIN_PASSWORD` | ✅ 1º deploy | Admin: `admin.gestop@franca.sp.gov.br` (fallback temporário `Gestop@123` se vazio) |
+| Variável | Onde definir | Notas |
+|----------|--------------|-------|
+| `POSTGRES_PASSWORD` | Build + Runtime | **Não mude** depois do 1º deploy (volume `pgdata`) |
+| `JWT_SECRET` | **Só Runtime** (Coolify Env) | **Obrigatório** ≥ 32 chars; **não** no compose `environment:` |
+| `INITIAL_ADMIN_PASSWORD` | **Só Runtime** (1º deploy) | Admin: `admin.gestop@franca.sp.gov.br` (fallback temporário `Gestop@123` se vazio) |
 | `CORS_ORIGINS` | runtime | URL HTTPS do **web** (sem `/`); fallback `SERVICE_URL_WEB` |
 | `STORAGE_PUBLIC_URL_BASE` | runtime | `https://seu-web/.../api-gestop` ou fallback `SERVICE_URL_WEB` |
 | `BACKEND_INTERNAL_URL` | runtime | `http://api:3001` (rede Docker) |
 | `RUN_SEED` | runtime | `true` só se precisar forçar re-seed |
-| `WEBMAP_AUTO_IMPORT_ON_START` | runtime | `true` no 1º boot; falha de GitHub **não** derruba a API |
+| `WEBMAP_AUTO_IMPORT_ON_START` | runtime | Default `false` (1º boot mais confiável); falha de GitHub **não** derruba a API |
 
-Opcionais: `POSTGRES_USER=gestop`, `POSTGRES_DB=gestop`, `WEBMAP_AUTO_IMPORT_ON_START=true`
+Segredos opcionais (mesma regra — **só Runtime**, nunca `${VAR:-}` no compose): `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, chaves VAPID, `BACKUP_ENCRYPTION_KEY`, `WEBMAP_CRON_SECRET`, `INTEGRACOES_WEBHOOK_SECRET`.
+
+Opcionais: `POSTGRES_USER=gestop`, `POSTGRES_DB=gestop`
 
 ### 3. Domínios
 
@@ -90,12 +101,13 @@ Na maioria dos casos **só o web precisa de domínio público** — o browser fa
 
 1. Clique **Deploy**
 2. Logs da **api**:
+   - `JWT_SECRET: definido (length=N)` (se `nao definido` / exit 1 → falta Runtime no Coolify)
    - `prisma migrate deploy`
    - seed (se banco vazio + `INITIAL_ADMIN_PASSWORD`)
-   - eventual import webmap (`WEBMAP_AUTO_IMPORT_ON_START`)
+   - eventual import webmap (só se `WEBMAP_AUTO_IMPORT_ON_START=true`)
 3. Testes:
    - `GET https://sigma.../api/health` → `{"status":"ok","service":"sigma-web"}`
-   - `GET https://sigma.../api/health/backend` → status ok + db
+   - `GET https://sigma.../api/health/backend` → status ok + db (útil se a API ainda estiver subindo/falhando)
    - (se api pública) `GET https://api.../health` → ok
    - Login: `admin.gestop@franca.sp.gov.br` + senha do `INITIAL_ADMIN_PASSWORD`
 
@@ -126,10 +138,21 @@ Não é necessário redeploy só por isso; evite deixar `RUN_SEED=true` em produ
 
 ```bash
 cp .env.coolify.example .env
-# Edite POSTGRES_PASSWORD, JWT_SECRET, INITIAL_ADMIN_PASSWORD
+# Edite POSTGRES_PASSWORD (interpolação do compose)
 
-export $(grep -v '^#' .env | xargs)
-docker compose -f docker-compose.coolify.yml up -d --build
+# Segredos NÃO vão no .env do compose (evita override vazio).
+# Override local (não commitado) — no Coolify o painel injeta Runtime sem isso:
+cat > docker-compose.coolify.override.yml <<'EOF'
+services:
+  api:
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD}
+EOF
+
+export JWT_SECRET="$(openssl rand -base64 48)"
+export INITIAL_ADMIN_PASSWORD='SenhaForteLocal12!'
+docker compose -f docker-compose.coolify.yml -f docker-compose.coolify.override.yml up -d --build
 ```
 
 Para acessar no host, adicione temporariamente `ports: ["3000:3000"]` / `["3001:3001"]` nos serviços, ou use `docker compose -f docker-compose.yml up -d` só para Postgres local (dev habitual).
@@ -151,11 +174,11 @@ Para acessar no host, adicione temporariamente `ports: ["3000:3000"]` / `["3001:
 
 | Problema | Solução |
 |----------|---------|
-| **api unhealthy** / `dependency failed to start` | Quase sempre a API **crashou antes** de `/health` ou demorou mais que o grace. Veja logs do container **api** (não só o compose). Causas comuns abaixo. |
-| `JWT_SECRET` fraco / ausente | Compose **não** injeta mais placeholder curto. Defina `JWT_SECRET` (≥32 chars, `openssl rand -base64 48`) como **Build Variable** e redeploy. Entrypoint aborta cedo com mensagem clara. |
+| **api Error (~2s)** / `dependency failed: api is unhealthy` | Quase sempre **saída do container** (não healthcheck lento — `start_period` é 180s). Veja logs da **api**. Causa clássica: `JWT_SECRET` vazio por override do compose. |
+| `JWT_SECRET` ausente / override vazio | Defina `JWT_SECRET` (≥32 chars, `openssl rand -base64 48`) **só** no Coolify Environment (runtime). Remova qualquer `JWT_SECRET=` vazio do `.env` do compose. O compose **não** deve listar essa chave em `environment:`. |
 | `STORAGE_PUBLIC_URL_BASE` | Compose usa `SERVICE_URL_WEB` + `/api-gestop`. Sem domínio, a API sobe com fallback temporário — defina a URL pública do **web** depois. |
-| Seed / login admin | Defina `INITIAL_ADMIN_PASSWORD` (≥12). Se vazio no 1º deploy, seed usa `Gestop@123` (aviso no log) — **troque imediatamente**. |
-| Import webmap lento / falha GitHub | Não derruba mais a API. Use `WEBMAP_AUTO_IMPORT_ON_START=false` se a rede outbound for bloqueada; importe pela UI depois. Healthcheck: `start_period` 180s + retries. |
+| Seed / login admin | Defina `INITIAL_ADMIN_PASSWORD` (≥12) no Coolify Runtime. Se vazio no 1º deploy, seed usa `Gestop@123` (aviso no log) — **troque imediatamente**. Não deixe a chave em branco no `.env` do compose. |
+| Import webmap lento / falha GitHub | Default do compose é `false`. Não derruba a API. Ative `WEBMAP_AUTO_IMPORT_ON_START=true` só quando outbound estiver ok; ou importe pela UI. |
 | `db: error` / migrate falha | `POSTGRES_PASSWORD` diferente da 1ª subida do volume |
 | Login falha / 0 usuários | Defina `INITIAL_ADMIN_PASSWORD` e redeploy; se preciso `RUN_SEED=true` uma vez |
 | Proxy 502 no frontend | `BACKEND_INTERNAL_URL=http://api:3001` no serviço **web** |
@@ -171,7 +194,7 @@ Para acessar no host, adicione temporariamente `ports: ["3000:3000"]` / `["3001:
 
 | Variável | Efeito se ausente/inválida |
 |----------|----------------------------|
-| `JWT_SECRET` | **Crash no boot** (entrypoint ou Nest). Obrigatória ≥32 chars. |
+| `JWT_SECRET` | **Crash no boot** (entrypoint ou Nest). Obrigatória ≥32 chars. Só Runtime; nunca blank no compose. |
 | `POSTGRES_PASSWORD` | Migrate/DB falha → container reinicia → unhealthy |
 | `DATABASE_URL` | Montada pelo compose; se mudar `POSTGRES_*` após 1º deploy, DB rejeita auth |
 | `STORAGE_LOCAL_DIR` | Em Coolify deve ser `/data/gestop-evidencias` (volume). Ausente → crash de env. |
