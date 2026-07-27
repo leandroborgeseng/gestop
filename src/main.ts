@@ -26,7 +26,7 @@ async function bootstrap() {
     assertProductionEnv();
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
-    console.error('[SIGMA:api] Corrija as variaveis no Railway → gestop → Variables → Redeploy.');
+    console.error('[SIGMA:api] Corrija as variaveis no Coolify/Railway (Environment) e redeploy.');
     process.exit(1);
   }
 
@@ -69,9 +69,10 @@ async function bootstrap() {
   );
 
   const port = Number(process.env.PORT ?? 3001);
-  // Rede privada Railway usa IPv6 — escutar em :: evita "fetch failed" do frontend.
-  await app.listen(port, '::');
-  console.log(`[SIGMA:api] Servidor ouvindo em [::]:${port}`);
+  // Railway rede privada: :: (IPv6). Coolify/Docker Compose: HOST=0.0.0.0.
+  const host = process.env.HOST?.trim() || '::';
+  await app.listen(port, host);
+  console.log(`[SIGMA:api] Servidor ouvindo em [${host}]:${port}`);
 }
 
 void bootstrap().catch((error) => {

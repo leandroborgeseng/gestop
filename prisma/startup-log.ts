@@ -70,7 +70,10 @@ export function isProductionRuntime() {
   return (
     process.env.NODE_ENV === 'production' ||
     Boolean(process.env.RAILWAY_ENVIRONMENT) ||
-    Boolean(process.env.RAILWAY_PROJECT_ID)
+    Boolean(process.env.RAILWAY_PROJECT_ID) ||
+    Boolean(process.env.COOLIFY) ||
+    Boolean(process.env.COOLIFY_RESOURCE_UUID) ||
+    Boolean(process.env.COOLIFY_CONTAINER_NAME)
   );
 }
 

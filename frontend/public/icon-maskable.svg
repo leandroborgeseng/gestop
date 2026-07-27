@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="SIGMA">
+  <!-- Ícone maskable: fundo full-bleed (sem cantos arredondados) e marca na safe zone (~80% central). -->
+  <defs>
+    <linearGradient id="sigma-maskable-gradient" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0066CC"/>
+      <stop offset="1" stop-color="#0199DC"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#sigma-maskable-gradient)"/>
+  <!-- Marca oficial (pin) com padding ~18% para evitar corte em máscaras Android/iOS -->
+  <g transform="translate(256 256) scale(2.85) translate(-32 -32)">
+    <path d="M32 14c-8.8 0-16 7.2-16 16 0 12 16 30 16 30s16-18 16-30c0-8.8-7.2-16-16-16zm0 22a6 6 0 1 1 0-12 6 6 0 0 1 0 12z" fill="#FFFFFF"/>
+  </g>
+</svg>

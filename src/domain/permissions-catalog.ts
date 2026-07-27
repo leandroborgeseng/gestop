@@ -52,7 +52,7 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
     label: 'Chamados',
     functions: [
       { id: '_tela', label: 'Chamados', actions: [...PERMISSION_ACTIONS] },
-      { id: 'abrir_chamado', label: 'Abrir chamado', actions: ['visualizar', 'inserir'] },
+      { id: 'abrir_chamado', label: 'Novo chamado', actions: ['visualizar', 'inserir'] },
       { id: 'salvar_chamado', label: 'Salvar chamado', actions: ['alterar', 'inserir'] },
       { id: 'alterar_status', label: 'Alterar status', actions: ['alterar', 'executar'] },
       { id: 'notificar_equipe', label: 'Notificar equipe', actions: ['executar'] },

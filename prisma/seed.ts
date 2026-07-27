@@ -174,6 +174,7 @@ async function main() {
       ['checklists.gerenciar', 'Criar e publicar checklists', 'fiscalizacao'],
       ['fiscalizacoes.executar', 'Executar fiscalizacoes em campo', 'fiscalizacao'],
       ['chamados.gerenciar', 'Gerenciar chamados operacionais', 'chamados'],
+      ['chamados.abrir', 'Abrir novo chamado (sem acesso à triagem)', 'chamados'],
       ['chamados.executar', 'Executar chamados em campo', 'chamados'],
       ['chamados.editar_abertura', 'Editar informações de abertura do chamado', 'chamados'],
       ['chamados.execucao_manual', 'Lançar execução de chamado manualmente', 'chamados'],
@@ -186,7 +187,7 @@ async function main() {
     ),
   );
 
-  const [adminPerfil, gestorPerfil, fiscalPerfil, manutencaoPerfil] = await Promise.all([
+  const [adminPerfil, gestorPerfil, fiscalPerfil, manutencaoPerfil, solicitacaoPerfil] = await Promise.all([
     prisma.perfil.create({
       data: { nome: 'Administrador do Sistema', sistema: true, descricao: 'Acesso total ao SIGMA' },
     }),
@@ -198,6 +199,13 @@ async function main() {
     }),
     prisma.perfil.create({
       data: { nome: 'Operador de Manutencao', sistema: true, descricao: 'Execucao de ordens de servico' },
+    }),
+    prisma.perfil.create({
+      data: {
+        nome: 'Solicitação',
+        sistema: true,
+        descricao: 'Abertura de chamados sem acesso à triagem ou gerenciamento',
+      },
     }),
   ]);
 
@@ -213,6 +221,9 @@ async function main() {
       ...permissoes
         .filter((permissao) => permissao.chave === 'chamados.executar')
         .map((permissao) => ({ perfilId: manutencaoPerfil.id, permissaoId: permissao.id })),
+      ...permissoes
+        .filter((permissao) => permissao.chave === 'chamados.abrir')
+        .map((permissao) => ({ perfilId: solicitacaoPerfil.id, permissaoId: permissao.id })),
     ],
   });
 

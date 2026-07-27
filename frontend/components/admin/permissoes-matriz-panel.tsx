@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Plus, Save } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, Power, Save } from 'lucide-react';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
@@ -18,6 +18,8 @@ import {
   listAdminUsuarios,
   saveAdminPerfilMatriz,
   saveAdminUsuarioMatriz,
+  setAdminPerfilAtivo,
+  updateAdminPerfil,
 } from '@/lib/api';
 import {
   PERMISSION_ACTIONS,
@@ -38,6 +40,7 @@ type ConfigurablePerfil = {
   descricao?: string | null;
   sistema: boolean;
   ativo: boolean;
+  usuariosVinculados?: number;
 };
 
 type MatrizMode = 'perfil' | 'usuario';
@@ -61,17 +64,23 @@ export function PermissoesMatrizPanel({
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editNome, setEditNome] = useState('');
+  const [editDescricao, setEditDescricao] = useState('');
+  const [savingPerfilMeta, setSavingPerfilMeta] = useState(false);
   const initialKeysRef = useRef<Set<string>>(new Set());
 
-  const loadPerfis = useCallback(async () => {
+  const loadPerfis = useCallback(async (preferId?: string) => {
     setLoading(true);
     setError(null);
     try {
       const items = await listAdminPerfisConfiguraveis();
       setPerfis(items);
-      if (!selectedPerfilId && items.length > 0) {
-        setSelectedPerfilId(items[0].id);
-      }
+      const nextId =
+        (preferId && items.some((item) => item.id === preferId) ? preferId : null) ||
+        (selectedPerfilId && items.some((item) => item.id === selectedPerfilId) ? selectedPerfilId : null) ||
+        items[0]?.id ||
+        '';
+      setSelectedPerfilId(nextId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar perfis.');
     } finally {
@@ -114,6 +123,8 @@ export function PermissoesMatrizPanel({
         initialKeysRef.current = new Set(data.chaves);
         setDirty(false);
         setPerfisVinculados([]);
+        setEditNome(data.perfil.nome);
+        setEditDescricao(data.perfil.descricao ?? '');
         const expandedDefaults: Record<string, boolean> = {};
         for (const tela of data.catalogo) {
           expandedDefaults[tela.id] = false;
@@ -153,6 +164,9 @@ export function PermissoesMatrizPanel({
   const selectedPerfil = perfis.find((item) => item.id === selectedPerfilId);
   const selectedUsuario = usuarios.find((item) => item.id === selectedUsuarioId);
   const hasSelection = mode === 'perfil' ? Boolean(selectedPerfilId) : Boolean(selectedUsuarioId);
+  const perfilMetaDirty =
+    Boolean(selectedPerfil) &&
+    (editNome.trim() !== selectedPerfil!.nome || editDescricao.trim() !== (selectedPerfil!.descricao ?? ''));
 
   const screenRows = useMemo(
     () =>
@@ -235,8 +249,55 @@ export function PermissoesMatrizPanel({
     );
     if (ok) {
       event.currentTarget.reset();
-      await loadPerfis();
+      const items = await listAdminPerfisConfiguraveis();
+      setPerfis(items);
+      const created = items.find((item) => item.nome === nome);
       setMode('perfil');
+      if (created) setSelectedPerfilId(created.id);
+    }
+  }
+
+  async function handleSavePerfilMeta() {
+    if (!selectedPerfilId || !perfilMetaDirty || savingPerfilMeta) return;
+    setSavingPerfilMeta(true);
+    setError(null);
+    try {
+      const ok = await mutate(
+        () =>
+          updateAdminPerfil(selectedPerfilId, {
+            nome: editNome.trim(),
+            descricao: editDescricao.trim() || null,
+          }),
+        'Dados do perfil atualizados.',
+      );
+      if (ok) {
+        await loadPerfis(selectedPerfilId);
+      }
+    } finally {
+      setSavingPerfilMeta(false);
+    }
+  }
+
+  async function handleToggleAtivo() {
+    if (!selectedPerfil) return;
+    const nextAtivo = !selectedPerfil.ativo;
+    const vinculados = selectedPerfil.usuariosVinculados ?? 0;
+
+    if (!nextAtivo && vinculados > 0) {
+      const confirmed = window.confirm(
+        `Este perfil possui ${vinculados} usuário(s) vinculado(s).\n\n` +
+          'A inativação não apaga histórico, permissões nem vínculos — apenas impede novos usos do perfil.\n\n' +
+          'Deseja inativar mesmo assim?',
+      );
+      if (!confirmed) return;
+    }
+
+    const ok = await mutate(
+      () => setAdminPerfilAtivo(selectedPerfil.id, nextAtivo),
+      nextAtivo ? 'Perfil reativado.' : 'Perfil inativado.',
+    );
+    if (ok) {
+      await loadPerfis(selectedPerfil.id);
     }
   }
 
@@ -244,24 +305,75 @@ export function PermissoesMatrizPanel({
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-[minmax(280px,360px)_1fr]">
-        <FormSection title="Novo perfil">
-          <form onSubmit={handleCreatePerfil} className="space-y-4">
-            <Field label="Nome do perfil">
-              <Input name="nomePerfil" required placeholder="Ex.: Coordenador de Zeladoria" />
-            </Field>
-            <Field label="Descrição">
-              <Input name="descricaoPerfil" placeholder="Opcional" />
-            </Field>
-            <Button type="submit" variant="outlined" className="w-full">
-              <Plus className="h-4 w-4" />
-              Criar perfil
-            </Button>
-          </form>
-          <p className="mt-3 text-[12px] text-[var(--ink-3)]">
-            Novos perfis nascem sem permissões. Selecione o perfil ao lado e marque as funções desejadas.
-          </p>
-        </FormSection>
+      <div className="grid gap-6 lg:grid-cols-[minmax(300px,380px)_1fr]">
+        <div className="space-y-6">
+          <FormSection title="Gestão de perfis">
+            <div className="max-h-[320px] space-y-2 overflow-y-auto pr-1">
+              {perfis.length === 0 ? (
+                <p className="text-[13px] text-[var(--ink-3)]">Nenhum perfil configurável ainda.</p>
+              ) : (
+                perfis.map((perfil) => {
+                  const active = perfil.id === selectedPerfilId && mode === 'perfil';
+                  return (
+                    <button
+                      key={perfil.id}
+                      type="button"
+                      onClick={() => {
+                        setMode('perfil');
+                        setSelectedPerfilId(perfil.id);
+                      }}
+                      className={`w-full rounded-[var(--r-md)] border px-3 py-2.5 text-left transition-colors ${
+                        active
+                          ? 'border-[var(--brand)] bg-[var(--brand-soft)]'
+                          : 'border-[var(--line)] hover:bg-[var(--surface-2)]'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-semibold text-[var(--ink)]">{perfil.nome}</p>
+                          <p className="mt-0.5 line-clamp-2 text-[11px] text-[var(--ink-3)]">
+                            {perfil.descricao || 'Sem descrição'}
+                          </p>
+                        </div>
+                        <span
+                          className={`shrink-0 rounded-[var(--r-pill)] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                            perfil.ativo
+                              ? 'bg-[var(--ok-soft,rgba(16,185,129,0.12))] text-[var(--ok,#059669)]'
+                              : 'bg-[var(--surface-2)] text-[var(--ink-3)]'
+                          }`}
+                        >
+                          {perfil.ativo ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </div>
+                      <p className="mt-1.5 text-[11px] text-[var(--ink-3)]">
+                        {perfil.usuariosVinculados ?? 0} usuário(s) vinculado(s)
+                        {perfil.sistema ? ' · sistema' : ''}
+                      </p>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </FormSection>
+
+          <FormSection title="Novo perfil">
+            <form onSubmit={(event) => void handleCreatePerfil(event)} className="space-y-4">
+              <Field label="Nome do perfil">
+                <Input name="nomePerfil" required placeholder="Ex.: Solicitação" />
+              </Field>
+              <Field label="Descrição">
+                <Input name="descricaoPerfil" placeholder="Opcional" />
+              </Field>
+              <Button type="submit" variant="outlined" className="w-full">
+                <Plus className="h-4 w-4" />
+                Criar perfil
+              </Button>
+            </form>
+            <p className="mt-3 text-[12px] text-[var(--ink-3)]">
+              Novos perfis nascem sem permissões. Selecione o perfil e marque as funções desejadas.
+            </p>
+          </FormSection>
+        </div>
 
         <FormSection title={mode === 'perfil' ? 'Permissões por perfil' : 'Permissões individuais por usuário'}>
           <div className="mb-4 flex flex-wrap gap-1.5">
@@ -285,6 +397,7 @@ export function PermissoesMatrizPanel({
                   {perfis.map((perfil) => (
                     <option key={perfil.id} value={perfil.id}>
                       {perfil.nome}
+                      {!perfil.ativo ? ' — inativo' : ''}
                       {perfil.sistema ? ' (sistema)' : ''}
                     </option>
                   ))}
@@ -319,9 +432,39 @@ export function PermissoesMatrizPanel({
           </div>
 
           {mode === 'perfil' && selectedPerfil ? (
-            <p className="mb-4 text-[13px] text-[var(--ink-3)]">
-              {selectedPerfil.descricao || 'Configure telas e funções para este perfil.'}
-            </p>
+            <div className="mb-4 space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Nome">
+                  <Input value={editNome} onChange={(event) => setEditNome(event.target.value)} disabled={savingPerfilMeta} />
+                </Field>
+                <Field label="Descrição">
+                  <Input
+                    value={editDescricao}
+                    onChange={(event) => setEditDescricao(event.target.value)}
+                    disabled={savingPerfilMeta}
+                  />
+                </Field>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outlined"
+                  size="sm"
+                  disabled={!perfilMetaDirty || savingPerfilMeta}
+                  onClick={() => void handleSavePerfilMeta()}
+                >
+                  <Save className="h-4 w-4" />
+                  Salvar dados
+                </Button>
+                <Button type="button" variant="outlined" size="sm" onClick={() => void handleToggleAtivo()}>
+                  <Power className="h-4 w-4" />
+                  {selectedPerfil.ativo ? 'Inativar perfil' : 'Reativar perfil'}
+                </Button>
+                <p className="text-[12px] text-[var(--ink-3)]">
+                  {selectedPerfil.usuariosVinculados ?? 0} usuário(s) · inativação preserva vínculos e permissões
+                </p>
+              </div>
+            </div>
           ) : null}
 
           {mode === 'usuario' && selectedUsuario ? (

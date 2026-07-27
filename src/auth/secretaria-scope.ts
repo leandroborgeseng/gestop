@@ -40,6 +40,12 @@ export function resolveSecretariaScopeIds(user: JwtPayload): string[] | undefine
   return [];
 }
 
+/**
+ * Acesso ao chamado por:
+ * - Secretaria responsável pela execução (`chamado.secretariaId`)
+ * - Secretaria do próprio (`unidade.secretariaId`)
+ * - Secretaria da equipe atualmente atribuída (`equipe.secretariaId`) — encaminhamento operacional
+ */
 export function resolveChamadoSecretariaFilter(user: JwtPayload): Prisma.ChamadoWhereInput {
   const ids = resolveSecretariaScopeIds(user);
   if (!ids) return {};
@@ -47,11 +53,19 @@ export function resolveChamadoSecretariaFilter(user: JwtPayload): Prisma.Chamado
   if (ids.length === 1) {
     const secretariaId = ids[0];
     return {
-      OR: [{ secretariaId }, { unidade: { secretariaId } }],
+      OR: [
+        { secretariaId },
+        { unidade: { secretariaId } },
+        { equipe: { secretariaId } },
+      ],
     };
   }
   return {
-    OR: [{ secretariaId: { in: ids } }, { unidade: { secretariaId: { in: ids } } }],
+    OR: [
+      { secretariaId: { in: ids } },
+      { unidade: { secretariaId: { in: ids } } },
+      { equipe: { secretariaId: { in: ids } } },
+    ],
   };
 }
 
@@ -69,12 +83,16 @@ export function resolveUnidadeSecretariaFilter(user: JwtPayload): Prisma.Unidade
   return ids.length === 1 ? { secretariaId: ids[0] } : { secretariaId: { in: ids } };
 }
 
-/** Visualização: execução OU próprio da secretaria no escopo. */
+/** Visualização: execução, próprio OU secretaria da equipe atribuída. */
 export function assertChamadoSecretariaAccess(
   user: JwtPayload,
   chamado: {
     secretariaId: string;
     unidade?: {
+      secretariaId?: string | null;
+      secretaria?: { id: string } | null;
+    } | null;
+    equipe?: {
       secretariaId?: string | null;
       secretaria?: { id: string } | null;
     } | null;
@@ -90,12 +108,26 @@ export function assertChamadoSecretariaAccess(
   if (ids.includes(chamado.secretariaId)) return;
   const unidadeSec = chamado.unidade?.secretariaId ?? chamado.unidade?.secretaria?.id;
   if (unidadeSec && ids.includes(unidadeSec)) return;
+  const equipeSec = chamado.equipe?.secretariaId ?? chamado.equipe?.secretaria?.id;
+  if (equipeSec && ids.includes(equipeSec)) return;
 
   throw new ForbiddenException('Chamado fora da secretaria autorizada.');
 }
 
-/** Tratativa operacional: somente secretaria responsável pela execução. */
-export function assertChamadoExecucaoAccess(user: JwtPayload, chamado: { secretariaId: string }) {
+/**
+ * Tratativa operacional: secretaria de execução OU secretaria da equipe atribuída
+ * (encaminhamento operacional sem alterar a secretaria responsável original).
+ */
+export function assertChamadoExecucaoAccess(
+  user: JwtPayload,
+  chamado: {
+    secretariaId: string;
+    equipe?: {
+      secretariaId?: string | null;
+      secretaria?: { id: string } | null;
+    } | null;
+  },
+) {
   if (user.permissoes.includes('usuarios.gerenciar') || user.acessoTodasSecretarias) {
     if (!user.secretariaId?.trim()) return;
   }
@@ -103,6 +135,8 @@ export function assertChamadoExecucaoAccess(user: JwtPayload, chamado: { secreta
   const ids = resolveSecretariaScopeIds(user);
   if (!ids) return;
   if (ids.includes(chamado.secretariaId)) return;
+  const equipeSec = chamado.equipe?.secretariaId ?? chamado.equipe?.secretaria?.id;
+  if (equipeSec && ids.includes(equipeSec)) return;
 
   throw new ForbiddenException('Sem permissão de tratativa: secretaria de execução diferente da ativa.');
 }

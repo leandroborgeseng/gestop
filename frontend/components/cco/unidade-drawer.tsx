@@ -93,7 +93,9 @@ export function UnidadeDrawer({
 
   if (!open || !unidade || !mounted) return null;
 
-  const ncCount = detalhe?.pendenciasDetalhadas.naoConformidades.length ?? unidade.pendencias.naoConformidadesAbertas;
+  const ncCount =
+    detalhe?.pendenciasDetalhadas.naoConformidades.filter((nc) => nc.pendenteAtiva).length ??
+    unidade.pendencias.naoConformidadesAbertas;
   const chamadosCount = detalhe?.pendenciasDetalhadas.chamados.length ?? unidade.pendencias.chamadosAbertos;
   const fiscCount = detalhe?.ultimasFiscalizacoes.length ?? unidade.totais.fiscalizacoes;
 
@@ -280,28 +282,49 @@ function FiscTab({ unidade }: { unidade: UnidadeDetalhe }) {
 function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
   const items = unidade.pendenciasDetalhadas.naoConformidades;
   if (items.length === 0) {
-    return <EmptyTab icon={AlertTriangle} message="Nenhuma não conformidade aberta" ok />;
+    return <EmptyTab icon={AlertTriangle} message="Nenhuma não conformidade registrada" ok />;
   }
 
   return (
     <div className="space-y-2">
-      {items.map((item) => (
-        <div key={item.id} className="flex gap-3 rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface)] text-[var(--warn)]">
-            <AlertTriangle className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-semibold text-[var(--ink)]">
-              {item.item.codigo} — {item.item.titulo}
-            </p>
-            <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{item.descricao}</p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <Badge variant="warning">{item.severidade}</Badge>
-              <Badge variant="neutral">{item.status}</Badge>
+      {items.map((item) => {
+        const situacao = item.situacaoVisual ?? (item.chamado ? 'VINCULADA_EM_ANDAMENTO' : 'ABERTA');
+        const isPendente = situacao === 'ABERTA' || situacao === 'VINCULADA_EM_ANDAMENTO';
+        return (
+          <div
+            key={item.id}
+            className={
+              isPendente
+                ? 'flex gap-3 rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3'
+                : 'flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3'
+            }
+          >
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface)] text-[var(--warn)]">
+              <AlertTriangle className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-semibold text-[var(--ink)]">
+                {item.item.codigo} — {item.item.titulo}
+              </p>
+              <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{item.descricao}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                <Badge variant="warning">{item.severidade}</Badge>
+                <Badge variant={isPendente ? 'warning' : 'neutral'}>
+                  {situacao === 'ABERTA'
+                    ? 'Sem chamado'
+                    : situacao === 'VINCULADA_EM_ANDAMENTO'
+                      ? item.chamado?.codigo ?? 'Chamado em andamento'
+                      : situacao === 'BAIXADA_MANUAL'
+                        ? 'Baixada'
+                        : situacao === 'RESOLVIDA_CHAMADO'
+                          ? 'Resolvida'
+                          : item.status}
+                </Badge>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -18,9 +18,12 @@ function isUsableBackendUrl(value: string | undefined): value is string {
 }
 
 /**
- * URL do NestJS para o proxy server-side (/api-sigma).
- * Em producao no Railway, defina no servico frontend (supportive-light):
- *   BACKEND_INTERNAL_URL=http://${{gestop.RAILWAY_PRIVATE_DOMAIN}}:${{gestop.BACKEND_LISTEN_PORT}}
+ * URL do NestJS para o proxy server-side (/api-sigma e /api-gestop).
+ *
+ * Coolify (compose): BACKEND_INTERNAL_URL=http://api:3001
+ * Railway: BACKEND_INTERNAL_URL=http://${{gestop.RAILWAY_PRIVATE_DOMAIN}}:${{gestop.PORT}}
+ *
+ * Nao use NEXT_PUBLIC_API_URL no browser — o proxy Next.js e o caminho suportado.
  */
 export function resolveBackendUrl() {
   const explicit = [
@@ -36,6 +39,11 @@ export function resolveBackendUrl() {
 
   if (process.env.NODE_ENV !== 'production') {
     return `http://127.0.0.1:${process.env.BACKEND_PORT ?? '3001'}`;
+  }
+
+  // Compose Coolify: servico "api" na rede interna
+  if (process.env.COOLIFY || process.env.COOLIFY_RESOURCE_UUID) {
+    return `http://${process.env.BACKEND_PRIVATE_HOST ?? 'api'}:${process.env.BACKEND_SERVICE_PORT ?? '3001'}`;
   }
 
   const host = process.env.BACKEND_PRIVATE_HOST ?? 'gestop.railway.internal';

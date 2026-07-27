@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
 import { RequirePermissions } from '../auth/permissions';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { ParseUuidPipe } from '../common/parse-uuid.pipe';
 import { MobileSyncFiscalizacaoDto } from './mobile.dto';
 import { MobileService } from './mobile.service';
 
@@ -16,6 +17,12 @@ export class MobileController {
   @Get('field-package')
   getFieldPackage(@CurrentUser() user: JwtPayload) {
     return this.mobileService.getFieldPackage(user);
+  }
+
+  @RequirePermissions('fiscalizacoes.executar')
+  @Get('unidades/:id/chamados-pendentes')
+  listChamadosPendentes(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.mobileService.listChamadosPendentesUnidade(id, user);
   }
 
   @RequirePermissions('fiscalizacoes.executar')

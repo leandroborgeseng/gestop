@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
+import { BackupModule } from './backup/backup.module';
 import { ChecklistsModule } from './checklists/checklists.module';
 import { GlobalHttpExceptionFilter } from './common/http-exception.filter';
 import { HealthController, RootController } from './health.controller';
@@ -31,6 +32,7 @@ import { LgpdModule } from './lgpd/lgpd.module';
     EmailModule,
     AuthModule,
     AdminModule,
+    BackupModule,
     ChecklistsModule,
     CronogramaModule,
     MobileModule,

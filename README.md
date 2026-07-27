@@ -34,6 +34,20 @@ npm run dev
 
 O app Next.js inicia por padrao em `http://localhost:3000`.
 
+## Deploy Coolify
+
+Stack completa (PostGIS + API + Web) no mesmo padrao dos outros apps deste ambiente:
+
+- Compose: [`docker-compose.coolify.yml`](docker-compose.coolify.yml)
+- Guia: [`COOLIFY.md`](COOLIFY.md)
+- Variaveis: [`.env.coolify.example`](.env.coolify.example)
+
+```bash
+cp .env.coolify.example .env
+# edite POSTGRES_PASSWORD, JWT_SECRET, INITIAL_ADMIN_PASSWORD
+docker compose -f docker-compose.coolify.yml up -d --build
+```
+
 ## Rotas da Fase 2
 
 API:

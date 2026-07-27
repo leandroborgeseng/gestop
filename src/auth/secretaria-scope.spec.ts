@@ -48,15 +48,23 @@ describe('secretaria-scope', () => {
   it('admin com secretaria ativa filtra pela secretaria', () => {
     expect(resolveSecretariaScopeId(adminSecretariaAtiva)).toBe('sec-a');
     expect(resolveChamadoSecretariaFilter(adminSecretariaAtiva)).toEqual({
-      OR: [{ secretariaId: 'sec-a' }, { unidade: { secretariaId: 'sec-a' } }],
+      OR: [
+        { secretariaId: 'sec-a' },
+        { unidade: { secretariaId: 'sec-a' } },
+        { equipe: { secretariaId: 'sec-a' } },
+      ],
     });
   });
 
-  it('aplica filtro para secretaria ativa (execução ou próprio)', () => {
+  it('aplica filtro para secretaria ativa (execução, próprio ou equipe)', () => {
     expect(isSecretariaScoped(gestorSecretaria)).toBe(true);
     expect(resolveSecretariaScopeId(gestorSecretaria)).toBe('sec-educacao');
     expect(resolveChamadoSecretariaFilter(gestorSecretaria)).toEqual({
-      OR: [{ secretariaId: 'sec-educacao' }, { unidade: { secretariaId: 'sec-educacao' } }],
+      OR: [
+        { secretariaId: 'sec-educacao' },
+        { unidade: { secretariaId: 'sec-educacao' } },
+        { equipe: { secretariaId: 'sec-educacao' } },
+      ],
     });
   });
 
@@ -69,12 +77,27 @@ describe('secretaria-scope', () => {
     ).not.toThrow();
   });
 
-  it('tratativa exige secretaria de execução', () => {
+  it('visualização permite secretaria da equipe atribuída', () => {
+    expect(() =>
+      assertChamadoSecretariaAccess(gestorSecretaria, {
+        secretariaId: 'sec-servicos',
+        equipe: { secretariaId: 'sec-educacao' },
+      }),
+    ).not.toThrow();
+  });
+
+  it('tratativa permite execução ou secretaria da equipe atribuída', () => {
     expect(() =>
       assertChamadoExecucaoAccess(gestorSecretaria, { secretariaId: 'sec-servicos' }),
     ).toThrow(/tratativa|execução/i);
     expect(() =>
       assertChamadoExecucaoAccess(gestorSecretaria, { secretariaId: 'sec-educacao' }),
+    ).not.toThrow();
+    expect(() =>
+      assertChamadoExecucaoAccess(gestorSecretaria, {
+        secretariaId: 'sec-servicos',
+        equipe: { secretariaId: 'sec-educacao' },
+      }),
     ).not.toThrow();
   });
 

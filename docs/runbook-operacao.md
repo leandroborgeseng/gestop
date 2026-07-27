@@ -126,6 +126,12 @@ npm run import:unidades data/unidades-franca.csv
 3. Permitir notificações para aviso de sync concluído
 4. Service worker cacheia shell; fila offline continua no IndexedDB
 
+Nome no atalho (ícone): **SIGMA** (`short_name`); nome completo no manifesto:
+`SIGMA — Sistema Integrado de Gestão de Manutenção e Ativos`.
+
+**Instalações antigas:** o SO costuma manter o nome/ícone da primeira instalação.
+Para atualizar o rótulo “Vistoria” → “SIGMA”, remova o atalho/app instalado e reinstale a partir de `/mobile`.
+
 ## LGPD
 
 - Admin → seção LGPD: purge de auditoria antiga

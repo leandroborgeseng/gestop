@@ -14,6 +14,8 @@ export type ResponseDraft = {
   valorTexto?: string;
   valorNumero?: number;
   valorBooleano?: boolean | null;
+  /** Quando NC e item gera chamado: true = abre chamado; false = só registra NC pendente. */
+  gerarChamado?: boolean;
   evidencias?: EvidenceDraft[];
   /** @deprecated Preferir `evidencias`. Mantido para rascunhos/offline antigos. */
   evidenceDataUrl?: string;
@@ -124,6 +126,9 @@ export function buildRespostaPayload(
     valorTexto: item.tipo === 'ESCALA_LIKERT' ? response.valorTexto : response.valorTexto,
     valorNumero: item.tipo === 'ESCALA_LIKERT' ? response.valorNumero : undefined,
     comentario: response.comentario,
+    ...(response.conformidade === 'NAO_CONFORME' && item.geraNaoConformidade
+      ? { gerarChamado: response.gerarChamado !== false }
+      : {}),
     evidencias,
   };
 }

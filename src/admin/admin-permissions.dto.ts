@@ -14,6 +14,22 @@ export class PerfilCreateDto {
   ativo?: boolean;
 }
 
+export class PerfilUpdateDto {
+  @IsOptional()
+  @IsString()
+  @MinLength(2)
+  nome?: string;
+
+  @IsOptional()
+  @IsString()
+  descricao?: string | null;
+}
+
+export class PerfilAtivoDto {
+  @IsBoolean()
+  ativo!: boolean;
+}
+
 export class PerfilMatrizDto {
   @IsArray()
   @IsString({ each: true })

@@ -1,10 +1,15 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { UnidadeTipo, RegiaoUnidade } from '@prisma/client';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
-import { RequirePermissions } from '../auth/permissions';
+import { RequireAnyPermissions, RequirePermissions } from '../auth/permissions';
+import { ParseUuidPipe } from '../common/parse-uuid.pipe';
+import {
+  BaixarNaoConformidadeDto,
+  VincularChamadoNcDto,
+} from './operacional.dto';
 import { OperacionalService } from './operacional.service';
 import {
   ChamadosMapaQuery,
@@ -103,8 +108,43 @@ export class OperacionalController {
   }
 
   @Get('unidades/:id')
-  getUnidadeDetalhe(@Param('id') id: string) {
+  getUnidadeDetalhe(@Param('id', ParseUuidPipe) id: string) {
     return this.operacionalService.getUnidadeDetalhe(id);
+  }
+
+  @Get('unidades/:id/chamados-para-vincular')
+  listChamadosParaVincular(
+    @Param('id', ParseUuidPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('tipoChamadoId') tipoChamadoId?: string,
+  ) {
+    return this.operacionalService.listChamadosParaVincularNc(id, user, {
+      search: normalizeText(search),
+      status: normalizeText(status),
+      tipoChamadoId: normalizeText(tipoChamadoId),
+    });
+  }
+
+  @RequireAnyPermissions('dashboard.visualizar', 'chamados.gerenciar')
+  @Post('nao-conformidades/:id/vincular-chamado')
+  vincularChamado(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: VincularChamadoNcDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.operacionalService.vincularChamadoNc(id, body.chamadoId, user);
+  }
+
+  @RequireAnyPermissions('dashboard.visualizar', 'chamados.gerenciar')
+  @Post('nao-conformidades/:id/baixa')
+  baixarNaoConformidade(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: BaixarNaoConformidadeDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.operacionalService.baixarNaoConformidade(id, body.motivo, user);
   }
 }
 

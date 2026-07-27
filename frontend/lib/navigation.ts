@@ -10,11 +10,17 @@ import {
   LayoutGrid,
   MapPin,
   Megaphone,
+  PlusCircle,
   Plug,
   Settings,
 } from 'lucide-react';
 
-import { isMatrixPermissionKey, navItemAllowedByMatrix, screenHasVisualizarAccess } from '@/lib/permissions-matrix';
+import {
+  hasAbrirChamadoAccess,
+  isMatrixPermissionKey,
+  navItemAllowedByMatrix,
+  screenHasVisualizarAccess,
+} from '@/lib/permissions-matrix';
 
 export type NavBadgeKey = 'chamados' | 'integracoes';
 
@@ -72,6 +78,15 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'chamados.gerenciar',
     mobilePrimary: true,
     badgeKey: 'chamados',
+  },
+  {
+    id: 'novo_chamado',
+    label: 'Novo chamado',
+    shortLabel: 'Novo',
+    href: '/chamados/novo',
+    icon: PlusCircle,
+    permissions: ['chamados.abrir', 'chamados.gerenciar'],
+    mobilePrimary: true,
   },
   {
     id: 'execucao',
@@ -132,13 +147,13 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export const NAV_GROUPS: NavGroup[] = [
-  { title: 'Operação', itemIds: ['cco', 'mobile', 'vistorias', 'chamados', 'execucao'] },
+  { title: 'Operação', itemIds: ['cco', 'mobile', 'vistorias', 'novo_chamado', 'chamados', 'execucao'] },
   { title: 'Gestão', itemIds: ['dashboard', 'cronograma', 'relatorios'] },
   { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
 ];
 
 /** Atalhos fixos na barra inferior mobile — Execução sempre incluído quando permitido. */
-const MOBILE_BAR_CORE = ['cco', 'mobile', 'chamados', 'execucao'] as const;
+const MOBILE_BAR_CORE = ['cco', 'mobile', 'novo_chamado', 'chamados', 'execucao'] as const;
 
 export function getVisibleNavItems(permissions: string[]) {
   const usesMatrix = permissions.some(isMatrixPermissionKey);
@@ -214,8 +229,17 @@ export function isNavActive(pathname: string, href: string) {
     return pathname === '/vistorias' || pathname.startsWith('/vistorias/');
   }
 
+  if (href === '/chamados/novo') {
+    return pathname === '/chamados/novo';
+  }
+
   if (href === '/chamados') {
-    return pathname === '/chamados' || (pathname.startsWith('/chamados/') && !pathname.startsWith('/chamados/em-execucao'));
+    return (
+      pathname === '/chamados' ||
+      (pathname.startsWith('/chamados/') &&
+        !pathname.startsWith('/chamados/em-execucao') &&
+        !pathname.startsWith('/chamados/novo'))
+    );
   }
 
   if (href === '/execucao') {
@@ -226,12 +250,16 @@ export function isNavActive(pathname: string, href: string) {
 }
 
 export function hasChamadosGerenciar(permissions: string[]) {
-  // Com matriz ativa, Triagem/Chamados exige visualizar da tela chamados — não basta Execução.
+  // Com matriz ativa, Triagem/Chamados exige visualizar da tela chamados — não basta Execução nem só Novo chamado.
   const hasMatrix = permissions.some(isMatrixPermissionKey);
   if (hasMatrix) {
     return screenHasVisualizarAccess('chamados', permissions);
   }
   return permissions.includes('chamados.gerenciar');
+}
+
+export function hasAbrirChamado(permissions: string[]) {
+  return hasAbrirChamadoAccess(permissions);
 }
 
 export function hasChamadosExecutar(permissions: string[]) {

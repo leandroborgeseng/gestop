@@ -40,8 +40,8 @@ export async function GET() {
         message: 'Frontend nao conseguiu contatar o backend.',
         error: message,
         hint: config.usingFallback
-          ? 'Defina BACKEND_INTERNAL_URL no servico frontend do Railway e redeploy.'
-          : 'Verifique se o servico gestop (backend) esta Running nos logs do Railway.',
+          ? 'Defina BACKEND_INTERNAL_URL no servico web (Coolify: http://api:3001) e redeploy.'
+          : 'Verifique se o servico api (backend) esta healthy nos logs do Coolify/Railway.',
       },
       { status: 502 },
     );

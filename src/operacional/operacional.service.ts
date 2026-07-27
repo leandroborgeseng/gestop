@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  AuditAction,
   ChamadoPrioridade,
   ChamadoStatus,
   FiscalizacaoStatus,
@@ -20,6 +21,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import {
   applyInMemoryUnidadeFilters,
+  countPendenciasUnicas,
   DEFAULT_TIPOS_PENDENCIA,
   isChamadoForaPrazo,
   LEGACY_TIPOS_PENDENCIA,
@@ -35,7 +37,8 @@ import {
   UnidadeVistoriaNotaResumo,
 } from './operacional.types';
 
-const NON_CONFORMITY_OPEN_STATUSES: NaoConformidadeStatus[] = [
+/** Status de NC que ainda podem ser pendência (antes do filtro de chamado). */
+const NON_CONFORMITY_CANDIDATE_STATUSES: NaoConformidadeStatus[] = [
   NaoConformidadeStatus.ABERTA,
   NaoConformidadeStatus.EM_TRIAGEM,
   NaoConformidadeStatus.CHAMADO_GERADO,
@@ -64,9 +67,10 @@ export class OperacionalService {
       totalSecretarias,
       fiscalizacoesConcluidas,
       naoConformidadesAbertas,
+      naoConformidadesSemChamadoAberto,
       chamadosAbertos,
       eventosSyncPendentes,
-      cronogramasAtrasados,
+      vistoriasAtrasadas,
     ] = await Promise.all([
       this.prisma.unidadePublica.count({ where: { ...unidadeWhere, ativo: true } }),
       !scopeIds
@@ -76,7 +80,15 @@ export class OperacionalService {
           : this.prisma.secretaria.count({ where: { id: { in: scopeIds }, ativo: true } }),
       this.prisma.fiscalizacao.count({ where: { ...fiscalizacaoWhere, status: 'CONCLUIDA' } }),
       this.prisma.naoConformidade.count({
-        where: { ...ncWhere, status: { in: NON_CONFORMITY_OPEN_STATUSES } },
+        where: { ...ncWhere, ...this.buildNcPendenciaWhere() },
+      }),
+      // NC ainda sem chamado — evita somar a mesma pendência duas vezes (NC + chamado).
+      this.prisma.naoConformidade.count({
+        where: {
+          ...ncWhere,
+          status: { in: [NaoConformidadeStatus.ABERTA, NaoConformidadeStatus.EM_TRIAGEM] },
+          chamado: { is: null },
+        },
       }),
       this.prisma.chamado.count({
         where: { ...chamadoWhere, status: { in: CHAMADO_OPEN_STATUSES } },
@@ -84,16 +96,26 @@ export class OperacionalService {
       this.prisma.offlineSyncEvent.count({
         where: { status: { in: ['PENDENTE', 'PROCESSANDO', 'CONFLITO', 'FALHOU'] } },
       }),
-      this.prisma.cronogramaChecagem.findMany({
+      // ID único de cada vistoria programada atrasada (não agrupar por próprio).
+      this.prisma.cronogramaChecagem.count({
         where: {
           ativo: true,
           proximaChecagemEm: { lt: startOfDay(new Date()) },
           unidade: { ...unidadeWhere, ativo: true },
         },
-        distinct: ['unidadeId'],
-        select: { unidadeId: true },
       }),
     ]);
+
+    // Total único: NC sem chamado + chamados abertos + vistorias atrasadas.
+    // SLA fora do prazo é só classificação visual e NÃO entra nesta soma.
+    const totalPendencias = countPendenciasUnicas(
+      {
+        chamadosAbertos,
+        naoConformidadesSemChamadoAberto,
+        vistoriasAtrasadas,
+      },
+      DEFAULT_TIPOS_PENDENCIA,
+    );
 
     return {
       totalUnidades: unidadesAtivas,
@@ -102,7 +124,8 @@ export class OperacionalService {
       fiscalizacoesConcluidas,
       naoConformidadesAbertas,
       chamadosAbertos,
-      vistoriasAtrasadas: cronogramasAtrasados.length,
+      vistoriasAtrasadas,
+      totalPendencias,
       eventosSyncPendentes,
     };
   }
@@ -300,6 +323,9 @@ export class OperacionalService {
 
     const notasPorUnidade = await this.loadUltimasNotasPorUnidade(unidades.map((unidade) => unidade.id));
     const vistoriasAtrasadas = await this.loadVistoriasAtrasadasPorUnidade(unidades.map((unidade) => unidade.id));
+    const ncsSemChamadoPorUnidade = await this.loadNcsSemChamadoCountPorUnidade(
+      unidades.map((unidade) => unidade.id),
+    );
 
     const mapped = unidades.map((unidade) => {
       const chamadosSlaForaPrazo = unidade.chamados.filter((chamado) =>
@@ -307,9 +333,11 @@ export class OperacionalService {
       ).length;
       const vistoriaAtrasada = vistoriasAtrasadas.get(unidade.id) ?? null;
       const semVistoria = vistoriaAtrasada !== null;
+      const naoConformidadesSemChamadoAberto = ncsSemChamadoPorUnidade.get(unidade.id) ?? 0;
       const countsForSituacao = {
         fiscalizacoes: unidade._count.fiscalizacoes,
         naoConformidadesAbertas: usesNc ? unidade._count.naoConformidades : 0,
+        naoConformidadesSemChamadoAberto: usesNc ? naoConformidadesSemChamadoAberto : 0,
         chamadosAbertos: usesChamados ? unidade._count.chamados : 0,
         chamadosSlaForaPrazo: usesChamados ? chamadosSlaForaPrazo : 0,
         semVistoria: usesVistorias ? semVistoria : false,
@@ -333,10 +361,20 @@ export class OperacionalService {
         ...mappedUnidade,
         pendencias: {
           naoConformidadesAbertas: unidade._count.naoConformidades,
+          naoConformidadesSemChamadoAberto,
           chamadosAbertos: unidade._count.chamados,
           semVistoria,
           vistoriaAtrasada,
         },
+        // Recalcula com totais reais (não mascarados pelo chip de tipo) + tipos ativos.
+        pendenciasUnicas: countPendenciasUnicas(
+          {
+            chamadosAbertos: usesChamados ? unidade._count.chamados : 0,
+            naoConformidadesSemChamadoAberto: usesNc ? naoConformidadesSemChamadoAberto : 0,
+            vistoriasAtrasadas: usesVistorias && semVistoria ? 1 : 0,
+          },
+          tiposPendencia,
+        ),
         totais: {
           fiscalizacoes: unidade._count.fiscalizacoes,
           naoConformidadesAbertas: unidade._count.naoConformidades,
@@ -544,18 +582,70 @@ export class OperacionalService {
           },
         },
         naoConformidades: {
-          where: { status: { in: NON_CONFORMITY_OPEN_STATUSES } },
           orderBy: { registradaEm: 'desc' },
-          take: 10,
+          take: 50,
           select: {
             id: true,
             descricao: true,
             severidade: true,
             status: true,
             registradaEm: true,
+            resolvidaEm: true,
+            motivoBaixa: true,
+            baixadaEm: true,
             item: {
               select: {
+                id: true,
                 codigo: true,
+                titulo: true,
+              },
+            },
+            resposta: {
+              select: {
+                id: true,
+                conformidade: true,
+                valorTexto: true,
+                valorBooleano: true,
+                valorNumero: true,
+                comentario: true,
+              },
+            },
+            fiscalizacao: {
+              select: {
+                id: true,
+                concluidaEm: true,
+                iniciadaEm: true,
+                checklistVersao: {
+                  select: {
+                    versao: true,
+                    checklist: { select: { id: true, nome: true } },
+                  },
+                },
+              },
+            },
+            evidencias: {
+              orderBy: { capturadaEm: 'asc' },
+              take: 8,
+              select: {
+                id: true,
+                tipo: true,
+                url: true,
+                mimeType: true,
+                capturadaEm: true,
+              },
+            },
+            registradaPor: {
+              select: { id: true, nome: true },
+            },
+            baixadaPor: {
+              select: { id: true, nome: true },
+            },
+            chamado: {
+              select: {
+                id: true,
+                codigo: true,
+                status: true,
+                prioridade: true,
                 titulo: true,
               },
             },
@@ -589,7 +679,7 @@ export class OperacionalService {
               where: { status: FiscalizacaoStatus.CONCLUIDA },
             },
             naoConformidades: {
-              where: { status: { in: NON_CONFORMITY_OPEN_STATUSES } },
+              where: this.buildNcPendenciaWhere(),
             },
             chamados: {
               where: { status: { in: CHAMADO_OPEN_STATUSES } },
@@ -607,12 +697,15 @@ export class OperacionalService {
     const vistoriaAtrasada =
       (await this.loadVistoriasAtrasadasPorUnidade([id])).get(id) ?? null;
     const semVistoria = vistoriaAtrasada !== null;
+    const naoConformidadesSemChamadoAberto =
+      (await this.loadNcsSemChamadoCountPorUnidade([id])).get(id) ?? 0;
 
     const resumo = mapUnidadeOperacional(
       unidade as UnidadeBaseRecord,
       {
         fiscalizacoes: unidade._count.fiscalizacoes,
         naoConformidadesAbertas: unidade._count.naoConformidades,
+        naoConformidadesSemChamadoAberto,
         chamadosAbertos: unidade._count.chamados,
         chamadosSlaForaPrazo,
         semVistoria,
@@ -625,9 +718,18 @@ export class OperacionalService {
       ...resumo,
       pendencias: {
         ...resumo.pendencias,
+        naoConformidadesSemChamadoAberto,
         semVistoria,
         vistoriaAtrasada,
       },
+      pendenciasUnicas: countPendenciasUnicas(
+        {
+          chamadosAbertos: unidade._count.chamados,
+          naoConformidadesSemChamadoAberto,
+          vistoriasAtrasadas: semVistoria ? 1 : 0,
+        },
+        LEGACY_TIPOS_PENDENCIA,
+      ),
       secretaria: unidade.secretaria,
       ultimasFiscalizacoes: unidade.fiscalizacoes.map((fiscalizacao) => ({
         ...fiscalizacao,
@@ -637,9 +739,343 @@ export class OperacionalService {
             : Number(fiscalizacao.distanciaCheckinMetros),
       })),
       pendenciasDetalhadas: {
-        naoConformidades: unidade.naoConformidades,
+        naoConformidades: unidade.naoConformidades.map((nc) => this.serializeNaoConformidadeDetalhe(nc)),
         chamados: unidade.chamados,
       },
+    };
+  }
+
+  async listChamadosParaVincularNc(
+    unidadeId: string,
+    user: JwtPayload,
+    filters?: { search?: string; status?: string; tipoChamadoId?: string },
+  ) {
+    const scope = resolveUnidadeSecretariaFilter(user);
+    const unidade = await this.prisma.unidadePublica.findFirst({
+      where: { id: unidadeId, ...scope },
+      select: { id: true },
+    });
+    if (!unidade) {
+      throw new NotFoundException('Próprio não encontrado.');
+    }
+
+    const search = filters?.search?.trim();
+    const statusFilter = filters?.status?.trim() as ChamadoStatus | undefined;
+    const chamados = await this.prisma.chamado.findMany({
+      where: {
+        unidadeId,
+        naoConformidadeId: null,
+        ...(statusFilter ? { status: statusFilter } : { status: { in: CHAMADO_OPEN_STATUSES } }),
+        ...(filters?.tipoChamadoId ? { tipoChamadoId: filters.tipoChamadoId } : {}),
+        ...(search
+          ? {
+              OR: [
+                { codigo: { contains: search, mode: 'insensitive' } },
+                { titulo: { contains: search, mode: 'insensitive' } },
+                { descricao: { contains: search, mode: 'insensitive' } },
+                { tipoChamado: { nome: { contains: search, mode: 'insensitive' } } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 40,
+      select: {
+        id: true,
+        codigo: true,
+        titulo: true,
+        descricao: true,
+        status: true,
+        prioridade: true,
+        createdAt: true,
+        tipoChamado: { select: { id: true, nome: true } },
+      },
+    });
+
+    return {
+      items: chamados.map((item) => ({
+        ...item,
+        createdAt: item.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  async vincularChamadoNc(naoConformidadeId: string, chamadoId: string, user: JwtPayload) {
+    const nc = await this.prisma.naoConformidade.findUnique({
+      where: { id: naoConformidadeId },
+      include: {
+        chamado: true,
+        unidade: { select: { id: true, secretariaId: true } },
+      },
+    });
+    if (!nc) {
+      throw new NotFoundException('Não conformidade não encontrada.');
+    }
+    this.assertUnidadeInScope(nc.unidade.secretariaId, user);
+
+    if (nc.status === NaoConformidadeStatus.BAIXADA_MANUAL || nc.status === NaoConformidadeStatus.RESOLVIDA) {
+      throw new BadRequestException('Não conformidade já encerrada.');
+    }
+    if (nc.chamado) {
+      throw new BadRequestException('Não conformidade já possui chamado vinculado.');
+    }
+
+    const chamado = await this.prisma.chamado.findUnique({
+      where: { id: chamadoId },
+      select: {
+        id: true,
+        codigo: true,
+        unidadeId: true,
+        naoConformidadeId: true,
+        status: true,
+      },
+    });
+    if (!chamado) {
+      throw new NotFoundException('Chamado não encontrado.');
+    }
+    if (chamado.unidadeId !== nc.unidadeId) {
+      throw new BadRequestException('O chamado deve pertencer ao mesmo próprio da NC.');
+    }
+    if (chamado.naoConformidadeId) {
+      throw new BadRequestException('Chamado já vinculado a outra não conformidade.');
+    }
+    if (chamado.status === ChamadoStatus.CONCLUIDO || chamado.status === ChamadoStatus.CANCELADO) {
+      throw new BadRequestException('Não é possível vincular a chamado concluído ou cancelado.');
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.chamado.update({
+        where: { id: chamado.id },
+        data: { naoConformidadeId: nc.id },
+      });
+      await tx.evidencia.updateMany({
+        where: { naoConformidadeId: nc.id },
+        data: { chamadoId: chamado.id },
+      });
+      const ncUpdated = await tx.naoConformidade.update({
+        where: { id: nc.id },
+        data: { status: NaoConformidadeStatus.CHAMADO_GERADO },
+        include: {
+          chamado: { select: { id: true, codigo: true, status: true } },
+          item: { select: { codigo: true, titulo: true } },
+        },
+      });
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'NaoConformidade',
+          entidadeId: nc.id,
+          valorAntigo: { status: nc.status, chamadoId: null } as Prisma.InputJsonValue,
+          valorNovo: {
+            status: NaoConformidadeStatus.CHAMADO_GERADO,
+            chamadoId: chamado.id,
+            chamadoCodigo: chamado.codigo,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await tx.historicoStatus.create({
+        data: {
+          entidadeTipo: 'NaoConformidade',
+          entidadeId: nc.id,
+          statusAnterior: nc.status,
+          statusNovo: NaoConformidadeStatus.CHAMADO_GERADO,
+          motivo: `Vinculada ao chamado ${chamado.codigo}.`,
+          alteradoPorId: user.sub,
+          metadata: { chamadoId: chamado.id },
+        },
+      });
+      return ncUpdated;
+    });
+
+    return updated;
+  }
+
+  async baixarNaoConformidade(naoConformidadeId: string, motivo: string, user: JwtPayload) {
+    const justificativa = motivo?.trim();
+    if (!justificativa) {
+      throw new BadRequestException('Informe a justificativa da baixa.');
+    }
+
+    const nc = await this.prisma.naoConformidade.findUnique({
+      where: { id: naoConformidadeId },
+      include: {
+        chamado: { select: { id: true, codigo: true, status: true } },
+        unidade: { select: { id: true, secretariaId: true } },
+      },
+    });
+    if (!nc) {
+      throw new NotFoundException('Não conformidade não encontrada.');
+    }
+    this.assertUnidadeInScope(nc.unidade.secretariaId, user);
+
+    if (
+      nc.status === NaoConformidadeStatus.BAIXADA_MANUAL ||
+      nc.status === NaoConformidadeStatus.RESOLVIDA ||
+      nc.status === NaoConformidadeStatus.CANCELADA
+    ) {
+      throw new BadRequestException('Não conformidade já encerrada.');
+    }
+
+    if (nc.chamado && CHAMADO_OPEN_STATUSES.includes(nc.chamado.status as (typeof CHAMADO_OPEN_STATUSES)[number])) {
+      throw new BadRequestException(
+        `NC vinculada ao chamado ${nc.chamado.codigo} em andamento. Conclua o chamado ou desvincule antes da baixa manual.`,
+      );
+    }
+
+    const now = new Date();
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const ncUpdated = await tx.naoConformidade.update({
+        where: { id: nc.id },
+        data: {
+          status: NaoConformidadeStatus.BAIXADA_MANUAL,
+          motivoBaixa: justificativa,
+          baixadaEm: now,
+          baixadaPorId: user.sub,
+          resolvidaEm: now,
+        },
+        include: {
+          baixadaPor: { select: { id: true, nome: true } },
+          item: { select: { codigo: true, titulo: true } },
+        },
+      });
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.STATUS_CHANGE,
+          entidadeTipo: 'NaoConformidade',
+          entidadeId: nc.id,
+          valorAntigo: { status: nc.status } as Prisma.InputJsonValue,
+          valorNovo: {
+            status: NaoConformidadeStatus.BAIXADA_MANUAL,
+            motivoBaixa: justificativa,
+          } as Prisma.InputJsonValue,
+        },
+      });
+      await tx.historicoStatus.create({
+        data: {
+          entidadeTipo: 'NaoConformidade',
+          entidadeId: nc.id,
+          statusAnterior: nc.status,
+          statusNovo: NaoConformidadeStatus.BAIXADA_MANUAL,
+          motivo: justificativa,
+          alteradoPorId: user.sub,
+        },
+      });
+      return ncUpdated;
+    });
+
+    return updated;
+  }
+
+  private assertUnidadeInScope(secretariaId: string, user: JwtPayload) {
+    const scopeIds = resolveSecretariaScopeIds(user);
+    if (scopeIds && !scopeIds.includes(secretariaId)) {
+      throw new NotFoundException('Próprio não encontrado.');
+    }
+  }
+
+  private serializeNaoConformidadeDetalhe(nc: {
+    id: string;
+    descricao: string;
+    severidade: string;
+    status: NaoConformidadeStatus;
+    registradaEm: Date;
+    resolvidaEm: Date | null;
+    motivoBaixa: string | null;
+    baixadaEm: Date | null;
+    item: { id: string; codigo: string; titulo: string };
+    resposta: {
+      id: string;
+      conformidade: string | null;
+      valorTexto: string | null;
+      valorBooleano: boolean | null;
+      valorNumero: Prisma.Decimal | number | null;
+      comentario: string | null;
+    };
+    fiscalizacao: {
+      id: string;
+      concluidaEm: Date | null;
+      iniciadaEm: Date | null;
+      checklistVersao: {
+        versao: number;
+        checklist: { id: string; nome: string };
+      };
+    };
+    evidencias: Array<{
+      id: string;
+      tipo: string;
+      url: string;
+      mimeType: string | null;
+      capturadaEm: Date;
+    }>;
+    registradaPor: { id: string; nome: string };
+    baixadaPor: { id: string; nome: string } | null;
+    chamado: {
+      id: string;
+      codigo: string;
+      status: string;
+      prioridade: string;
+      titulo: string | null;
+    } | null;
+  }) {
+    const chamadoAberto =
+      nc.chamado != null &&
+      CHAMADO_OPEN_STATUSES.includes(nc.chamado.status as (typeof CHAMADO_OPEN_STATUSES)[number]);
+    let situacaoVisual: 'ABERTA' | 'VINCULADA_EM_ANDAMENTO' | 'RESOLVIDA_CHAMADO' | 'BAIXADA_MANUAL' | 'ENCERRADA';
+    if (nc.status === NaoConformidadeStatus.BAIXADA_MANUAL) {
+      situacaoVisual = 'BAIXADA_MANUAL';
+    } else if (nc.status === NaoConformidadeStatus.RESOLVIDA) {
+      situacaoVisual = 'RESOLVIDA_CHAMADO';
+    } else if (nc.chamado && chamadoAberto) {
+      situacaoVisual = 'VINCULADA_EM_ANDAMENTO';
+    } else if (nc.chamado && !chamadoAberto) {
+      situacaoVisual = 'RESOLVIDA_CHAMADO';
+    } else if (
+      nc.status === NaoConformidadeStatus.ABERTA ||
+      nc.status === NaoConformidadeStatus.EM_TRIAGEM
+    ) {
+      situacaoVisual = 'ABERTA';
+    } else {
+      situacaoVisual = 'ENCERRADA';
+    }
+
+    const pendenteAtiva =
+      situacaoVisual === 'ABERTA' || situacaoVisual === 'VINCULADA_EM_ANDAMENTO';
+
+    return {
+      id: nc.id,
+      descricao: nc.descricao,
+      severidade: nc.severidade,
+      status: nc.status,
+      situacaoVisual,
+      pendenteAtiva,
+      registradaEm: nc.registradaEm.toISOString(),
+      resolvidaEm: nc.resolvidaEm?.toISOString() ?? null,
+      motivoBaixa: nc.motivoBaixa,
+      baixadaEm: nc.baixadaEm?.toISOString() ?? null,
+      dataVistoria:
+        nc.fiscalizacao.concluidaEm?.toISOString() ??
+        nc.fiscalizacao.iniciadaEm?.toISOString() ??
+        nc.registradaEm.toISOString(),
+      checklist: {
+        id: nc.fiscalizacao.checklistVersao.checklist.id,
+        nome: nc.fiscalizacao.checklistVersao.checklist.nome,
+        versao: nc.fiscalizacao.checklistVersao.versao,
+      },
+      fiscalizacaoId: nc.fiscalizacao.id,
+      item: nc.item,
+      resposta: {
+        ...nc.resposta,
+        valorNumero: nc.resposta.valorNumero == null ? null : Number(nc.resposta.valorNumero),
+      },
+      evidencias: nc.evidencias.map((ev) => ({
+        ...ev,
+        capturadaEm: ev.capturadaEm.toISOString(),
+      })),
+      registradaPor: nc.registradaPor,
+      baixadaPor: nc.baixadaPor,
+      chamado: nc.chamado,
     };
   }
 
@@ -656,7 +1092,7 @@ export class OperacionalService {
   private buildNcPendenciaWhere(): Prisma.NaoConformidadeWhereInput {
     // NC pendente = gerou chamado ainda aberto, ou NC aberta/em triagem ainda sem chamado.
     return {
-      status: { in: NON_CONFORMITY_OPEN_STATUSES },
+      status: { in: NON_CONFORMITY_CANDIDATE_STATUSES },
       OR: [
         { chamado: { status: { in: CHAMADO_OPEN_STATUSES } } },
         {
@@ -712,6 +1148,26 @@ export class OperacionalService {
           }
         : {}),
     };
+  }
+
+  private async loadNcsSemChamadoCountPorUnidade(unidadeIds: string[]) {
+    const map = new Map<string, number>();
+    if (unidadeIds.length === 0) return map;
+
+    const rows = await this.prisma.naoConformidade.groupBy({
+      by: ['unidadeId'],
+      where: {
+        unidadeId: { in: unidadeIds },
+        status: { in: [NaoConformidadeStatus.ABERTA, NaoConformidadeStatus.EM_TRIAGEM] },
+        chamado: { is: null },
+      },
+      _count: { _all: true },
+    });
+
+    for (const row of rows) {
+      map.set(row.unidadeId, row._count._all);
+    }
+    return map;
   }
 
   private async loadVistoriasAtrasadasPorUnidade(unidadeIds: string[]) {

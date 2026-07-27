@@ -39,12 +39,13 @@ import { downloadChamadoPdf, getChamado, listChamadoEquipes, listChamados, listT
 import { cn } from '@/lib/cn';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import {
-  chamadoMatchesSla,
-  chamadoMatchesStatusMulti,
+  chamadoMatchesFiltros,
   collectSecretariasFromChamados,
+  countChamadosByStatus,
 } from '@/lib/chamado-filtros';
 import { toInputDate } from '@/lib/cronograma';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
+import { useSessionUser } from '@/components/auth/session-context';
 import {
   CHAMADO_STATUS_META,
   buildChamadoTimelineFromHistorico,
@@ -65,6 +66,7 @@ const DEFAULT_FILTROS: ChamadosFiltrosValue = {
   statuses: 'TODOS',
   prioridade: 'TODAS',
   sla: 'TODOS',
+  atribuicao: 'TODOS',
   equipeId: '',
   secretariaProprioId: '',
   secretariaExecucaoId: '',
@@ -96,6 +98,7 @@ function ChamadosPageContent() {
   const searchParams = useSearchParams();
   const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
+  const sessionUser = useSessionUser();
   const [chamados, setChamados] = useState<ChamadoResumo[]>([]);
   const [chamadosTotal, setChamadosTotal] = useState(0);
   const [hasMoreChamados, setHasMoreChamados] = useState(false);
@@ -213,54 +216,40 @@ function ChamadosPageContent() {
 
   const showSemSla = useMemo(() => chamados.some((item) => !item.prazoEm), [chamados]);
 
+  const minhaEquipeIds = useMemo(() => {
+    const userId = sessionUser?.id;
+    if (!userId) return new Set<string>();
+    return new Set(
+      equipes
+        .filter((equipe) => equipe.membros?.some((membro) => membro.usuario.id === userId))
+        .map((equipe) => equipe.id),
+    );
+  }, [equipes, sessionUser?.id]);
+
+  const filtroMatchOpts = useMemo(
+    () => ({
+      statuses: filtros.statuses,
+      prioridade: filtros.prioridade,
+      sla: filtros.sla,
+      atribuicao: filtros.atribuicao,
+      equipeId: filtros.equipeId,
+      secretariaProprioId: filtros.secretariaProprioId,
+      secretariaExecucaoId: filtros.secretariaExecucaoId,
+      tipoChamadoId: filtros.tipoChamadoId,
+      search,
+      userId: sessionUser?.id,
+      minhaEquipeIds,
+    }),
+    [filtros, minhaEquipeIds, search, sessionUser?.id],
+  );
+
   const counts = useMemo(() => {
-    const next: Record<string, number> = { TODOS: chamados.length };
-    for (const key of Object.keys(CHAMADO_STATUS_META)) next[key] = 0;
-    for (const item of chamados) {
-      if (next[item.status] != null) next[item.status] += 1;
-    }
-    return next;
-  }, [chamados]);
+    return countChamadosByStatus(chamados, filtroMatchOpts);
+  }, [chamados, filtroMatchOpts]);
 
   const filtered = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    return chamados.filter((item) => {
-      if (!chamadoMatchesStatusMulti(item, filtros.statuses)) return false;
-      if (filtros.prioridade !== 'TODAS' && item.prioridade !== filtros.prioridade) return false;
-      if (!chamadoMatchesSla(item, filtros.sla)) return false;
-      if (filtros.equipeId === 'sem-equipe') {
-        if (item.equipe?.id) return false;
-      } else if (filtros.equipeId && item.equipe?.id !== filtros.equipeId) {
-        return false;
-      }
-      if (filtros.secretariaProprioId && item.unidade?.secretaria?.id !== filtros.secretariaProprioId) {
-        return false;
-      }
-      if (filtros.secretariaExecucaoId && item.secretaria?.id !== filtros.secretariaExecucaoId) {
-        return false;
-      }
-      if (filtros.tipoChamadoId) {
-        if (item.tipoChamado?.id !== filtros.tipoChamadoId) return false;
-      }
-      if (!query) return true;
-      const haystack = [
-        item.codigo,
-        item.titulo,
-        item.descricao,
-        item.tipoChamado?.nome,
-        item.unidade?.nome,
-        item.unidade?.codigoPatrimonial,
-        item.enderecoTexto,
-        item.solicitanteNome,
-        item.responsavel?.nome,
-        item.equipe?.nome,
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [chamados, filtros, search]);
+    return chamados.filter((item) => chamadoMatchesFiltros(item, filtroMatchOpts));
+  }, [chamados, filtroMatchOpts]);
 
   const selected = useMemo(() => {
     if (selectedId) {

@@ -781,6 +781,10 @@ export class ChamadosService {
         },
       });
 
+      if (nextStatus === ChamadoStatus.CONCLUIDO && updated.naoConformidadeId) {
+        await this.resolveNaoConformidadeFromChamadoTx(tx, updated.naoConformidadeId, user.sub);
+      }
+
       return updated;
     });
 
@@ -1100,6 +1104,10 @@ export class ChamadosService {
           valorNovo: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
         },
       });
+
+      if (dto.status === ChamadoStatus.CONCLUIDO && updated.naoConformidadeId) {
+        await this.resolveNaoConformidadeFromChamadoTx(tx, updated.naoConformidadeId, user.sub);
+      }
 
       return updated;
     });
@@ -1653,6 +1661,10 @@ export class ChamadosService {
         },
       });
 
+      if (nextStatus === ChamadoStatus.CONCLUIDO && updated.naoConformidadeId) {
+        await this.resolveNaoConformidadeFromChamadoTx(tx, updated.naoConformidadeId, user.sub);
+      }
+
       return updated;
     });
 
@@ -1969,6 +1981,44 @@ export class ChamadosService {
     return chamado;
   }
 
+  private async resolveNaoConformidadeFromChamadoTx(
+    tx: Tx,
+    naoConformidadeId: string,
+    usuarioId: string,
+  ) {
+    const nc = await tx.naoConformidade.findUnique({
+      where: { id: naoConformidadeId },
+      select: { id: true, status: true },
+    });
+    if (!nc) return;
+    if (
+      nc.status === NaoConformidadeStatus.RESOLVIDA ||
+      nc.status === NaoConformidadeStatus.BAIXADA_MANUAL ||
+      nc.status === NaoConformidadeStatus.CANCELADA
+    ) {
+      return;
+    }
+
+    const now = new Date();
+    await tx.naoConformidade.update({
+      where: { id: nc.id },
+      data: {
+        status: NaoConformidadeStatus.RESOLVIDA,
+        resolvidaEm: now,
+      },
+    });
+    await tx.historicoStatus.create({
+      data: {
+        entidadeTipo: 'NaoConformidade',
+        entidadeId: nc.id,
+        statusAnterior: nc.status,
+        statusNovo: NaoConformidadeStatus.RESOLVIDA,
+        motivo: 'Resolvida pela conclusão do chamado vinculado.',
+        alteradoPorId: usuarioId,
+      },
+    });
+  }
+
   private async resolveCreateLocation(dto: CreateChamadoDto, usuarioId: string) {
     if (dto.modoLocalizacao === ChamadoModoLocalizacao.UNIDADE) {
       if (!dto.unidadeId?.trim()) {
@@ -2138,7 +2188,14 @@ export class ChamadosService {
         },
       },
       responsavel: { select: { id: true, nome: true } },
-      equipe: { select: { id: true, nome: true } },
+      equipe: {
+        select: {
+          id: true,
+          nome: true,
+          secretariaId: true,
+          secretaria: { select: { id: true, nome: true, sigla: true } },
+        },
+      },
       tipoChamado: { select: { id: true, nome: true, exigeVistoriaPrevia: true } },
       registradoPor: { select: { id: true, nome: true } },
       naoConformidade: {

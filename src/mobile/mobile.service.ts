@@ -1,4 +1,4 @@
-import { BadRequestException, forwardRef, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AuditAction,
   ConformidadeStatus,
@@ -18,6 +18,7 @@ import {
   resolveSecretariaScopeIds,
   resolveUnidadeSecretariaFilter,
 } from '../auth/secretaria-scope';
+import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import { ChamadosService } from '../chamados/chamados.service';
 import { CronogramaService } from '../cronograma/cronograma.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -280,7 +281,7 @@ export class MobileService {
           });
         }
 
-        if (naoConformidadeId) {
+        if (naoConformidadeId && resposta.gerarChamado !== false) {
           await this.chamadosService.generateForNaoConformidadeTx(tx, naoConformidadeId, user.sub);
         }
       }
@@ -429,5 +430,65 @@ export class MobileService {
         ultimoErro: reason,
       },
     });
+  }
+
+  /** Chamados pendentes do próprio — consulta durante preenchimento da vistoria (ticket 178). */
+  async listChamadosPendentesUnidade(unidadeId: string, user: JwtPayload) {
+    const scope = resolveUnidadeSecretariaFilter(user);
+    const unidade = await this.prisma.unidadePublica.findFirst({
+      where: { id: unidadeId, ativo: true, ...scope },
+      select: { id: true, nome: true },
+    });
+    if (!unidade) {
+      throw new NotFoundException('Próprio não encontrado ou fora do escopo.');
+    }
+
+    const chamados = await this.prisma.chamado.findMany({
+      where: {
+        unidadeId,
+        status: { in: CHAMADO_OPEN_STATUSES },
+      },
+      orderBy: [{ prioridade: 'desc' }, { createdAt: 'desc' }],
+      select: {
+        id: true,
+        codigo: true,
+        titulo: true,
+        descricao: true,
+        status: true,
+        prioridade: true,
+        createdAt: true,
+        previstaExecucaoEm: true,
+        prazoEm: true,
+        fotoUrl: true,
+        tipoChamado: { select: { id: true, nome: true } },
+        equipe: { select: { id: true, nome: true } },
+        responsavel: { select: { id: true, nome: true } },
+        evidencias: {
+          orderBy: { capturadaEm: 'desc' },
+          take: 8,
+          select: {
+            id: true,
+            tipo: true,
+            url: true,
+            mimeType: true,
+            capturadaEm: true,
+          },
+        },
+      },
+    });
+
+    return {
+      unidade: { id: unidade.id, nome: unidade.nome },
+      items: chamados.map((chamado) => ({
+        ...chamado,
+        createdAt: chamado.createdAt.toISOString(),
+        previstaExecucaoEm: chamado.previstaExecucaoEm?.toISOString() ?? null,
+        prazoEm: chamado.prazoEm?.toISOString() ?? null,
+        evidencias: chamado.evidencias.map((ev) => ({
+          ...ev,
+          capturadaEm: ev.capturadaEm.toISOString(),
+        })),
+      })),
+    };
   }
 }

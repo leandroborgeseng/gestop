@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Header, Param, Post, Put, Query, StreamableFile, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, StreamableFile, Header, UseGuards, Delete } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -26,7 +26,7 @@ import { ChamadosService } from './chamados.service';
 export class ChamadosController {
   constructor(private readonly chamadosService: ChamadosService) {}
 
-  @RequirePermissions('chamados.gerenciar')
+  @RequireAnyPermissions('chamados.gerenciar', 'chamados.abrir')
   @Get('tipos/opcoes')
   listTiposChamado() {
     return this.chamadosService.listTiposChamadoAtivos();
@@ -173,7 +173,7 @@ export class ChamadosController {
     return this.chamadosService.getChamado(id, user);
   }
 
-  @RequirePermissions('chamados.gerenciar')
+  @RequireAnyPermissions('chamados.gerenciar', 'chamados.abrir')
   @Post()
   create(@Body() body: CreateChamadoDto, @CurrentUser() user: JwtPayload) {
     return this.chamadosService.createChamado(body, user);

@@ -1,7 +1,7 @@
 /* SIGMA PWA — cache do shell + assets Next para vistoria offline */
-const CACHE_VERSION = 'sigma-campo-v4';
+const CACHE_VERSION = 'sigma-campo-v5';
 const SHELL_URL = '/mobile';
-const PRECACHE_URLS = [SHELL_URL, '/icon.svg', '/manifest.webmanifest'];
+const PRECACHE_URLS = [SHELL_URL, '/icon.svg', '/icon-maskable.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -187,6 +187,7 @@ self.addEventListener('fetch', (event) => {
   if (
     isNextStaticAsset(url.pathname) ||
     url.pathname === '/icon.svg' ||
+    url.pathname === '/icon-maskable.svg' ||
     url.pathname === '/manifest.webmanifest' ||
     url.pathname.startsWith('/icons/')
   ) {

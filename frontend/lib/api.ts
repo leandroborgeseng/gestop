@@ -33,7 +33,9 @@ import {
   ChamadoMapaItem,
   ChamadosMapaFilters,
   FiscalizacaoDetalhe,
+  FiscalizacaoOpcoesManuais,
   FiscalizacoesListResponse,
+  LancamentoManualPayload,
   EquipeOpcaoResumo,
   PublicUnidadeChamado,
   SecretariaOption,
@@ -46,6 +48,9 @@ import {
   WebmapImportSelection,
   WebmapSyncAllResult,
   WebmapImportStatus,
+  BackupS3ConfigPayload,
+  BackupS3ObjectItem,
+  BackupS3StatusResponse,
 } from './types';
 import { toGeoCheckin } from '@/lib/geolocation';
 import { notifyAuthExpired } from './security';
@@ -285,6 +290,45 @@ export function getUnidadeDetalhe(id: string) {
   return request<UnidadeDetalhe>(`/operacional/unidades/${id}`);
 }
 
+export function listChamadosParaVincularNc(
+  unidadeId: string,
+  params?: { search?: string; status?: string; tipoChamadoId?: string },
+) {
+  const search = new URLSearchParams();
+  if (params?.search) search.set('search', params.search);
+  if (params?.status) search.set('status', params.status);
+  if (params?.tipoChamadoId) search.set('tipoChamadoId', params.tipoChamadoId);
+  const qs = search.toString();
+  return request<{
+    items: Array<{
+      id: string;
+      codigo: string;
+      titulo: string | null;
+      descricao: string;
+      status: string;
+      prioridade: string;
+      createdAt: string;
+      tipoChamado?: { id: string; nome: string } | null;
+    }>;
+  }>(`/operacional/unidades/${unidadeId}/chamados-para-vincular${qs ? `?${qs}` : ''}`);
+}
+
+export function vincularChamadoNc(naoConformidadeId: string, chamadoId: string) {
+  return request(`/operacional/nao-conformidades/${naoConformidadeId}/vincular-chamado`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chamadoId }),
+  });
+}
+
+export function baixarNaoConformidade(naoConformidadeId: string, motivo: string) {
+  return request(`/operacional/nao-conformidades/${naoConformidadeId}/baixa`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ motivo }),
+  });
+}
+
 export function listAdminSecretarias() {
   return request<AdminSecretaria[]>('/admin/secretarias');
 }
@@ -343,6 +387,7 @@ export type AdminPerfilConfiguravel = {
   descricao?: string | null;
   sistema: boolean;
   ativo: boolean;
+  usuariosVinculados?: number;
 };
 
 export type AdminPerfilMatrizResponse = {
@@ -391,6 +436,22 @@ export function createAdminPerfil(payload: { nome: string; descricao?: string; a
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+  });
+}
+
+export function updateAdminPerfil(id: string, payload: { nome?: string; descricao?: string | null }) {
+  return request<AdminPerfilConfiguravel>(`/admin/perfis/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function setAdminPerfilAtivo(id: string, ativo: boolean) {
+  return request<AdminPerfilConfiguravel>(`/admin/perfis/${id}/ativo`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ativo }),
   });
 }
 
@@ -574,6 +635,34 @@ export function publishChecklistVersion(versionId: string) {
 
 export function getMobileFieldPackage() {
   return request<MobileFieldPackage>('/mobile/field-package');
+}
+
+export function listMobileChamadosPendentes(unidadeId: string) {
+  return request<{
+    unidade: { id: string; nome: string };
+    items: Array<{
+      id: string;
+      codigo: string;
+      titulo: string | null;
+      descricao: string;
+      status: string;
+      prioridade: string;
+      createdAt: string;
+      previstaExecucaoEm: string | null;
+      prazoEm: string | null;
+      fotoUrl: string | null;
+      tipoChamado: { id: string; nome: string } | null;
+      equipe: { id: string; nome: string } | null;
+      responsavel: { id: string; nome: string } | null;
+      evidencias: Array<{
+        id: string;
+        tipo: string;
+        url: string;
+        mimeType: string | null;
+        capturadaEm: string;
+      }>;
+    }>;
+  }>(`/mobile/unidades/${unidadeId}/chamados-pendentes`);
 }
 
 export function syncMobileInspection(payload: MobileQueuedInspection) {
@@ -862,6 +951,52 @@ export function getFiscalizacao(id: string) {
   return request<FiscalizacaoDetalhe>(`/fiscalizacoes/${id}`);
 }
 
+export function getFiscalizacaoOpcoesManuais() {
+  return request<FiscalizacaoOpcoesManuais>('/fiscalizacoes/opcoes-manuais');
+}
+
+export async function downloadVistoriaManualPdf(payload: {
+  checklistVersaoId: string;
+  unidadeIds: string[];
+  ondeEncaminharFotos: string;
+}) {
+  const token = getStoredAuth()?.accessToken;
+  const response = await fetch(`${API_BASE_URL}/fiscalizacoes/imprimir-manual`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    let message = 'Falha ao gerar PDF da vistoria manual.';
+    try {
+      const data = (await response.json()) as { message?: string | string[] };
+      if (typeof data.message === 'string') message = data.message;
+      else if (Array.isArray(data.message)) message = data.message.join('; ');
+    } catch {
+      // ignore parse errors
+    }
+    throw new Error(message);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = 'vistoria-manual.pdf';
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function lancarVistoriaManual(payload: LancamentoManualPayload) {
+  return request<FiscalizacaoDetalhe>('/fiscalizacoes/lancamento-manual', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
 export function registrarChamadoHistorico(
   id: string,
   payload: {
@@ -1138,5 +1273,35 @@ export function unsubscribeWebPush(endpoint: string) {
 export function dispararAlertasOperacionais() {
   return request<{ enviados: number; webhook: boolean; push: number }>('/notificacoes/alertas/disparar', {
     method: 'POST',
+  });
+}
+
+export function getBackupStatus() {
+  return request<BackupS3StatusResponse>('/admin/backup');
+}
+
+export function saveBackupConfig(payload: BackupS3ConfigPayload) {
+  return request<BackupS3StatusResponse>('/admin/backup', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function runBackupNow() {
+  return request<{ objectKeys: string[]; bytes: number; status: BackupS3StatusResponse }>('/admin/backup/run', {
+    method: 'POST',
+  });
+}
+
+export function listBackupObjects() {
+  return request<{ items: BackupS3ObjectItem[] }>('/admin/backup/objects');
+}
+
+export function restoreBackup(payload: { objectKey: string; confirmacao: string }) {
+  return request<{ ok: boolean; message?: string }>('/admin/backup/restore', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   });
 }

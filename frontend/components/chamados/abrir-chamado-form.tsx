@@ -21,7 +21,8 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
-import { createChamado, getSecretarias, getUnidades, listTiposChamadoOpcoes } from '@/lib/api';
+import { createChamado, getSecretarias, getStoredAuth, getUnidades, listTiposChamadoOpcoes } from '@/lib/api';
+import { formatPhoneInput, normalizePhoneForApi } from '@/lib/br-input-masks';
 import { captureCurrentPosition } from '@/lib/geolocation';
 import {
   composeEnderecoTexto,
@@ -30,6 +31,7 @@ import {
   searchAddresses,
 } from '@/lib/geocoding';
 import { isWithinFrancaMunicipio } from '@/lib/franca-geo';
+import { hasChamadosGerenciar } from '@/lib/navigation';
 import { TipoChamadoOpcao, UnidadeOperacional } from '@/lib/types';
 
 const PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
@@ -43,11 +45,17 @@ export function AbrirChamadoForm({
   initialUnidadeNome,
   onSuccess,
   compact = false,
+  redirectOnSuccess,
+  stayOnPage = false,
 }: {
   initialUnidadeId?: string;
   initialUnidadeNome?: string;
-  onSuccess?: () => void;
+  onSuccess?: (chamado?: { codigo: string }) => void;
   compact?: boolean;
+  /** Se false, não redireciona após sucesso. Se undefined, redireciona só com permissão de visualizar/gerenciar chamados. */
+  redirectOnSuccess?: boolean;
+  /** Quando true, permanece na página e mostra confirmação (útil para perfil Solicitação). */
+  stayOnPage?: boolean;
 }) {
   const router = useRouter();
   const snackbar = useSnackbar();
@@ -58,6 +66,7 @@ export function AbrirChamadoForm({
   const [tiposChamado, setTiposChamado] = useState<TipoChamadoOpcao[]>([]);
   const [prioridade, setPrioridade] = useState<(typeof PRIORIDADES)[number]>('MEDIA');
   const [solicitanteNome, setSolicitanteNome] = useState('');
+  const [solicitanteTelefone, setSolicitanteTelefone] = useState('');
   const [secretariaId, setSecretariaId] = useState('');
   const [pickedUnidade, setPickedUnidade] = useState<{
     id: string;
@@ -103,6 +112,7 @@ export function AbrirChamadoForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pinHint, setPinHint] = useState<string | null>(null);
+  const [successCodigo, setSuccessCodigo] = useState<string | null>(null);
 
   const enderecoComposto = useMemo(
     () => composeEnderecoTexto({ logradouro, numero, complemento, cidade }),
@@ -470,16 +480,64 @@ export function AbrirChamadoForm({
         prioridade,
         origem: 'MANUAL',
         solicitanteNome: solicitanteNome.trim() || undefined,
+        solicitanteTelefone: normalizePhoneForApi(solicitanteTelefone) ?? undefined,
         fotoDataUrl: fotoDataUrl ?? undefined,
       });
       snackbar.show(`Chamado ${chamado.codigo} aberto com sucesso.`, 'success');
-      onSuccess?.();
-      router.push(`/chamados?search=${encodeURIComponent(chamado.codigo)}`);
+      onSuccess?.(chamado);
+
+      const canViewChamados = hasChamadosGerenciar(getStoredAuth()?.user.permissoes ?? []);
+      const shouldRedirect =
+        !stayOnPage && (redirectOnSuccess === true || (redirectOnSuccess !== false && canViewChamados));
+
+      if (shouldRedirect) {
+        router.push(`/chamados?search=${encodeURIComponent(chamado.codigo)}`);
+      } else {
+        setSuccessCodigo(chamado.codigo);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível registrar o chamado.');
     } finally {
       setBusy(false);
     }
+  }
+
+  if (successCodigo) {
+    return (
+      <div
+        className={
+          compact
+            ? 'space-y-4 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4'
+            : 'mx-auto max-w-2xl space-y-4 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-5'
+        }
+      >
+        <p className="text-[15px] font-semibold text-[var(--ink)]">Chamado registrado com sucesso.</p>
+        <p className="text-[14px] text-[var(--ink-2)]">
+          Número: <strong className="mono text-[var(--brand-hover)]">{successCodigo}</strong>
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="filled"
+            onClick={() => {
+              setSuccessCodigo(null);
+              setDescricao('');
+              setTipoChamadoId('');
+              setPrioridade('MEDIA');
+              setSolicitanteNome('');
+              setSolicitanteTelefone('');
+              setFotoDataUrl(null);
+              setFotoPreview(null);
+              setFotoGeo(null);
+              setError(null);
+              setPinHint(null);
+            }}
+          >
+            Abrir outro chamado
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -813,6 +871,17 @@ export function AbrirChamadoForm({
             </Field>
             <Field label="Solicitante (opcional)">
               <Input value={solicitanteNome} onChange={(event) => setSolicitanteNome(event.target.value)} disabled={busy} />
+            </Field>
+            <Field label="Telefone (opcional)">
+              <Input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder="(16) 99999-9999"
+                value={solicitanteTelefone}
+                onChange={(event) => setSolicitanteTelefone(formatPhoneInput(event.target.value))}
+                disabled={busy}
+              />
             </Field>
           </div>
         </>

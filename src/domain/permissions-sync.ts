@@ -20,6 +20,12 @@ export async function syncPermissionsCatalog(prisma: PrismaClient) {
     modulo: 'permissoes',
   });
 
+  entries.push({
+    chave: 'chamados.abrir',
+    descricao: 'Abrir novo chamado (sem acesso à triagem)',
+    modulo: 'chamados',
+  });
+
   for (const entry of entries) {
     await prisma.permissao.upsert({
       where: { chave: entry.chave },

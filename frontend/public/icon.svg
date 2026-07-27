@@ -1,10 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" role="img" aria-label="SIGMA">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="SIGMA">
   <defs>
-    <linearGradient id="sigma-gradient" x1="16" y1="16" x2="112" y2="112" gradientUnits="userSpaceOnUse">
+    <linearGradient id="sigma-gradient" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
       <stop stop-color="#0066CC"/>
       <stop offset="1" stop-color="#0199DC"/>
     </linearGradient>
   </defs>
-  <rect width="128" height="128" rx="28" fill="url(#sigma-gradient)"/>
-  <path d="M64 28c-14.4 0-26 11.6-26 26 0 19.5 26 48 26 48s26-28.5 26-48c0-14.4-11.6-26-26-26zm0 35a9 9 0 1 1 0-18 9 9 0 0 1 0 18z" fill="#FFFFFF"/>
+  <rect width="512" height="512" rx="112" fill="url(#sigma-gradient)"/>
+  <!-- Marca oficial com margem interna para boa leitura em atalho / favicon -->
+  <g transform="translate(256 256) scale(3.1) translate(-32 -32)">
+    <path d="M32 14c-8.8 0-16 7.2-16 16 0 12 16 30 16 30s16-18 16-30c0-8.8-7.2-16-16-16zm0 22a6 6 0 1 1 0-12 6 6 0 0 1 0 12z" fill="#FFFFFF"/>
+  </g>
 </svg>

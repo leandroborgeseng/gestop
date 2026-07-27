@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { resolveAuditUsuarioId } from '../audit/audit.util';
 import {
@@ -13,7 +13,7 @@ import {
 } from '../domain/permissions-matrix';
 import { syncPermissionsCatalog } from '../domain/permissions-sync';
 import { PrismaService } from '../prisma/prisma.service';
-import { PerfilCreateDto } from './admin-permissions.dto';
+import { PerfilAtivoDto, PerfilCreateDto, PerfilUpdateDto } from './admin-permissions.dto';
 
 @Injectable()
 export class AdminPermissionsService {
@@ -26,19 +26,28 @@ export class AdminPermissionsService {
   async listPerfisConfiguraveis() {
     const perfis = await this.prisma.perfil.findMany({
       where: {
-        ativo: true,
         nome: { not: ADMINISTRADOR_SISTEMA_NOME },
       },
-      orderBy: { nome: 'asc' },
+      orderBy: [{ ativo: 'desc' }, { nome: 'asc' }],
       select: {
         id: true,
         nome: true,
         descricao: true,
         sistema: true,
         ativo: true,
+        _count: {
+          select: { usuarios: true },
+        },
       },
     });
-    return perfis;
+    return perfis.map((perfil) => ({
+      id: perfil.id,
+      nome: perfil.nome,
+      descricao: perfil.descricao,
+      sistema: perfil.sistema,
+      ativo: perfil.ativo,
+      usuariosVinculados: perfil._count.usuarios,
+    }));
   }
 
   async getMatrizPerfil(perfilId: string) {
@@ -223,29 +232,206 @@ export class AdminPermissionsService {
     return this.getMatrizUsuario(usuarioId);
   }
 
-  async createPerfil(dto: PerfilCreateDto) {
-    const existing = await this.prisma.perfil.findUnique({ where: { nome: dto.nome.trim() } });
+  async createPerfil(dto: PerfilCreateDto, user: JwtPayload) {
+    const nome = dto.nome.trim();
+    if (nome === ADMINISTRADOR_SISTEMA_NOME) {
+      throw new BadRequestException('Não é permitido criar um perfil com este nome.');
+    }
+
+    const existing = await this.prisma.perfil.findUnique({ where: { nome } });
     if (existing) {
       throw new BadRequestException('Já existe um perfil com este nome.');
     }
 
-    const perfil = await this.prisma.perfil.create({
-      data: {
-        nome: dto.nome.trim(),
-        descricao: dto.descricao?.trim() || null,
-        ativo: dto.ativo ?? true,
-        sistema: false,
-      },
-      select: {
-        id: true,
-        nome: true,
-        descricao: true,
-        sistema: true,
-        ativo: true,
-      },
+    const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
+
+    const perfil = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.perfil.create({
+        data: {
+          nome,
+          descricao: dto.descricao?.trim() || null,
+          ativo: dto.ativo ?? true,
+          sistema: false,
+        },
+        select: {
+          id: true,
+          nome: true,
+          descricao: true,
+          sistema: true,
+          ativo: true,
+        },
+      });
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId,
+          acao: AuditAction.CREATE,
+          entidadeTipo: 'Perfil',
+          entidadeId: created.id,
+          valorAntigo: Prisma.JsonNull,
+          valorNovo: {
+            nome: created.nome,
+            descricao: created.descricao,
+            ativo: created.ativo,
+          },
+        },
+      });
+
+      return created;
     });
 
-    return perfil;
+    return { ...perfil, usuariosVinculados: 0 };
+  }
+
+  async updatePerfil(perfilId: string, dto: PerfilUpdateDto, user: JwtPayload) {
+    const perfil = await this.getPerfilConfiguravelOrThrow(perfilId);
+
+    const nextNome = dto.nome !== undefined ? dto.nome.trim() : perfil.nome;
+    const nextDescricao =
+      dto.descricao !== undefined ? (dto.descricao?.trim() || null) : perfil.descricao;
+
+    if (!nextNome || nextNome.length < 2) {
+      throw new BadRequestException('Informe um nome válido para o perfil.');
+    }
+    if (nextNome === ADMINISTRADOR_SISTEMA_NOME) {
+      throw new BadRequestException('Não é permitido renomear um perfil para Administrador do Sistema.');
+    }
+
+    if (nextNome !== perfil.nome) {
+      const existing = await this.prisma.perfil.findUnique({ where: { nome: nextNome } });
+      if (existing && existing.id !== perfilId) {
+        throw new BadRequestException('Já existe um perfil com este nome.');
+      }
+    }
+
+    if (nextNome === perfil.nome && nextDescricao === perfil.descricao) {
+      const count = await this.prisma.usuarioPerfil.count({ where: { perfilId } });
+      return {
+        id: perfil.id,
+        nome: perfil.nome,
+        descricao: perfil.descricao,
+        sistema: perfil.sistema,
+        ativo: perfil.ativo,
+        usuariosVinculados: count,
+      };
+    }
+
+    const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.perfil.update({
+        where: { id: perfilId },
+        data: {
+          nome: nextNome,
+          descricao: nextDescricao,
+        },
+        select: {
+          id: true,
+          nome: true,
+          descricao: true,
+          sistema: true,
+          ativo: true,
+          _count: { select: { usuarios: true } },
+        },
+      });
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'Perfil',
+          entidadeId: perfilId,
+          valorAntigo: {
+            nome: perfil.nome,
+            descricao: perfil.descricao,
+          },
+          valorNovo: {
+            nome: result.nome,
+            descricao: result.descricao,
+          },
+        },
+      });
+
+      return result;
+    });
+
+    return {
+      id: updated.id,
+      nome: updated.nome,
+      descricao: updated.descricao,
+      sistema: updated.sistema,
+      ativo: updated.ativo,
+      usuariosVinculados: updated._count.usuarios,
+    };
+  }
+
+  async setPerfilAtivo(perfilId: string, dto: PerfilAtivoDto, user: JwtPayload) {
+    const perfil = await this.getPerfilConfiguravelOrThrow(perfilId);
+
+    if (perfil.ativo === dto.ativo) {
+      const count = await this.prisma.usuarioPerfil.count({ where: { perfilId } });
+      return {
+        id: perfil.id,
+        nome: perfil.nome,
+        descricao: perfil.descricao,
+        sistema: perfil.sistema,
+        ativo: perfil.ativo,
+        usuariosVinculados: count,
+      };
+    }
+
+    const usuariosVinculados = await this.prisma.usuarioPerfil.count({ where: { perfilId } });
+    if (!dto.ativo && usuariosVinculados > 0) {
+      // Inativação permitida: vínculos e permissões são preservados; a UI alerta antes.
+    }
+
+    const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.perfil.update({
+        where: { id: perfilId },
+        data: { ativo: dto.ativo },
+        select: {
+          id: true,
+          nome: true,
+          descricao: true,
+          sistema: true,
+          ativo: true,
+          _count: { select: { usuarios: true } },
+        },
+      });
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId,
+          acao: AuditAction.STATUS_CHANGE,
+          entidadeTipo: 'Perfil',
+          entidadeId: perfilId,
+          valorAntigo: {
+            nome: perfil.nome,
+            ativo: perfil.ativo,
+            usuariosVinculados,
+          },
+          valorNovo: {
+            nome: result.nome,
+            ativo: result.ativo,
+            usuariosVinculados: result._count.usuarios,
+            acao: dto.ativo ? 'reativacao' : 'inativacao',
+          },
+        },
+      });
+
+      return result;
+    });
+
+    return {
+      id: updated.id,
+      nome: updated.nome,
+      descricao: updated.descricao,
+      sistema: updated.sistema,
+      ativo: updated.ativo,
+      usuariosVinculados: updated._count.usuarios,
+    };
   }
 
   async syncCatalogPermissions() {

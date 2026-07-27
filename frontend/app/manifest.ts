@@ -2,9 +2,10 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'SIGMA Vistoria',
-    short_name: 'Vistoria',
-    description: 'SIGMA — Sistema Integrado de Gestão de Manutenção de Ativos · Prefeitura de Franca',
+    name: 'SIGMA — Sistema Integrado de Gestão de Manutenção e Ativos',
+    short_name: 'SIGMA',
+    description:
+      'SIGMA — Sistema Integrado de Gestão de Manutenção e Ativos · Prefeitura de Franca',
     start_url: '/mobile',
     scope: '/',
     display: 'standalone',
@@ -19,7 +20,7 @@ export default function manifest(): MetadataRoute.Manifest {
         purpose: 'any',
       },
       {
-        src: '/icon.svg',
+        src: '/icon-maskable.svg',
         sizes: '512x512',
         type: 'image/svg+xml',
         purpose: 'maskable',

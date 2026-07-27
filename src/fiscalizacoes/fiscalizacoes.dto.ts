@@ -48,3 +48,8 @@ export class ListFiscalizacoesQueryDto {
   @Min(0)
   offset?: number;
 }
+
+export {
+  ImprimirVistoriaManualDto,
+  LancamentoManualFiscalizacaoDto,
+} from './fiscalizacoes-manual.dto';

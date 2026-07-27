@@ -152,6 +152,49 @@ export async function syncSystemRbac(prisma: PrismaClient) {
       });
     }
   }
+
+  // Perfil Solicitação: apenas Novo chamado (abrir_chamado), sem triagem/listagem.
+  const solicitacaoPerfil = await prisma.perfil.upsert({
+    where: { nome: 'Solicitação' },
+    update: {
+      descricao: 'Abertura de chamados sem acesso à triagem ou gerenciamento',
+      sistema: true,
+      ativo: true,
+    },
+    create: {
+      nome: 'Solicitação',
+      descricao: 'Abertura de chamados sem acesso à triagem ou gerenciamento',
+      sistema: true,
+      ativo: true,
+    },
+  });
+
+  const abrirChamadoKeys = [
+    'matriz.chamados.abrir_chamado.visualizar',
+    'matriz.chamados.abrir_chamado.inserir',
+    'chamados.abrir',
+  ] as const;
+
+  const abrirPermissoes = await prisma.permissao.findMany({
+    where: { chave: { in: [...abrirChamadoKeys] } },
+    select: { id: true, chave: true },
+  });
+
+  // Garante que o perfil Solicitação tenha exatamente as permissões de abertura.
+  await prisma.perfilPermissao.deleteMany({ where: { perfilId: solicitacaoPerfil.id } });
+  if (abrirPermissoes.length > 0) {
+    await prisma.perfilPermissao.createMany({
+      data: abrirPermissoes.map((permissao) => ({
+        perfilId: solicitacaoPerfil.id,
+        permissaoId: permissao.id,
+      })),
+    });
+  }
+
+  logInfo(
+    'sync-rbac',
+    `Perfil "${solicitacaoPerfil.nome}" sincronizado (${abrirPermissoes.length} permissoes de abertura).`,
+  );
 }
 
 async function main() {

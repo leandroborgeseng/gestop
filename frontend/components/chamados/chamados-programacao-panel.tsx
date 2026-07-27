@@ -15,14 +15,17 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { listChamadosProgramacao, updateChamadoPlanejamento } from '@/lib/api';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import {
+  chamadoMatchesAtribuicao,
   chamadoMatchesSla,
   chamadoMatchesStatusMulti,
   collectSecretariasFromChamados,
+  countChamadosByStatus,
 } from '@/lib/chamado-filtros';
 import { CHAMADO_STATUS_META, prioridadeVariant } from '@/lib/chamado-status';
 import { buildCalendarCells, monthBounds, toInputDate } from '@/lib/cronograma';
 import { cn } from '@/lib/cn';
 import { ChamadoProgramacaoResponse, ChamadoResumo, EquipeOpcao, TipoChamadoOpcao } from '@/lib/types';
+import { useSessionUser } from '@/components/auth/session-context';
 
 const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const WEEKDAYS_FULL = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
@@ -33,16 +36,29 @@ const DEFAULT_FILTROS: ChamadosFiltrosValue = {
   statuses: 'TODOS',
   prioridade: 'TODAS',
   sla: 'TODOS',
+  atribuicao: 'TODOS',
   equipeId: '',
   secretariaProprioId: '',
   secretariaExecucaoId: '',
   tipoChamadoId: '',
 };
 
-function matchesFiltros(chamado: ChamadoResumo, filtros: ChamadosFiltrosValue) {
+function matchesFiltros(
+  chamado: ChamadoResumo,
+  filtros: ChamadosFiltrosValue,
+  opts?: { userId?: string | null; minhaEquipeIds?: Set<string> },
+) {
   if (!chamadoMatchesStatusMulti(chamado, filtros.statuses)) return false;
   if (filtros.prioridade !== 'TODAS' && chamado.prioridade !== filtros.prioridade) return false;
   if (!chamadoMatchesSla(chamado, filtros.sla)) return false;
+  if (
+    !chamadoMatchesAtribuicao(chamado, filtros.atribuicao, {
+      userId: opts?.userId,
+      minhaEquipeIds: opts?.minhaEquipeIds,
+    })
+  ) {
+    return false;
+  }
   if (filtros.equipeId === 'sem-equipe') {
     if (chamado.equipe?.id) return false;
   } else if (filtros.equipeId && chamado.equipe?.id !== filtros.equipeId) {
@@ -76,6 +92,7 @@ export function ChamadosProgramacaoPanel({
   onScheduled?: () => void;
 }) {
   const snackbar = useSnackbar();
+  const sessionUser = useSessionUser();
   const requestSeq = useRef(0);
   const agendarFormRef = useRef<HTMLDivElement | null>(null);
   const [month, setMonth] = useState(() => new Date());
@@ -153,39 +170,59 @@ export function ChamadosProgramacaoPanel({
   const secretariasDisponiveis = useMemo(() => collectSecretariasFromChamados(pool), [pool]);
   const showSemSla = useMemo(() => pool.some((item) => !item.prazoEm), [pool]);
 
+  const minhaEquipeIds = useMemo(() => {
+    const userId = sessionUser?.id;
+    if (!userId) return new Set<string>();
+    return new Set(
+      equipes
+        .filter((equipe) => equipe.membros?.some((membro) => membro.usuario.id === userId))
+        .map((equipe) => equipe.id),
+    );
+  }, [equipes, sessionUser?.id]);
+
+  const atribuicaoOpts = useMemo(
+    () => ({ userId: sessionUser?.id, minhaEquipeIds }),
+    [minhaEquipeIds, sessionUser?.id],
+  );
+
   const statusCounts = useMemo(() => {
-    const next: Record<string, number> = { TODOS: pool.length };
-    for (const key of Object.keys(CHAMADO_STATUS_META)) next[key] = 0;
-    for (const item of pool) {
-      if (next[item.status] != null) next[item.status] += 1;
-    }
-    return next;
-  }, [pool]);
+    return countChamadosByStatus(pool, {
+      prioridade: filtros.prioridade,
+      sla: filtros.sla,
+      atribuicao: filtros.atribuicao,
+      equipeId: filtros.equipeId,
+      secretariaProprioId: filtros.secretariaProprioId,
+      secretariaExecucaoId: filtros.secretariaExecucaoId,
+      tipoChamadoId: filtros.tipoChamadoId,
+      userId: sessionUser?.id,
+      minhaEquipeIds,
+    });
+  }, [filtros, minhaEquipeIds, pool, sessionUser?.id]);
 
   const eventosPorDia = useMemo(() => {
     const map = new Map<string, ChamadoResumo[]>();
     for (const dia of data?.porDia ?? []) {
       map.set(
         dia.data,
-        dia.chamados.filter((chamado) => matchesFiltros(chamado, filtros)),
+        dia.chamados.filter((chamado) => matchesFiltros(chamado, filtros, atribuicaoOpts)),
       );
     }
     return map;
-  }, [data, filtros]);
+  }, [atribuicaoOpts, data, filtros]);
 
   const chamadosDoDia = selectedDate ? (eventosPorDia.get(selectedDate) ?? []) : [];
 
   const pendentesFiltrados = useMemo(
-    () => (data?.pendentes ?? []).filter((chamado) => matchesFiltros(chamado, filtros)),
-    [data?.pendentes, filtros],
+    () => (data?.pendentes ?? []).filter((chamado) => matchesFiltros(chamado, filtros, atribuicaoOpts)),
+    [atribuicaoOpts, data?.pendentes, filtros],
   );
 
   const programadosFiltrados = useMemo(
     () =>
       (data?.porDia ?? [])
         .flatMap((dia) => dia.chamados)
-        .filter((chamado) => matchesFiltros(chamado, filtros)),
-    [data?.porDia, filtros],
+        .filter((chamado) => matchesFiltros(chamado, filtros, atribuicaoOpts)),
+    [atribuicaoOpts, data?.porDia, filtros],
   );
 
   useEffect(() => {

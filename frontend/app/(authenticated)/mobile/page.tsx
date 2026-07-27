@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ClipboardList, CloudUpload, MapPin, RefreshCcw, Save, Smartphone, Satellite, Wifi, WifiOff } from 'lucide-react';
+import { ClipboardList, ClipboardPen, CloudUpload, MapPin, Printer, RefreshCcw, Save, Smartphone, Satellite, Wifi, WifiOff, Megaphone } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import {
   buildRespostaPayload,
@@ -12,6 +12,9 @@ import {
   ResponseDraft,
   validateItemResponse,
 } from '@/components/mobile/checklist-item-card';
+import { ChamadosPendentesUnidadeSheet } from '@/components/mobile/chamados-pendentes-unidade-sheet';
+import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
+import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
 import { getPublishedVersion } from '@/components/checklists/checklist-shared';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
@@ -58,6 +61,9 @@ export default function MobilePage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gpsNotice, setGpsNotice] = useState<string | null>(null);
+  const [chamadosPendentesOpen, setChamadosPendentesOpen] = useState(false);
+  const [imprimirOpen, setImprimirOpen] = useState(false);
+  const [lancarOpen, setLancarOpen] = useState(false);
   const queueRef = useRef<MobileQueuedInspection[]>([]);
 
   useEffect(() => {
@@ -349,6 +355,14 @@ export default function MobilePage() {
         backHref={backHref}
         action={
           <div className="flex flex-wrap gap-2">
+            <Button variant="outlined" size="sm" disabled={!online} onClick={() => setImprimirOpen(true)}>
+              <Printer className="mr-1.5 h-4 w-4" />
+              Imprimir vistoria manual
+            </Button>
+            <Button variant="tonal" size="sm" disabled={!online} onClick={() => setLancarOpen(true)}>
+              <ClipboardPen className="mr-1.5 h-4 w-4" />
+              Lançar vistoria manual
+            </Button>
             <Button variant="tonal" size="sm" disabled={downloading || !online} onClick={() => void downloadFieldPackage(true)}>
               <RefreshCcw className={cn('mr-1.5 h-4 w-4', downloading && 'animate-spin')} />
               {downloading ? 'Baixando...' : 'Baixar dados offline'}
@@ -469,10 +483,21 @@ export default function MobilePage() {
                       {formatUnidadeTipo(selectedUnit.tipo)} · {selectedUnit.secretaria.sigla} ·{' '}
                       {selectedUnit.bairro ?? 'Sem bairro'} · raio {selectedUnit.raioValidacaoMetros} m
                     </p>
-                    <Chip variant="brand" className="mt-3 gap-1.5">
-                      <Satellite className="h-3.5 w-3.5" />
-                      GPS ativo no check-in
-                    </Chip>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Chip variant="brand" className="gap-1.5">
+                        <Satellite className="h-3.5 w-3.5" />
+                        GPS ativo no check-in
+                      </Chip>
+                      <Button
+                        type="button"
+                        variant="outlined"
+                        size="sm"
+                        onClick={() => setChamadosPendentesOpen(true)}
+                      >
+                        <Megaphone className="mr-1.5 h-3.5 w-3.5" />
+                        Chamados pendentes
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               ) : null}
@@ -531,6 +556,16 @@ export default function MobilePage() {
           ) : null}
         </div>
       </PageShell>
+      {selectedUnit ? (
+        <ChamadosPendentesUnidadeSheet
+          open={chamadosPendentesOpen}
+          onClose={() => setChamadosPendentesOpen(false)}
+          unidadeId={selectedUnit.id}
+          unidadeNome={selectedUnit.nome}
+        />
+      ) : null}
+      <ImprimirVistoriaManualDialog open={imprimirOpen} onClose={() => setImprimirOpen(false)} />
+      <LancarVistoriaManualDialog open={lancarOpen} onClose={() => setLancarOpen(false)} />
     </RequirePermissions>
   );
 }

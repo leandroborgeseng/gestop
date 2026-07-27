@@ -87,4 +87,30 @@ describe('buildRespostaPayload', () => {
     expect(payload.evidencias).toHaveLength(2);
     expect(payload.evidencias[0]?.url).toContain('base64,a');
   });
+
+  it('inclui gerarChamado apenas em NC com item marcado', () => {
+    const withFlag = buildRespostaPayload(
+      item({ id: '1', titulo: 'NC', tipo: 'BOOLEANO', geraNaoConformidade: true }),
+      { conformidade: 'NAO_CONFORME', comentario: 'problema', gerarChamado: false, valorBooleano: false },
+      { latitude: -20, longitude: -47, precisaoMetros: 10 },
+      '2026-07-15T12:00:00.000Z',
+    );
+    expect(withFlag.gerarChamado).toBe(false);
+
+    const defaultOn = buildRespostaPayload(
+      item({ id: '1', titulo: 'NC', tipo: 'BOOLEANO', geraNaoConformidade: true }),
+      { conformidade: 'NAO_CONFORME', comentario: 'problema', valorBooleano: false },
+      { latitude: -20, longitude: -47, precisaoMetros: 10 },
+      '2026-07-15T12:00:00.000Z',
+    );
+    expect(defaultOn.gerarChamado).toBe(true);
+
+    const conforme = buildRespostaPayload(
+      item({ id: '1', titulo: 'OK', tipo: 'BOOLEANO', geraNaoConformidade: true }),
+      { conformidade: 'CONFORME', comentario: '', valorBooleano: true },
+      { latitude: -20, longitude: -47, precisaoMetros: 10 },
+      '2026-07-15T12:00:00.000Z',
+    );
+    expect(conforme.gerarChamado).toBeUndefined();
+  });
 });

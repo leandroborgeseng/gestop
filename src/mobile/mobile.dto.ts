@@ -68,6 +68,11 @@ class MobileRespostaDto {
   @IsString()
   comentario?: string;
 
+  /** Quando false, registra NC pendente sem abrir chamado automaticamente. Default: true. */
+  @IsOptional()
+  @IsBoolean()
+  gerarChamado?: boolean;
+
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => MobileEvidenciaDto)

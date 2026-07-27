@@ -29,6 +29,11 @@ export type OperacionalResumo = {
   chamadosAbertos: number;
   /** Próprios com vistoria programada atrasada no cronograma. */
   vistoriasAtrasadas?: number;
+  /**
+   * Contagem única de pendências (NC sem chamado aberto + chamados abertos + vistorias atrasadas).
+   * Não inclui classificação SLA — fora do prazo não duplica o total.
+   */
+  totalPendencias?: number;
   eventosSyncPendentes: number;
 };
 
@@ -52,6 +57,8 @@ export type UnidadeOperacional = {
   };
   pendencias: {
     naoConformidadesAbertas: number;
+    /** NCs sem chamado — para totalizar sem duplicar com chamados abertos. */
+    naoConformidadesSemChamadoAberto?: number;
     chamadosAbertos: number;
     /** True quando há vistoria programada no cronograma com data prevista vencida. */
     semVistoria?: boolean;
@@ -60,6 +67,8 @@ export type UnidadeOperacional = {
       checklistNome: string;
     } | null;
   };
+  /** Itens únicos de pendência (sem somar SLA). */
+  pendenciasUnicas?: number;
   totais: {
     fiscalizacoes: number;
     naoConformidadesAbertas: number;
@@ -110,11 +119,53 @@ export type UnidadeDetalhe = UnidadeOperacional & {
       descricao: string;
       severidade: string;
       status: string;
+      situacaoVisual?:
+        | 'ABERTA'
+        | 'VINCULADA_EM_ANDAMENTO'
+        | 'RESOLVIDA_CHAMADO'
+        | 'BAIXADA_MANUAL'
+        | 'ENCERRADA';
+      pendenteAtiva?: boolean;
       registradaEm: string;
+      resolvidaEm?: string | null;
+      motivoBaixa?: string | null;
+      baixadaEm?: string | null;
+      dataVistoria?: string;
+      checklist?: {
+        id: string;
+        nome: string;
+        versao: number;
+      };
+      fiscalizacaoId?: string;
       item: {
+        id?: string;
         codigo: string;
         titulo: string;
       };
+      resposta?: {
+        id: string;
+        conformidade: string;
+        valorTexto: string | null;
+        valorBooleano: boolean | null;
+        valorNumero: number | null;
+        comentario: string | null;
+      };
+      evidencias?: Array<{
+        id: string;
+        tipo: string;
+        url: string;
+        mimeType?: string | null;
+        capturadaEm: string;
+      }>;
+      registradaPor?: { id: string; nome: string };
+      baixadaPor?: { id: string; nome: string } | null;
+      chamado?: {
+        id: string;
+        codigo: string;
+        status: string;
+        prioridade?: string;
+        titulo?: string | null;
+      } | null;
     }>;
     chamados: Array<{
       id: string;
@@ -583,6 +634,7 @@ export type ChecklistVersao = {
 export type ChecklistModel = {
   id: string;
   secretariaId?: string | null;
+  unidadeId?: string | null;
   nome: string;
   descricao?: string | null;
   finalidade?: ChecklistFinalidade;
@@ -634,6 +686,7 @@ export type MobileQueuedInspection = {
     valorTexto?: string;
     valorNumero?: number;
     comentario?: string;
+    gerarChamado?: boolean;
     evidencias: Array<{
       tipo: 'FOTO';
       url: string;
@@ -759,7 +812,12 @@ export type ChamadoResumo = {
     secretaria?: SecretariaOption | null;
   } | null;
   responsavel?: { id: string; nome: string } | null;
-  equipe?: { id: string; nome: string } | null;
+  equipe?: {
+    id: string;
+    nome: string;
+    secretariaId?: string | null;
+    secretaria?: SecretariaOption | null;
+  } | null;
   tipoChamado?: { id: string; nome: string; exigeVistoriaPrevia?: boolean } | null;
   naoConformidade?: ChamadoNaoConformidade | null;
   registradoPor?: { id: string; nome: string } | null;
@@ -1036,15 +1094,22 @@ export type FiscalizacaoStatus =
   | 'CANCELADA'
   | 'SINCRONIZACAO_PENDENTE';
 
+export type FiscalizacaoOrigem = 'ROTINA' | 'CHAMADO' | 'AVULSA' | 'OFFLINE' | 'MANUAL';
+
 export type FiscalizacaoResumo = {
   id: string;
   status: FiscalizacaoStatus;
-  origem: string;
+  origem: FiscalizacaoOrigem | string;
+  origemLabel?: string | null;
   iniciadaEm: string | null;
   concluidaEm: string | null;
   dentroRaioPermitido: boolean | null;
   distanciaCheckinMetros: number | null;
   observacoes?: string | null;
+  metadata?: Record<string, unknown> | null;
+  lancamentoManual?: boolean;
+  dataVistoriaInformada?: string | null;
+  dataLancamento?: string | null;
   createdAt: string;
   secretaria: { id: string; sigla: string; nome: string };
   unidade: { id: string; nome: string; codigoPatrimonial: string; bairro?: string | null; tipo?: UnidadeTipo };
@@ -1055,6 +1120,32 @@ export type FiscalizacaoResumo = {
     checklist: { id: string; nome: string };
   };
   nota?: VistoriaNotaResumo | null;
+};
+
+export type FiscalizacaoOpcoesManuais = {
+  secretariaEscopo?: {
+    ativaId: string | null;
+    todas: boolean;
+  };
+  unidades: Array<{
+    id: string;
+    nome: string;
+    codigoPatrimonial: string;
+    tipo: UnidadeTipo;
+    endereco: string;
+    bairro?: string | null;
+    secretariaId: string;
+    secretaria: SecretariaOption;
+  }>;
+  checklists: ChecklistModel[];
+};
+
+export type LancamentoManualPayload = {
+  unidadeId: string;
+  checklistVersaoId: string;
+  dataVistoria: string;
+  observacoes?: string;
+  respostas: MobileQueuedInspection['respostas'];
 };
 
 export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
@@ -1076,7 +1167,10 @@ export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
     };
     naoConformidade?: {
       id: string;
-      chamado?: { id: string; codigo: string } | null;
+      status?: string;
+      motivoBaixa?: string | null;
+      baixadaEm?: string | null;
+      chamado?: { id: string; codigo: string; status?: string } | null;
     } | null;
     evidencias?: Array<{
       id: string;
@@ -1100,7 +1194,10 @@ export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
     descricao: string;
     severidade: string;
     status: string;
+    motivoBaixa?: string | null;
+    baixadaEm?: string | null;
     item: { codigo: string; titulo: string };
+    chamado?: { id: string; codigo: string; status?: string } | null;
   }>;
 };
 
@@ -1110,4 +1207,61 @@ export type FiscalizacoesListResponse = {
   limit: number;
   offset: number;
   hasMore: boolean;
+};
+
+export type BackupS3PublicConfig = {
+  enabled: boolean;
+  bucket: string | null;
+  region: string;
+  accessKeyId: string | null;
+  hasSecretAccessKey: boolean;
+  prefix: string;
+  dailyHour: number;
+  keepDaily: number;
+  keepWeekly: number;
+  keepMonthly: number;
+  endpoint: string | null;
+  timezone: string;
+  forcePathStyle: boolean;
+  envImportedAt?: string | null;
+  updatedAt?: string;
+};
+
+export type BackupS3StatusResponse = {
+  status: 'ativo' | 'desabilitado' | 'incompleto' | 'em_execucao';
+  running: boolean;
+  runningSince: string | null;
+  cronRegistered: boolean;
+  config: BackupS3PublicConfig;
+  lastRun: {
+    at: string | null;
+    status: string | null;
+    error: string | null;
+    trigger: string | null;
+    objectKey: string | null;
+    bytes: number | null;
+  };
+};
+
+export type BackupS3ObjectItem = {
+  tier: 'daily' | 'weekly' | 'monthly';
+  key: string;
+  size: number;
+  lastModified: string | null;
+};
+
+export type BackupS3ConfigPayload = {
+  enabled: boolean;
+  bucket?: string | null;
+  region?: string | null;
+  accessKeyId?: string | null;
+  secretAccessKey?: string | null;
+  prefix?: string | null;
+  dailyHour: number;
+  keepDaily: number;
+  keepWeekly: number;
+  keepMonthly: number;
+  endpoint?: string | null;
+  timezone?: string | null;
+  forcePathStyle?: boolean;
 };

@@ -6,7 +6,7 @@ import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
 import { TipoChamadoSelect } from '@/components/chamados/tipo-chamado-select';
 import { cn } from '@/lib/cn';
-import { SlaFilter, summarizeChamadoFiltros } from '@/lib/chamado-filtros';
+import { SlaFilter, AtribuicaoFilter, summarizeChamadoFiltros } from '@/lib/chamado-filtros';
 import { ChamadoStatus, EquipeOpcao, SecretariaOption, TipoChamadoOpcao } from '@/lib/types';
 import { CHAMADO_STATUS_META } from '@/lib/chamado-status';
 
@@ -27,6 +27,12 @@ const SLA_CHIPS: Array<{ value: SlaFilter; label: string }> = [
   { value: 'SEM', label: 'Sem SLA' },
 ];
 
+const ATRIBUICAO_CHIPS: Array<{ value: AtribuicaoFilter; label: string }> = [
+  { value: 'TODOS', label: 'Todos' },
+  { value: 'MIM', label: 'Atribuídos a mim' },
+  { value: 'MINHA_EQUIPE', label: 'Atribuídos à minha equipe' },
+];
+
 const STATUS_CHIPS: Array<{ value: 'TODOS' | ChamadoStatus; label: string }> = [
   { value: 'TODOS', label: 'Todos' },
   ...Object.entries(CHAMADO_STATUS_META).map(([value, meta]) => ({
@@ -39,6 +45,7 @@ export type ChamadosFiltrosValue = {
   statuses: Set<ChamadoStatus> | 'TODOS';
   prioridade: PrioridadeFilter;
   sla: SlaFilter;
+  atribuicao: AtribuicaoFilter;
   equipeId: string;
   secretariaProprioId: string;
   secretariaExecucaoId: string;
@@ -91,6 +98,7 @@ export function ChamadosFiltrosPanel({
       statusCount,
       prioridade: value.prioridade,
       sla: value.sla,
+      atribuicao: value.atribuicao,
       equipe: value.equipeId,
       secretariaProprio: value.secretariaProprioId,
       secretariaExecucao: value.secretariaExecucaoId,
@@ -107,6 +115,7 @@ export function ChamadosFiltrosPanel({
     statusCount,
     statusTodos,
     tiposChamado,
+    value.atribuicao,
     value.equipeId,
     value.prioridade,
     value.secretariaExecucaoId,
@@ -192,6 +201,21 @@ export function ChamadosFiltrosPanel({
                   key={item.value}
                   active={value.sla === item.value}
                   onClick={() => onChange({ ...value, sla: item.value })}
+                >
+                  {item.label}
+                </Chip>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Atribuição</p>
+            <div className="flex flex-wrap gap-1.5">
+              {ATRIBUICAO_CHIPS.map((item) => (
+                <Chip
+                  key={item.value}
+                  active={value.atribuicao === item.value}
+                  onClick={() => onChange({ ...value, atribuicao: item.value })}
                 >
                   {item.label}
                 </Chip>

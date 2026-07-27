@@ -1,0 +1,122 @@
+# SIGMA — stack completo para Coolify (PostGIS + API + Web).
+# Um unico recurso Docker Compose no Coolify; deploy automatico via Git.
+#
+# IMPORTANTE (Coolify): marque as variaveis criticas como "Available at Buildtime"
+# (Build Variable) na aba Environment — senão a interpolacao do compose falha.
+# Veja COOLIFY.md e .env.coolify.example
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gestop}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gestop_change_me}
+      POSTGRES_DB: ${POSTGRES_DB:-gestop}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-gestop} -d ${POSTGRES_DB:-gestop}',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gestop}:${POSTGRES_PASSWORD:-gestop_change_me}@postgres:5432/${POSTGRES_DB:-gestop}?schema=public
+      JWT_SECRET: ${JWT_SECRET:-change_me_jwt_secret}
+      CORS_ORIGINS: ${CORS_ORIGINS:-${SERVICE_URL_WEB:-http://localhost:3000}}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      RUN_SEED: ${RUN_SEED:-false}
+      FORCE_SEED_ON_START: ${FORCE_SEED_ON_START:-false}
+      FORCE_DB_RESET: ${FORCE_DB_RESET:-false}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      STORAGE_LOCAL_DIR: ${STORAGE_LOCAL_DIR:-/data/gestop-evidencias}
+      STORAGE_PUBLIC_URL_BASE: ${STORAGE_PUBLIC_URL_BASE:-${SERVICE_URL_WEB:-http://localhost:3000}/api-gestop}
+      STORAGE_MAX_FILE_BYTES: ${STORAGE_MAX_FILE_BYTES:-26214400}
+      FRONTEND_PUBLIC_URL: ${FRONTEND_PUBLIC_URL:-${SERVICE_URL_WEB:-http://localhost:3000}}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-${SERVICE_URL_WEB:-http://localhost:3000}}
+      WEBMAP_AUTO_IMPORT_ON_START: ${WEBMAP_AUTO_IMPORT_ON_START:-true}
+      WEBMAP_AUTO_IMPORT_MIN_UNITS: ${WEBMAP_AUTO_IMPORT_MIN_UNITS:-10}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-0.1}
+      INTEGRACOES_WEBHOOK_URL: ${INTEGRACOES_WEBHOOK_URL:-}
+      INTEGRACOES_WEBHOOK_SECRET: ${INTEGRACOES_WEBHOOK_SECRET:-}
+      WEB_PUSH_VAPID_PUBLIC_KEY: ${WEB_PUSH_VAPID_PUBLIC_KEY:-}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      WEB_PUSH_VAPID_SUBJECT: ${WEB_PUSH_VAPID_SUBJECT:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+      S3_PUBLIC_URL_BASE: ${S3_PUBLIC_URL_BASE:-}
+      BACKUP_ENCRYPTION_KEY: ${BACKUP_ENCRYPTION_KEY:-}
+      BACKUP_S3_PREFIX: ${BACKUP_S3_PREFIX:-sigma-backups}
+      ALERTAS_INTERVAL_MS: ${ALERTAS_INTERVAL_MS:-21600000}
+      SYNC_REPLAY_INTERVAL_MS: ${SYNC_REPLAY_INTERVAL_MS:-1800000}
+      LGPD_AUDIT_RETENTION_DAYS: ${LGPD_AUDIT_RETENTION_DAYS:-365}
+      WEBMAP_CRON_SECRET: ${WEBMAP_CRON_SECRET:-}
+    volumes:
+      - api_storage:/data/gestop-evidencias
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    expose:
+      - '3001'
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:-http://api:3001}
+      NEXT_PUBLIC_SHOW_DEMO_LOGIN: ${NEXT_PUBLIC_SHOW_DEMO_LOGIN:-false}
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    expose:
+      - '3000'
+
+volumes:
+  pgdata:
+  api_storage:

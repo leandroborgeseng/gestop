@@ -9,9 +9,21 @@ import {
 
 /** Chaves legadas usadas pelos guards atuais — derivadas da matriz ao salvar. */
 const LEGACY_CHAMADOS_GERENCIAR = 'chamados.gerenciar';
+const LEGACY_CHAMADOS_ABRIR = 'chamados.abrir';
 const LEGACY_CHAMADOS_EXECUTAR = 'chamados.executar';
 const LEGACY_CHAMADOS_EDITAR_ABERTURA = 'chamados.editar_abertura';
 const LEGACY_CHAMADOS_EXECUCAO_MANUAL = 'chamados.execucao_manual';
+
+const CHAMADOS_ABRIR_ONLY_KEYS = new Set([
+  permissionMatrixKey('chamados', 'abrir_chamado', 'visualizar'),
+  permissionMatrixKey('chamados', 'abrir_chamado', 'inserir'),
+]);
+
+function hasChamadosBeyondAbrir(matrixKeys: Set<string>) {
+  return [...matrixKeys].some(
+    (key) => key.startsWith('matriz.chamados.') && !CHAMADOS_ABRIR_ONLY_KEYS.has(key),
+  );
+}
 const LEGACY_FISCALIZACOES_EXECUTAR = 'fiscalizacoes.executar';
 const LEGACY_DASHBOARD_VISUALIZAR = 'dashboard.visualizar';
 const LEGACY_USUARIOS_GERENCIAR = 'usuarios.gerenciar';
@@ -44,9 +56,16 @@ export function deriveLegacyPermissionKeys(matrixKeys: Set<string>): Set<string>
 
   const hasPrefix = (prefix: string) => [...matrixKeys].some((key) => key.startsWith(`matriz.${prefix}.`));
 
-  // Gerenciar/triagem só com permissões da tela Chamados — Execução sozinha não libera Triagem.
-  if (hasPrefix('chamados')) {
+  // Gerenciar/triagem: permissões da tela Chamados além de “Novo chamado” (abrir_chamado).
+  // Só abrir_chamado NÃO libera listagem/triagem/programação.
+  if (hasChamadosBeyondAbrir(matrixKeys)) {
     legacy.add(LEGACY_CHAMADOS_GERENCIAR);
+  }
+  if (
+    matrixKeys.has(permissionMatrixKey('chamados', 'abrir_chamado', 'visualizar')) ||
+    matrixKeys.has(permissionMatrixKey('chamados', 'abrir_chamado', 'inserir'))
+  ) {
+    legacy.add(LEGACY_CHAMADOS_ABRIR);
   }
   if (hasPrefix('execucao') || matrixKeys.has(permissionMatrixKey('chamados', 'execucao_manual', 'executar'))) {
     legacy.add(LEGACY_CHAMADOS_EXECUTAR);
@@ -108,6 +127,10 @@ export function expandLegacyToMatrixKeys(legacyKeys: Set<string>): Set<string> {
   if (legacyKeys.has(LEGACY_CHAMADOS_GERENCIAR)) {
     grantScreen('chamados');
     grantScreen('execucao', ['visualizar', 'executar', 'inserir']);
+  }
+  if (legacyKeys.has(LEGACY_CHAMADOS_ABRIR)) {
+    matrix.add(permissionMatrixKey('chamados', 'abrir_chamado', 'visualizar'));
+    matrix.add(permissionMatrixKey('chamados', 'abrir_chamado', 'inserir'));
   }
   if (legacyKeys.has(LEGACY_CHAMADOS_EXECUTAR)) {
     grantScreen('execucao', ['visualizar', 'executar', 'inserir']);
@@ -227,7 +250,12 @@ export function diffMatrixPermissions(before: Set<string>, after: Set<string>): 
 
 /** Tela visível no menu se tiver visualizar na linha da tela ou em alguma função. */
 export function screenHasVisualizarAccess(telaId: string, effectiveKeys: Set<string>) {
-  return keysForScreen(telaId, 'visualizar').some((key) => effectiveKeys.has(key));
+  return keysForScreen(telaId, 'visualizar').some((key) => {
+    if (!effectiveKeys.has(key)) return false;
+    // “Novo chamado” sozinho não libera o menu Chamados (triagem/programação).
+    if (telaId === 'chamados' && CHAMADOS_ABRIR_ONLY_KEYS.has(key)) return false;
+    return true;
+  });
 }
 
 export const NAV_SCREEN_MAP: Record<string, string> = {
@@ -235,6 +263,7 @@ export const NAV_SCREEN_MAP: Record<string, string> = {
   mobile: 'vistoria_campo',
   vistorias: 'vistorias',
   chamados: 'chamados',
+  novo_chamado: 'chamados',
   execucao: 'execucao',
   dashboard: 'dashboard',
   cronograma: 'cronograma',

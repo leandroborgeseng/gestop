@@ -1,3 +1,5 @@
+# Banco local para desenvolvimento.
+# Stack completa Coolify/produção: docker-compose.coolify.yml (ver COOLIFY.md)
 services:
   postgres:
     image: postgis/postgis:16-3.4

@@ -76,11 +76,18 @@ export type UnidadeOperacional = {
   };
   pendencias: {
     naoConformidadesAbertas: number;
+    /** NCs abertas/em triagem ainda sem chamado — evita duplicar com chamadosAbertos. */
+    naoConformidadesSemChamadoAberto: number;
     chamadosAbertos: number;
     semVistoria: boolean;
     /** Detalhe da vistoria programada mais antiga em atraso (quando semVistoria). */
     vistoriaAtrasada?: VistoriaAtrasadaResumo | null;
   };
+  /**
+   * Itens únicos de pendência neste próprio (respeitando tiposPendencia).
+   * Não inclui classificação SLA.
+   */
+  pendenciasUnicas: number;
   totais: UnidadeResumoCounts;
   /** Verde/vermelho no mapa quando há chamado aberto com prazo. */
   slaMapa: UnidadeSlaMapa;

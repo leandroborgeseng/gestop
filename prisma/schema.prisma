@@ -75,6 +75,7 @@ enum FiscalizacaoOrigem {
   CHAMADO
   AVULSA
   OFFLINE
+  MANUAL
 }
 
 enum ConformidadeStatus {
@@ -97,6 +98,7 @@ enum NaoConformidadeStatus {
   CHAMADO_GERADO
   RESOLVIDA
   CANCELADA
+  BAIXADA_MANUAL
 }
 
 enum Severidade {
@@ -267,6 +269,7 @@ model Usuario {
   checklistVersoes ChecklistVersao[]  @relation("ChecklistVersaoPublicadoPor")
   fiscalizacoes    Fiscalizacao[]     @relation("FiscalizacaoAgente")
   naoConformidades NaoConformidade[]  @relation("NaoConformidadeRegistradaPor")
+  naoConformidadesBaixadas NaoConformidade[] @relation("NaoConformidadeBaixadaPor")
   chamadosResponsavel Chamado[]         @relation("ChamadoResponsavel")
   historicosStatus  HistoricoStatus[] @relation("HistoricoAlteradoPor")
   logsAuditoria     LogAuditoria[]    @relation("AuditoriaUsuario")
@@ -565,6 +568,10 @@ model Fiscalizacao {
   distanciaCheckinMetros Decimal?           @db.Decimal(10, 2)
   dentroRaioPermitido   Boolean?
   observacoes           String?
+  /// Data real informada no lançamento manual (sem GPS).
+  dataVistoriaInformada DateTime?
+  /// Auditoria de lançamento (ex.: lancamentoManual, dataVistoriaInformada, dataLancamento).
+  metadata              Json?
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
@@ -581,6 +588,7 @@ model Fiscalizacao {
   @@index([checklistVersaoId])
   @@index([agenteId])
   @@index([status])
+  @@index([origem])
   @@index([createdAt])
 }
 
@@ -680,6 +688,9 @@ model NaoConformidade {
   evidenciaObrigatoriaAtendida Boolean                @default(false)
   registradaEm                DateTime                @default(now())
   resolvidaEm                 DateTime?
+  motivoBaixa                 String?
+  baixadaEm                   DateTime?
+  baixadaPorId                String?
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
 
@@ -688,6 +699,7 @@ model NaoConformidade {
   item          ChecklistItem     @relation(fields: [itemId], references: [id], onDelete: Restrict)
   unidade       UnidadePublica    @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
   registradaPor Usuario           @relation("NaoConformidadeRegistradaPor", fields: [registradaPorId], references: [id], onDelete: Restrict)
+  baixadaPor    Usuario?          @relation("NaoConformidadeBaixadaPor", fields: [baixadaPorId], references: [id], onDelete: SetNull)
   evidencias    Evidencia[]
   chamado       Chamado?
 
@@ -695,6 +707,7 @@ model NaoConformidade {
   @@index([itemId])
   @@index([unidadeId])
   @@index([registradaPorId])
+  @@index([baixadaPorId])
   @@index([status])
   @@index([severidade])
 }
@@ -871,4 +884,34 @@ model WebmapImport {
   @@index([githubCommitSha])
   @@index([createdAt])
   @@index([usuarioId])
+}
+
+/// Configuração singleton de backup automático para S3-compatible (admin UI).
+model BackupS3Config {
+  id                 String    @id @default("default")
+  enabled            Boolean   @default(false)
+  bucket             String?
+  region             String    @default("auto")
+  accessKeyId        String?
+  /// Secret Access Key criptografada (AES-256-GCM). Nunca retornada pela API.
+  secretAccessKeyEnc String?
+  prefix             String    @default("sigma-backups")
+  /// Hora local do backup diário (0–23). Cron: `0 {dailyHour} * * *`
+  dailyHour          Int       @default(2)
+  timezone           String    @default("America/Sao_Paulo")
+  endpoint           String?
+  forcePathStyle     Boolean   @default(false)
+  keepDaily          Int       @default(7)
+  keepWeekly         Int       @default(5)
+  keepMonthly        Int       @default(12)
+  /// Marca importação única a partir de variáveis S3_* do ambiente.
+  envImportedAt      DateTime?
+  lastRunAt          DateTime?
+  lastRunStatus      String?
+  lastRunError       String?
+  lastRunTrigger     String?
+  lastRunObjectKey   String?
+  lastRunBytes       BigInt?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 }

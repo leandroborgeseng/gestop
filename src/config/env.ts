@@ -52,14 +52,21 @@ export function assertProductionEnv() {
     }
 
     const localDir = process.env.STORAGE_LOCAL_DIR?.trim();
-    if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
+    const isManagedDeploy =
+      Boolean(process.env.RAILWAY_ENVIRONMENT) ||
+      Boolean(process.env.RAILWAY_PROJECT_ID) ||
+      Boolean(process.env.COOLIFY) ||
+      Boolean(process.env.COOLIFY_RESOURCE_UUID) ||
+      Boolean(process.env.COOLIFY_CONTAINER_NAME);
+
+    if (isManagedDeploy) {
       if (!localDir) {
         errors.push(
-          '[SIGMA:env] STORAGE_LOCAL_DIR obrigatorio no Railway (ex.: /data/gestop-evidencias com Volume montado em /data).',
+          '[SIGMA:env] STORAGE_LOCAL_DIR obrigatorio em Coolify/Railway (ex.: /data/gestop-evidencias com volume persistente).',
         );
       } else if (!localDir.startsWith('/data/')) {
         errors.push(
-          '[SIGMA:env] STORAGE_LOCAL_DIR deve apontar para o Volume persistente (/data/gestop-evidencias).',
+          '[SIGMA:env] STORAGE_LOCAL_DIR deve apontar para o volume persistente (/data/gestop-evidencias).',
         );
       }
     }

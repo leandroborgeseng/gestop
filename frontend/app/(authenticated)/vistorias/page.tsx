@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ClipboardList, MapPin, Search, UserRound } from 'lucide-react';
+import { ClipboardList, ClipboardPen, MapPin, Printer, Search, UserRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
 import { PageShell } from '@/components/layout/page-shell';
@@ -13,6 +13,8 @@ import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
+import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
+import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
 import { getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { formatUnidadeTipo, UNIDADE_TIPO_LABELS } from '@/lib/unidade-tipo';
@@ -102,6 +104,10 @@ export default function VistoriasPage() {
 
   const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
+  const [imprimirOpen, setImprimirOpen] = useState(false);
+  const [lancarOpen, setLancarOpen] = useState(false);
+
+  const canExecutar = Boolean(sessionUser?.permissoes.includes('fiscalizacoes.executar'));
 
   useEffect(() => {
     if (canFilterSecretaria) {
@@ -192,11 +198,25 @@ export default function VistoriasPage() {
         description="Consulte vistorias registradas no sistema com filtros por período, agente e unidade."
         backHref="/mobile"
         action={
-          <Link href="/mobile">
-            <Button variant="outlined" size="sm">
-              Nova vistoria
-            </Button>
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {canExecutar ? (
+              <>
+                <Button variant="outlined" size="sm" onClick={() => setImprimirOpen(true)}>
+                  <Printer className="mr-1.5 h-4 w-4" />
+                  Imprimir vistoria manual
+                </Button>
+                <Button variant="tonal" size="sm" onClick={() => setLancarOpen(true)}>
+                  <ClipboardPen className="mr-1.5 h-4 w-4" />
+                  Lançar vistoria manual
+                </Button>
+              </>
+            ) : null}
+            <Link href="/mobile">
+              <Button variant="outlined" size="sm">
+                Nova vistoria
+              </Button>
+            </Link>
+          </div>
         }
       >
         {error ? <ErrorState message={error} /> : null}
@@ -313,6 +333,9 @@ export default function VistoriasPage() {
                               </span>
                             ) : null}
                             <Badge variant={STATUS_BADGE[item.status]}>{statusLabel(item.status)}</Badge>
+                            {item.lancamentoManual || item.origem === 'MANUAL' ? (
+                              <Badge variant="info">Lançamento manual</Badge>
+                            ) : null}
                           </div>
                         </div>
                         <p className="text-[12px] text-[var(--ink-3)]">
@@ -325,6 +348,7 @@ export default function VistoriasPage() {
                             {item.agente.nome}
                           </span>
                           <span>{formatDateTime(item.concluidaEm ?? item.iniciadaEm)}</span>
+                          <span>Origem: {item.origemLabel ?? item.origem}</span>
                         </div>
                       </button>
                     );
@@ -367,6 +391,9 @@ export default function VistoriasPage() {
                           <NotaVistoriaDestaque notaGeral={detail.nota.notaGeral} />
                         ) : null}
                         <Badge variant={STATUS_BADGE[selected.status]}>{statusLabel(selected.status)}</Badge>
+                        {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
+                          <Badge variant="info">Lançamento manual</Badge>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -376,8 +403,25 @@ export default function VistoriasPage() {
                     <dl className="grid gap-3 sm:grid-cols-2">
                       <DetailField label="Checklist">{selected.checklistVersao.checklist.nome} (v{selected.checklistVersao.versao})</DetailField>
                       <DetailField label="Agente">{selected.agente.nome}</DetailField>
-                      <DetailField label="Iniciada em">{formatDateTime(selected.iniciadaEm)}</DetailField>
-                      <DetailField label="Concluída em">{formatDateTime(selected.concluidaEm)}</DetailField>
+                      <DetailField label="Origem">{(detail ?? selected).origemLabel ?? selected.origem}</DetailField>
+                      <DetailField label="Lançamento manual">
+                        {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? 'Sim' : 'Não'}
+                      </DetailField>
+                      {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
+                        <>
+                          <DetailField label="Data da vistoria">
+                            {formatDateTime((detail ?? selected).dataVistoriaInformada ?? selected.iniciadaEm)}
+                          </DetailField>
+                          <DetailField label="Data do lançamento">
+                            {formatDateTime((detail ?? selected).dataLancamento ?? selected.createdAt)}
+                          </DetailField>
+                        </>
+                      ) : (
+                        <>
+                          <DetailField label="Iniciada em">{formatDateTime(selected.iniciadaEm)}</DetailField>
+                          <DetailField label="Concluída em">{formatDateTime(selected.concluidaEm)}</DetailField>
+                        </>
+                      )}
                       <DetailField label="Dentro do raio">
                         {selected.dentroRaioPermitido == null ? '—' : selected.dentroRaioPermitido ? 'Sim' : 'Não'}
                       </DetailField>
@@ -431,6 +475,23 @@ export default function VistoriasPage() {
                             <div key={nc.id} className="rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[13px]">
                               <p className="font-semibold text-[var(--warn)]">{nc.item.codigo} — {nc.item.titulo}</p>
                               <p className="mt-1 text-[var(--ink-2)]">{nc.descricao}</p>
+                              {nc.chamado ? (
+                                <p className="mt-2 text-[12px]">
+                                  Chamado gerado:{' '}
+                                  <Link href={`/chamados?search=${encodeURIComponent(nc.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
+                                    {nc.chamado.codigo}
+                                  </Link>
+                                  {nc.chamado.status ? ` · ${nc.chamado.status}` : ''}
+                                </p>
+                              ) : nc.status === 'BAIXADA_MANUAL' ? (
+                                <p className="mt-2 text-[12px] text-[var(--ink-3)]">
+                                  Baixada manualmente{nc.motivoBaixa ? `: ${nc.motivoBaixa}` : ''}
+                                </p>
+                              ) : (
+                                <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
+                                  Pendente sem chamado
+                                </p>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -463,6 +524,12 @@ export default function VistoriasPage() {
                                   <Link href={`/chamados?search=${encodeURIComponent(resposta.naoConformidade.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
                                     {resposta.naoConformidade.chamado.codigo}
                                   </Link>
+                                </p>
+                              ) : resposta.naoConformidade ? (
+                                <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
+                                  {resposta.naoConformidade.status === 'BAIXADA_MANUAL'
+                                    ? 'NC baixada manualmente (sem chamado)'
+                                    : 'NC pendente sem chamado'}
                                 </p>
                               ) : null}
                             </div>
@@ -500,11 +567,24 @@ export default function VistoriasPage() {
                       {resposta.naoConformidade.chamado.codigo}
                     </Link>
                   </p>
+                ) : resposta.naoConformidade ? (
+                  <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
+                    {resposta.naoConformidade.status === 'BAIXADA_MANUAL'
+                      ? 'NC baixada manualmente (sem chamado)'
+                      : 'NC pendente sem chamado'}
+                  </p>
                 ) : null}
               </div>
             ))}
           </div>
         </Sheet>
+
+        <ImprimirVistoriaManualDialog open={imprimirOpen} onClose={() => setImprimirOpen(false)} />
+        <LancarVistoriaManualDialog
+          open={lancarOpen}
+          onClose={() => setLancarOpen(false)}
+          onSuccess={() => void loadList(0, false)}
+        />
       </PageShell>
     </RequirePermissions>
   );

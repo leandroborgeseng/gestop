@@ -89,6 +89,7 @@ export const NAV_SCREEN_MAP: Record<string, string> = {
   mobile: 'vistoria_campo',
   vistorias: 'vistorias',
   chamados: 'chamados',
+  novo_chamado: 'chamados',
   execucao: 'execucao',
   dashboard: 'dashboard',
   cronograma: 'cronograma',
@@ -98,17 +99,42 @@ export const NAV_SCREEN_MAP: Record<string, string> = {
   integracoes: 'integracoes',
 };
 
+const CHAMADOS_ABRIR_KEYS = new Set([
+  buildMatrixKey('chamados', 'abrir_chamado', 'visualizar'),
+  buildMatrixKey('chamados', 'abrir_chamado', 'inserir'),
+]);
+
 export function screenHasVisualizarAccess(telaId: string, permissoes: string[]) {
   const set = new Set(permissoes);
-  return permissoes.some(
-    (key) => key.startsWith(`matriz.${telaId}.`) && key.endsWith('.visualizar') && set.has(key),
+  return permissoes.some((key) => {
+    if (!(key.startsWith(`matriz.${telaId}.`) && key.endsWith('.visualizar') && set.has(key))) {
+      return false;
+    }
+    // Novo chamado sozinho não libera o menu Chamados.
+    if (telaId === 'chamados' && CHAMADOS_ABRIR_KEYS.has(key)) return false;
+    return true;
+  });
+}
+
+export function hasAbrirChamadoAccess(permissoes: string[]) {
+  if (permissoes.includes('chamados.abrir') || permissoes.includes('chamados.gerenciar')) {
+    return true;
+  }
+  return (
+    permissoes.includes(buildMatrixKey('chamados', 'abrir_chamado', 'visualizar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'abrir_chamado', 'inserir'))
   );
 }
 
 export function navItemAllowedByMatrix(itemId: string, permissoes: string[]) {
-  const telaId = NAV_SCREEN_MAP[itemId];
-  if (!telaId) return null;
   const hasMatrix = permissoes.some(isMatrixPermissionKey);
   if (!hasMatrix) return null;
+
+  if (itemId === 'novo_chamado') {
+    return hasAbrirChamadoAccess(permissoes);
+  }
+
+  const telaId = NAV_SCREEN_MAP[itemId];
+  if (!telaId) return null;
   return screenHasVisualizarAccess(telaId, permissoes);
 }

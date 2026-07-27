@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Bell } from 'lucide-react';
 import { getStoredAuth } from '@/lib/api';
 import { cn } from '@/lib/cn';
+import { hasAbrirChamado } from '@/lib/navigation';
 import { Button } from '@/components/ui/button';
 
 export function UnidadeAvulsoActions({
@@ -21,9 +22,9 @@ export function UnidadeAvulsoActions({
   className?: string;
 }) {
   const router = useRouter();
-  const canManage = getStoredAuth()?.user.permissoes.includes('chamados.gerenciar') ?? false;
+  const canOpen = hasAbrirChamado(getStoredAuth()?.user.permissoes ?? []);
 
-  if (!canManage) return null;
+  if (!canOpen) return null;
 
   const href =
     unidadeId && unidadeNome

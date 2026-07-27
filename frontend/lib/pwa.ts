@@ -26,7 +26,13 @@ export async function prepareOfflineShell() {
 
   await navigator.serviceWorker.ready;
 
-  const urls = new Set<string>(['/mobile', '/icon.svg', '/manifest.webmanifest', window.location.pathname]);
+  const urls = new Set<string>([
+    '/mobile',
+    '/icon.svg',
+    '/icon-maskable.svg',
+    '/manifest.webmanifest',
+    window.location.pathname,
+  ]);
 
   for (const entry of performance.getEntriesByType('resource') as PerformanceResourceTiming[]) {
     try {
@@ -35,6 +41,7 @@ export async function prepareOfflineShell() {
       if (
         resourceUrl.pathname.startsWith('/_next/static/') ||
         resourceUrl.pathname === '/icon.svg' ||
+        resourceUrl.pathname === '/icon-maskable.svg' ||
         resourceUrl.pathname === '/manifest.webmanifest' ||
         resourceUrl.pathname === '/mobile'
       ) {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyInMemoryUnidadeFilters,
+  countPendenciasUnicas,
   deriveUnidadeSituacao,
   hasPendenciaAtiva,
   isChamadoForaPrazo,
@@ -160,5 +161,65 @@ describe('mapeamento operacional de unidades', () => {
         ['NAO_CONFORMIDADES'],
       ),
     ).toBe(false);
+  });
+
+  it('conta pendencias unicas sem duplicar SLA nem NC+chamado', () => {
+    // 1 chamado pendente + fora do SLA → ainda conta 1
+    expect(
+      countPendenciasUnicas({
+        chamadosAbertos: 1,
+        naoConformidadesSemChamadoAberto: 0,
+        vistoriasAtrasadas: 0,
+      }),
+    ).toBe(1);
+
+    // NC já virada em chamado: só o chamado entra
+    expect(
+      countPendenciasUnicas({
+        chamadosAbertos: 1,
+        naoConformidadesSemChamadoAberto: 0,
+        vistoriasAtrasadas: 0,
+      }),
+    ).toBe(1);
+
+    // NC sem chamado + chamado distinto + vistoria
+    expect(
+      countPendenciasUnicas({
+        chamadosAbertos: 2,
+        naoConformidadesSemChamadoAberto: 1,
+        vistoriasAtrasadas: 1,
+      }),
+    ).toBe(4);
+
+    // Tipo filtrado: só chamados
+    expect(
+      countPendenciasUnicas(
+        {
+          chamadosAbertos: 2,
+          naoConformidadesSemChamadoAberto: 3,
+          vistoriasAtrasadas: 1,
+        },
+        ['CHAMADOS'],
+      ),
+    ).toBe(2);
+  });
+
+  it('expoe pendenciasUnicas no mapeamento da unidade', () => {
+    const unidade = mapUnidadeOperacional(
+      baseUnidade,
+      {
+        fiscalizacoes: 1,
+        naoConformidadesAbertas: 1,
+        naoConformidadesSemChamadoAberto: 0,
+        chamadosAbertos: 1,
+        chamadosSlaForaPrazo: 1,
+        semVistoria: false,
+      },
+      null,
+      ['CHAMADOS', 'NAO_CONFORMIDADES', 'VISTORIAS'],
+    );
+
+    expect(unidade.slaMapa).toBe('FORA');
+    expect(unidade.pendenciasUnicas).toBe(1);
   });
 });

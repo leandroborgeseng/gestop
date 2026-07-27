@@ -1,9 +1,10 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, Briefcase, ClipboardList, Download, Layers3, MapPin, Search, Shield, UserRound, UsersRound } from 'lucide-react';
+import { Building2, Briefcase, ClipboardList, DatabaseBackup, Download, Layers3, MapPin, Shield, UserRound, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
+import { BackupPanel } from '@/components/admin/backup-panel';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
@@ -11,7 +12,7 @@ import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
-import { FormGrid, FormSection, RecordItem, RecordList } from '@/components/ui/form-section';
+import { FormSection } from '@/components/ui/form-section';
 import { Input } from '@/components/ui/input';
 import { MaskedInput } from '@/components/ui/masked-input';
 import { Select } from '@/components/ui/select';
@@ -21,9 +22,14 @@ import {
   DataTable,
   DataTableBody,
   DataTableCell,
+  DataTableFilterCell,
+  DataTableFilterRow,
+  DataTableFiltersBar,
   DataTableHead,
   DataTableHeaderCell,
   DataTableRow,
+  DataTableSelectFilter,
+  DataTableTextFilter,
 } from '@/components/ui/data-table';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
@@ -47,7 +53,6 @@ import {
   saveAdminCategoriaVistoria,
   listAdminCargos,
   saveAdminCargo,
-  deleteAdminCargo,
   anonymizeUsuarioLgpd,
   purgeAuditoriaLgpd,
 } from '@/lib/api';
@@ -70,7 +75,7 @@ import {
   validatePasswordPolicy,
 } from '@/lib/password-policy';
 
-type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'cargos' | 'tipos-chamado' | 'categorias-vistoria' | 'permissoes' | 'importacao';
+type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'cargos' | 'tipos-chamado' | 'categorias-vistoria' | 'permissoes' | 'backup' | 'importacao';
 
 const tipos: UnidadeTipo[] = ['ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO', 'ESPACO_ESPORTIVO', 'OUTRO'];
 const regioes: RegiaoUnidade[] = ['NORTE', 'SUL', 'LESTE', 'OESTE', 'CENTRO'];
@@ -170,12 +175,13 @@ export default function AdminPage() {
               { id: 'tipos-chamado', label: 'Tipos de chamado', icon: <ClipboardList className="h-4 w-4" />, count: tiposChamado.length },
               { id: 'categorias-vistoria', label: 'Categorias vistoria', icon: <Layers3 className="h-4 w-4" />, count: categoriasVistoria.length },
               { id: 'permissoes', label: 'Permissões', icon: <Shield className="h-4 w-4" /> },
+              { id: 'backup', label: 'Backup S3', icon: <DatabaseBackup className="h-4 w-4" /> },
               { id: 'importacao', label: 'Importação', icon: <Download className="h-4 w-4" /> },
             ]}
           />
         </div>
 
-        {loading ? <LoadingState label="Carregando cadastros..." /> : null}
+        {loading && tab !== 'backup' ? <LoadingState label="Carregando cadastros..." /> : null}
 
         {!loading && tab === 'secretarias' ? (
           <SecretariasPanel secretarias={secretarias} mutate={mutate} />
@@ -201,11 +207,12 @@ export default function AdminPage() {
         {!loading && tab === 'permissoes' ? (
           <PermissoesMatrizPanel mutate={mutate} />
         ) : null}
+        {tab === 'backup' ? <BackupPanel /> : null}
         {!loading && tab === 'importacao' ? (
           <ImportacaoPanel onSynced={() => void load()} />
         ) : null}
 
-        {!loading && tab !== 'importacao' ? (
+        {!loading && tab !== 'importacao' && tab !== 'backup' ? (
           <section className="mt-8 rounded-[var(--r-card)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-5">
             <div className="flex items-start gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface)] text-[var(--warn)] shadow-[var(--sh-sm)]">
@@ -234,8 +241,50 @@ export default function AdminPage() {
   );
 }
 
+function matchesText(value: string | null | undefined, filter: string) {
+  if (!filter.trim()) return true;
+  return String(value ?? '').toLowerCase().includes(filter.trim().toLowerCase());
+}
+
+function matchesStatus(ativo: boolean, filter: string) {
+  if (!filter) return true;
+  if (filter === 'ativo') return ativo;
+  if (filter === 'inativo') return !ativo;
+  return true;
+}
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'ativo', label: 'Ativo' },
+  { value: 'inativo', label: 'Inativo' },
+];
+
 function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretaria[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
   const [editing, setEditing] = useState<AdminSecretaria | null>(null);
+  const [filterSigla, setFilterSigla] = useState('');
+  const [filterNome, setFilterNome] = useState('');
+  const [filterResponsavel, setFilterResponsavel] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  const filtersActive = Boolean(filterSigla || filterNome || filterResponsavel || filterStatus);
+
+  const filtered = useMemo(
+    () =>
+      secretarias.filter(
+        (secretaria) =>
+          matchesText(secretaria.sigla, filterSigla) &&
+          matchesText(secretaria.nome, filterNome) &&
+          matchesText(secretaria.responsavelNome, filterResponsavel) &&
+          matchesStatus(secretaria.ativo, filterStatus),
+      ),
+    [secretarias, filterSigla, filterNome, filterResponsavel, filterStatus],
+  );
+
+  function clearFilters() {
+    setFilterSigla('');
+    setFilterNome('');
+    setFilterResponsavel('');
+    setFilterStatus('');
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -264,37 +313,17 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
 
   return (
     <div className="space-y-6">
-      <DataTable>
-        <DataTableHead>
-          <DataTableHeaderCell>Sigla</DataTableHeaderCell>
-          <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
-          <DataTableHeaderCell>Responsável</DataTableHeaderCell>
-          <DataTableHeaderCell>Status</DataTableHeaderCell>
-        </DataTableHead>
-        <DataTableBody>
-          {secretarias.map((secretaria) => (
-            <DataTableRow key={secretaria.id}>
-              <DataTableCell mono>{secretaria.sigla}</DataTableCell>
-              <DataTableCell>{secretaria.nome}</DataTableCell>
-              <DataTableCell>{secretaria.responsavelNome ?? '—'}</DataTableCell>
-              <DataTableCell>
-                <Badge variant={secretaria.ativo ? 'success' : 'muted'}>{secretaria.ativo ? 'Ativo' : 'Inativo'}</Badge>
-              </DataTableCell>
-            </DataTableRow>
-          ))}
-        </DataTableBody>
-      </DataTable>
-
-      <FormGrid>
       <FormSection title={editing ? 'Editar secretaria' : 'Nova secretaria'}>
         <form key={editing?.id ?? 'new-secretaria'} onSubmit={submit} className="space-y-4">
-          <Field label="Nome"><Input name="nome" required defaultValue={editing?.nome} /></Field>
-          <Field label="Sigla"><Input name="sigla" required defaultValue={editing?.sigla} /></Field>
-          <Field label="Descrição"><Input name="descricao" defaultValue={editing?.descricao ?? ''} /></Field>
-          <Field label="Responsável"><Input name="responsavelNome" defaultValue={editing?.responsavelNome ?? ''} /></Field>
-          <Field label="E-mail do responsável"><Input name="responsavelEmail" type="email" defaultValue={editing?.responsavelEmail ?? ''} /></Field>
-          <div className="flex gap-2">
-            <Button type="submit" variant="filled" className="flex-1">{editing ? 'Salvar alterações' : 'Cadastrar secretaria'}</Button>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Nome"><Input name="nome" required defaultValue={editing?.nome} /></Field>
+            <Field label="Sigla"><Input name="sigla" required defaultValue={editing?.sigla} /></Field>
+            <Field label="Descrição"><Input name="descricao" defaultValue={editing?.descricao ?? ''} /></Field>
+            <Field label="Responsável"><Input name="responsavelNome" defaultValue={editing?.responsavelNome ?? ''} /></Field>
+            <Field label="E-mail do responsável"><Input name="responsavelEmail" type="email" defaultValue={editing?.responsavelEmail ?? ''} /></Field>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" variant="filled">{editing ? 'Salvar alterações' : 'Cadastrar secretaria'}</Button>
             {editing ? (
               <Button type="button" variant="text" onClick={() => setEditing(null)}>
                 Cancelar
@@ -303,57 +332,131 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
           </div>
         </form>
       </FormSection>
-      <FormSection title="Registros">
-        <RecordList empty="Nenhuma secretaria cadastrada.">
-          {secretarias.map((secretaria) => (
-            <RecordItem
-              key={secretaria.id}
-              title={`${secretaria.sigla} — ${secretaria.nome}`}
-              subtitle={secretaria.responsavelNome ?? 'Sem responsável'}
-              active={secretaria.ativo}
-              actions={
-                <div className="flex gap-2">
-                  <Button variant="text" size="sm" onClick={() => setEditing(secretaria)}>
-                    Editar
-                  </Button>
-                  {secretaria.ativo ? (
-                    <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminSecretaria(secretaria.id), 'Secretaria inativada.')}>
-                      Inativar
-                    </Button>
-                  ) : null}
-                </div>
-              }
-            />
-          ))}
-        </RecordList>
-      </FormSection>
-    </FormGrid>
+
+      <div>
+        <DataTableFiltersBar
+          active={filtersActive}
+          onClear={clearFilters}
+          resultCount={filtered.length}
+          totalCount={secretarias.length}
+        />
+        <DataTable>
+          <DataTableHead>
+            <tr>
+              <DataTableHeaderCell>Sigla</DataTableHeaderCell>
+              <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
+              <DataTableHeaderCell>Responsável</DataTableHeaderCell>
+              <DataTableHeaderCell>Status</DataTableHeaderCell>
+              <DataTableHeaderCell>Ações</DataTableHeaderCell>
+            </tr>
+            <DataTableFilterRow>
+              <DataTableFilterCell>
+                <DataTableTextFilter value={filterSigla} onChange={setFilterSigla} placeholder="Sigla" aria-label="Filtrar sigla" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableTextFilter value={filterNome} onChange={setFilterNome} placeholder="Nome" aria-label="Filtrar secretaria" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableTextFilter value={filterResponsavel} onChange={setFilterResponsavel} placeholder="Responsável" aria-label="Filtrar responsável" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterStatus} onChange={setFilterStatus} options={STATUS_FILTER_OPTIONS} aria-label="Filtrar status" />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+            </DataTableFilterRow>
+          </DataTableHead>
+          <DataTableBody>
+            {filtered.length === 0 ? (
+              <DataTableRow>
+                <DataTableCell colSpan={5} className="py-6 text-center text-[var(--ink-3)]">
+                  {secretarias.length === 0 ? 'Nenhuma secretaria cadastrada.' : 'Nenhum registro corresponde aos filtros.'}
+                </DataTableCell>
+              </DataTableRow>
+            ) : (
+              filtered.map((secretaria) => (
+                <DataTableRow key={secretaria.id}>
+                  <DataTableCell mono>{secretaria.sigla}</DataTableCell>
+                  <DataTableCell>{secretaria.nome}</DataTableCell>
+                  <DataTableCell>{secretaria.responsavelNome ?? '—'}</DataTableCell>
+                  <DataTableCell>
+                    <Badge variant={secretaria.ativo ? 'success' : 'muted'}>{secretaria.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                  </DataTableCell>
+                  <DataTableCell>
+                    <div className="flex flex-wrap gap-1">
+                      <Button variant="text" size="sm" onClick={() => setEditing(secretaria)}>
+                        Editar
+                      </Button>
+                      {secretaria.ativo ? (
+                        <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminSecretaria(secretaria.id), 'Secretaria inativada.')}>
+                          Inativar
+                        </Button>
+                      ) : null}
+                    </div>
+                  </DataTableCell>
+                </DataTableRow>
+              ))
+            )}
+          </DataTableBody>
+        </DataTable>
+      </div>
     </div>
   );
 }
 
 function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSecretaria[]; unidades: AdminUnidade[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
-  const [search, setSearch] = useState('');
   const [editing, setEditing] = useState<AdminUnidade | null>(null);
+  const [filterCodigo, setFilterCodigo] = useState('');
+  const [filterNome, setFilterNome] = useState('');
+  const [filterOrigem, setFilterOrigem] = useState('');
+  const [filterTipo, setFilterTipo] = useState('');
+  const [filterSecretaria, setFilterSecretaria] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
-  const filteredUnidades = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return unidades;
+  const filtersActive = Boolean(filterCodigo || filterNome || filterOrigem || filterTipo || filterSecretaria || filterStatus);
 
-    return unidades.filter((unidade) =>
-      [
-        unidade.nome,
-        unidade.codigoPatrimonial,
-        unidade.endereco,
-        unidade.bairro,
-        unidade.secretaria.sigla,
-        unidade.secretaria.nome,
-        formatUnidadeTipo(unidade.tipo),
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query)),
-    );
-  }, [search, unidades]);
+  const secretariaOptions = useMemo(
+    () =>
+      [...new Map(unidades.map((u) => [u.secretaria.sigla, u.secretaria.sigla])).entries()].map(([, sigla]) => ({
+        value: sigla,
+        label: sigla,
+      })),
+    [unidades],
+  );
+
+  const tipoOptions = useMemo(
+    () => tipos.map((tipo) => ({ value: tipo, label: formatUnidadeTipo(tipo) })),
+    [],
+  );
+
+  const origemOptions = useMemo(() => {
+    const values = new Set(unidades.map((u) => formatUnidadeOrigem(u)));
+    return [...values].sort().map((label) => ({ value: label, label }));
+  }, [unidades]);
+
+  const filteredUnidades = useMemo(
+    () =>
+      unidades.filter((unidade) => {
+        const origem = formatUnidadeOrigem(unidade);
+        return (
+          matchesText(unidade.codigoPatrimonial, filterCodigo) &&
+          matchesText(unidade.nome, filterNome) &&
+          (!filterOrigem || origem === filterOrigem) &&
+          (!filterTipo || unidade.tipo === filterTipo) &&
+          (!filterSecretaria || unidade.secretaria.sigla === filterSecretaria) &&
+          matchesStatus(unidade.ativo, filterStatus)
+        );
+      }),
+    [unidades, filterCodigo, filterNome, filterOrigem, filterTipo, filterSecretaria, filterStatus],
+  );
+
+  function clearFilters() {
+    setFilterCodigo('');
+    setFilterNome('');
+    setFilterOrigem('');
+    setFilterTipo('');
+    setFilterSecretaria('');
+    setFilterStatus('');
+  }
 
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -419,21 +522,9 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
 
   return (
     <div className="space-y-6">
-      <Field label="Buscar próprio" hint="Nome, código patrimonial, endereço, bairro ou secretaria.">
-        <div className="relative">
-          <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Ex.: PMF-ESC, Cidade Nova, UBS..."
-            className="pl-9"
-          />
-        </div>
-      </Field>
-
-      <FormGrid>
-        <FormSection title="Novo próprio">
-          <form onSubmit={submitCreate} className="space-y-4">
+      <FormSection title="Novo próprio">
+        <form onSubmit={submitCreate} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Secretaria">
               <Select name="secretariaId" required>
                 {secretarias.map((s) => (
@@ -465,59 +556,63 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
                 ))}
               </Select>
             </Field>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Field label="Latitude"><Input name="latitude" type="number" step="0.000001" required /></Field>
-              <Field label="Longitude"><Input name="longitude" type="number" step="0.000001" required /></Field>
-              <Field label="Raio (m)"><Input name="raioValidacaoMetros" type="number" defaultValue="200" /></Field>
-            </div>
-            <Button type="submit" variant="filled" className="w-full">Cadastrar próprio</Button>
-          </form>
-        </FormSection>
-
-        <FormSection title={`Registros (${filteredUnidades.length})`}>
-          <div className="max-h-[min(480px,55vh)] overflow-y-auto overscroll-contain pr-1">
-            <RecordList empty={search.trim() ? 'Nenhum próprio encontrado para a busca.' : 'Nenhum próprio cadastrado.'}>
-              {filteredUnidades.map((unidade) => (
-                <RecordItem
-                  key={unidade.id}
-                  title={unidade.nome}
-                  subtitle={`${unidade.codigoPatrimonial} · ${unidade.secretaria.sigla} · ${formatUnidadeTipo(unidade.tipo)} · ${unidade.bairro ?? 'sem bairro'}`}
-                  active={unidade.ativo}
-                  actions={
-                    <div className="flex items-center gap-2">
-                      <Badge variant={isQgisImported(unidade) ? 'info' : 'muted'}>
-                        {formatUnidadeOrigem(unidade)}
-                      </Badge>
-                      <Button variant="text" size="sm" onClick={() => setEditing(unidade)}>
-                        Editar
-                      </Button>
-                      {unidade.ativo ? (
-                        <Button variant="text" size="sm" className="text-red-700" onClick={() => mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
-                          Inativar
-                        </Button>
-                      ) : null}
-                    </div>
-                  }
-                />
-              ))}
-            </RecordList>
+            <Field label="Latitude"><Input name="latitude" type="number" step="0.000001" required /></Field>
+            <Field label="Longitude"><Input name="longitude" type="number" step="0.000001" required /></Field>
+            <Field label="Raio (m)"><Input name="raioValidacaoMetros" type="number" defaultValue="200" /></Field>
           </div>
-        </FormSection>
-      </FormGrid>
+          <Button type="submit" variant="filled">Cadastrar próprio</Button>
+        </form>
+      </FormSection>
 
-      <div className="overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]">
-        <div className="max-h-[min(320px,40vh)] overflow-auto">
-          <DataTable>
-            <DataTableHead>
+      <div>
+        <DataTableFiltersBar
+          active={filtersActive}
+          onClear={clearFilters}
+          resultCount={filteredUnidades.length}
+          totalCount={unidades.length}
+        />
+        <DataTable>
+          <DataTableHead>
+            <tr>
               <DataTableHeaderCell>Código</DataTableHeaderCell>
               <DataTableHeaderCell>Unidade</DataTableHeaderCell>
               <DataTableHeaderCell>Origem</DataTableHeaderCell>
               <DataTableHeaderCell>Tipo</DataTableHeaderCell>
               <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
               <DataTableHeaderCell>Status</DataTableHeaderCell>
-            </DataTableHead>
-            <DataTableBody>
-              {filteredUnidades.map((unidade) => (
+              <DataTableHeaderCell>Ações</DataTableHeaderCell>
+            </tr>
+            <DataTableFilterRow>
+              <DataTableFilterCell>
+                <DataTableTextFilter value={filterCodigo} onChange={setFilterCodigo} placeholder="Código" aria-label="Filtrar código" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableTextFilter value={filterNome} onChange={setFilterNome} placeholder="Unidade" aria-label="Filtrar unidade" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterOrigem} onChange={setFilterOrigem} options={origemOptions} aria-label="Filtrar origem" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterTipo} onChange={setFilterTipo} options={tipoOptions} aria-label="Filtrar tipo" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterSecretaria} onChange={setFilterSecretaria} options={secretariaOptions} aria-label="Filtrar secretaria" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterStatus} onChange={setFilterStatus} options={STATUS_FILTER_OPTIONS} aria-label="Filtrar status" />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+            </DataTableFilterRow>
+          </DataTableHead>
+          <DataTableBody>
+            {filteredUnidades.length === 0 ? (
+              <DataTableRow>
+                <DataTableCell colSpan={7} className="py-6 text-center text-[var(--ink-3)]">
+                  {unidades.length === 0 ? 'Nenhum próprio cadastrado.' : 'Nenhum registro corresponde aos filtros.'}
+                </DataTableCell>
+              </DataTableRow>
+            ) : (
+              filteredUnidades.map((unidade) => (
                 <DataTableRow key={unidade.id}>
                   <DataTableCell mono>{unidade.codigoPatrimonial}</DataTableCell>
                   <DataTableCell>{unidade.nome}</DataTableCell>
@@ -531,16 +626,23 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
                   <DataTableCell>
                     <Badge variant={unidade.ativo ? 'success' : 'muted'}>{unidade.ativo ? 'Ativo' : 'Inativo'}</Badge>
                   </DataTableCell>
+                  <DataTableCell>
+                    <div className="flex flex-wrap gap-1">
+                      <Button variant="text" size="sm" onClick={() => setEditing(unidade)}>
+                        Editar
+                      </Button>
+                      {unidade.ativo ? (
+                        <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
+                          Inativar
+                        </Button>
+                      ) : null}
+                    </div>
+                  </DataTableCell>
                 </DataTableRow>
-              ))}
-            </DataTableBody>
-          </DataTable>
-        </div>
-        {filteredUnidades.length === 0 ? (
-          <p className="border-t border-[var(--line)] px-4 py-6 text-center text-[12px] text-[var(--ink-3)]">
-            Nenhum registro para exibir.
-          </p>
-        ) : null}
+              ))
+            )}
+          </DataTableBody>
+        </DataTable>
       </div>
 
       <Sheet
@@ -746,6 +848,13 @@ function UsuariosPanel({
   const [cpfValue, setCpfValue] = useState('');
   const [telefoneValue, setTelefoneValue] = useState('');
   const [emailValue, setEmailValue] = useState('');
+  const [filterUsuario, setFilterUsuario] = useState('');
+  const [filterPerfil, setFilterPerfil] = useState('');
+  const [filterEquipe, setFilterEquipe] = useState('');
+  const [filterSecretaria, setFilterSecretaria] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  const filtersActive = Boolean(filterUsuario || filterPerfil || filterEquipe || filterSecretaria || filterStatus);
 
   useEffect(() => {
     setSelectedEquipeIds(editing?.equipes?.map((item) => item.equipe.id) ?? []);
@@ -753,6 +862,41 @@ function UsuariosPanel({
     setTelefoneValue(formatPhoneInput(editing?.telefone ?? ''));
     setEmailValue(editing?.email ?? '');
   }, [editing?.id, editing?.equipes, editing?.cpf, editing?.telefone, editing?.email]);
+
+  const perfilOptions = useMemo(
+    () => [...new Set(usuarios.flatMap((u) => u.perfis.map((p) => p.perfil.nome)))].sort().map((nome) => ({ value: nome, label: nome })),
+    [usuarios],
+  );
+  const equipeOptions = useMemo(
+    () => [...new Set(usuarios.flatMap((u) => u.equipes?.map((e) => e.equipe.nome) ?? []))].sort().map((nome) => ({ value: nome, label: nome })),
+    [usuarios],
+  );
+  const secretariaOptions = useMemo(
+    () => [...new Set(usuarios.map((u) => u.secretaria?.sigla).filter(Boolean) as string[])].sort().map((sigla) => ({ value: sigla, label: sigla })),
+    [usuarios],
+  );
+
+  const filtered = useMemo(
+    () =>
+      usuarios.filter((usuario) => {
+        return (
+          (matchesText(usuario.nome, filterUsuario) || matchesText(usuario.email, filterUsuario)) &&
+          (!filterPerfil || usuario.perfis.some((p) => p.perfil.nome === filterPerfil)) &&
+          (!filterEquipe || Boolean(usuario.equipes?.some((e) => e.equipe.nome === filterEquipe))) &&
+          (!filterSecretaria || usuario.secretaria?.sigla === filterSecretaria) &&
+          matchesStatus(usuario.ativo, filterStatus)
+        );
+      }),
+    [usuarios, filterUsuario, filterPerfil, filterEquipe, filterSecretaria, filterStatus],
+  );
+
+  function clearFilters() {
+    setFilterUsuario('');
+    setFilterPerfil('');
+    setFilterEquipe('');
+    setFilterSecretaria('');
+    setFilterStatus('');
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -806,103 +950,74 @@ function UsuariosPanel({
     }
   }
 
-  const editingPerfilId = editing?.perfis[0]?.perfil.id ?? defaultPerfil;
-
   return (
     <div className="space-y-6">
-      <DataTable>
-        <DataTableHead>
-          <DataTableHeaderCell>Usuário</DataTableHeaderCell>
-          <DataTableHeaderCell>Perfil</DataTableHeaderCell>
-          <DataTableHeaderCell>Equipes</DataTableHeaderCell>
-          <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
-          <DataTableHeaderCell>Status</DataTableHeaderCell>
-        </DataTableHead>
-        <DataTableBody>
-          {usuarios.map((usuario) => (
-            <DataTableRow key={usuario.id}>
-              <DataTableCell>
-                <div>
-                  <p className="font-semibold text-[var(--ink)]">{usuario.nome}</p>
-                  <p className="text-[12px] text-[var(--ink-3)]">{usuario.email}</p>
-                </div>
-              </DataTableCell>
-              <DataTableCell>{usuario.perfis.map((p) => p.perfil.nome).join(', ') || '—'}</DataTableCell>
-              <DataTableCell>{usuario.equipes?.map((e) => e.equipe.nome).join(', ') || '—'}</DataTableCell>
-              <DataTableCell mono>{usuario.secretaria?.sigla ?? '—'}</DataTableCell>
-              <DataTableCell>
-                <Badge variant={usuario.ativo ? 'success' : 'muted'}>{usuario.ativo ? 'Ativo' : 'Inativo'}</Badge>
-              </DataTableCell>
-            </DataTableRow>
-          ))}
-        </DataTableBody>
-      </DataTable>
-
-      <FormGrid>
       <FormSection title={editing ? 'Editar usuário' : 'Novo usuário'}>
         <form key={editing?.id ?? 'new'} onSubmit={submit} className="space-y-4">
-          <Field label="Nome" tooltip="Nome completo do usuário para identificação no sistema.">
-            <Input name="nome" required defaultValue={editing?.nome} />
-          </Field>
-          <Field label="E-mail" tooltip="Use um e-mail válido. Será usado para login e notificações.">
-            <Input
-              name="email"
-              type="email"
-              required
-              value={emailValue}
-              onChange={(event) => setEmailValue(event.target.value)}
-            />
-          </Field>
-          <Field label="CPF" tooltip="Digite apenas números. A máscara é aplicada automaticamente.">
-            <MaskedInput name="cpf" mask="cpf" value={cpfValue} onValueChange={(_, formatted) => setCpfValue(formatted)} />
-          </Field>
-          <Field
-            label="Telefone"
-            tooltip="Digite apenas números com DDD. Aceita 8 ou 9 dígitos após o DDD (fixo ou celular)."
-          >
-            <MaskedInput
-              name="telefone"
-              mask="phone"
-              value={telefoneValue}
-              onValueChange={(_, formatted) => setTelefoneValue(formatted)}
-            />
-          </Field>
-          <Field label="Cargo" tooltip="Selecione um cargo cadastrado para relatórios futuros por função.">
-            <Select name="cargoId" defaultValue={editing?.cargoId ?? editing?.cargoRef?.id ?? ''}>
-              <option value="">Sem cargo</option>
-              {cargos
-                .filter((cargo) => cargo.ativo)
-                .map((cargo) => (
-                  <option key={cargo.id} value={cargo.id}>
-                    {cargo.nome}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Nome" tooltip="Nome completo do usuário para identificação no sistema.">
+              <Input name="nome" required defaultValue={editing?.nome} />
+            </Field>
+            <Field label="E-mail" tooltip="Use um e-mail válido. Será usado para login e notificações.">
+              <Input
+                name="email"
+                type="email"
+                required
+                value={emailValue}
+                onChange={(event) => setEmailValue(event.target.value)}
+              />
+            </Field>
+            <Field label="CPF" tooltip="Digite apenas números. A máscara é aplicada automaticamente.">
+              <MaskedInput name="cpf" mask="cpf" value={cpfValue} onValueChange={(_, formatted) => setCpfValue(formatted)} />
+            </Field>
+            <Field
+              label="Telefone"
+              tooltip="Digite apenas números com DDD. Aceita 8 ou 9 dígitos após o DDD (fixo ou celular)."
+            >
+              <MaskedInput
+                name="telefone"
+                mask="phone"
+                value={telefoneValue}
+                onValueChange={(_, formatted) => setTelefoneValue(formatted)}
+              />
+            </Field>
+            <Field label="Cargo" tooltip="Selecione um cargo cadastrado para relatórios futuros por função.">
+              <Select name="cargoId" defaultValue={editing?.cargoId ?? editing?.cargoRef?.id ?? ''}>
+                <option value="">Sem cargo</option>
+                {cargos
+                  .filter((cargo) => cargo.ativo)
+                  .map((cargo) => (
+                    <option key={cargo.id} value={cargo.id}>
+                      {cargo.nome}
+                    </option>
+                  ))}
+              </Select>
+            </Field>
+            <Field
+              label={editing ? 'Nova senha (opcional)' : `Senha inicial (mín. ${PASSWORD_MIN_LENGTH_NEW} caracteres)`}
+              tooltip={PASSWORD_POLICY_HINT}
+              hint={PASSWORD_POLICY_HINT}
+            >
+              <Input
+                name="senha"
+                type="password"
+                autoComplete="new-password"
+                minLength={editing ? undefined : PASSWORD_MIN_LENGTH_NEW}
+                required={!editing}
+                placeholder={editing ? 'Deixe em branco para manter a atual' : 'Defina uma senha forte'}
+              />
+            </Field>
+            <Field label="Secretaria principal" tooltip="Secretaria padrão inicial da sessão do usuário.">
+              <Select name="secretariaId" defaultValue={editing?.secretariaId ?? ''}>
+                <option value="">Sem secretaria</option>
+                {secretarias.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.sigla} — {s.nome}
                   </option>
                 ))}
-            </Select>
-          </Field>
-          <Field
-            label={editing ? 'Nova senha (opcional)' : `Senha inicial (mín. ${PASSWORD_MIN_LENGTH_NEW} caracteres)`}
-            tooltip={PASSWORD_POLICY_HINT}
-            hint={PASSWORD_POLICY_HINT}
-          >
-            <Input
-              name="senha"
-              type="password"
-              autoComplete="new-password"
-              minLength={editing ? undefined : PASSWORD_MIN_LENGTH_NEW}
-              required={!editing}
-              placeholder={editing ? 'Deixe em branco para manter a atual' : 'Defina uma senha forte'}
-            />
-          </Field>
-          <Field label="Secretaria principal" tooltip="Secretaria padrão inicial da sessão do usuário.">
-            <Select name="secretariaId" defaultValue={editing?.secretariaId ?? ''}>
-              <option value="">Sem secretaria</option>
-              {secretarias.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.sigla} — {s.nome}
-                </option>
-              ))}
-            </Select>
-          </Field>
+              </Select>
+            </Field>
+          </div>
           <Field
             label="Secretarias vinculadas"
             tooltip="Secretarias em que o usuário pode atuar (alternáveis na sessão)."
@@ -940,109 +1055,163 @@ function UsuariosPanel({
             />
             <span>Permitir atuação em “Todas as Secretarias”</span>
           </label>
-          <Field label="Perfis">
-            <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
-              {perfis.filter((p) => p.ativo !== false).map((p) => (
-                <label key={p.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
-                  <input
-                    type="checkbox"
-                    name="perfilIds"
-                    value={p.id}
-                    defaultChecked={editing?.perfis.some((item) => item.perfil.id === p.id) ?? p.id === defaultPerfil}
-                  />
-                  <span>{p.nome}</span>
-                </label>
-              ))}
-            </div>
-          </Field>
-          <Field label="Equipes">
-            <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
-              {equipes.filter((equipe) => equipe.ativo).length === 0 ? (
-                <p className="text-[12px] text-[var(--ink-3)]">Nenhuma equipe cadastrada.</p>
-              ) : (
-                equipes
-                  .filter((equipe) => equipe.ativo)
-                  .map((equipe) => (
-                    <label key={equipe.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
-                      <input
-                        type="checkbox"
-                        checked={selectedEquipeIds.includes(equipe.id)}
-                        onChange={(event) => {
-                          setSelectedEquipeIds((current) =>
-                            event.target.checked
-                              ? [...current, equipe.id]
-                              : current.filter((id) => id !== equipe.id),
-                          );
-                        }}
-                      />
-                      <span>
-                        {equipe.nome}
-                        {equipe.secretaria?.sigla ? ` · ${equipe.secretaria.sigla}` : ''}
-                      </span>
-                    </label>
-                  ))
-              )}
-            </div>
-          </Field>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Perfis">
+              <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
+                {perfis.filter((p) => p.ativo !== false).map((p) => (
+                  <label key={p.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+                    <input
+                      type="checkbox"
+                      name="perfilIds"
+                      value={p.id}
+                      defaultChecked={editing?.perfis.some((item) => item.perfil.id === p.id) ?? p.id === defaultPerfil}
+                    />
+                    <span>{p.nome}</span>
+                  </label>
+                ))}
+              </div>
+            </Field>
+            <Field label="Equipes">
+              <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
+                {equipes.filter((equipe) => equipe.ativo).length === 0 ? (
+                  <p className="text-[12px] text-[var(--ink-3)]">Nenhuma equipe cadastrada.</p>
+                ) : (
+                  equipes
+                    .filter((equipe) => equipe.ativo)
+                    .map((equipe) => (
+                      <label key={equipe.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+                        <input
+                          type="checkbox"
+                          checked={selectedEquipeIds.includes(equipe.id)}
+                          onChange={(event) => {
+                            setSelectedEquipeIds((current) =>
+                              event.target.checked
+                                ? [...current, equipe.id]
+                                : current.filter((id) => id !== equipe.id),
+                            );
+                          }}
+                        />
+                        <span>
+                          {equipe.nome}
+                          {equipe.secretaria?.sigla ? ` · ${equipe.secretaria.sigla}` : ''}
+                        </span>
+                      </label>
+                    ))
+                )}
+              </div>
+            </Field>
+          </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <Button type="submit" variant="filled" className="w-full sm:flex-1">
+            <Button type="submit" variant="filled">
               {editing ? 'Salvar alterações' : 'Cadastrar usuário'}
             </Button>
             {editing ? (
-              <Button type="button" variant="outlined" className="w-full sm:flex-1" onClick={() => setEditing(null)}>
+              <Button type="button" variant="outlined" onClick={() => setEditing(null)}>
                 Cancelar edição
               </Button>
             ) : null}
           </div>
         </form>
       </FormSection>
-      <FormSection title="Registros">
-        <p className="mb-4 text-[12px] text-[var(--ink-3)]">
+
+      <div>
+        <p className="mb-2 text-[12px] text-[var(--ink-3)]">
           O sistema não remove usuários do banco: inativar impede o login; use Reativar para restaurar o acesso.
         </p>
-        <RecordList empty="Nenhum usuário cadastrado.">
-          {usuarios.map((usuario) => (
-            <RecordItem
-              key={usuario.id}
-              title={usuario.nome}
-              subtitle={`${usuario.email} · ${usuario.perfis.map((p) => p.perfil.nome).join(', ') || 'sem perfil'}${usuario.equipes?.length ? ` · ${usuario.equipes.map((e) => e.equipe.nome).join(', ')}` : ''}`}
-              active={usuario.ativo}
-              actions={
-                <div className="flex flex-wrap items-center gap-1">
-                  <Button variant="text" size="sm" onClick={() => setEditing(usuario)}>
-                    Editar
-                  </Button>
-                  {usuario.ativo ? (
-                    <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(usuario)}>
-                      Inativar
-                    </Button>
-                  ) : (
-                    <>
-                      <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(usuario)}>
-                        Reativar
+        <DataTableFiltersBar
+          active={filtersActive}
+          onClear={clearFilters}
+          resultCount={filtered.length}
+          totalCount={usuarios.length}
+        />
+        <DataTable>
+          <DataTableHead>
+            <tr>
+              <DataTableHeaderCell>Usuário</DataTableHeaderCell>
+              <DataTableHeaderCell>Perfil</DataTableHeaderCell>
+              <DataTableHeaderCell>Equipes</DataTableHeaderCell>
+              <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
+              <DataTableHeaderCell>Status</DataTableHeaderCell>
+              <DataTableHeaderCell>Ações</DataTableHeaderCell>
+            </tr>
+            <DataTableFilterRow>
+              <DataTableFilterCell>
+                <DataTableTextFilter value={filterUsuario} onChange={setFilterUsuario} placeholder="Nome ou e-mail" aria-label="Filtrar usuário" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterPerfil} onChange={setFilterPerfil} options={perfilOptions} aria-label="Filtrar perfil" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterEquipe} onChange={setFilterEquipe} options={equipeOptions} aria-label="Filtrar equipe" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterSecretaria} onChange={setFilterSecretaria} options={secretariaOptions} aria-label="Filtrar secretaria" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterStatus} onChange={setFilterStatus} options={STATUS_FILTER_OPTIONS} aria-label="Filtrar status" />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+            </DataTableFilterRow>
+          </DataTableHead>
+          <DataTableBody>
+            {filtered.length === 0 ? (
+              <DataTableRow>
+                <DataTableCell colSpan={6} className="py-6 text-center text-[var(--ink-3)]">
+                  {usuarios.length === 0 ? 'Nenhum usuário cadastrado.' : 'Nenhum registro corresponde aos filtros.'}
+                </DataTableCell>
+              </DataTableRow>
+            ) : (
+              filtered.map((usuario) => (
+                <DataTableRow key={usuario.id}>
+                  <DataTableCell>
+                    <div>
+                      <p className="font-semibold text-[var(--ink)]">{usuario.nome}</p>
+                      <p className="text-[12px] text-[var(--ink-3)]">{usuario.email}</p>
+                    </div>
+                  </DataTableCell>
+                  <DataTableCell>{usuario.perfis.map((p) => p.perfil.nome).join(', ') || '—'}</DataTableCell>
+                  <DataTableCell>{usuario.equipes?.map((e) => e.equipe.nome).join(', ') || '—'}</DataTableCell>
+                  <DataTableCell mono>{usuario.secretaria?.sigla ?? '—'}</DataTableCell>
+                  <DataTableCell>
+                    <Badge variant={usuario.ativo ? 'success' : 'muted'}>{usuario.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                  </DataTableCell>
+                  <DataTableCell>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Button variant="text" size="sm" onClick={() => setEditing(usuario)}>
+                        Editar
                       </Button>
-                      <Button
-                        variant="text"
-                        size="sm"
-                        className="text-red-700"
-                        onClick={() =>
-                          void mutate(
-                            () => anonymizeUsuarioLgpd(usuario.id),
-                            `Usuário ${usuario.nome} anonimizado.`,
-                          )
-                        }
-                      >
-                        Anonimizar
-                      </Button>
-                    </>
-                  )}
-                </div>
-              }
-            />
-          ))}
-        </RecordList>
-      </FormSection>
-    </FormGrid>
+                      {usuario.ativo ? (
+                        <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(usuario)}>
+                          Inativar
+                        </Button>
+                      ) : (
+                        <>
+                          <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(usuario)}>
+                            Reativar
+                          </Button>
+                          <Button
+                            variant="text"
+                            size="sm"
+                            className="text-red-700"
+                            onClick={() =>
+                              void mutate(
+                                () => anonymizeUsuarioLgpd(usuario.id),
+                                `Usuário ${usuario.nome} anonimizado.`,
+                              )
+                            }
+                          >
+                            Anonimizar
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </DataTableCell>
+                </DataTableRow>
+              ))
+            )}
+          </DataTableBody>
+        </DataTable>
+      </div>
     </div>
   );
 }
@@ -1060,10 +1229,37 @@ function EquipesPanel({
 }) {
   const [editing, setEditing] = useState<AdminEquipe | null>(null);
   const [selectedUsuarioIds, setSelectedUsuarioIds] = useState<string[]>([]);
+  const [filterEquipe, setFilterEquipe] = useState('');
+  const [filterSecretaria, setFilterSecretaria] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  const filtersActive = Boolean(filterEquipe || filterSecretaria || filterStatus);
 
   useEffect(() => {
     setSelectedUsuarioIds(editing?.membros.map((item) => item.usuario.id) ?? []);
   }, [editing?.id, editing?.membros]);
+
+  const secretariaOptions = useMemo(
+    () => [...new Set(equipes.map((e) => e.secretaria?.sigla).filter(Boolean) as string[])].sort().map((sigla) => ({ value: sigla, label: sigla })),
+    [equipes],
+  );
+
+  const filtered = useMemo(
+    () =>
+      equipes.filter(
+        (equipe) =>
+          (matchesText(equipe.nome, filterEquipe) || matchesText(equipe.codigo, filterEquipe) || matchesText(equipe.descricao, filterEquipe)) &&
+          (!filterSecretaria || equipe.secretaria?.sigla === filterSecretaria) &&
+          matchesStatus(equipe.ativo, filterStatus),
+      ),
+    [equipes, filterEquipe, filterSecretaria, filterStatus],
+  );
+
+  function clearFilters() {
+    setFilterEquipe('');
+    setFilterSecretaria('');
+    setFilterStatus('');
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1096,38 +1292,9 @@ function EquipesPanel({
 
   return (
     <div className="space-y-6">
-      <DataTable>
-        <DataTableHead>
-          <DataTableHeaderCell>Equipe</DataTableHeaderCell>
-          <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
-          <DataTableHeaderCell>Membros</DataTableHeaderCell>
-          <DataTableHeaderCell>Chamados</DataTableHeaderCell>
-          <DataTableHeaderCell>Status</DataTableHeaderCell>
-        </DataTableHead>
-        <DataTableBody>
-          {equipes.map((equipe) => (
-            <DataTableRow key={equipe.id}>
-              <DataTableCell>
-                <div>
-                  <p className="mono text-[11px] text-[var(--ink-3)]">{equipe.codigo}</p>
-                  <p className="font-semibold text-[var(--ink)]">{equipe.nome}</p>
-                  {equipe.descricao ? <p className="text-[12px] text-[var(--ink-3)]">{equipe.descricao}</p> : null}
-                </div>
-              </DataTableCell>
-              <DataTableCell mono>{equipe.secretaria?.sigla ?? '—'}</DataTableCell>
-              <DataTableCell>{equipe.membros.length}</DataTableCell>
-              <DataTableCell>{equipe._count?.chamados ?? 0}</DataTableCell>
-              <DataTableCell>
-                <Badge variant={equipe.ativo ? 'success' : 'muted'}>{equipe.ativo ? 'Ativa' : 'Inativa'}</Badge>
-              </DataTableCell>
-            </DataTableRow>
-          ))}
-        </DataTableBody>
-      </DataTable>
-
-      <FormGrid>
-        <FormSection title={editing ? 'Editar equipe' : 'Nova equipe'}>
-          <form key={editing?.id ?? 'new-equipe'} onSubmit={submit} className="space-y-4">
+      <FormSection title={editing ? 'Editar equipe' : 'Nova equipe'}>
+        <form key={editing?.id ?? 'new-equipe'} onSubmit={submit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Código" tooltip="Código único da equipe (ex.: ZEL-A). Não pode repetir em outra equipe.">
               <Input
                 name="codigo"
@@ -1162,75 +1329,125 @@ function EquipesPanel({
                 ))}
               </Select>
             </Field>
-            <Field label="Membros">
-              <div className="max-h-48 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
-                {usuarios.filter((usuario) => usuario.ativo).length === 0 ? (
-                  <p className="text-[12px] text-[var(--ink-3)]">Nenhum usuário ativo cadastrado.</p>
-                ) : (
-                  usuarios
-                    .filter((usuario) => usuario.ativo)
-                    .map((usuario) => (
-                      <label key={usuario.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
-                        <input
-                          type="checkbox"
-                          checked={selectedUsuarioIds.includes(usuario.id)}
-                          onChange={(event) => {
-                            setSelectedUsuarioIds((current) =>
-                              event.target.checked
-                                ? [...current, usuario.id]
-                                : current.filter((id) => id !== usuario.id),
-                            );
-                          }}
-                        />
-                        <span>
-                          {usuario.nome} · {usuario.email}
-                        </span>
-                      </label>
-                    ))
-                )}
-              </div>
-            </Field>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button type="submit" variant="filled" className="w-full sm:flex-1">
-                {editing ? 'Salvar alterações' : 'Cadastrar equipe'}
-              </Button>
-              {editing ? (
-                <Button type="button" variant="outlined" className="w-full sm:flex-1" onClick={() => setEditing(null)}>
-                  Cancelar edição
-                </Button>
-              ) : null}
+          </div>
+          <Field label="Membros">
+            <div className="max-h-48 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
+              {usuarios.filter((usuario) => usuario.ativo).length === 0 ? (
+                <p className="text-[12px] text-[var(--ink-3)]">Nenhum usuário ativo cadastrado.</p>
+              ) : (
+                usuarios
+                  .filter((usuario) => usuario.ativo)
+                  .map((usuario) => (
+                    <label key={usuario.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+                      <input
+                        type="checkbox"
+                        checked={selectedUsuarioIds.includes(usuario.id)}
+                        onChange={(event) => {
+                          setSelectedUsuarioIds((current) =>
+                            event.target.checked
+                              ? [...current, usuario.id]
+                              : current.filter((id) => id !== usuario.id),
+                          );
+                        }}
+                      />
+                      <span>
+                        {usuario.nome} · {usuario.email}
+                      </span>
+                    </label>
+                  ))
+              )}
             </div>
-          </form>
-        </FormSection>
-        <FormSection title="Registros">
-          <RecordList empty="Nenhuma equipe cadastrada.">
-            {equipes.map((equipe) => (
-              <RecordItem
-                key={equipe.id}
-                title={equipe.nome}
-                subtitle={`${equipe.membros.length} membro(s) · ${equipe.secretaria?.sigla ?? 'sem secretaria'}`}
-                active={equipe.ativo}
-                actions={
-                  <div className="flex flex-wrap items-center gap-1">
-                    <Button variant="text" size="sm" onClick={() => setEditing(equipe)}>
-                      Editar
-                    </Button>
-                    {equipe.ativo ? (
-                      <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(equipe)}>
-                        Inativar
+          </Field>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button type="submit" variant="filled">
+              {editing ? 'Salvar alterações' : 'Cadastrar equipe'}
+            </Button>
+            {editing ? (
+              <Button type="button" variant="outlined" onClick={() => setEditing(null)}>
+                Cancelar edição
+              </Button>
+            ) : null}
+          </div>
+        </form>
+      </FormSection>
+
+      <div>
+        <DataTableFiltersBar
+          active={filtersActive}
+          onClear={clearFilters}
+          resultCount={filtered.length}
+          totalCount={equipes.length}
+        />
+        <DataTable>
+          <DataTableHead>
+            <tr>
+              <DataTableHeaderCell>Equipe</DataTableHeaderCell>
+              <DataTableHeaderCell>Secretaria</DataTableHeaderCell>
+              <DataTableHeaderCell>Membros</DataTableHeaderCell>
+              <DataTableHeaderCell>Chamados</DataTableHeaderCell>
+              <DataTableHeaderCell>Status</DataTableHeaderCell>
+              <DataTableHeaderCell>Ações</DataTableHeaderCell>
+            </tr>
+            <DataTableFilterRow>
+              <DataTableFilterCell>
+                <DataTableTextFilter value={filterEquipe} onChange={setFilterEquipe} placeholder="Código ou nome" aria-label="Filtrar equipe" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterSecretaria} onChange={setFilterSecretaria} options={secretariaOptions} aria-label="Filtrar secretaria" />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+              <DataTableFilterCell />
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterStatus} onChange={setFilterStatus} options={STATUS_FILTER_OPTIONS} aria-label="Filtrar status" />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+            </DataTableFilterRow>
+          </DataTableHead>
+          <DataTableBody>
+            {filtered.length === 0 ? (
+              <DataTableRow>
+                <DataTableCell colSpan={6} className="py-6 text-center text-[var(--ink-3)]">
+                  {equipes.length === 0 ? 'Nenhuma equipe cadastrada.' : 'Nenhum registro corresponde aos filtros.'}
+                </DataTableCell>
+              </DataTableRow>
+            ) : (
+              filtered.map((equipe) => (
+                <DataTableRow key={equipe.id}>
+                  <DataTableCell>
+                    <div>
+                      <p className="mono text-[11px] text-[var(--ink-3)]">{equipe.codigo}</p>
+                      <p className="font-semibold text-[var(--ink)]">{equipe.nome}</p>
+                      {equipe.descricao ? <p className="text-[12px] text-[var(--ink-3)]">{equipe.descricao}</p> : null}
+                    </div>
+                  </DataTableCell>
+                  <DataTableCell mono>{equipe.secretaria?.sigla ?? '—'}</DataTableCell>
+                  <DataTableCell>{equipe.membros.length}</DataTableCell>
+                  <DataTableCell>{equipe._count?.chamados ?? 0}</DataTableCell>
+                  <DataTableCell>
+                    <Badge variant={equipe.ativo ? 'success' : 'muted'}>{equipe.ativo ? 'Ativa' : 'Inativa'}</Badge>
+                  </DataTableCell>
+                  <DataTableCell>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Button variant="text" size="sm" onClick={() => setEditing(equipe)}>
+                        Editar
                       </Button>
-                    ) : (
-                      <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(equipe)}>
-                        Reativar
-                      </Button>
-                    )}
-                  </div>
-                }
-              />
-            ))}
-          </RecordList>
-        </FormSection>
-      </FormGrid>
+                      {equipe.ativo ? (
+                        <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(equipe)}>
+                          Inativar
+                        </Button>
+                      ) : (
+                        <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(equipe)}>
+                          Reativar
+                        </Button>
+                      )}
+                    </div>
+                  </DataTableCell>
+                </DataTableRow>
+              ))
+            )}
+          </DataTableBody>
+        </DataTable>
+      </div>
     </div>
   );
 }
@@ -1243,6 +1460,29 @@ function TiposChamadoPanel({
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState<AdminTipoChamado | null>(null);
+  const [filterNome, setFilterNome] = useState('');
+  const [filterVistoria, setFilterVistoria] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  const filtersActive = Boolean(filterNome || filterVistoria || filterStatus);
+
+  const filtered = useMemo(
+    () =>
+      tipos.filter((tipo) => {
+        const vistoriaOk =
+          !filterVistoria ||
+          (filterVistoria === 'sim' && tipo.exigeVistoriaPrevia) ||
+          (filterVistoria === 'nao' && !tipo.exigeVistoriaPrevia);
+        return matchesText(tipo.nome, filterNome) && vistoriaOk && matchesStatus(tipo.ativo, filterStatus);
+      }),
+    [tipos, filterNome, filterVistoria, filterStatus],
+  );
+
+  function clearFilters() {
+    setFilterNome('');
+    setFilterVistoria('');
+    setFilterStatus('');
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1269,76 +1509,104 @@ function TiposChamadoPanel({
 
   return (
     <div className="space-y-6">
-      <DataTable>
-        <DataTableHead>
-          <DataTableHeaderCell>Nome</DataTableHeaderCell>
-          <DataTableHeaderCell>SLA Baixa/Média/Alta</DataTableHeaderCell>
-          <DataTableHeaderCell>Vist. prévia</DataTableHeaderCell>
-          <DataTableHeaderCell>Status</DataTableHeaderCell>
-        </DataTableHead>
-        <DataTableBody>
-          {tipos.map((tipo) => (
-            <DataTableRow key={tipo.id}>
-              <DataTableCell>{tipo.nome}</DataTableCell>
-              <DataTableCell mono>{tipo.slaBaixaDias}/{tipo.slaMediaDias}/{tipo.slaAltaDias}d</DataTableCell>
-              <DataTableCell>{tipo.exigeVistoriaPrevia ? 'Sim' : 'Não'}</DataTableCell>
-              <DataTableCell>
-                <Badge variant={tipo.ativo ? 'success' : 'muted'}>{tipo.ativo ? 'Ativo' : 'Inativo'}</Badge>
-              </DataTableCell>
-            </DataTableRow>
-          ))}
-        </DataTableBody>
-      </DataTable>
-
-      <FormGrid>
-        <FormSection title={editing ? 'Editar tipo de chamado' : 'Novo tipo de chamado'}>
-          <form key={editing?.id ?? 'new-tipo'} onSubmit={submit} className="space-y-4">
+      <FormSection title={editing ? 'Editar tipo de chamado' : 'Novo tipo de chamado'}>
+        <form key={editing?.id ?? 'new-tipo'} onSubmit={submit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Nome"><Input name="nome" required defaultValue={editing?.nome} /></Field>
             <Field label="Descrição"><Input name="descricao" defaultValue={editing?.descricao ?? ''} /></Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="SLA Baixa (dias)"><Input name="slaBaixaDias" type="number" min={1} required defaultValue={editing?.slaBaixaDias ?? 30} /></Field>
-              <Field label="SLA Média (dias)"><Input name="slaMediaDias" type="number" min={1} required defaultValue={editing?.slaMediaDias ?? 15} /></Field>
-              <Field label="SLA Alta (dias)"><Input name="slaAltaDias" type="number" min={1} required defaultValue={editing?.slaAltaDias ?? 7} /></Field>
-              <Field label="SLA Urgente (dias)"><Input name="slaUrgenteDias" type="number" min={1} required defaultValue={editing?.slaUrgenteDias ?? 3} /></Field>
-            </div>
-            <label className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
-              <input
-                type="checkbox"
-                name="exigeVistoriaPrevia"
-                defaultChecked={editing?.exigeVistoriaPrevia ?? false}
-                className="h-4 w-4 rounded border-[var(--line)]"
-              />
-              Exige Análise Técnica Prévia
-            </label>
-            <div className="flex gap-2">
-              <Button type="submit" variant="filled" className="flex-1">{editing ? 'Salvar' : 'Cadastrar'}</Button>
-              {editing ? (
-                <Button type="button" variant="text" onClick={() => setEditing(null)}>Cancelar</Button>
-              ) : null}
-            </div>
-          </form>
-        </FormSection>
-        <FormSection title="Registros">
-          <RecordList empty="Nenhum tipo cadastrado.">
-            {tipos.map((tipo) => (
-              <RecordItem
-                key={tipo.id}
-                title={tipo.nome}
-                subtitle={tipo.descricao ?? 'Sem descrição'}
-                active={tipo.ativo}
-                actions={
-                  <div className="flex gap-2">
-                    <Button variant="text" size="sm" onClick={() => setEditing(tipo)}>Editar</Button>
-                    <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminTipoChamado(tipo.id), 'Tipo excluído.')}>
-                      Excluir
-                    </Button>
-                  </div>
-                }
-              />
-            ))}
-          </RecordList>
-        </FormSection>
-      </FormGrid>
+          </div>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Field label="SLA Baixa (dias)"><Input name="slaBaixaDias" type="number" min={1} required defaultValue={editing?.slaBaixaDias ?? 30} /></Field>
+            <Field label="SLA Média (dias)"><Input name="slaMediaDias" type="number" min={1} required defaultValue={editing?.slaMediaDias ?? 15} /></Field>
+            <Field label="SLA Alta (dias)"><Input name="slaAltaDias" type="number" min={1} required defaultValue={editing?.slaAltaDias ?? 7} /></Field>
+            <Field label="SLA Urgente (dias)"><Input name="slaUrgenteDias" type="number" min={1} required defaultValue={editing?.slaUrgenteDias ?? 3} /></Field>
+          </div>
+          <label className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+            <input
+              type="checkbox"
+              name="exigeVistoriaPrevia"
+              defaultChecked={editing?.exigeVistoriaPrevia ?? false}
+              className="h-4 w-4 rounded border-[var(--line)]"
+            />
+            Exige Análise Técnica Prévia
+          </label>
+          <div className="flex gap-2">
+            <Button type="submit" variant="filled">{editing ? 'Salvar' : 'Cadastrar'}</Button>
+            {editing ? (
+              <Button type="button" variant="text" onClick={() => setEditing(null)}>Cancelar</Button>
+            ) : null}
+          </div>
+        </form>
+      </FormSection>
+
+      <div>
+        <DataTableFiltersBar
+          active={filtersActive}
+          onClear={clearFilters}
+          resultCount={filtered.length}
+          totalCount={tipos.length}
+        />
+        <DataTable>
+          <DataTableHead>
+            <tr>
+              <DataTableHeaderCell>Nome</DataTableHeaderCell>
+              <DataTableHeaderCell>SLA Baixa/Média/Alta</DataTableHeaderCell>
+              <DataTableHeaderCell>Vist. prévia</DataTableHeaderCell>
+              <DataTableHeaderCell>Status</DataTableHeaderCell>
+              <DataTableHeaderCell>Ações</DataTableHeaderCell>
+            </tr>
+            <DataTableFilterRow>
+              <DataTableFilterCell>
+                <DataTableTextFilter value={filterNome} onChange={setFilterNome} placeholder="Nome" aria-label="Filtrar nome" />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+              <DataTableFilterCell>
+                <DataTableSelectFilter
+                  value={filterVistoria}
+                  onChange={setFilterVistoria}
+                  options={[
+                    { value: 'sim', label: 'Sim' },
+                    { value: 'nao', label: 'Não' },
+                  ]}
+                  aria-label="Filtrar vistoria prévia"
+                />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterStatus} onChange={setFilterStatus} options={STATUS_FILTER_OPTIONS} aria-label="Filtrar status" />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+            </DataTableFilterRow>
+          </DataTableHead>
+          <DataTableBody>
+            {filtered.length === 0 ? (
+              <DataTableRow>
+                <DataTableCell colSpan={5} className="py-6 text-center text-[var(--ink-3)]">
+                  {tipos.length === 0 ? 'Nenhum tipo cadastrado.' : 'Nenhum registro corresponde aos filtros.'}
+                </DataTableCell>
+              </DataTableRow>
+            ) : (
+              filtered.map((tipo) => (
+                <DataTableRow key={tipo.id}>
+                  <DataTableCell>{tipo.nome}</DataTableCell>
+                  <DataTableCell mono>{tipo.slaBaixaDias}/{tipo.slaMediaDias}/{tipo.slaAltaDias}d</DataTableCell>
+                  <DataTableCell>{tipo.exigeVistoriaPrevia ? 'Sim' : 'Não'}</DataTableCell>
+                  <DataTableCell>
+                    <Badge variant={tipo.ativo ? 'success' : 'muted'}>{tipo.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                  </DataTableCell>
+                  <DataTableCell>
+                    <div className="flex gap-2">
+                      <Button variant="text" size="sm" onClick={() => setEditing(tipo)}>Editar</Button>
+                      <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminTipoChamado(tipo.id), 'Tipo excluído.')}>
+                        Excluir
+                      </Button>
+                    </div>
+                  </DataTableCell>
+                </DataTableRow>
+              ))
+            )}
+          </DataTableBody>
+        </DataTable>
+      </div>
     </div>
   );
 }
@@ -1351,6 +1619,20 @@ function CargosPanel({
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState<AdminCargo | null>(null);
+  const [filterNome, setFilterNome] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  const filtersActive = Boolean(filterNome || filterStatus);
+
+  const filtered = useMemo(
+    () => cargos.filter((cargo) => matchesText(cargo.nome, filterNome) && matchesStatus(cargo.ativo, filterStatus)),
+    [cargos, filterNome, filterStatus],
+  );
+
+  function clearFilters() {
+    setFilterNome('');
+    setFilterStatus('');
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1383,70 +1665,86 @@ function CargosPanel({
         Cadastre os cargos dos usuários (ex.: Agente, Encarregado). Eles aparecem no cadastro de usuários para relatórios futuros por função.
       </TipBanner>
 
-      <DataTable>
-        <DataTableHead>
-          <DataTableHeaderCell>Nome</DataTableHeaderCell>
-          <DataTableHeaderCell>Status</DataTableHeaderCell>
-        </DataTableHead>
-        <DataTableBody>
-          {cargos.map((cargo) => (
-            <DataTableRow key={cargo.id}>
-              <DataTableCell>{cargo.nome}</DataTableCell>
-              <DataTableCell>
-                <Badge variant={cargo.ativo ? 'success' : 'muted'}>{cargo.ativo ? 'Ativo' : 'Inativo'}</Badge>
-              </DataTableCell>
-            </DataTableRow>
-          ))}
-        </DataTableBody>
-      </DataTable>
-
-      <FormGrid>
-        <FormSection title={editing ? 'Editar cargo' : 'Novo cargo'}>
-          <form key={editing?.id ?? 'new-cargo'} onSubmit={submit} className="space-y-4">
+      <FormSection title={editing ? 'Editar cargo' : 'Novo cargo'}>
+        <form key={editing?.id ?? 'new-cargo'} onSubmit={submit} className="space-y-4">
+          <div className="max-w-md">
             <Field label="Nome" tooltip="Nome do cargo exibido na lista do cadastro de usuários.">
               <Input name="nome" required defaultValue={editing?.nome} placeholder="Ex.: Agente de campo" />
             </Field>
-            <div className="flex gap-2">
-              <Button type="submit" variant="filled" className="flex-1">
-                {editing ? 'Salvar' : 'Cadastrar'}
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" variant="filled">
+              {editing ? 'Salvar' : 'Cadastrar'}
+            </Button>
+            {editing ? (
+              <Button type="button" variant="text" onClick={() => setEditing(null)}>
+                Cancelar
               </Button>
-              {editing ? (
-                <Button type="button" variant="text" onClick={() => setEditing(null)}>
-                  Cancelar
-                </Button>
-              ) : null}
-            </div>
-          </form>
-        </FormSection>
-        <FormSection title="Registros">
-          <RecordList empty="Nenhum cargo cadastrado.">
-            {cargos.map((cargo) => (
-              <RecordItem
-                key={cargo.id}
-                title={cargo.nome}
-                subtitle={cargo.ativo ? 'Ativo' : 'Inativo'}
-                active={cargo.ativo}
-                actions={
-                  <div className="flex flex-wrap items-center gap-1">
-                    <Button variant="text" size="sm" onClick={() => setEditing(cargo)}>
-                      Editar
-                    </Button>
-                    {cargo.ativo ? (
-                      <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(cargo)}>
-                        Inativar
+            ) : null}
+          </div>
+        </form>
+      </FormSection>
+
+      <div>
+        <DataTableFiltersBar
+          active={filtersActive}
+          onClear={clearFilters}
+          resultCount={filtered.length}
+          totalCount={cargos.length}
+        />
+        <DataTable>
+          <DataTableHead>
+            <tr>
+              <DataTableHeaderCell>Nome</DataTableHeaderCell>
+              <DataTableHeaderCell>Status</DataTableHeaderCell>
+              <DataTableHeaderCell>Ações</DataTableHeaderCell>
+            </tr>
+            <DataTableFilterRow>
+              <DataTableFilterCell>
+                <DataTableTextFilter value={filterNome} onChange={setFilterNome} placeholder="Nome" aria-label="Filtrar nome" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterStatus} onChange={setFilterStatus} options={STATUS_FILTER_OPTIONS} aria-label="Filtrar status" />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+            </DataTableFilterRow>
+          </DataTableHead>
+          <DataTableBody>
+            {filtered.length === 0 ? (
+              <DataTableRow>
+                <DataTableCell colSpan={3} className="py-6 text-center text-[var(--ink-3)]">
+                  {cargos.length === 0 ? 'Nenhum cargo cadastrado.' : 'Nenhum registro corresponde aos filtros.'}
+                </DataTableCell>
+              </DataTableRow>
+            ) : (
+              filtered.map((cargo) => (
+                <DataTableRow key={cargo.id}>
+                  <DataTableCell>{cargo.nome}</DataTableCell>
+                  <DataTableCell>
+                    <Badge variant={cargo.ativo ? 'success' : 'muted'}>{cargo.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                  </DataTableCell>
+                  <DataTableCell>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Button variant="text" size="sm" onClick={() => setEditing(cargo)}>
+                        Editar
                       </Button>
-                    ) : (
-                      <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(cargo)}>
-                        Reativar
-                      </Button>
-                    )}
-                  </div>
-                }
-              />
-            ))}
-          </RecordList>
-        </FormSection>
-      </FormGrid>
+                      {cargo.ativo ? (
+                        <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(cargo)}>
+                          Inativar
+                        </Button>
+                      ) : (
+                        <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(cargo)}>
+                          Reativar
+                        </Button>
+                      )}
+                    </div>
+                  </DataTableCell>
+                </DataTableRow>
+              ))
+            )}
+          </DataTableBody>
+        </DataTable>
+      </div>
     </div>
   );
 }
@@ -1459,6 +1757,20 @@ function CategoriasVistoriaPanel({
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState<AdminCategoriaVistoria | null>(null);
+  const [filterNome, setFilterNome] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  const filtersActive = Boolean(filterNome || filterStatus);
+
+  const filtered = useMemo(
+    () => categorias.filter((categoria) => matchesText(categoria.nome, filterNome) && matchesStatus(categoria.ativo, filterStatus)),
+    [categorias, filterNome, filterStatus],
+  );
+
+  function clearFilters() {
+    setFilterNome('');
+    setFilterStatus('');
+  }
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1483,56 +1795,72 @@ function CategoriasVistoriaPanel({
         Categorias usadas nos itens Likert dos checklists e no mapa de notas da CCO (Pintura, Piso, Móveis, etc.).
       </TipBanner>
 
-      <DataTable>
-        <DataTableHead>
-          <DataTableHeaderCell>Nome</DataTableHeaderCell>
-          <DataTableHeaderCell>Status</DataTableHeaderCell>
-        </DataTableHead>
-        <DataTableBody>
-          {categorias.map((categoria) => (
-            <DataTableRow key={categoria.id}>
-              <DataTableCell>{categoria.nome}</DataTableCell>
-              <DataTableCell>
-                <Badge variant={categoria.ativo ? 'success' : 'muted'}>{categoria.ativo ? 'Ativo' : 'Inativo'}</Badge>
-              </DataTableCell>
-            </DataTableRow>
-          ))}
-        </DataTableBody>
-      </DataTable>
-
-      <FormGrid>
-        <FormSection title={editing ? 'Editar categoria' : 'Nova categoria'}>
-          <form key={editing?.id ?? 'new-categoria'} onSubmit={submit} className="space-y-4">
+      <FormSection title={editing ? 'Editar categoria' : 'Nova categoria'}>
+        <form key={editing?.id ?? 'new-categoria'} onSubmit={submit} className="space-y-4">
+          <div className="max-w-md">
             <Field label="Nome"><Input name="nome" required defaultValue={editing?.nome} /></Field>
-            <div className="flex gap-2">
-              <Button type="submit" variant="filled" className="flex-1">{editing ? 'Salvar' : 'Cadastrar'}</Button>
-              {editing ? (
-                <Button type="button" variant="text" onClick={() => setEditing(null)}>Cancelar</Button>
-              ) : null}
-            </div>
-          </form>
-        </FormSection>
-        <FormSection title="Registros">
-          <RecordList empty="Nenhuma categoria cadastrada.">
-            {categorias.map((categoria) => (
-              <RecordItem
-                key={categoria.id}
-                title={categoria.nome}
-                subtitle={categoria.ativo ? 'Ativa' : 'Inativa'}
-                active={categoria.ativo}
-                actions={
-                  <div className="flex gap-2">
-                    <Button variant="text" size="sm" onClick={() => setEditing(categoria)}>Editar</Button>
-                    <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminCategoriaVistoria(categoria.id), 'Categoria excluída.')}>
-                      Excluir
-                    </Button>
-                  </div>
-                }
-              />
-            ))}
-          </RecordList>
-        </FormSection>
-      </FormGrid>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" variant="filled">{editing ? 'Salvar' : 'Cadastrar'}</Button>
+            {editing ? (
+              <Button type="button" variant="text" onClick={() => setEditing(null)}>Cancelar</Button>
+            ) : null}
+          </div>
+        </form>
+      </FormSection>
+
+      <div>
+        <DataTableFiltersBar
+          active={filtersActive}
+          onClear={clearFilters}
+          resultCount={filtered.length}
+          totalCount={categorias.length}
+        />
+        <DataTable>
+          <DataTableHead>
+            <tr>
+              <DataTableHeaderCell>Nome</DataTableHeaderCell>
+              <DataTableHeaderCell>Status</DataTableHeaderCell>
+              <DataTableHeaderCell>Ações</DataTableHeaderCell>
+            </tr>
+            <DataTableFilterRow>
+              <DataTableFilterCell>
+                <DataTableTextFilter value={filterNome} onChange={setFilterNome} placeholder="Nome" aria-label="Filtrar nome" />
+              </DataTableFilterCell>
+              <DataTableFilterCell>
+                <DataTableSelectFilter value={filterStatus} onChange={setFilterStatus} options={STATUS_FILTER_OPTIONS} aria-label="Filtrar status" />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+            </DataTableFilterRow>
+          </DataTableHead>
+          <DataTableBody>
+            {filtered.length === 0 ? (
+              <DataTableRow>
+                <DataTableCell colSpan={3} className="py-6 text-center text-[var(--ink-3)]">
+                  {categorias.length === 0 ? 'Nenhuma categoria cadastrada.' : 'Nenhum registro corresponde aos filtros.'}
+                </DataTableCell>
+              </DataTableRow>
+            ) : (
+              filtered.map((categoria) => (
+                <DataTableRow key={categoria.id}>
+                  <DataTableCell>{categoria.nome}</DataTableCell>
+                  <DataTableCell>
+                    <Badge variant={categoria.ativo ? 'success' : 'muted'}>{categoria.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                  </DataTableCell>
+                  <DataTableCell>
+                    <div className="flex gap-2">
+                      <Button variant="text" size="sm" onClick={() => setEditing(categoria)}>Editar</Button>
+                      <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminCategoriaVistoria(categoria.id), 'Categoria excluída.')}>
+                        Excluir
+                      </Button>
+                    </div>
+                  </DataTableCell>
+                </DataTableRow>
+              ))
+            )}
+          </DataTableBody>
+        </DataTable>
+      </div>
     </div>
   );
 }

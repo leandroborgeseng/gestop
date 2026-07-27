@@ -18,8 +18,10 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
+  applicationName: 'SIGMA',
   title: 'SIGMA | CCO',
-  description: 'SIGMA — Sistema Integrado de Gestão de Manutenção de Ativos · Prefeitura de Franca',
+  description:
+    'SIGMA — Sistema Integrado de Gestão de Manutenção e Ativos · Prefeitura de Franca',
   icons: {
     icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
     apple: [{ url: '/icon.svg', type: 'image/svg+xml' }],

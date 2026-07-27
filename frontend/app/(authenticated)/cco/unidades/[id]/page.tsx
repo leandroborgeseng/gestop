@@ -1,18 +1,26 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import {
   AlertTriangle,
   Building2,
   CalendarClock,
   ClipboardList,
+  Link2,
   MapPin,
   UserRound,
   Megaphone,
+  CheckCircle2,
 } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
-import { getUnidadeDetalhe } from '@/lib/api';
+import {
+  baixarNaoConformidade,
+  getUnidadeDetalhe,
+  listChamadosParaVincularNc,
+  vincularChamadoNc,
+} from '@/lib/api';
 import { chamadoTitulo } from '@/lib/chamado-geo';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { UnidadeDetalhe } from '@/lib/types';
@@ -23,7 +31,32 @@ import { MetricCard } from '@/components/metric-card';
 import { StatusBadge } from '@/components/status-badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Sheet } from '@/components/ui/sheet';
+import { useSnackbar } from '@/components/ui/snackbar';
+import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { ErrorState, LoadingState } from '@/components/ui-states';
+import { resolveStorageApiPath } from '@/lib/storage-url';
+import { cn } from '@/lib/cn';
+
+type NcItem = UnidadeDetalhe['pendenciasDetalhadas']['naoConformidades'][number];
+
+const SITUACAO_LABEL: Record<NonNullable<NcItem['situacaoVisual']>, string> = {
+  ABERTA: 'Aberta (sem chamado)',
+  VINCULADA_EM_ANDAMENTO: 'Vinculada — chamado em andamento',
+  RESOLVIDA_CHAMADO: 'Resolvida por chamado',
+  BAIXADA_MANUAL: 'Baixada manualmente',
+  ENCERRADA: 'Encerrada',
+};
+
+const SITUACAO_CHIP: Record<NonNullable<NcItem['situacaoVisual']>, 'warning' | 'brand' | 'success' | 'default' | 'danger'> = {
+  ABERTA: 'warning',
+  VINCULADA_EM_ANDAMENTO: 'brand',
+  RESOLVIDA_CHAMADO: 'success',
+  BAIXADA_MANUAL: 'default',
+  ENCERRADA: 'default',
+};
 
 export default function UnidadeDetalhePage() {
   const params = useParams<{ id: string }>();
@@ -86,6 +119,88 @@ export default function UnidadeDetalhePage() {
 }
 
 function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; onRefresh: () => void }) {
+  const snackbar = useSnackbar();
+  const [vincularNc, setVincularNc] = useState<NcItem | null>(null);
+  const [baixaNc, setBaixaNc] = useState<NcItem | null>(null);
+  const [baixaMotivo, setBaixaMotivo] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [chamadoSearch, setChamadoSearch] = useState('');
+  const [chamadosOpcoes, setChamadosOpcoes] = useState<
+    Array<{
+      id: string;
+      codigo: string;
+      titulo: string | null;
+      descricao: string;
+      status: string;
+      prioridade: string;
+      createdAt: string;
+      tipoChamado?: { id: string; nome: string } | null;
+    }>
+  >([]);
+  const [loadingChamados, setLoadingChamados] = useState(false);
+
+  const ncs = unidade.pendenciasDetalhadas.naoConformidades;
+  const ncsAbertas = useMemo(() => ncs.filter((nc) => nc.pendenteAtiva !== false && (nc.situacaoVisual === 'ABERTA' || nc.situacaoVisual === 'VINCULADA_EM_ANDAMENTO' || (!nc.situacaoVisual && nc.status !== 'RESOLVIDA' && nc.status !== 'BAIXADA_MANUAL' && nc.status !== 'CANCELADA'))), [ncs]);
+
+  useEffect(() => {
+    if (!vincularNc) return;
+    let active = true;
+    setLoadingChamados(true);
+    const timer = window.setTimeout(() => {
+      listChamadosParaVincularNc(unidade.id, { search: chamadoSearch || undefined })
+        .then((data) => {
+          if (!active) return;
+          setChamadosOpcoes(data.items);
+        })
+        .catch(() => {
+          if (!active) return;
+          setChamadosOpcoes([]);
+        })
+        .finally(() => {
+          if (active) setLoadingChamados(false);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [vincularNc, unidade.id, chamadoSearch]);
+
+  async function handleVincular(chamadoId: string) {
+    if (!vincularNc) return;
+    setSaving(true);
+    try {
+      await vincularChamadoNc(vincularNc.id, chamadoId);
+      snackbar.show('Chamado vinculado à não conformidade.', 'success');
+      setVincularNc(null);
+      onRefresh();
+    } catch (err) {
+      snackbar.show(err instanceof Error ? err.message : 'Falha ao vincular chamado.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleBaixa() {
+    if (!baixaNc) return;
+    if (!baixaMotivo.trim()) {
+      snackbar.show('Informe a justificativa da baixa.', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      await baixarNaoConformidade(baixaNc.id, baixaMotivo.trim());
+      snackbar.show('Não conformidade baixada.', 'success');
+      setBaixaNc(null);
+      setBaixaMotivo('');
+      onRefresh();
+    } catch (err) {
+      snackbar.show(err instanceof Error ? err.message : 'Falha ao dar baixa.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card elevation={1}>
@@ -124,7 +239,7 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
           icon={AlertTriangle}
           title="Não conformidades"
           value={unidade.pendencias.naoConformidadesAbertas}
-          hint="abertas"
+          hint="pendências ativas"
           deltaTone={unidade.pendencias.naoConformidadesAbertas > 0 ? 'warn' : undefined}
         />
         <MetricCard icon={Megaphone} title="Chamados" value={unidade.pendencias.chamadosAbertos} hint="abertos" />
@@ -223,39 +338,232 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
           )}
         </Panel>
 
-        <Panel title="Pendências e chamados relacionados">
+        <Panel title="Chamados relacionados">
           <div className="space-y-3">
-            {unidade.pendenciasDetalhadas.naoConformidades.length === 0 &&
-            unidade.pendenciasDetalhadas.chamados.length === 0 ? (
-              <p className="text-[13px] text-[var(--ink-3)]">Nenhuma pendência ativa para este próprio.</p>
-            ) : null}
-
-            {unidade.pendenciasDetalhadas.naoConformidades.map((item) => (
-              <div key={item.id} className="rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-4">
-                <Chip variant="warning" className="mb-2">
-                  {item.severidade} · {item.status}
-                </Chip>
-                <p className="text-[14px] font-semibold text-[var(--ink)]">
-                  {item.item.codigo} — {item.item.titulo}
-                </p>
-                <p className="mt-1 text-[13px] text-[var(--ink-2)]">{item.descricao}</p>
-              </div>
-            ))}
-
-            {unidade.pendenciasDetalhadas.chamados.map((chamado) => (
-              <div key={chamado.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--brand-soft)] p-4">
-                <Chip variant="brand" className="mb-2">
-                  {chamado.codigo} · {chamado.status} · {chamado.prioridade}
-                </Chip>
-                <p className="text-[14px] font-semibold text-[var(--ink)]">{chamadoTitulo(chamado)}</p>
-                <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                  Responsável: {chamado.responsavel?.nome ?? 'não atribuído'}
-                </p>
-              </div>
-            ))}
+            {unidade.pendenciasDetalhadas.chamados.length === 0 ? (
+              <p className="text-[13px] text-[var(--ink-3)]">Nenhum chamado aberto para este próprio.</p>
+            ) : (
+              unidade.pendenciasDetalhadas.chamados.map((chamado) => (
+                <div key={chamado.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--brand-soft)] p-4">
+                  <Chip variant="brand" className="mb-2">
+                    {chamado.codigo} · {chamado.status} · {chamado.prioridade}
+                  </Chip>
+                  <p className="text-[14px] font-semibold text-[var(--ink)]">{chamadoTitulo(chamado)}</p>
+                  <p className="mt-1 text-[13px] text-[var(--ink-3)]">
+                    Responsável: {chamado.responsavel?.nome ?? 'não atribuído'}
+                  </p>
+                </div>
+              ))
+            )}
           </div>
         </Panel>
       </section>
+
+      <Card elevation={1}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-[var(--ink)]">
+            <AlertTriangle className="h-5 w-5 text-[var(--warn)]" />
+            Não conformidades
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3 pt-0">
+          <p className="text-[13px] text-[var(--ink-3)]">
+            NC aberta sem chamado e NC vinculada a chamado em andamento contam como pendência ativa no CCO.
+            Baixadas manualmente ou resolvidas por chamado permanecem no histórico.
+            {ncsAbertas.length > 0 ? ` · ${ncsAbertas.length} pendente(s) ativa(s).` : ''}
+          </p>
+
+          {ncs.length === 0 ? (
+            <p className="text-[13px] text-[var(--ink-3)]">Nenhuma não conformidade registrada.</p>
+          ) : (
+            ncs.map((item) => {
+              const situacao = item.situacaoVisual ?? (item.chamado ? 'VINCULADA_EM_ANDAMENTO' : 'ABERTA');
+              const podeAgir = situacao === 'ABERTA';
+              const respostaTexto =
+                item.resposta?.valorTexto ??
+                (item.resposta?.valorBooleano != null
+                  ? item.resposta.valorBooleano
+                    ? 'Sim'
+                    : 'Não'
+                  : null) ??
+                (item.resposta?.valorNumero != null ? String(item.resposta.valorNumero) : null) ??
+                item.resposta?.conformidade ??
+                '—';
+
+              return (
+                <div
+                  key={item.id}
+                  className={cn(
+                    'rounded-[var(--r-md)] border p-4',
+                    situacao === 'ABERTA' && 'border-[var(--warn-bd)] bg-[var(--warn-bg)]',
+                    situacao === 'VINCULADA_EM_ANDAMENTO' && 'border-[var(--brand)]/30 bg-[var(--brand-soft)]',
+                    situacao === 'RESOLVIDA_CHAMADO' && 'border-[var(--ok-bd)] bg-[var(--ok-bg)]',
+                    (situacao === 'BAIXADA_MANUAL' || situacao === 'ENCERRADA') &&
+                      'border-[var(--line)] bg-[var(--surface-2)] opacity-90',
+                  )}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Chip variant={SITUACAO_CHIP[situacao]}>{SITUACAO_LABEL[situacao]}</Chip>
+                    <Chip>{item.severidade}</Chip>
+                  </div>
+                  <p className="mt-2 text-[14px] font-semibold text-[var(--ink)]">
+                    {item.item.codigo} — {item.item.titulo}
+                  </p>
+                  <dl className="mt-2 grid gap-1.5 text-[12px] text-[var(--ink-3)] sm:grid-cols-2">
+                    <div>
+                      <dt className="font-semibold uppercase tracking-wide">Data vistoria</dt>
+                      <dd>
+                        {item.dataVistoria
+                          ? new Date(item.dataVistoria).toLocaleString('pt-BR')
+                          : new Date(item.registradaEm).toLocaleString('pt-BR')}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold uppercase tracking-wide">Checklist</dt>
+                      <dd>
+                        {item.checklist
+                          ? `${item.checklist.nome} v${item.checklist.versao}`
+                          : '—'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold uppercase tracking-wide">Resposta</dt>
+                      <dd>{respostaTexto}</dd>
+                    </div>
+                    <div>
+                      <dt className="font-semibold uppercase tracking-wide">Usuário</dt>
+                      <dd>{item.registradaPor?.nome ?? '—'}</dd>
+                    </div>
+                  </dl>
+                  {(item.resposta?.comentario || item.descricao) ? (
+                    <p className="mt-2 text-[13px] text-[var(--ink-2)]">
+                      {item.resposta?.comentario || item.descricao}
+                    </p>
+                  ) : null}
+
+                  {item.evidencias && item.evidencias.length > 0 ? (
+                    <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                      {item.evidencias.map((ev, index) => (
+                        <ZoomableAuthenticatedImage
+                          key={ev.id}
+                          src={resolveStorageApiPath(ev.url) ?? ev.url}
+                          alt={`Evidência ${index + 1}`}
+                          className="aspect-square w-full rounded-[var(--r-sm)] object-cover"
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {item.chamado ? (
+                    <p className="mt-2 text-[13px]">
+                      Chamado vinculado:{' '}
+                      <Link
+                        href={`/chamados?search=${encodeURIComponent(item.chamado.codigo)}`}
+                        className="font-semibold text-[var(--brand)] hover:underline"
+                      >
+                        {item.chamado.codigo}
+                      </Link>{' '}
+                      · {item.chamado.status}
+                    </p>
+                  ) : situacao === 'ABERTA' ? (
+                    <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
+                      Pendente sem chamado — conta como pendência ativa no CCO.
+                    </p>
+                  ) : null}
+
+                  {item.motivoBaixa ? (
+                    <p className="mt-2 text-[12px] text-[var(--ink-3)]">
+                      Baixa: {item.motivoBaixa}
+                      {item.baixadaPor ? ` · ${item.baixadaPor.nome}` : ''}
+                      {item.baixadaEm ? ` · ${new Date(item.baixadaEm).toLocaleString('pt-BR')}` : ''}
+                    </p>
+                  ) : null}
+
+                  {podeAgir ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button type="button" variant="outlined" size="sm" onClick={() => setVincularNc(item)}>
+                        <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                        Vincular chamado
+                      </Button>
+                      <Button type="button" variant="outlined" size="sm" onClick={() => { setBaixaNc(item); setBaixaMotivo(''); }}>
+                        <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                        Dar baixa
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
+        </CardContent>
+      </Card>
+
+      <Sheet
+        open={Boolean(vincularNc)}
+        onClose={() => setVincularNc(null)}
+        title="Vincular chamado à NC"
+      >
+        <div className="space-y-3">
+          <p className="text-[13px] text-[var(--ink-3)]">
+            Selecione um chamado existente deste próprio (sem NC vinculada).
+          </p>
+          <Input
+            value={chamadoSearch}
+            onChange={(e) => setChamadoSearch(e.target.value)}
+            placeholder="Buscar por número, tipo ou descrição"
+          />
+          {loadingChamados ? <LoadingState label="Buscando chamados..." /> : null}
+          {!loadingChamados && chamadosOpcoes.length === 0 ? (
+            <p className="text-[13px] text-[var(--ink-3)]">Nenhum chamado disponível para vínculo.</p>
+          ) : null}
+          <div className="max-h-[50dvh] space-y-2 overflow-y-auto">
+            {chamadosOpcoes.map((chamado) => (
+              <button
+                key={chamado.id}
+                type="button"
+                disabled={saving}
+                onClick={() => void handleVincular(chamado.id)}
+                className="w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-left transition hover:border-[var(--brand)]"
+              >
+                <p className="text-[13px] font-semibold text-[var(--ink)]">
+                  {chamado.codigo} · {chamado.status} · {chamado.tipoChamado?.nome ?? 'Sem tipo'}
+                </p>
+                <p className="mt-1 line-clamp-2 text-[12px] text-[var(--ink-3)]">
+                  {chamado.titulo || chamado.descricao}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </Sheet>
+
+      <Sheet
+        open={Boolean(baixaNc)}
+        onClose={() => setBaixaNc(null)}
+        title="Dar baixa na NC"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outlined" onClick={() => setBaixaNc(null)} disabled={saving}>
+              Cancelar
+            </Button>
+            <Button type="button" variant="filled" onClick={() => void handleBaixa()} disabled={saving}>
+              Confirmar baixa
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-[13px] text-[var(--ink-3)]">
+            A NC deixa de ser pendência ativa no CCO, mas permanece no histórico/auditoria. Justificativa obrigatória.
+          </p>
+          <textarea
+            value={baixaMotivo}
+            onChange={(e) => setBaixaMotivo(e.target.value)}
+            placeholder="Justificativa da baixa"
+            className="min-h-28 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] p-3 text-[14px] focus:border-[var(--brand)] focus:outline-none"
+          />
+        </div>
+      </Sheet>
     </div>
   );
 }

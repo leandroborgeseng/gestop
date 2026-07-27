@@ -114,12 +114,34 @@ export function resolveUnidadeSlaMapa(chamadosAbertos: number, chamadosSlaForaPr
   return chamadosSlaForaPrazo > 0 ? 'FORA' : 'DENTRO';
 }
 
+/**
+ * Contagem de pendências únicas (item a item).
+ * SLA dentro/fora é só classificação visual — nunca entra nesta soma.
+ * NC com chamado aberto conta só no chamado (evita duplicar NC + CH).
+ */
+export function countPendenciasUnicas(
+  input: {
+    chamadosAbertos: number;
+    naoConformidadesSemChamadoAberto: number;
+    vistoriasAtrasadas: number;
+  },
+  tiposPendencia: TipoPendencia[] = DEFAULT_TIPOS_PENDENCIA,
+) {
+  const tipos = tiposPendencia.length > 0 ? tiposPendencia : DEFAULT_TIPOS_PENDENCIA;
+  let total = 0;
+  if (tipos.includes('CHAMADOS')) total += Math.max(0, input.chamadosAbertos);
+  if (tipos.includes('NAO_CONFORMIDADES')) total += Math.max(0, input.naoConformidadesSemChamadoAberto);
+  if (tipos.includes('VISTORIAS')) total += Math.max(0, input.vistoriasAtrasadas);
+  return total;
+}
+
 export function mapUnidadeOperacional(
   unidade: UnidadeBaseRecord,
-  counts: UnidadeResumoCounts,
+  counts: UnidadeResumoCounts & { naoConformidadesSemChamadoAberto?: number },
   ultimaVistoriaNota?: UnidadeVistoriaNotaResumo | null,
   tiposPendencia?: TipoPendencia[],
 ): UnidadeOperacional {
+  const tipos = tiposPendencia ?? LEGACY_TIPOS_PENDENCIA;
   const situacao = deriveUnidadeSituacao({
     ativo: unidade.ativo,
     latitude: unidade.latitude,
@@ -127,8 +149,20 @@ export function mapUnidadeOperacional(
     naoConformidadesAbertas: counts.naoConformidadesAbertas,
     chamadosAbertos: counts.chamadosAbertos,
     semVistoria: counts.semVistoria,
-    tiposPendencia,
+    tiposPendencia: tipos,
   });
+
+  const naoConformidadesSemChamadoAberto =
+    counts.naoConformidadesSemChamadoAberto ?? counts.naoConformidadesAbertas;
+  const vistoriasAtrasadas = counts.semVistoria ? 1 : 0;
+  const pendenciasUnicas = countPendenciasUnicas(
+    {
+      chamadosAbertos: counts.chamadosAbertos,
+      naoConformidadesSemChamadoAberto,
+      vistoriasAtrasadas,
+    },
+    tipos,
+  );
 
   return {
     id: unidade.id,
@@ -147,10 +181,12 @@ export function mapUnidadeOperacional(
     secretaria: unidade.secretaria,
     pendencias: {
       naoConformidadesAbertas: counts.naoConformidadesAbertas,
+      naoConformidadesSemChamadoAberto,
       chamadosAbertos: counts.chamadosAbertos,
       semVistoria: counts.semVistoria,
       vistoriaAtrasada: null,
     },
+    pendenciasUnicas,
     totais: counts,
     slaMapa: resolveUnidadeSlaMapa(counts.chamadosAbertos, counts.chamadosSlaForaPrazo),
     ultimaVistoriaNota: ultimaVistoriaNota ?? null,

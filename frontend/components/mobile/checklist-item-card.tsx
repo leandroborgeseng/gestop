@@ -280,8 +280,30 @@ export function ChecklistItemCard({
           </div>
         ) : null}
 
-        {item.geraNaoConformidade ? (
-          <p className="md-body-md text-[var(--md-on-surface-variant)]">Item gera chamado NC se marcado como não conforme.</p>
+        {item.geraNaoConformidade && current.conformidade === 'NAO_CONFORME' ? (
+          <div className="space-y-2 rounded-[var(--md-shape-sm)] border border-[var(--md-outline)] bg-[var(--md-surface-container-low)] p-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 accent-[var(--color-brand-primary)]"
+                checked={current.gerarChamado !== false}
+                onChange={(e) => onChange({ gerarChamado: e.target.checked })}
+              />
+              <span className="space-y-1">
+                <span className="block md-label-lg text-[var(--md-on-surface)]">
+                  Gerar chamado / Abrir chamado automaticamente
+                </span>
+                <span className="block md-body-md text-[var(--md-on-surface-variant)]">
+                  Esta resposta pode gerar chamado de não conformidade. Desmarque se já existir chamado
+                  pendente para este problema.
+                </span>
+              </span>
+            </label>
+          </div>
+        ) : item.geraNaoConformidade ? (
+          <p className="md-body-md text-[var(--md-on-surface-variant)]">
+            Item gera chamado NC se marcado como não conforme.
+          </p>
         ) : null}
         {needsEvidence && current.conformidade === 'NAO_CONFORME' ? (
           <p className="md-body-md text-amber-700">Não conformidade exige evidência fotográfica e comentário.</p>

@@ -5,7 +5,7 @@ import { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequireAnyPermissions, RequirePermissions } from '../auth/permissions';
 import { AdminPermissionsService } from './admin-permissions.service';
-import { PerfilCreateDto, PerfilMatrizDto } from './admin-permissions.dto';
+import { PerfilAtivoDto, PerfilCreateDto, PerfilMatrizDto, PerfilUpdateDto } from './admin-permissions.dto';
 import { AdminService } from './admin.service';
 import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto, CategoriaVistoriaDto, CargoDto } from './admin.dto';
 
@@ -133,8 +133,20 @@ export class AdminController {
 
   @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
   @Post('perfis')
-  createPerfil(@Body() body: PerfilCreateDto) {
-    return this.adminPermissionsService.createPerfil(body);
+  createPerfil(@Body() body: PerfilCreateDto, @CurrentUser() user: JwtPayload) {
+    return this.adminPermissionsService.createPerfil(body, user);
+  }
+
+  @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
+  @Put('perfis/:id')
+  updatePerfil(@Param('id') id: string, @Body() body: PerfilUpdateDto, @CurrentUser() user: JwtPayload) {
+    return this.adminPermissionsService.updatePerfil(id, body, user);
+  }
+
+  @RequireAnyPermissions('usuarios.gerenciar', 'permissoes.gerenciar')
+  @Put('perfis/:id/ativo')
+  setPerfilAtivo(@Param('id') id: string, @Body() body: PerfilAtivoDto, @CurrentUser() user: JwtPayload) {
+    return this.adminPermissionsService.setPerfilAtivo(id, body, user);
   }
 
   @RequirePermissions('usuarios.gerenciar')
