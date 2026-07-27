@@ -35,10 +35,13 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
+      # Coolify/Docker: bind IPv4 para o healthcheck em 127.0.0.1 funcionar
       HOST: 0.0.0.0
       PORT: 3001
+      COOLIFY: 'true'
       DATABASE_URL: postgresql://${POSTGRES_USER:-gestop}:${POSTGRES_PASSWORD:-gestop_change_me}@postgres:5432/${POSTGRES_DB:-gestop}?schema=public
-      JWT_SECRET: ${JWT_SECRET:-change_me_jwt_secret}
+      # Sem default fraco (<32 chars) — entrypoint recusa cedo se ausente/curto
+      JWT_SECRET: ${JWT_SECRET:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-${SERVICE_URL_WEB:-http://localhost:3000}}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
       RUN_SEED: ${RUN_SEED:-false}
@@ -50,6 +53,7 @@ services:
       STORAGE_MAX_FILE_BYTES: ${STORAGE_MAX_FILE_BYTES:-26214400}
       FRONTEND_PUBLIC_URL: ${FRONTEND_PUBLIC_URL:-${SERVICE_URL_WEB:-http://localhost:3000}}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-${SERVICE_URL_WEB:-http://localhost:3000}}
+      # Import pode demorar; falha nao derruba a API (ver startup-import)
       WEBMAP_AUTO_IMPORT_ON_START: ${WEBMAP_AUTO_IMPORT_ON_START:-true}
       WEBMAP_AUTO_IMPORT_MIN_UNITS: ${WEBMAP_AUTO_IMPORT_MIN_UNITS:-10}
       SENTRY_DSN: ${SENTRY_DSN:-}
@@ -74,6 +78,8 @@ services:
     volumes:
       - api_storage:/data/gestop-evidencias
     healthcheck:
+      # node fetch (Node 20) — imagem bookworm-slim nao inclui wget/curl
+      # start_period alto: migrate + seed + eventual webmap antes do Nest ouvir
       test:
         [
           'CMD',
@@ -81,10 +87,10 @@ services:
           '-e',
           "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 120s
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 180s
     expose:
       - '3001'
 

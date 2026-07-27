@@ -17,7 +17,7 @@ describe('describeStoragePersistenceRisk', () => {
   it('alerta quando aponta para /app em producao', () => {
     process.env.NODE_ENV = 'production';
     process.env.STORAGE_LOCAL_DIR = '/app/storage';
-    expect(describeStoragePersistenceRisk('/app/storage')).toMatch(/Volume Railway/);
+    expect(describeStoragePersistenceRisk('/app/storage')).toMatch(/volume persistente/);
   });
 
   it('nao alerta para /data/gestop-evidencias', () => {

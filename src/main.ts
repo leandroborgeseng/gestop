@@ -69,10 +69,11 @@ async function bootstrap() {
   );
 
   const port = Number(process.env.PORT ?? 3001);
-  // Railway rede privada: :: (IPv6). Coolify/Docker Compose: HOST=0.0.0.0.
-  const host = process.env.HOST?.trim() || '::';
+  // Coolify/Docker healthcheck usa 127.0.0.1 — precisa bind IPv4 (0.0.0.0).
+  // Railway rede privada IPv6: defina HOST=:: no painel se necessario.
+  const host = process.env.HOST?.trim() || '0.0.0.0';
   await app.listen(port, host);
-  console.log(`[SIGMA:api] Servidor ouvindo em [${host}]:${port}`);
+  console.log(`[SIGMA:api] Servidor ouvindo em ${host}:${port}`);
 }
 
 void bootstrap().catch((error) => {

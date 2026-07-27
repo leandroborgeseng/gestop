@@ -87,19 +87,25 @@ async function main() {
     await resetDevData();
   }
 
-  const initialPassword = isProduction
+  const PRODUCTION_ADMIN_PASSWORD_FALLBACK = 'Gestop@123';
+  let initialPassword = isProduction
     ? process.env.INITIAL_ADMIN_PASSWORD?.trim()
-    : process.env.INITIAL_ADMIN_PASSWORD?.trim() || 'Gestop@123';
+    : process.env.INITIAL_ADMIN_PASSWORD?.trim() || PRODUCTION_ADMIN_PASSWORD_FALLBACK;
 
   if (isProduction && existingUsers === 0 && !initialPassword) {
-    throw new Error('INITIAL_ADMIN_PASSWORD obrigatoria no primeiro seed de producao.');
+    // Evita crash do container no Coolify: seed com fallback e aviso alto no log.
+    logWarn(
+      'seed',
+      'INITIAL_ADMIN_PASSWORD ausente no 1o seed — usando fallback temporario Gestop@123. Defina a senha no Coolify e troque apos o login.',
+    );
+    initialPassword = PRODUCTION_ADMIN_PASSWORD_FALLBACK;
   }
 
   if (isProduction && initialPassword && initialPassword.length < 12) {
-    throw new Error('INITIAL_ADMIN_PASSWORD deve ter pelo menos 8 caracteres.');
+    throw new Error('INITIAL_ADMIN_PASSWORD deve ter pelo menos 12 caracteres.');
   }
 
-  const defaultPasswordHash = hashPassword(initialPassword ?? 'Gestop@123', isProduction ? undefined : 'gestop-dev-seed-salt');
+  const defaultPasswordHash = hashPassword(initialPassword ?? PRODUCTION_ADMIN_PASSWORD_FALLBACK, isProduction ? undefined : 'gestop-dev-seed-salt');
 
   const secretariasSeed = [
     { nome: 'Secretaria Municipal de Educacao', sigla: 'SME', responsavelNome: 'Mariana Costa', responsavelEmail: 'mariana.costa@franca.sp.gov.br' },

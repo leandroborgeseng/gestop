@@ -9,8 +9,12 @@ export function resolveStorageLocalDir() {
 
 export function describeStoragePersistenceRisk(localDir: string) {
   const configured = process.env.STORAGE_LOCAL_DIR?.trim();
+  const isManagedDeploy =
+    Boolean(process.env.RAILWAY_ENVIRONMENT) ||
+    Boolean(process.env.COOLIFY) ||
+    Boolean(process.env.COOLIFY_RESOURCE_UUID);
 
-  if (!isProductionEnv() && !process.env.RAILWAY_ENVIRONMENT) {
+  if (!isProductionEnv() && !isManagedDeploy) {
     return null;
   }
 
@@ -19,11 +23,11 @@ export function describeStoragePersistenceRisk(localDir: string) {
   }
 
   if (localDir.startsWith('/app/') || localDir === join(process.cwd(), 'storage')) {
-    return 'STORAGE_LOCAL_DIR aponta para a pasta da aplicacao (/app) — monte um Volume Railway em /data e use /data/gestop-evidencias.';
+    return 'STORAGE_LOCAL_DIR aponta para a pasta da aplicacao (/app) — monte um volume persistente em /data e use /data/gestop-evidencias (Coolify: volume api_storage).';
   }
 
   if (!localDir.startsWith('/data/')) {
-    return 'Confirme se STORAGE_LOCAL_DIR usa o Volume persistente do Railway (recomendado: /data/gestop-evidencias).';
+    return 'Confirme se STORAGE_LOCAL_DIR usa o volume persistente (recomendado: /data/gestop-evidencias).';
   }
 
   return null;

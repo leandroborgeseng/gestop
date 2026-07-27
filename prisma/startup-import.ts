@@ -93,8 +93,13 @@ export async function runStartupWebmapImportIfNeeded() {
       logWarn('startup-import', `${result.layersFailed} camada(s) falharam durante a importacao.`);
     }
   } catch (error) {
-    logError('startup-import', 'Falha na importacao automatica do webmap', error);
-    throw error;
+    // Nao derruba o boot da API: Coolify marca unhealthy se Nest nao sobe.
+    // Unidades podem ser importadas depois pela UI ou com WEBMAP_AUTO_IMPORT_ON_START=true.
+    logError('startup-import', 'Falha na importacao automatica do webmap (API seguira sem unidades)', error);
+    logWarn(
+      'startup-import',
+      'Boot continua. Importe unidades pela UI Admin ou corrija rede outbound para GitHub e redeploy.',
+    );
   } finally {
     await prisma.$disconnect();
   }
