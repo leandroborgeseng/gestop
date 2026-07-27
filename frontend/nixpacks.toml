@@ -1,4 +1,5 @@
-# Railway/Nixpacks — Next.js 16 exige Node >=20.9
+# Coolify / Railway / Nixpacks — Next.js 16 (Node >=20.9)
+# Produção usa standalone (não depende do binário `next` no PATH).
 
 [phases.setup]
 nixPkgs = ["nodejs_22", "npm-9_x"]
@@ -10,4 +11,8 @@ cmds = ["npm ci"]
 cmds = ["npm run build"]
 
 [start]
-cmd = "npm start"
+cmd = "node .next/standalone/server.js"
+
+[variables]
+HOSTNAME = "0.0.0.0"
+NEXT_TELEMETRY_DISABLED = "1"

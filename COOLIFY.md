@@ -156,6 +156,7 @@ Para acessar no host, adicione temporariamente `ports: ["3000:3000"]` / `["3001:
 | CORS | `CORS_ORIGINS` = URL exata do web (https, sem barra) |
 | Build sem espaço | `docker system prune` no host Coolify |
 | Import webmap lento | Rede outbound no host; ou `WEBMAP_AUTO_IMPORT_ON_START=false` e importe pela UI |
+| `sh: next: not found` / crash loop no web | App Nixpacks ainda em `next start`. Redeploy com `node .next/standalone/server.js` (já no repo) **ou** use Compose/`frontend/Dockerfile` (`CMD node server.js`) |
 
 ### Se mudou `POSTGRES_PASSWORD` depois do 1º deploy
 
@@ -168,6 +169,22 @@ O Postgres **ignora** a nova senha (dados no volume). Volte à senha original **
 Só se precisar escalar api/web separados:
 
 1. App **api**: Dockerfile na raiz + Postgres (ou DB gerenciado) + volume `/data`
-2. App **web**: `frontend/Dockerfile` + `BACKEND_INTERNAL_URL` apontando para a URL interna/pública da api
+2. App **web**: `frontend/Dockerfile` (**Dockerfile**, não Nixpacks) + `BACKEND_INTERNAL_URL` apontando para a URL interna/pública da api  
+   - CMD esperado: `node server.js` (standalone)  
+   - Se o painel mostrar `npm start` / `next start`, o builder está errado → mude para Dockerfile ou veja Nixpacks abaixo
+
+### Se o web for app Nixpacks (root = `frontend/`)
+
+Não use `next start` — em produção o binário `next` pode sumir do PATH (`sh: next: not found`).
+
+O build gera `.next/standalone` (`output: 'standalone'`) e o start é:
+
+```bash
+node .next/standalone/server.js
+```
+
+Arquivos: `frontend/nixpacks.toml`, `frontend/railway.toml`, `frontend/package.json` (`npm start` já aponta para o standalone).
+
+Defina `HOSTNAME=0.0.0.0` e `BACKEND_INTERNAL_URL` (URL da api).
 
 O **compose único** acima é o recomendado (igual SIGLM).

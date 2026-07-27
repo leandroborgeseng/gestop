@@ -1,4 +1,7 @@
 # Servico Frontend (Next.js) — Root Directory = frontend/
+# Preferivel no Coolify: Docker Compose (docker-compose.coolify.yml) com frontend/Dockerfile.
+# Este arquivo cobre o caminho Nixpacks/Railway (app separado com root = frontend/).
+#
 # O proxy /api-gestop usa BACKEND_INTERNAL_URL para falar com o NestJS na rede privada.
 # Use ${{gestop.PORT}} (porta real do container), nao BACKEND_LISTEN_PORT.
 
@@ -6,11 +9,13 @@
 builder = "NIXPACKS"
 
 [deploy]
-startCommand = "npm start"
+startCommand = "node .next/standalone/server.js"
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 10
 
 [env]
 NODE_ENV = "production"
+HOSTNAME = "0.0.0.0"
+NEXT_TELEMETRY_DISABLED = "1"
 # Servico backend no Railway deve se chamar "gestop"
 BACKEND_INTERNAL_URL = "http://${{gestop.RAILWAY_PRIVATE_DOMAIN}}:${{gestop.PORT}}"
