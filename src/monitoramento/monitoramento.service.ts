@@ -82,6 +82,7 @@ export class MonitoramentoService {
       syncPendentes,
       pendenciasPorSecretaria,
       analise,
+      analiseVistorias,
     ] = await Promise.all([
       this.prisma.unidadePublica.count({
         where: {
@@ -142,6 +143,7 @@ export class MonitoramentoService {
         orderBy: { sigla: 'asc' },
       }),
       this.buildAnaliseChamados(filtro, chamadoWhere, chamadoConcluidoWhere),
+      this.buildAnaliseVistorias(filtro, from, to),
     ]);
 
     return {
@@ -168,7 +170,10 @@ export class MonitoramentoService {
         },
         syncPendentes,
       },
-      analise,
+      analise: {
+        ...analise,
+        ...analiseVistorias,
+      },
       pendenciasPorSecretaria: pendenciasPorSecretaria.map((secretaria) => ({
         id: secretaria.id,
         sigla: secretaria.sigla,
@@ -310,6 +315,97 @@ export class MonitoramentoService {
       chamadosPorTipo: porTipo,
       chamadosPorSecretaria: porSecretaria,
       totalConcluidosAnalisados: concluidos.length,
+    };
+  }
+
+  private async buildAnaliseVistorias(filtro: DashboardFiltroDto, from: Date | null, to: Date | null) {
+    const fiscalizacoes = await this.prisma.fiscalizacao.findMany({
+      where: {
+        status: 'CONCLUIDA',
+        ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
+        ...(from || to
+          ? {
+              OR: [
+                {
+                  concluidaEm: {
+                    ...(from ? { gte: from } : {}),
+                    ...(to ? { lte: to } : {}),
+                  },
+                },
+                {
+                  AND: [
+                    { concluidaEm: null },
+                    {
+                      dataVistoriaInformada: {
+                        ...(from ? { gte: from } : {}),
+                        ...(to ? { lte: to } : {}),
+                      },
+                    },
+                  ],
+                },
+              ],
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        agenteId: true,
+        realizadaPorNome: true,
+        agente: { select: { id: true, nome: true } },
+        _count: {
+          select: {
+            naoConformidades: true,
+          },
+        },
+        naoConformidades: {
+          select: {
+            chamado: { select: { id: true } },
+          },
+        },
+      },
+    });
+
+    type Acc = {
+      chave: string;
+      label: string;
+      total: number;
+      naoConformidades: number;
+      chamadosGerados: number;
+    };
+    const byExecutor = new Map<string, Acc>();
+
+    for (const item of fiscalizacoes) {
+      const label = item.realizadaPorNome?.trim() || item.agente.nome;
+      const chave = item.realizadaPorNome?.trim()
+        ? `nome:${item.realizadaPorNome.trim().toLowerCase()}`
+        : item.agenteId;
+      const current = byExecutor.get(chave) ?? {
+        chave,
+        label,
+        total: 0,
+        naoConformidades: 0,
+        chamadosGerados: 0,
+      };
+      current.total += 1;
+      current.naoConformidades += item._count.naoConformidades;
+      current.chamadosGerados += item.naoConformidades.filter((nc) => nc.chamado).length;
+      byExecutor.set(chave, current);
+    }
+
+    const produtividadeVistoriasPorUsuario = [...byExecutor.values()]
+      .map((item) => ({
+        chave: item.chave,
+        label: item.label,
+        detalhe: `${item.naoConformidades} NC · ${item.chamadosGerados} chamado(s)`,
+        total: item.total,
+        naoConformidades: item.naoConformidades,
+        chamadosGerados: item.chamadosGerados,
+      }))
+      .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label, 'pt-BR'));
+
+    return {
+      produtividadeVistoriasPorUsuario,
+      totalVistoriasAnalisadas: fiscalizacoes.length,
     };
   }
 

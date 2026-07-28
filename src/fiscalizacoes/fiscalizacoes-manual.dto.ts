@@ -117,6 +117,17 @@ export class LancamentoManualFiscalizacaoDto {
   @MaxLength(2000)
   observacoes?: string;
 
+  /** Usuário que realizou a vistoria em campo (produtividade). */
+  @IsOptional()
+  @IsString()
+  realizadaPorId?: string;
+
+  /** Nome livre quando o executor não tem usuário no sistema. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  realizadaPorNome?: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

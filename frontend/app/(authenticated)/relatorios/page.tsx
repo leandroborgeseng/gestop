@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   Inbox,
   BarChart3,
+  CalendarDays,
 } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
@@ -24,11 +25,22 @@ import {
   downloadRelatorioXlsx,
   getOpcoesFiltroUnidades,
   getSecretarias,
+  getUnidades,
+  listChecklists,
+  listUsuariosAtivosExecucao,
 } from '@/lib/api';
 import { CHAMADO_STATUS_META } from '@/lib/chamado-status';
-import { SecretariaOption, UnidadeFiltroOpcoes } from '@/lib/types';
+import { CRONOGRAMA_FREQUENCIAS, CRONOGRAMA_FREQUENCIA_LABELS } from '@/lib/cronograma';
+import { formatUnidadeTipo } from '@/lib/unidade-tipo';
+import {
+  ChecklistModel,
+  SecretariaOption,
+  UnidadeFiltroOpcoes,
+  UnidadeOperacional,
+  UsuarioExecucaoOpcao,
+} from '@/lib/types';
 
-type RelatorioTipo = 'unidades' | 'fiscalizacoes' | 'chamados' | 'chamados-produtividade';
+type RelatorioTipo = 'unidades' | 'fiscalizacoes' | 'chamados' | 'chamados-produtividade' | 'cronograma-cobertura';
 type RelatorioFormato = 'csv' | 'pdf' | 'xlsx';
 
 const PRIORIDADES = [
@@ -73,6 +85,13 @@ const RELATORIOS: Array<{
     hint: 'Relação analítica de chamados concluídos com equipe, funcionário, cargo e cumprimento de prazo.',
     icon: BarChart3,
   },
+  {
+    tipo: 'cronograma-cobertura',
+    title: 'Cobertura de cronogramas',
+    modalTitle: 'Gerar relatório de cobertura de vistorias',
+    hint: 'Lista próprios ativos e indica se possuem cronograma de vistoria vinculado, com responsáveis previstos.',
+    icon: CalendarDays,
+  },
 ];
 
 type BaseModalState = {
@@ -91,6 +110,15 @@ type ChamadosModalState = BaseModalState & {
 
 type ProdutividadeModalState = BaseModalState & {
   tipoChamadoId: string;
+};
+
+type CoberturaModalState = Omit<BaseModalState, 'from' | 'to'> & {
+  tipo: string;
+  unidadeId: string;
+  checklistId: string;
+  frequencia: string;
+  ativo: string;
+  responsavelId: string;
 };
 
 const EMPTY_BASE: BaseModalState = {
@@ -113,9 +141,23 @@ const EMPTY_PROD: ProdutividadeModalState = {
   tipoChamadoId: '',
 };
 
+const EMPTY_COBERTURA: CoberturaModalState = {
+  secretariaId: '',
+  tipo: '',
+  unidadeId: '',
+  checklistId: '',
+  frequencia: '',
+  ativo: '',
+  responsavelId: '',
+  formato: 'pdf',
+};
+
 export default function RelatoriosPage() {
   const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
   const [opcoes, setOpcoes] = useState<UnidadeFiltroOpcoes | null>(null);
+  const [unidades, setUnidades] = useState<UnidadeOperacional[]>([]);
+  const [checklists, setChecklists] = useState<ChecklistModel[]>([]);
+  const [responsaveis, setResponsaveis] = useState<UsuarioExecucaoOpcao[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -123,12 +165,16 @@ export default function RelatoriosPage() {
   const [simplesModal, setSimplesModal] = useState<BaseModalState>(EMPTY_BASE);
   const [chamadosModal, setChamadosModal] = useState<ChamadosModalState>(EMPTY_CHAMADOS);
   const [prodModal, setProdModal] = useState<ProdutividadeModalState>(EMPTY_PROD);
+  const [coberturaModal, setCoberturaModal] = useState<CoberturaModalState>(EMPTY_COBERTURA);
 
   useEffect(() => {
     getSecretarias().then(setSecretarias).catch(() => setSecretarias([]));
     getOpcoesFiltroUnidades()
       .then(setOpcoes)
       .catch(() => setOpcoes(null));
+    getUnidades({}).then(setUnidades).catch(() => setUnidades([]));
+    listChecklists().then(setChecklists).catch(() => setChecklists([]));
+    listUsuariosAtivosExecucao().then(setResponsaveis).catch(() => setResponsaveis([]));
   }, []);
 
   async function exportar(tipo: RelatorioTipo, formato: RelatorioFormato, params: Record<string, string>) {
@@ -151,6 +197,8 @@ export default function RelatoriosPage() {
       setChamadosModal({ ...EMPTY_CHAMADOS });
     } else if (tipo === 'chamados-produtividade') {
       setProdModal({ ...EMPTY_PROD });
+    } else if (tipo === 'cronograma-cobertura') {
+      setCoberturaModal({ ...EMPTY_COBERTURA });
     } else {
       setSimplesModal({ ...EMPTY_BASE });
     }
@@ -190,11 +238,31 @@ export default function RelatoriosPage() {
     await exportar('chamados-produtividade', prodModal.formato, params);
   }
 
+  async function gerarCobertura() {
+    const params: Record<string, string> = {};
+    if (coberturaModal.secretariaId) params.secretariaId = coberturaModal.secretariaId;
+    if (coberturaModal.tipo) params.tipo = coberturaModal.tipo;
+    if (coberturaModal.unidadeId) params.unidadeId = coberturaModal.unidadeId;
+    if (coberturaModal.checklistId) params.checklistId = coberturaModal.checklistId;
+    if (coberturaModal.frequencia) params.frequencia = coberturaModal.frequencia;
+    if (coberturaModal.ativo) params.cronogramaAtivo = coberturaModal.ativo;
+    if (coberturaModal.responsavelId) params.responsavelId = coberturaModal.responsavelId;
+    await exportar('cronograma-cobertura', coberturaModal.formato, params);
+  }
+
   const tiposChamado = opcoes?.tiposChamado ?? [];
   const equipes = opcoes?.equipes ?? [];
+  const tiposUnidade = opcoes?.tipos ?? [];
   const statusOptions = Object.entries(CHAMADO_STATUS_META);
   const activeMeta = RELATORIOS.find((item) => item.tipo === activeTipo) ?? null;
   const isLoading = Boolean(loading);
+
+  const unidadesDaCobertura = coberturaModal.secretariaId
+    ? unidades.filter((item) => item.secretaria.id === coberturaModal.secretariaId)
+    : unidades;
+  const checklistsDaCobertura = coberturaModal.secretariaId
+    ? checklists.filter((item) => !item.secretariaId || item.secretariaId === coberturaModal.secretariaId)
+    : checklists;
 
   return (
     <RequirePermissions permissions={['dashboard.visualizar']}>
@@ -481,6 +549,131 @@ export default function RelatoriosPage() {
           <p className="mt-3 text-[12px] text-[var(--ink-3)]">
             O período considera a <b>data de conclusão</b>. Equipe e participantes vêm do log de conclusão da
             execução, não da atribuição atual do chamado.
+          </p>
+        </Sheet>
+
+        <Sheet
+          open={activeTipo === 'cronograma-cobertura'}
+          onClose={closeModal}
+          title="Gerar relatório de cobertura de cronogramas"
+          footer={
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outlined" onClick={closeModal}>
+                Cancelar
+              </Button>
+              <Button variant="filled" disabled={isLoading} onClick={() => void gerarCobertura()}>
+                {isLoading ? 'Gerando...' : 'Gerar relatório'}
+              </Button>
+            </div>
+          }
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Secretaria">
+              <Select
+                value={coberturaModal.secretariaId}
+                onChange={(e) =>
+                  setCoberturaModal((prev) => ({ ...prev, secretariaId: e.target.value, unidadeId: '' }))
+                }
+              >
+                <option value="">Todas</option>
+                {secretarias.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.sigla} — {item.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Tipo de próprio">
+              <Select
+                value={coberturaModal.tipo}
+                onChange={(e) => setCoberturaModal((prev) => ({ ...prev, tipo: e.target.value }))}
+              >
+                <option value="">Todos</option>
+                {tiposUnidade.map((tipo) => (
+                  <option key={tipo} value={tipo}>
+                    {formatUnidadeTipo(tipo)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Próprio">
+              <Select
+                value={coberturaModal.unidadeId}
+                onChange={(e) => setCoberturaModal((prev) => ({ ...prev, unidadeId: e.target.value }))}
+              >
+                <option value="">Todos</option>
+                {unidadesDaCobertura.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Checklist">
+              <Select
+                value={coberturaModal.checklistId}
+                onChange={(e) => setCoberturaModal((prev) => ({ ...prev, checklistId: e.target.value }))}
+              >
+                <option value="">Todos</option>
+                {checklistsDaCobertura.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Periodicidade">
+              <Select
+                value={coberturaModal.frequencia}
+                onChange={(e) => setCoberturaModal((prev) => ({ ...prev, frequencia: e.target.value }))}
+              >
+                <option value="">Todas</option>
+                {CRONOGRAMA_FREQUENCIAS.map((frequencia) => (
+                  <option key={frequencia} value={frequencia}>
+                    {CRONOGRAMA_FREQUENCIA_LABELS[frequencia]}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Situação do cronograma">
+              <Select
+                value={coberturaModal.ativo}
+                onChange={(e) => setCoberturaModal((prev) => ({ ...prev, ativo: e.target.value }))}
+              >
+                <option value="">Todas</option>
+                <option value="true">Ativo</option>
+                <option value="false">Inativo</option>
+              </Select>
+            </Field>
+            <Field label="Responsável previsto">
+              <Select
+                value={coberturaModal.responsavelId}
+                onChange={(e) => setCoberturaModal((prev) => ({ ...prev, responsavelId: e.target.value }))}
+              >
+                <option value="">Todos</option>
+                {responsaveis.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Formato">
+              <Select
+                value={coberturaModal.formato}
+                onChange={(e) =>
+                  setCoberturaModal((prev) => ({ ...prev, formato: e.target.value as RelatorioFormato }))
+                }
+              >
+                <option value="pdf">PDF</option>
+                <option value="csv">CSV</option>
+                <option value="xlsx">Excel (XLSX)</option>
+              </Select>
+            </Field>
+          </div>
+          <p className="mt-3 text-[12px] text-[var(--ink-3)]">
+            Lista todos os próprios ativos da secretaria e indica se possuem cronograma de vistoria vinculado.
+            Responsáveis previstos são de acompanhamento; a execução da vistoria segue as permissões do sistema.
           </p>
         </Sheet>
       </PageShell>

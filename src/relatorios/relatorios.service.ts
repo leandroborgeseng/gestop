@@ -16,7 +16,17 @@ import { FISCALIZACOES_EXPORT_HEADERS, mapFiscalizacoesExportRows } from './rela
 import { formatCoordenada, loadExecucaoCoordenadas } from './relatorios.execucao-coords';
 import { loadExecucaoParticipantes } from './relatorios.execucao-participantes';
 import { UNIDADES_EXPORT_HEADERS, mapUnidadesExportRows } from './relatorios.unidades-export';
+import {
+  CRONOGRAMA_COBERTURA_HEADERS,
+  CronogramaCoberturaUnidade,
+  computeCronogramaCoberturaTotais,
+  formatCronogramaCoberturaSummaryLines,
+  mapCronogramaCoberturaExportRows,
+} from './relatorios.cronograma-cobertura-export';
 import { buildXlsx } from './relatorios.xlsx';
+
+const CRONOGRAMA_COBERTURA_NOTE =
+  'Responsáveis previstos são de acompanhamento/planejamento; a execução da vistoria segue as permissões do sistema.';
 
 function chamadoUnidadeCodigo(item: { unidade: { codigoPatrimonial: string } | null }) {
   return item.unidade?.codigoPatrimonial ?? '';
@@ -415,5 +425,106 @@ export class RelatoriosService {
           }
         : {}),
     };
+  }
+
+  async exportCronogramaCobertura(filtro: RelatorioFiltroDto): Promise<CronogramaCoberturaUnidade[]> {
+    const cronogramaAtivo =
+      filtro.cronogramaAtivo === 'true' ? true : filtro.cronogramaAtivo === 'false' ? false : undefined;
+
+    const unidades = await this.prisma.unidadePublica.findMany({
+      where: {
+        ativo: true,
+        ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
+        ...(filtro.tipo ? { tipo: filtro.tipo as never } : {}),
+        ...(filtro.unidadeId ? { id: filtro.unidadeId } : {}),
+      },
+      orderBy: [{ secretaria: { sigla: 'asc' } }, { nome: 'asc' }],
+      select: {
+        codigoPatrimonial: true,
+        nome: true,
+        tipo: true,
+        endereco: true,
+        secretaria: { select: { sigla: true, nome: true } },
+        cronogramas: {
+          where: {
+            ...(filtro.checklistId ? { checklistId: filtro.checklistId } : {}),
+            ...(filtro.frequencia ? { frequencia: filtro.frequencia } : {}),
+            ...(cronogramaAtivo == null ? {} : { ativo: cronogramaAtivo }),
+            ...(filtro.responsavelId
+              ? {
+                  OR: [
+                    { responsavelId: filtro.responsavelId },
+                    { responsaveis: { some: { usuarioId: filtro.responsavelId } } },
+                  ],
+                }
+              : {}),
+          },
+          include: {
+            checklist: { select: { nome: true } },
+            responsavel: { select: { nome: true } },
+            responsaveis: { include: { usuario: { select: { nome: true } } } },
+          },
+          orderBy: { proximaChecagemEm: 'asc' },
+        },
+      },
+    });
+
+    if (filtro.checklistId || filtro.frequencia || filtro.responsavelId || cronogramaAtivo != null) {
+      return unidades.filter((unidade) => unidade.cronogramas.length > 0);
+    }
+
+    return unidades;
+  }
+
+  cronogramaCoberturaCsv(filtro: RelatorioFiltroDto) {
+    return this.exportCronogramaCobertura(filtro).then((items) => {
+      const rows = mapCronogramaCoberturaExportRows(items);
+      const summary = [
+        ...formatCronogramaCoberturaSummaryLines(computeCronogramaCoberturaTotais(items)),
+        CRONOGRAMA_COBERTURA_NOTE,
+      ];
+      const body = buildCsv([...CRONOGRAMA_COBERTURA_HEADERS], rows);
+      return `${body}\n\n${summary.map((line) => `"${line.replace(/"/g, '""')}"`).join('\n')}`;
+    });
+  }
+
+  cronogramaCoberturaXlsx(filtro: RelatorioFiltroDto) {
+    return this.exportCronogramaCobertura(filtro).then((items) =>
+      buildXlsx('Cobertura', [...CRONOGRAMA_COBERTURA_HEADERS], mapCronogramaCoberturaExportRows(items), {
+        wrapText: true,
+        summaryLines: [
+          ...formatCronogramaCoberturaSummaryLines(computeCronogramaCoberturaTotais(items)),
+          CRONOGRAMA_COBERTURA_NOTE,
+        ],
+      }),
+    );
+  }
+
+  cronogramaCoberturaPdf(filtro: RelatorioFiltroDto) {
+    return this.exportCronogramaCobertura(filtro).then((items) =>
+      buildTablePdf({
+        title: 'SIGMA — Cobertura de cronogramas de vistoria',
+        subtitle: `Gerado em ${new Date().toLocaleString('pt-BR')} · ${CRONOGRAMA_COBERTURA_NOTE}`,
+        headers: [
+          'Sec.',
+          'Secretaria',
+          'Código',
+          'Próprio',
+          'Tipo',
+          'Endereço',
+          'Checklist',
+          'Periodicidade',
+          'Início',
+          'Próxima',
+          'Responsáveis',
+          'Situação',
+          'Cobertura',
+        ],
+        columnWeights: [0.05, 0.08, 0.07, 0.1, 0.07, 0.1, 0.09, 0.07, 0.06, 0.06, 0.1, 0.06, 0.09],
+        wrapFully: true,
+        summaryLines: formatCronogramaCoberturaSummaryLines(computeCronogramaCoberturaTotais(items)),
+        rows: mapCronogramaCoberturaExportRows(items).map((row) => row.map((cell) => String(cell ?? ''))),
+      }),
+    );
   }
 }

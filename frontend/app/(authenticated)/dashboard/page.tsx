@@ -366,6 +366,22 @@ export default function DashboardPage() {
               />
             </section>
 
+            <div className="mb-4">
+              <h2 className="text-[15px] font-semibold text-[var(--ink)]">Produtividade de vistorias</h2>
+              <p className="mt-1 text-[13px] text-[var(--ink-3)]">
+                Com base no usuário que efetivamente realizou a vistoria · {analise?.totalVistoriasAnalisadas ?? 0}{' '}
+                vistoria(s) no filtro. Responsáveis previstos do cronograma não entram nesta conta.
+              </p>
+            </div>
+            <section className="mb-8 grid gap-4 lg:grid-cols-2">
+              <DashboardAnalysisCard
+                title="Vistorias por usuário executor"
+                hint="Online/offline = quem concluiu · Manual = campo “Vistoria realizada por”"
+                items={analise?.produtividadeVistoriasPorUsuario ?? []}
+                emptyLabel="Sem vistorias no período"
+              />
+            </section>
+
             <div className="mb-4 border-t border-[var(--line)] pt-6">
               <h2 className="text-[15px] font-semibold text-[var(--ink)]">Acompanhamento geral do sistema</h2>
               <p className="mt-1 text-[13px] text-[var(--ink-3)]">

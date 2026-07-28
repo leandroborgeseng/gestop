@@ -1,5 +1,14 @@
 import { CronogramaFrequencia } from '@prisma/client';
-import { IsBoolean, IsDateString, IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsString,
+  MinLength,
+} from 'class-validator';
 
 export class CronogramaDto {
   @IsString()
@@ -14,9 +23,17 @@ export class CronogramaDto {
   @IsDateString()
   proximaChecagemEm!: string;
 
+  /** Legado: responsável único. Preferir `responsavelIds`. */
   @IsOptional()
   @IsString()
   responsavelId?: string;
+
+  /** Responsáveis previstos (acompanhamento). Não restringe quem pode executar a vistoria. */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Type(() => String)
+  responsavelIds?: string[];
 
   @IsOptional()
   @IsBoolean()

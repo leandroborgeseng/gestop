@@ -163,7 +163,14 @@ export function EventoChecagemCard({ evento }: { evento: CalendarioChecagemEvent
         {evento.checklist.nome} · {evento.unidade.secretariaSigla}
       </p>
       {evento.agenteNome ? (
-        <p className="mt-1 text-[13px] text-[var(--ink-3)]">Agente: {evento.agenteNome}</p>
+        <p className="mt-1 text-[13px] text-[var(--ink-3)]">Realizada por: {evento.agenteNome}</p>
+      ) : null}
+      {evento.responsavelNome ? (
+        <p className="mt-1 text-[13px] text-[var(--ink-3)]">
+          Responsável previsto: {evento.responsavelNome}
+        </p>
+      ) : evento.tipo !== 'REALIZADA' ? (
+        <p className="mt-1 text-[13px] text-[var(--ink-3)]">Sem responsável definido</p>
       ) : null}
       <Link
         href={`/cco/unidades/${evento.unidade.id}`}

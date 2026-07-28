@@ -1,7 +1,15 @@
 /* SIGMA PWA — cache do shell + assets Next para vistoria offline */
-const CACHE_VERSION = 'sigma-campo-v5';
+const CACHE_VERSION = 'sigma-campo-v6';
 const SHELL_URL = '/mobile';
-const PRECACHE_URLS = [SHELL_URL, '/icon.svg', '/icon-maskable.svg', '/manifest.webmanifest'];
+const PRECACHE_URLS = [
+  SHELL_URL,
+  '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/icon-maskable-512.png',
+  '/apple-touch-icon.png',
+  '/manifest.webmanifest',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -47,7 +55,7 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
-      icon: '/icon.svg',
+      icon: '/icon-192.png',
       data: { url: payload.url },
     }),
   );
@@ -187,6 +195,10 @@ self.addEventListener('fetch', (event) => {
   if (
     isNextStaticAsset(url.pathname) ||
     url.pathname === '/icon.svg' ||
+    url.pathname === '/icon-192.png' ||
+    url.pathname === '/icon-512.png' ||
+    url.pathname === '/icon-maskable-512.png' ||
+    url.pathname === '/apple-touch-icon.png' ||
     url.pathname === '/icon-maskable.svg' ||
     url.pathname === '/manifest.webmanifest' ||
     url.pathname.startsWith('/icons/')

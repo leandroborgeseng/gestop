@@ -16,8 +16,9 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { ErrorState, LoadingState } from '@/components/ui-states';
+import { UsuarioMultiPicker } from '@/components/usuarios/usuario-multi-picker';
 import { checklistAppliesToUnidade } from '@/lib/checklist-matching';
-import { getStoredAuth, deactivateCronograma, getCalendarioChecagens, getSecretarias, getUnidades, listChecklists, listCronogramas, saveCronograma } from '@/lib/api';
+import { getStoredAuth, deactivateCronograma, downloadRelatorioPdf, downloadRelatorioXlsx, getCalendarioChecagens, getSecretarias, getUnidades, listChecklists, listCronogramas, saveCronograma } from '@/lib/api';
 import { CRONOGRAMA_FREQUENCIAS, CRONOGRAMA_FREQUENCIA_LABELS, monthBounds, toInputDate } from '@/lib/cronograma';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
@@ -28,6 +29,7 @@ import {
   CronogramaFrequencia,
   SecretariaOption,
   UnidadeOperacional,
+  UsuarioExecucaoOpcao,
 } from '@/lib/types';
 
 export default function CronogramaPage() {
@@ -47,6 +49,11 @@ export default function CronogramaPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CronogramaChecagem | null>(null);
   const [formUnidadeId, setFormUnidadeId] = useState('');
+  const [formResponsavelIds, setFormResponsavelIds] = useState<string[]>([]);
+  const [formResponsaveis, setFormResponsaveis] = useState<UsuarioExecucaoOpcao[]>([]);
+  const [coberturaOpen, setCoberturaOpen] = useState(false);
+  const [coberturaFormato, setCoberturaFormato] = useState<'pdf' | 'xlsx'>('pdf');
+  const [coberturaLoading, setCoberturaLoading] = useState(false);
   const canManage = useMemo(
     () => getStoredAuth()?.user.permissoes.includes('checklists.gerenciar') ?? false,
     [],
@@ -139,6 +146,7 @@ export default function CronogramaPage() {
       frequencia: String(form.get('frequencia')) as CronogramaFrequencia,
       proximaChecagemEm: String(form.get('proximaChecagemEm')),
       observacoes: String(form.get('observacoes') || ''),
+      responsavelIds: formResponsavelIds,
       ativo: true,
     };
 
@@ -147,6 +155,8 @@ export default function CronogramaPage() {
       setSuccess(editing ? 'Cronograma atualizado.' : 'Cronograma cadastrado.');
       setFormOpen(false);
       setEditing(null);
+      setFormResponsavelIds([]);
+      setFormResponsaveis([]);
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível salvar o cronograma.');
@@ -156,12 +166,19 @@ export default function CronogramaPage() {
   function openCreate() {
     setEditing(null);
     setFormUnidadeId(unidadeId);
+    setFormResponsavelIds([]);
+    setFormResponsaveis([]);
     setFormOpen(true);
   }
 
   function openEdit(item: CronogramaChecagem) {
     setEditing(item);
     setFormUnidadeId(item.unidadeId);
+    const fromJunction = (item.responsaveis ?? []).map((row) => row.usuario);
+    const legacy = item.responsavel ? [item.responsavel] : [];
+    const users = fromJunction.length ? fromJunction : legacy;
+    setFormResponsaveis(users.map((user) => ({ ...user, cpf: null, cargo: null })));
+    setFormResponsavelIds(users.map((user) => user.id));
     setFormOpen(true);
   }
 
@@ -173,7 +190,26 @@ export default function CronogramaPage() {
         title="Cronograma de checagens"
         description="Defina a periodicidade de vistoria por próprio e acompanhe o calendário de checagens realizadas, agendadas e atrasadas."
         backHref={backHref}
-        className={canManage ? 'pb-[calc(5.75rem+env(safe-area-inset-bottom)+5.5rem)] lg:pb-5' : undefined}
+        className={canManage ? 'overflow-y-auto pb-[calc(5.75rem+env(safe-area-inset-bottom)+1rem)] lg:pb-5' : 'overflow-y-auto'}
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outlined"
+              onClick={() => {
+                setCoberturaOpen(true);
+              }}
+            >
+              Cobertura de vistorias
+            </Button>
+            {canManage ? (
+              <Button type="button" onClick={openCreate} className="lg:hidden">
+                <Plus className="h-4 w-4" />
+                Novo cronograma
+              </Button>
+            ) : null}
+          </div>
+        }
       >
         <TipBanner id="cronograma-checagens">
           Cadastre a periodicidade por próprio + checklist. Após cada vistoria, a próxima data avança automaticamente.
@@ -274,6 +310,12 @@ export default function CronogramaPage() {
                             ? ` · Última: ${new Date(item.ultimaChecagemEm).toLocaleDateString('pt-BR')}`
                             : ''}
                         </p>
+                        <p className="mt-1 text-[13px] text-[var(--ink-3)]">
+                          Responsável(is):{' '}
+                          {item.responsaveis?.length
+                            ? item.responsaveis.map((r) => r.usuario.nome).join(', ')
+                            : item.responsavel?.nome ?? 'Sem responsável definido'}
+                        </p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button variant="tonal" size="sm" onClick={() => openEdit(item)}>
@@ -330,7 +372,7 @@ export default function CronogramaPage() {
 
         {canManage ? (
           <>
-            <Fab extended aria-label="Novo cronograma" onClick={openCreate}>
+            <Fab extended aria-label="Novo cronograma" onClick={openCreate} className="hidden lg:inline-flex">
               <Plus className="h-6 w-6" />
               Cronograma
             </Fab>
@@ -393,6 +435,17 @@ export default function CronogramaPage() {
                     }
                   />
                 </Field>
+                <UsuarioMultiPicker
+                  label="Responsável(is) pela vistoria"
+                  hint="Responsáveis previstos para acompanhamento. Não restringem quem pode realizar a vistoria."
+                  selectedIds={formResponsavelIds}
+                  initialUsers={formResponsaveis}
+                  preferSecretariaId={formUnidade?.secretaria.id}
+                  onChange={(ids, users) => {
+                    setFormResponsavelIds(ids);
+                    setFormResponsaveis(users);
+                  }}
+                />
                 <Field label="Observações">
                   <Input name="observacoes" defaultValue={editing?.observacoes ?? ''} />
                 </Field>
@@ -403,6 +456,61 @@ export default function CronogramaPage() {
             </Sheet>
           </>
         ) : null}
+
+        <Sheet
+          open={coberturaOpen}
+          onClose={() => setCoberturaOpen(false)}
+          title="Cobertura de vistorias"
+        >
+          <div className="space-y-4">
+            <p className="text-[13px] text-[var(--ink-3)]">
+              Lista todos os próprios ativos e indica se possuem cronograma vinculado. Responsáveis previstos são de
+              acompanhamento e não restringem a execução da vistoria.
+            </p>
+            <Field label="Secretaria">
+              <Select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)}>
+                <option value="">Todas</option>
+                {secretarias.map((secretaria) => (
+                  <option key={secretaria.id} value={secretaria.id}>
+                    {secretaria.sigla} — {secretaria.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Formato">
+              <Select
+                value={coberturaFormato}
+                onChange={(event) => setCoberturaFormato(event.target.value as 'pdf' | 'xlsx')}
+              >
+                <option value="pdf">PDF</option>
+                <option value="xlsx">Excel</option>
+              </Select>
+            </Field>
+            <Button
+              type="button"
+              variant="filled"
+              className="w-full"
+              disabled={coberturaLoading}
+              onClick={() => {
+                setCoberturaLoading(true);
+                const params: Record<string, string> = {};
+                if (secretariaId) params.secretariaId = secretariaId;
+                const request =
+                  coberturaFormato === 'pdf'
+                    ? downloadRelatorioPdf('cronograma-cobertura', params)
+                    : downloadRelatorioXlsx('cronograma-cobertura', params);
+                void request
+                  .then(() => setCoberturaOpen(false))
+                  .catch((err) =>
+                    setError(err instanceof Error ? err.message : 'Falha ao gerar relatório de cobertura.'),
+                  )
+                  .finally(() => setCoberturaLoading(false));
+              }}
+            >
+              {coberturaLoading ? 'Gerando...' : 'Emitir relatório'}
+            </Button>
+          </div>
+        </Sheet>
       </PageShell>
     </RequirePermissions>
   );

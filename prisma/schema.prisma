@@ -268,6 +268,7 @@ model Usuario {
   secretariasVinculos   UsuarioSecretaria[]
   checklistVersoes ChecklistVersao[]  @relation("ChecklistVersaoPublicadoPor")
   fiscalizacoes    Fiscalizacao[]     @relation("FiscalizacaoAgente")
+  fiscalizacoesLancadas Fiscalizacao[] @relation("FiscalizacaoLancadoPor")
   naoConformidades NaoConformidade[]  @relation("NaoConformidadeRegistradaPor")
   naoConformidadesBaixadas NaoConformidade[] @relation("NaoConformidadeBaixadaPor")
   chamadosResponsavel Chamado[]         @relation("ChamadoResponsavel")
@@ -279,6 +280,7 @@ model Usuario {
   chamadosRegistrados Chamado[] @relation("ChamadoRegistradoPor")
   pushSubscriptions   PushSubscription[]
   cronogramasResponsavel CronogramaChecagem[] @relation("CronogramaResponsavel")
+  cronogramasResponsaveisPrevistos CronogramaChecagemResponsavel[]
   equipes             EquipeUsuario[]
 
   @@index([secretariaId])
@@ -554,7 +556,12 @@ model Fiscalizacao {
   secretariaId          String
   unidadeId             String
   checklistVersaoId     String
+  /// Usuário que efetivamente realizou a vistoria (produtividade).
   agenteId              String
+  /// Usuário que lançou no sistema (lançamento manual). Null em vistorias digitais.
+  lancadoPorId          String?
+  /// Nome livre quando o executor não tem usuário no sistema (fallback do lançamento manual).
+  realizadaPorNome      String?
   status                FiscalizacaoStatus  @default(PLANEJADA)
   origem                FiscalizacaoOrigem  @default(ROTINA)
   iniciadaEm            DateTime?
@@ -579,6 +586,7 @@ model Fiscalizacao {
   unidade         UnidadePublica    @relation(fields: [unidadeId], references: [id], onDelete: Restrict)
   checklistVersao ChecklistVersao   @relation(fields: [checklistVersaoId], references: [id], onDelete: Restrict)
   agente          Usuario           @relation("FiscalizacaoAgente", fields: [agenteId], references: [id], onDelete: Restrict)
+  lancadoPor      Usuario?          @relation("FiscalizacaoLancadoPor", fields: [lancadoPorId], references: [id], onDelete: SetNull)
   respostas       RespostaChecklist[]
   evidencias      Evidencia[]
   naoConformidades NaoConformidade[]
@@ -587,6 +595,7 @@ model Fiscalizacao {
   @@index([unidadeId])
   @@index([checklistVersaoId])
   @@index([agenteId])
+  @@index([lancadoPorId])
   @@index([status])
   @@index([origem])
   @@index([createdAt])
@@ -599,20 +608,34 @@ model CronogramaChecagem {
   frequencia        CronogramaFrequencia
   proximaChecagemEm DateTime
   ultimaChecagemEm  DateTime?
+  /// Legado: responsável único. Preferir `responsaveis` (N:N).
   responsavelId     String?
   ativo             Boolean              @default(true)
   observacoes       String?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
-  unidade     UnidadePublica @relation(fields: [unidadeId], references: [id], onDelete: Cascade)
-  checklist   Checklist      @relation(fields: [checklistId], references: [id], onDelete: Restrict)
-  responsavel Usuario?       @relation("CronogramaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  unidade      UnidadePublica @relation(fields: [unidadeId], references: [id], onDelete: Cascade)
+  checklist    Checklist      @relation(fields: [checklistId], references: [id], onDelete: Restrict)
+  responsavel  Usuario?       @relation("CronogramaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  responsaveis CronogramaChecagemResponsavel[]
 
   @@unique([unidadeId, checklistId])
   @@index([proximaChecagemEm])
   @@index([ativo])
   @@index([checklistId])
+}
+
+model CronogramaChecagemResponsavel {
+  cronogramaId String
+  usuarioId    String
+  createdAt    DateTime @default(now())
+
+  cronograma CronogramaChecagem @relation(fields: [cronogramaId], references: [id], onDelete: Cascade)
+  usuario    Usuario            @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@id([cronogramaId, usuarioId])
+  @@index([usuarioId])
 }
 
 model RespostaChecklist {

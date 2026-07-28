@@ -65,7 +65,6 @@ function CcoPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bootLoading, setBootLoading] = useState(true);
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mapMode, setMapMode] = useState<CcoMapMode>('situacao');
   const [categoriaFiltroId, setCategoriaFiltroId] = useState('');
@@ -119,6 +118,8 @@ function CcoPageContent() {
   const effectiveFilters = useMemo(() => {
     const base: UnidadeFilters = {
       ...filters,
+      responsavel: undefined,
+      responsavelEmail: undefined,
       tiposPendencia: filters.tiposPendencia?.length
         ? filters.tiposPendencia
         : [...DEFAULT_TIPOS_PENDENCIA],
@@ -329,8 +330,6 @@ function CcoPageContent() {
           onMapModeChange={setMapMode}
           categoriaFiltroId={categoriaFiltroId}
           onCategoriaFiltroChange={setCategoriaFiltroId}
-          showAdvancedFilters={showAdvancedFilters}
-          onShowAdvancedFiltersChange={setShowAdvancedFilters}
           onClear={clearFilters}
           resultCount={resultCount}
           defaultTiposPendencia={DEFAULT_TIPOS_PENDENCIA}

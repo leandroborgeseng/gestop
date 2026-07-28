@@ -189,6 +189,25 @@ function isTextoLongo(opcoes: unknown) {
   return (opcoes as { formato?: string }).formato !== 'CURTO';
 }
 
+function estimateOptionRows(doc: InstanceType<typeof PDFDocument>, labels: string[], width: number) {
+  doc.font('Helvetica').fontSize(8);
+  let x = 0;
+  let rows = 1;
+  const gap = 12;
+  const box = 10;
+
+  for (const label of labels) {
+    const labelWidth = Math.min(doc.widthOfString(label) + box + 6, width);
+    if (x + labelWidth > width && x > 0) {
+      x = 0;
+      rows += 1;
+    }
+    x += labelWidth + gap;
+  }
+
+  return rows;
+}
+
 function drawOptionRow(
   doc: InstanceType<typeof PDFDocument>,
   labels: string[],
@@ -200,22 +219,26 @@ function drawOptionRow(
   let rowY = y;
   const gap = 12;
   const box = 10;
+  const rowHeight = 16;
+
+  doc.font('Helvetica').fontSize(8);
 
   for (const label of labels) {
     const labelWidth = Math.min(doc.widthOfString(label) + box + 6, width);
     if (x + labelWidth > left + width && x > left) {
       x = left;
-      rowY += 16;
-      rowY = ensureSpace(doc, rowY, 16);
+      rowY += rowHeight;
+      rowY = ensureSpace(doc, rowY, rowHeight);
     }
     drawCheckbox(doc, x, rowY, box);
     doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(label, x + box + 4, rowY + 1, {
       width: labelWidth - box - 4,
+      lineBreak: false,
     });
     x += labelWidth + gap;
   }
 
-  return rowY + 16;
+  return rowY + rowHeight;
 }
 
 function drawAnswerLines(
@@ -237,6 +260,36 @@ function drawAnswerLines(
   return y;
 }
 
+function resolveOptionLabels(item: VistoriaManualPdfItem): string[] | null {
+  const tipo = item.tipo;
+  if (tipo === 'BOOLEANO') return ['Sim', 'Não', 'Não aplicável'];
+  if (tipo === 'ESCALA_LIKERT') return parseLikertLabels(item.opcoes);
+  if (tipo === 'MULTIPLA_ESCOLHA') {
+    const options = parseMcOptions(item.opcoes);
+    return options.length ? options : ['Opção 1', 'Opção 2', 'Opção 3'];
+  }
+  if (tipo === 'TEXTO' || tipo === 'NUMERO' || tipo === 'DATA' || tipo === 'FOTO' || tipo === 'ASSINATURA') {
+    return null;
+  }
+  return ['Conforme', 'Não conforme', 'N/A'];
+}
+
+function estimateAnswerHeight(doc: InstanceType<typeof PDFDocument>, item: VistoriaManualPdfItem, width: number) {
+  const tipo = item.tipo;
+  const optionLabels = resolveOptionLabels(item);
+  if (optionLabels) {
+    return estimateOptionRows(doc, optionLabels, width) * 16 + 4;
+  }
+  if (tipo === 'TEXTO' || tipo === 'NUMERO' || tipo === 'DATA') {
+    const lines = tipo === 'TEXTO' && isTextoLongo(item.opcoes) ? 3 : 1;
+    return 12 + lines * 16 + 4;
+  }
+  if (tipo === 'FOTO' || tipo === 'ASSINATURA') {
+    return 16 + 4;
+  }
+  return 20;
+}
+
 function drawPergunta(
   doc: InstanceType<typeof PDFDocument>,
   item: VistoriaManualPdfItem,
@@ -245,52 +298,70 @@ function drawPergunta(
 ): number {
   const left = doc.page.margins.left;
   const width = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const contentWidth = width - 16;
   const tags: string[] = [];
   if (item.obrigatorio) tags.push('Obrigatório');
   if (item.exigeEvidencia) tags.push('Exige foto');
   if (item.geraNaoConformidade) tags.push('Gera NC');
   const tagLine = tags.length ? ` [${tags.join(' · ')}]` : '';
   const title = `${index + 1}. ${item.codigo} — ${item.titulo}${tagLine}`;
-  const titleHeight = doc.heightOfString(title, { width: width - 16 });
-  const descHeight = item.descricao
-    ? doc.heightOfString(item.descricao, { width: width - 16 })
-    : 0;
-  const needed = 14 + titleHeight + (descHeight ? descHeight + 4 : 0) + 48;
-
-  y = ensureSpace(doc, y, needed);
-
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT_PRIMARY).text(title, left, y, { width: width - 16 });
-  y += titleHeight + 4;
-
-  if (item.descricao) {
-    doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED).text(item.descricao, left, y, { width: width - 16 });
-    y += descHeight + 4;
-  }
-
   const tipo = item.tipo;
 
-  if (tipo === 'BOOLEANO') {
-    y = drawOptionRow(doc, ['Sim', 'Não', 'Não aplicável'], left, width, y);
-  } else if (tipo === 'ESCALA_LIKERT') {
-    y = drawOptionRow(doc, parseLikertLabels(item.opcoes), left, width, y);
-  } else if (tipo === 'MULTIPLA_ESCOLHA') {
-    const options = parseMcOptions(item.opcoes);
-    y = drawOptionRow(doc, options.length ? options : ['Opção 1', 'Opção 2', 'Opção 3'], left, width, y);
+  doc.font('Helvetica-Bold').fontSize(9);
+  const titleHeight = doc.heightOfString(title, { width: contentWidth });
+  doc.font('Helvetica').fontSize(8);
+  const descHeight = item.descricao
+    ? doc.heightOfString(item.descricao, { width: contentWidth })
+    : 0;
+  const answerHeight = estimateAnswerHeight(doc, item, width);
+  const photoHintHeight = item.exigeEvidencia || tipo === 'FOTO' ? 14 : 0;
+  const obsHeight = 12 + 18 + 8;
+  const blockGap = 6;
+  const needed =
+    titleHeight +
+    4 +
+    (descHeight ? descHeight + 4 : 0) +
+    answerHeight +
+    photoHintHeight +
+    obsHeight +
+    blockGap;
+
+  // Quebra de página antes do bloco inteiro quando não cabe (evita cortar pergunta no meio).
+  y = ensureSpace(doc, y, Math.min(needed, doc.page.height - doc.page.margins.top - doc.page.margins.bottom - 20));
+
+  doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT_PRIMARY).text(title, left, y, {
+    width: contentWidth,
+  });
+  y = doc.y + 4;
+
+  if (item.descricao) {
+    doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED).text(item.descricao, left, y, {
+      width: contentWidth,
+    });
+    y = doc.y + 4;
+  }
+
+  const optionLabels = resolveOptionLabels(item);
+  if (optionLabels) {
+    y = ensureSpace(doc, y, estimateOptionRows(doc, optionLabels, width) * 16);
+    y = drawOptionRow(doc, optionLabels, left, width, y);
+    y += 2;
   } else if (tipo === 'TEXTO' || tipo === 'NUMERO' || tipo === 'DATA') {
     const lines = tipo === 'TEXTO' && isTextoLongo(item.opcoes) ? 3 : 1;
+    y = ensureSpace(doc, y, 12 + lines * 16);
     doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED).text('Resposta:', left, y);
     y += 12;
     y = drawAnswerLines(doc, left, width, y, lines);
+    y += 2;
   } else if (tipo === 'FOTO' || tipo === 'ASSINATURA') {
+    y = ensureSpace(doc, y, 16);
     drawCheckbox(doc, left, y, 10);
     doc
       .font('Helvetica')
       .fontSize(8)
       .fillColor(TEXT_PRIMARY)
       .text(tipo === 'ASSINATURA' ? 'Assinatura anexada / registrada' : 'Foto anexada / encaminhada', left + 14, y + 1);
-    y += 16;
-  } else {
-    y = drawOptionRow(doc, ['Conforme', 'Não conforme', 'N/A'], left, width, y);
+    y += 18;
   }
 
   if (item.exigeEvidencia || tipo === 'FOTO') {
@@ -299,10 +370,13 @@ function drawPergunta(
       .font('Helvetica-Oblique')
       .fontSize(7.5)
       .fillColor(BRAND_PRIMARY)
-      .text('⚠ Este item exige foto — encaminhar conforme instrução do cabeçalho.', left, y);
-    y += 12;
+      .text('⚠ Este item exige foto — encaminhar conforme instrução do cabeçalho.', left, y, {
+        width,
+      });
+    y = doc.y + 4;
   }
 
+  y = ensureSpace(doc, y, obsHeight);
   doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED).text('Observações:', left, y);
   y += 12;
   doc.rect(left, y, width, 18).stroke(BORDER);

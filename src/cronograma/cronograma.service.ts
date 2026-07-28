@@ -30,6 +30,7 @@ type CalendarioEvento = {
   fiscalizacaoId?: string;
   frequencia?: CronogramaFrequencia;
   responsavelNome?: string | null;
+  responsaveisNomes?: string[];
   agenteNome?: string;
 };
 
@@ -45,7 +46,30 @@ const cronogramaInclude = {
   },
   checklist: { select: { id: true, nome: true, escopo: true, unidadeTipo: true } },
   responsavel: { select: { id: true, nome: true, email: true } },
+  responsaveis: {
+    include: {
+      usuario: { select: { id: true, nome: true, email: true, ativo: true } },
+    },
+  },
 } satisfies Prisma.CronogramaChecagemInclude;
+
+function formatResponsaveis(
+  responsaveis: Array<{ usuario: { id: string; nome: string; email: string } }>,
+  legacy?: { id: string; nome: string; email: string } | null,
+) {
+  const fromJunction = responsaveis.map((item) => item.usuario);
+  if (fromJunction.length > 0) return fromJunction;
+  return legacy ? [legacy] : [];
+}
+
+function responsaveisLabel(
+  responsaveis: Array<{ usuario: { id: string; nome: string; email: string } }>,
+  legacy?: { id: string; nome: string; email: string } | null,
+) {
+  const users = formatResponsaveis(responsaveis, legacy);
+  if (!users.length) return null;
+  return users.map((user) => user.nome).join(', ');
+}
 
 @Injectable()
 export class CronogramaService {
@@ -64,44 +88,85 @@ export class CronogramaService {
 
   async createCronograma(dto: CronogramaDto, user: JwtPayload) {
     await this.assertVinculoValido(dto.unidadeId, dto.checklistId);
+    const responsavelIds = await this.resolveResponsavelIds(dto);
 
     const proximaChecagemEm = startOfDay(new Date(dto.proximaChecagemEm));
-    const cronograma = await this.prisma.cronogramaChecagem.create({
-      data: {
-        unidadeId: dto.unidadeId,
-        checklistId: dto.checklistId,
-        frequencia: dto.frequencia,
-        proximaChecagemEm,
-        responsavelId: dto.responsavelId || null,
-        ativo: dto.ativo ?? true,
-        observacoes: dto.observacoes?.trim() || null,
-      },
-      include: cronogramaInclude,
+    const cronograma = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.cronogramaChecagem.create({
+        data: {
+          unidadeId: dto.unidadeId,
+          checklistId: dto.checklistId,
+          frequencia: dto.frequencia,
+          proximaChecagemEm,
+          responsavelId: responsavelIds[0] ?? null,
+          ativo: dto.ativo ?? true,
+          observacoes: dto.observacoes?.trim() || null,
+        },
+      });
+
+      if (responsavelIds.length) {
+        await tx.cronogramaChecagemResponsavel.createMany({
+          data: responsavelIds.map((usuarioId) => ({
+            cronogramaId: created.id,
+            usuarioId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return tx.cronogramaChecagem.findUniqueOrThrow({
+        where: { id: created.id },
+        include: cronogramaInclude,
+      });
     });
 
-    await this.audit(user, AuditAction.CREATE, cronograma.id, null, cronograma);
+    await this.audit(user, AuditAction.CREATE, cronograma.id, null, this.auditSnapshot(cronograma));
     return cronograma;
   }
 
   async updateCronograma(id: string, dto: CronogramaDto, user: JwtPayload) {
     const before = await this.getCronogramaOrThrow(id);
     await this.assertVinculoValido(dto.unidadeId, dto.checklistId);
+    const responsavelIds = await this.resolveResponsavelIds(dto);
 
-    const cronograma = await this.prisma.cronogramaChecagem.update({
-      where: { id },
-      data: {
-        unidadeId: dto.unidadeId,
-        checklistId: dto.checklistId,
-        frequencia: dto.frequencia,
-        proximaChecagemEm: startOfDay(new Date(dto.proximaChecagemEm)),
-        responsavelId: dto.responsavelId || null,
-        ativo: dto.ativo ?? true,
-        observacoes: dto.observacoes?.trim() || null,
-      },
-      include: cronogramaInclude,
+    const cronograma = await this.prisma.$transaction(async (tx) => {
+      await tx.cronogramaChecagem.update({
+        where: { id },
+        data: {
+          unidadeId: dto.unidadeId,
+          checklistId: dto.checklistId,
+          frequencia: dto.frequencia,
+          proximaChecagemEm: startOfDay(new Date(dto.proximaChecagemEm)),
+          responsavelId: responsavelIds[0] ?? null,
+          ativo: dto.ativo ?? true,
+          observacoes: dto.observacoes?.trim() || null,
+        },
+      });
+
+      await tx.cronogramaChecagemResponsavel.deleteMany({ where: { cronogramaId: id } });
+      if (responsavelIds.length) {
+        await tx.cronogramaChecagemResponsavel.createMany({
+          data: responsavelIds.map((usuarioId) => ({
+            cronogramaId: id,
+            usuarioId,
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      return tx.cronogramaChecagem.findUniqueOrThrow({
+        where: { id },
+        include: cronogramaInclude,
+      });
     });
 
-    await this.audit(user, AuditAction.UPDATE, id, before, cronograma);
+    await this.audit(
+      user,
+      AuditAction.UPDATE,
+      id,
+      this.auditSnapshot(before),
+      this.auditSnapshot(cronograma),
+    );
     return cronograma;
   }
 
@@ -113,7 +178,13 @@ export class CronogramaService {
       include: cronogramaInclude,
     });
 
-    await this.audit(user, AuditAction.DELETE, id, before, cronograma);
+    await this.audit(
+      user,
+      AuditAction.DELETE,
+      id,
+      this.auditSnapshot(before),
+      this.auditSnapshot(cronograma),
+    );
     return cronograma;
   }
 
@@ -147,6 +218,7 @@ export class CronogramaService {
       select: {
         id: true,
         concluidaEm: true,
+        realizadaPorNome: true,
         unidade: { select: { id: true, nome: true, secretaria: { select: { sigla: true } } } },
         checklistVersao: {
           select: {
@@ -176,7 +248,7 @@ export class CronogramaService {
           },
           checklist: { id: checklist.id, nome: checklist.nome },
           fiscalizacaoId: fiscalizacao.id,
-          agenteNome: fiscalizacao.agente.nome,
+          agenteNome: fiscalizacao.realizadaPorNome?.trim() || fiscalizacao.agente.nome,
         },
       ];
     });
@@ -197,6 +269,9 @@ export class CronogramaService {
         }
 
         const tipo = resolveEventoTipo(date, hoje);
+        const nomes = formatResponsaveis(cronograma.responsaveis, cronograma.responsavel).map(
+          (item) => item.nome,
+        );
         eventos.push({
           id: `agendada-${cronograma.id}-${dataKey}`,
           tipo,
@@ -209,7 +284,8 @@ export class CronogramaService {
           checklist: { id: cronograma.checklist.id, nome: cronograma.checklist.nome },
           cronogramaId: cronograma.id,
           frequencia: cronograma.frequencia,
-          responsavelNome: cronograma.responsavel?.nome ?? null,
+          responsavelNome: responsaveisLabel(cronograma.responsaveis, cronograma.responsavel),
+          responsaveisNomes: nomes,
           fiscalizacaoId: undefined,
           agenteNome: undefined,
         });
@@ -254,6 +330,41 @@ export class CronogramaService {
         proximaChecagemEm: addFrequency(concluidaEm, cronograma.frequencia),
       },
     });
+  }
+
+  private async resolveResponsavelIds(dto: CronogramaDto) {
+    const rawIds = [
+      ...(dto.responsavelIds ?? []),
+      ...(dto.responsavelId ? [dto.responsavelId] : []),
+    ];
+    const uniqueIds = [...new Set(rawIds.map((id) => id.trim()).filter(Boolean))];
+    if (!uniqueIds.length) return [];
+
+    const users = await this.prisma.usuario.findMany({
+      where: { id: { in: uniqueIds }, ativo: true },
+      select: { id: true },
+    });
+    if (users.length !== uniqueIds.length) {
+      throw new BadRequestException('Um ou mais responsaveis sao invalidos ou inativos.');
+    }
+    return uniqueIds;
+  }
+
+  private auditSnapshot(
+    cronograma: Prisma.CronogramaChecagemGetPayload<{ include: typeof cronogramaInclude }>,
+  ) {
+    const responsaveis = formatResponsaveis(cronograma.responsaveis, cronograma.responsavel);
+    return {
+      id: cronograma.id,
+      unidadeId: cronograma.unidadeId,
+      checklistId: cronograma.checklistId,
+      frequencia: cronograma.frequencia,
+      proximaChecagemEm: cronograma.proximaChecagemEm,
+      ativo: cronograma.ativo,
+      observacoes: cronograma.observacoes,
+      responsavelIds: responsaveis.map((item) => item.id),
+      responsaveisNomes: responsaveis.map((item) => item.nome),
+    };
   }
 
   private async getCronogramaOrThrow(id: string) {
@@ -313,7 +424,10 @@ export class CronogramaService {
         acao,
         entidadeTipo: 'CronogramaChecagem',
         entidadeId,
-        valorAntigo: valorAntigo === null ? Prisma.JsonNull : (JSON.parse(JSON.stringify(valorAntigo)) as Prisma.InputJsonValue),
+        valorAntigo:
+          valorAntigo === null
+            ? Prisma.JsonNull
+            : (JSON.parse(JSON.stringify(valorAntigo)) as Prisma.InputJsonValue),
         valorNovo: JSON.parse(JSON.stringify(valorNovo)) as Prisma.InputJsonValue,
       },
     });

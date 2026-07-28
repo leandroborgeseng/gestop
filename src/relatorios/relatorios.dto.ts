@@ -1,4 +1,5 @@
-import { IsDateString, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsBooleanString, IsDateString, IsEnum, IsIn, IsOptional, IsString, IsUUID } from 'class-validator';
+import { CronogramaFrequencia } from '@prisma/client';
 
 export class RelatorioFiltroDto {
   @IsOptional()
@@ -29,4 +30,28 @@ export class RelatorioFiltroDto {
   @IsOptional()
   @IsDateString()
   to?: string;
+
+  @IsOptional()
+  @IsString()
+  tipo?: string;
+
+  @IsOptional()
+  @IsString()
+  unidadeId?: string;
+
+  @IsOptional()
+  @IsString()
+  checklistId?: string;
+
+  @IsOptional()
+  @IsEnum(CronogramaFrequencia)
+  frequencia?: CronogramaFrequencia;
+
+  @IsOptional()
+  @IsBooleanString()
+  cronogramaAtivo?: string;
+
+  @IsOptional()
+  @IsString()
+  responsavelId?: string;
 }

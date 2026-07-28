@@ -53,7 +53,8 @@ const UNIDADE_TIPO_LABELS: Record<UnidadeTipo, string> = {
 const listInclude = {
   secretaria: { select: { id: true, sigla: true, nome: true } },
   unidade: { select: { id: true, nome: true, codigoPatrimonial: true, bairro: true, tipo: true } },
-  agente: { select: { id: true, nome: true } },
+  agente: { select: { id: true, nome: true, email: true } },
+  lancadoPor: { select: { id: true, nome: true, email: true } },
   checklistVersao: {
     select: {
       id: true,
@@ -115,10 +116,15 @@ export class FiscalizacoesService {
       this.prisma.fiscalizacao.count({ where }),
     ]);
 
+    const responsaveisMap = await this.loadResponsaveisPrevistosMap(
+      items.map((item) => ({ unidadeId: item.unidadeId, checklistId: item.checklistVersao.checklist.id })),
+    );
+
     return {
       items: items.map(({ respostas, ...item }) => ({
         ...this.serialize(item),
         nota: computeVistoriaNotas(respostas),
+        ...this.responsaveisPrevistosFromMap(responsaveisMap, item.unidadeId, item.checklistVersao.checklist.id),
       })),
       total,
       limit,
@@ -203,10 +209,14 @@ export class FiscalizacoesService {
     }
 
     const nota = computeVistoriaNotas(fiscalizacao.respostas);
+    const responsaveisMap = await this.loadResponsaveisPrevistosMap([
+      { unidadeId: fiscalizacao.unidadeId, checklistId: fiscalizacao.checklistVersao.checklist.id },
+    ]);
 
     return {
       ...this.serialize(fiscalizacao),
       nota,
+      ...this.responsaveisPrevistosFromMap(responsaveisMap, fiscalizacao.unidadeId, fiscalizacao.checklistVersao.checklist.id),
       respostas: fiscalizacao.respostas.map((resposta) => ({
         ...resposta,
         valorNumero: resposta.valorNumero == null ? null : Number(resposta.valorNumero),
@@ -510,6 +520,25 @@ export class FiscalizacoesService {
     }
 
     const dataLancamento = new Date();
+
+    const realizadaPorId = dto.realizadaPorId?.trim() || null;
+    const realizadaPorNome = dto.realizadaPorNome?.trim() || null;
+    if (!realizadaPorId && !realizadaPorNome) {
+      throw new BadRequestException('Informe quem realizou a vistoria em campo (usuário ou nome).');
+    }
+
+    let agenteId = user.sub;
+    if (realizadaPorId) {
+      const executor = await this.prisma.usuario.findFirst({
+        where: { id: realizadaPorId, ativo: true },
+        select: { id: true, nome: true },
+      });
+      if (!executor) {
+        throw new BadRequestException('Usuário informado em "Vistoria realizada por" é inválido ou inativo.');
+      }
+      agenteId = executor.id;
+    }
+
     const respostasPreparadas = await Promise.all(
       dto.respostas.map(async (resposta) => ({
         ...resposta,
@@ -533,7 +562,9 @@ export class FiscalizacoesService {
             secretariaId: unidade.secretariaId,
             unidadeId: unidade.id,
             checklistVersaoId: checklistVersao.id,
-            agenteId: user.sub,
+            agenteId,
+            lancadoPorId: user.sub,
+            realizadaPorNome: realizadaPorId ? null : realizadaPorNome,
             status: FiscalizacaoStatus.CONCLUIDA,
             origem: FiscalizacaoOrigem.MANUAL,
             iniciadaEm: dataVistoria,
@@ -547,6 +578,9 @@ export class FiscalizacoesService {
               dataVistoriaInformada: dataVistoria.toISOString(),
               dataLancamento: dataLancamento.toISOString(),
               ignorouRaioGps: true,
+              realizadaPorId: realizadaPorId ?? null,
+              realizadaPorNome: realizadaPorId ? null : realizadaPorNome,
+              lancadoPorId: user.sub,
             } as Prisma.InputJsonValue,
           },
         });
@@ -624,6 +658,10 @@ export class FiscalizacoesService {
               unidadeId: unidade.id,
               checklistVersaoId: checklistVersao.id,
               totalRespostas: dto.respostas.length,
+              realizadaPorId: realizadaPorId ?? null,
+              realizadaPorNome: realizadaPorId ? null : realizadaPorNome,
+              lancadoPorId: user.sub,
+              agenteId,
             } as Prisma.InputJsonValue,
           },
         });
@@ -642,6 +680,53 @@ export class FiscalizacoesService {
       await this.storageService.deleteStoredObjects(persistedStorageKeys);
       throw error;
     }
+  }
+
+  private async loadResponsaveisPrevistosMap(pairs: Array<{ unidadeId: string; checklistId: string }>) {
+    type Responsavel = { id: string; nome: string; email?: string | null };
+    const map = new Map<string, Responsavel[]>();
+    const uniquePairs = Array.from(
+      new Map(pairs.map((pair) => [`${pair.unidadeId}:${pair.checklistId}`, pair])).values(),
+    );
+    if (uniquePairs.length === 0) return map;
+
+    const cronogramas = await this.prisma.cronogramaChecagem.findMany({
+      where: { OR: uniquePairs.map((pair) => ({ unidadeId: pair.unidadeId, checklistId: pair.checklistId })) },
+      select: {
+        unidadeId: true,
+        checklistId: true,
+        responsavel: { select: { id: true, nome: true, email: true } },
+        responsaveis: {
+          include: { usuario: { select: { id: true, nome: true, email: true } } },
+        },
+      },
+    });
+
+    for (const cronograma of cronogramas) {
+      const responsaveis: Responsavel[] =
+        cronograma.responsaveis.length > 0
+          ? cronograma.responsaveis.map((item) => item.usuario)
+          : cronograma.responsavel
+            ? [cronograma.responsavel]
+            : [];
+      map.set(`${cronograma.unidadeId}:${cronograma.checklistId}`, responsaveis);
+    }
+
+    return map;
+  }
+
+  private responsaveisPrevistosFromMap(
+    map: Map<string, Array<{ id: string; nome: string; email?: string | null }>>,
+    unidadeId: string,
+    checklistId: string,
+  ) {
+    const responsaveisPrevistos = map.get(`${unidadeId}:${checklistId}`) ?? [];
+    return {
+      responsaveisPrevistos,
+      responsaveisPrevistosLabel: responsaveisPrevistos.length
+        ? responsaveisPrevistos.map((item) => item.nome).join(', ')
+        : null,
+    };
   }
 
   private async resolveUnidadesParaManual(
@@ -762,6 +847,7 @@ export class FiscalizacoesService {
     origem?: FiscalizacaoOrigem | string;
     metadata?: unknown;
     dataVistoriaInformada?: Date | null;
+    realizadaPorNome?: string | null;
     distanciaCheckinMetros?: unknown;
     checkinLatitude?: unknown;
     checkinLongitude?: unknown;
@@ -771,6 +857,8 @@ export class FiscalizacoesService {
     concluidaEm?: Date | null;
     createdAt?: Date;
     updatedAt?: Date;
+    agente?: { id: string; nome: string; email?: string | null } | null;
+    lancadoPor?: { id: string; nome: string; email?: string | null } | null;
   }>(fiscalizacao: T) {
     const metadata = asMetadataRecord(fiscalizacao.metadata);
     const lancamentoManual =
@@ -784,6 +872,11 @@ export class FiscalizacoesService {
       typeof metadata?.dataLancamento === 'string'
         ? metadata.dataLancamento
         : fiscalizacao.createdAt?.toISOString() ?? null;
+
+    const realizadaPorLabel =
+      fiscalizacao.realizadaPorNome?.trim() ||
+      fiscalizacao.agente?.nome ||
+      (typeof metadata?.realizadaPorNome === 'string' ? metadata.realizadaPorNome : null);
 
     return {
       ...fiscalizacao,
@@ -801,6 +894,8 @@ export class FiscalizacoesService {
       dataVistoriaInformada: lancamentoManual ? dataVistoriaInformada : fiscalizacao.dataVistoriaInformada?.toISOString() ?? null,
       dataLancamento: lancamentoManual ? dataLancamento : null,
       origemLabel: this.origemLabel(fiscalizacao.origem, lancamentoManual),
+      realizadaPorLabel,
+      lancadoPorLabel: fiscalizacao.lancadoPor?.nome ?? null,
     };
   }
 

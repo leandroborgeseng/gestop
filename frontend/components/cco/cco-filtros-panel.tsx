@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import { ChevronDown, Search, SlidersHorizontal } from 'lucide-react';
-import { UnidadeFiltersPanel } from '@/components/unidade-filters';
 import { Hint } from '@/components/help/hint';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
@@ -21,7 +20,8 @@ import {
 } from '@/lib/types';
 import { CcoMapMode } from '@/components/operational-map';
 
-const TIPOS_CHAMADO_VISIBLE = 15;
+const SELECT_CLASS =
+  'h-9 w-full min-w-0 max-w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs';
 
 const situacaoChips: Array<{ value: UnidadeSituacao | ''; label: string; color: string }> = [
   { value: '', label: 'Todas', color: 'var(--ink-3)' },
@@ -133,8 +133,6 @@ export function CcoFiltrosPanel({
   onMapModeChange,
   categoriaFiltroId,
   onCategoriaFiltroChange,
-  showAdvancedFilters,
-  onShowAdvancedFiltersChange,
   onClear,
   resultCount,
   defaultTiposPendencia,
@@ -153,23 +151,18 @@ export function CcoFiltrosPanel({
   onMapModeChange: (mode: CcoMapMode) => void;
   categoriaFiltroId: string;
   onCategoriaFiltroChange: (id: string) => void;
-  showAdvancedFilters: boolean;
-  onShowAdvancedFiltersChange: (open: boolean) => void;
   onClear: () => void;
   resultCount: number;
   defaultTiposPendencia: TipoPendencia[];
 }) {
   const [open, setOpen] = useState(false);
-  const [tiposChamadoExpanded, setTiposChamadoExpanded] = useState(false);
 
   const tiposPendenciaSelected = filters.tiposPendencia ?? defaultTiposPendencia;
   const chamadosPendenciaAtivo = tiposPendenciaSelected.includes('CHAMADOS');
   const equipes = opcoesFiltro?.equipes ?? [];
   const tiposChamado = opcoesFiltro?.tiposChamado ?? [];
-  const tiposChamadoVisiveis = tiposChamadoExpanded
-    ? tiposChamado
-    : tiposChamado.slice(0, TIPOS_CHAMADO_VISIBLE);
-  const hasMoreTiposChamado = tiposChamado.length > TIPOS_CHAMADO_VISIBLE;
+  const tiposChamadoSelecionados = filters.tiposChamadoId ?? [];
+  const tiposChamadoDisponiveis = tiposChamado.filter((tipo) => !tiposChamadoSelecionados.includes(tipo.id));
 
   const summary = useMemo(
     () =>
@@ -186,7 +179,7 @@ export function CcoFiltrosPanel({
   );
 
   return (
-    <div className="shrink-0 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+    <div className="min-w-0 shrink-0 overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
       <button
         type="button"
         className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
@@ -219,9 +212,9 @@ export function CcoFiltrosPanel({
       </button>
 
       {open ? (
-        <div className="space-y-3 border-t border-[var(--line-2)] px-3.5 py-3.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[220px] flex-1">
+        <div className="min-w-0 space-y-3 overflow-hidden border-t border-[var(--line-2)] px-3.5 py-3.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <div className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
               <input
                 value={tab === 'proprios' ? (filters.search ?? '') : (chamadoFilters.search ?? '')}
@@ -234,7 +227,7 @@ export function CcoFiltrosPanel({
                   }
                 }}
                 placeholder={tab === 'proprios' ? 'Nome, código ou endereço' : 'Código, título ou endereço'}
-                className="h-[38px] w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+                className="h-[38px] w-full min-w-0 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
               />
             </div>
             <Button variant="ghost" size="sm" className="h-8 shrink-0" onClick={onClear}>
@@ -260,92 +253,106 @@ export function CcoFiltrosPanel({
                 ))}
               </div>
 
-              <div className="grid gap-3 lg:grid-cols-2">
-                <div>
-                  <div className="mb-1 text-[11px] font-semibold text-[var(--ink-3)]">Tipos de pendência</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {TIPO_PENDENCIA_CHIPS.map((chip) => (
-                      <Chip
-                        key={chip.value}
-                        active={tiposPendenciaSelected.includes(chip.value)}
-                        onClick={() =>
-                          onFiltersChange((prev) => ({
-                            ...prev,
-                            tiposPendencia: toggleMultiValue(
-                              prev.tiposPendencia,
-                              chip.value,
-                              defaultTiposPendencia,
-                            ),
-                            ...(chip.value === 'CHAMADOS' && tiposPendenciaSelected.includes('CHAMADOS')
-                              ? { tiposChamadoId: undefined }
-                              : {}),
-                          }))
-                        }
-                      >
-                        {chip.label}
-                      </Chip>
-                    ))}
-                  </div>
+              <div>
+                <div className="mb-1 text-[11px] font-semibold text-[var(--ink-3)]">Tipos de pendência</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {TIPO_PENDENCIA_CHIPS.map((chip) => (
+                    <Chip
+                      key={chip.value}
+                      active={tiposPendenciaSelected.includes(chip.value)}
+                      onClick={() =>
+                        onFiltersChange((prev) => ({
+                          ...prev,
+                          tiposPendencia: toggleMultiValue(
+                            prev.tiposPendencia,
+                            chip.value,
+                            defaultTiposPendencia,
+                          ),
+                          ...(chip.value === 'CHAMADOS' && tiposPendenciaSelected.includes('CHAMADOS')
+                            ? { tiposChamadoId: undefined }
+                            : {}),
+                        }))
+                      }
+                    >
+                      {chip.label}
+                    </Chip>
+                  ))}
                 </div>
+              </div>
 
-                {chamadosPendenciaAtivo ? (
-                  <div>
-                    <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-semibold text-[var(--ink-3)]">
-                      <span>Tipo de chamado</span>
-                      {filters.tiposChamadoId?.length ? (
-                        <button
-                          type="button"
-                          className="text-[var(--brand)] hover:underline"
-                          onClick={() => onFiltersChange((prev) => ({ ...prev, tiposChamadoId: undefined }))}
-                        >
-                          Todos
-                        </button>
-                      ) : (
-                        <span>Todos</span>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {tiposChamadoVisiveis.map((tipo) => {
-                        const active = (filters.tiposChamadoId ?? []).includes(tipo.id);
+              {chamadosPendenciaAtivo ? (
+                <div className="min-w-0">
+                  <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-semibold text-[var(--ink-3)]">
+                    <span>Tipo de chamado</span>
+                    {tiposChamadoSelecionados.length ? (
+                      <button
+                        type="button"
+                        className="text-[var(--brand)] hover:underline"
+                        onClick={() => onFiltersChange((prev) => ({ ...prev, tiposChamadoId: undefined }))}
+                      >
+                        Limpar tipos
+                      </button>
+                    ) : (
+                      <span>Nenhum selecionado</span>
+                    )}
+                  </div>
+                  <select
+                    value=""
+                    onChange={(event) => {
+                      const id = event.target.value;
+                      if (!id) return;
+                      onFiltersChange((prev) => {
+                        const current = prev.tiposChamadoId ?? [];
+                        if (current.includes(id)) return prev;
+                        return { ...prev, tiposChamadoId: [...current, id] };
+                      });
+                    }}
+                    className={SELECT_CLASS}
+                  >
+                    <option value="">
+                      {tiposChamadoDisponiveis.length
+                        ? 'Selecionar tipo de chamado…'
+                        : tiposChamado.length
+                          ? 'Todos os tipos já selecionados'
+                          : 'Nenhum tipo disponível'}
+                    </option>
+                    {tiposChamadoDisponiveis.map((tipo) => (
+                      <option key={tipo.id} value={tipo.id}>
+                        {tipo.nome}
+                      </option>
+                    ))}
+                  </select>
+                  {tiposChamadoSelecionados.length ? (
+                    <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
+                      {tiposChamadoSelecionados.map((id) => {
+                        const tipo = tiposChamado.find((item) => item.id === id);
                         return (
                           <Chip
-                            key={tipo.id}
-                            active={active}
+                            key={id}
+                            active
                             onClick={() =>
                               onFiltersChange((prev) => {
-                                const current = prev.tiposChamadoId ?? [];
-                                const next = active
-                                  ? current.filter((item) => item !== tipo.id)
-                                  : [...current, tipo.id];
+                                const next = (prev.tiposChamadoId ?? []).filter((item) => item !== id);
                                 return { ...prev, tiposChamadoId: next.length ? next : undefined };
                               })
                             }
                           >
-                            {tipo.nome}
+                            {tipo?.nome ?? id} ×
                           </Chip>
                         );
                       })}
-                      {hasMoreTiposChamado ? (
-                        <button
-                          type="button"
-                          className="text-[11px] font-semibold text-[var(--brand)] hover:underline"
-                          onClick={() => setTiposChamadoExpanded((current) => !current)}
-                        >
-                          {tiposChamadoExpanded ? 'Mostrar menos' : 'Mostrar mais'}
-                        </button>
-                      ) : null}
                     </div>
-                  </div>
-                ) : null}
-              </div>
+                  ) : null}
+                </div>
+              ) : null}
 
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <select
                   value={filters.secretariaId ?? ''}
                   onChange={(event) =>
                     onFiltersChange((prev) => ({ ...prev, secretariaId: event.target.value || undefined }))
                   }
-                  className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+                  className={SELECT_CLASS}
                 >
                   <option value="">Todas secretarias</option>
                   {(opcoesFiltro?.secretarias ?? []).map((s) => (
@@ -359,7 +366,7 @@ export function CcoFiltrosPanel({
                   onChange={(event) =>
                     onFiltersChange((prev) => ({ ...prev, bairro: event.target.value || undefined }))
                   }
-                  className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+                  className={SELECT_CLASS}
                 >
                   <option value="">Todos bairros</option>
                   {(opcoesFiltro?.bairros ?? []).map((b) => (
@@ -373,7 +380,7 @@ export function CcoFiltrosPanel({
                   onChange={(event) =>
                     onFiltersChange((prev) => ({ ...prev, regiao: event.target.value || undefined }))
                   }
-                  className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+                  className={SELECT_CLASS}
                 >
                   <option value="">Todas regiões</option>
                   {(opcoesFiltro?.regioes ?? []).map((regiao) => (
@@ -383,9 +390,23 @@ export function CcoFiltrosPanel({
                   ))}
                 </select>
                 <select
+                  value={filters.tipo ?? ''}
+                  onChange={(event) =>
+                    onFiltersChange((prev) => ({ ...prev, tipo: event.target.value || undefined }))
+                  }
+                  className={SELECT_CLASS}
+                >
+                  <option value="">Todos tipos de próprio</option>
+                  {(opcoesFiltro?.tipos ?? []).map((tipo) => (
+                    <option key={tipo} value={tipo}>
+                      {formatUnidadeTipo(tipo)}
+                    </option>
+                  ))}
+                </select>
+                <select
                   value={mapMode}
                   onChange={(event) => onMapModeChange(event.target.value as CcoMapMode)}
-                  className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+                  className={SELECT_CLASS}
                 >
                   <option value="situacao">Mapa: Localização</option>
                   <option value="notas">Mapa: Notas</option>
@@ -396,7 +417,7 @@ export function CcoFiltrosPanel({
                 <select
                   value={categoriaFiltroId}
                   onChange={(event) => onCategoriaFiltroChange(event.target.value)}
-                  className="h-9 w-full max-w-md rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+                  className={cn(SELECT_CLASS, 'max-w-md')}
                 >
                   <option value="">Nota geral (Likert)</option>
                   {(opcoesFiltro?.categoriasVistoria ?? []).map((categoria) => (
@@ -408,7 +429,7 @@ export function CcoFiltrosPanel({
               ) : null}
             </>
           ) : (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
               <select
                 value={(chamadoFilters.status ?? [])[0] ?? ''}
                 onChange={(event) =>
@@ -417,7 +438,7 @@ export function CcoFiltrosPanel({
                     status: event.target.value ? [event.target.value] : undefined,
                   }))
                 }
-                className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+                className={SELECT_CLASS}
               >
                 <option value="">Todos status</option>
                 {CHAMADO_STATUS_OPTIONS.map((status) => (
@@ -434,7 +455,7 @@ export function CcoFiltrosPanel({
                     prioridade: event.target.value ? [event.target.value] : undefined,
                   }))
                 }
-                className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+                className={SELECT_CLASS}
               >
                 <option value="">Todas prioridades</option>
                 {CHAMADO_PRIORIDADE_OPTIONS.map((prioridade) => (
@@ -451,7 +472,7 @@ export function CcoFiltrosPanel({
                     tipoChamadoId: event.target.value ? [event.target.value] : undefined,
                   }))
                 }
-                className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+                className={SELECT_CLASS}
               >
                 <option value="">Todos tipos de chamado</option>
                 {tiposChamado.map((tipo) => (
@@ -465,7 +486,7 @@ export function CcoFiltrosPanel({
                 onChange={(event) =>
                   onChamadoFiltersChange((prev) => ({ ...prev, bairro: event.target.value || undefined }))
                 }
-                className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+                className={SELECT_CLASS}
               >
                 <option value="">Todos bairros</option>
                 {(opcoesFiltro?.bairros ?? []).map((b) => (
@@ -482,7 +503,7 @@ export function CcoFiltrosPanel({
                     comUnidade: (event.target.value || 'TODOS') as 'TODOS' | 'COM' | 'SEM',
                   }))
                 }
-                className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+                className={SELECT_CLASS}
               >
                 <option value="TODOS">Vínculo próprio: Todos</option>
                 <option value="COM">Com próprio público</option>
@@ -491,7 +512,7 @@ export function CcoFiltrosPanel({
             </div>
           )}
 
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
             <select
               value={
                 tab === 'proprios'
@@ -507,7 +528,7 @@ export function CcoFiltrosPanel({
                   onChamadoFiltersChange((prev) => ({ ...prev, equipeIds }));
                 }
               }}
-              className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+              className={SELECT_CLASS}
             >
               <option value="">Equipe do chamado: Todas</option>
               {equipes.map((equipe) => (
@@ -526,40 +547,13 @@ export function CcoFiltrosPanel({
                   onChamadoFiltersChange((prev) => ({ ...prev, sla: value }));
                 }
               }}
-              className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs"
+              className={SELECT_CLASS}
             >
               <option value="">SLA: Todos</option>
               <option value="DENTRO">Dentro do prazo</option>
               <option value="FORA">Fora do prazo</option>
             </select>
           </div>
-
-          {tab === 'proprios' ? (
-            <>
-              <button
-                type="button"
-                onClick={() => onShowAdvancedFiltersChange(!showAdvancedFilters)}
-                className="text-xs font-semibold text-[var(--brand)] hover:underline"
-              >
-                {showAdvancedFilters ? 'Ocultar filtros avançados' : 'Mais filtros (tipo, responsável, e-mail)'}
-              </button>
-
-              {showAdvancedFilters ? (
-                <div className="rounded-[var(--r-md)] border border-[var(--line-2)] bg-[var(--surface-2)] p-2">
-                  <UnidadeFiltersPanel
-                    filters={filters}
-                    opcoes={opcoesFiltro}
-                    onChange={(next) => onFiltersChange(next)}
-                    embedded
-                  />
-                </div>
-              ) : null}
-            </>
-          ) : null}
-
-          {tab === 'proprios' && filters.tipo ? (
-            <p className="text-xs text-[var(--ink-3)]">{formatUnidadeTipo(filters.tipo as UnidadeTipo)}</p>
-          ) : null}
         </div>
       ) : null}
     </div>

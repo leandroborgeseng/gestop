@@ -6,8 +6,6 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" rx="112" fill="url(#sigma-gradient)"/>
-  <!-- Marca oficial com margem interna para boa leitura em atalho / favicon -->
-  <g transform="translate(256 256) scale(3.1) translate(-32 -32)">
-    <path d="M32 14c-8.8 0-16 7.2-16 16 0 12 16 30 16 30s16-18 16-30c0-8.8-7.2-16-16-16zm0 22a6 6 0 1 1 0-12 6 6 0 0 1 0 12z" fill="#FFFFFF"/>
-  </g>
+  <!-- Pin em coordenadas nativas 512×512 (equivalente ao SVG 128×128 anterior, pin grande e centralizado) -->
+  <path d="M256 112c-57.6 0-104 46.4-104 104 0 78 104 192 104 192s104-114 104-192c0-57.6-46.4-104-104-104zm0 140a36 36 0 1 1 0-72 36 36 0 0 1 0 72z" fill="#FFFFFF"/>
 </svg>

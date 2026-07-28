@@ -120,4 +120,27 @@ export class RelatoriosController {
       length: buffer.length,
     });
   }
+
+  @Get('export/cronograma-cobertura.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="sigma-cronograma-cobertura.csv"')
+  exportCronogramaCoberturaCsv(@Query() filtro: RelatorioFiltroDto) {
+    return this.relatoriosService.cronogramaCoberturaCsv(filtro);
+  }
+
+  @Get('export/cronograma-cobertura.pdf')
+  async exportCronogramaCoberturaPdf(@Query() filtro: RelatorioFiltroDto) {
+    const buffer = await this.relatoriosService.cronogramaCoberturaPdf(filtro);
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: 'attachment; filename="sigma-cronograma-cobertura.pdf"',
+      length: buffer.length,
+    });
+  }
+
+  @Get('export/cronograma-cobertura.xlsx')
+  async exportCronogramaCoberturaXlsx(@Query() filtro: RelatorioFiltroDto) {
+    const buffer = await this.relatoriosService.cronogramaCoberturaXlsx(filtro);
+    return streamXlsx(buffer, 'sigma-cronograma-cobertura.xlsx');
+  }
 }

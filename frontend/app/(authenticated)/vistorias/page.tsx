@@ -345,7 +345,7 @@ export default function VistoriasPage() {
                         <div className="flex flex-wrap gap-3 pt-1 text-[11px] text-[var(--ink-3)]">
                           <span className="inline-flex items-center gap-1">
                             <UserRound className="h-3 w-3" />
-                            {item.agente.nome}
+                            {item.realizadaPorLabel ?? item.agente.nome}
                           </span>
                           <span>{formatDateTime(item.concluidaEm ?? item.iniciadaEm)}</span>
                           <span>Origem: {item.origemLabel ?? item.origem}</span>
@@ -402,8 +402,20 @@ export default function VistoriasPage() {
                     {detailLoading ? <LoadingState label="Carregando detalhe..." /> : null}
                     <dl className="grid gap-3 sm:grid-cols-2">
                       <DetailField label="Checklist">{selected.checklistVersao.checklist.nome} (v{selected.checklistVersao.versao})</DetailField>
-                      <DetailField label="Agente">{selected.agente.nome}</DetailField>
                       <DetailField label="Origem">{(detail ?? selected).origemLabel ?? selected.origem}</DetailField>
+                      <DetailField label="Vistoria realizada por">
+                        {(detail ?? selected).realizadaPorLabel ?? selected.agente.nome}
+                      </DetailField>
+                      {(detail ?? selected).responsaveisPrevistosLabel ? (
+                        <DetailField label="Responsável previsto no cronograma">
+                          {(detail ?? selected).responsaveisPrevistosLabel}
+                        </DetailField>
+                      ) : null}
+                      {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
+                        <DetailField label="Lançada no sistema por">
+                          {(detail ?? selected).lancadoPorLabel ?? '—'}
+                        </DetailField>
+                      ) : null}
                       <DetailField label="Lançamento manual">
                         {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? 'Sim' : 'Não'}
                       </DetailField>

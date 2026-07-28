@@ -14,7 +14,7 @@ export function PageContainer({
   return (
     <div
       className={cn(
-        'flex min-h-0 flex-1 flex-col gap-4 overflow-hidden',
+        'flex min-h-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto',
         flush ? 'p-0' : 'px-[var(--content-px)] py-[18px] pb-5',
         className,
       )}

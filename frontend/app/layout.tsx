@@ -23,13 +23,32 @@ export const metadata: Metadata = {
   description:
     'SIGMA — Sistema Integrado de Gestão de Manutenção e Ativos · Prefeitura de Franca',
   icons: {
-    icon: [{ url: '/icon.svg', type: 'image/svg+xml' }],
-    apple: [{ url: '/icon.svg', type: 'image/svg+xml' }],
+    icon: [
+      { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+      { url: '/icon.svg', type: 'image/svg+xml' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
     title: 'SIGMA',
+    startupImage: [
+      {
+        url: '/splash-1080x1920.png',
+        media:
+          '(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3)',
+      },
+      {
+        url: '/splash-1290x2796.png',
+        media:
+          '(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3)',
+      },
+      {
+        url: '/splash-1080x1920.png',
+      },
+    ],
   },
 };
 

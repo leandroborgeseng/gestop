@@ -18,10 +18,11 @@ import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { LoadingState } from '@/components/ui-states';
-import { getFiscalizacaoOpcoesManuais, lancarVistoriaManual } from '@/lib/api';
+import { UsuarioSinglePicker } from '@/components/usuarios/usuario-multi-picker';
+import { getFiscalizacaoOpcoesManuais, getStoredAuth, lancarVistoriaManual } from '@/lib/api';
 import { filterChecklistsForUnidade } from '@/lib/checklist-matching';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
-import type { FiscalizacaoOpcoesManuais } from '@/lib/types';
+import type { FiscalizacaoOpcoesManuais, UsuarioExecucaoOpcao } from '@/lib/types';
 
 function fileToDataUrl(file: File) {
   return new Promise<string>((resolve, reject) => {
@@ -58,6 +59,11 @@ export function LancarVistoriaManualDialog({
   const [dataVistoria, setDataVistoria] = useState(toDateInputValue());
   const [observacoes, setObservacoes] = useState('');
   const [responses, setResponses] = useState<Record<string, ResponseDraft>>({});
+  const [realizadaPorId, setRealizadaPorId] = useState('');
+  const [realizadaPorUser, setRealizadaPorUser] = useState<UsuarioExecucaoOpcao | null>(null);
+  const [realizadaPorNome, setRealizadaPorNome] = useState('');
+  const [usarNomeLivre, setUsarNomeLivre] = useState(false);
+  const authUser = useMemo(() => getStoredAuth()?.user ?? null, []);
 
   useEffect(() => {
     if (!open) return;
@@ -88,10 +94,33 @@ export function LancarVistoriaManualDialog({
       setDataVistoria(toDateInputValue());
       setObservacoes('');
       setResponses({});
+      setRealizadaPorId(authUser?.id ?? '');
+      setRealizadaPorUser(
+        authUser
+          ? {
+              id: authUser.id,
+              nome: authUser.nome,
+              email: authUser.email,
+              cpf: null,
+              cargo: null,
+            }
+          : null,
+      );
+      setRealizadaPorNome('');
+      setUsarNomeLivre(false);
       setError(null);
       setSubmitting(false);
+    } else if (authUser) {
+      setRealizadaPorId(authUser.id);
+      setRealizadaPorUser({
+        id: authUser.id,
+        nome: authUser.nome,
+        email: authUser.email,
+        cpf: null,
+        cargo: null,
+      });
     }
-  }, [open]);
+  }, [open, authUser]);
 
   const selectedUnit = useMemo(
     () => opcoes?.unidades.find((unidade) => unidade.id === unidadeId) ?? null,
@@ -187,6 +216,14 @@ export function LancarVistoriaManualDialog({
       setError('Informe a data da vistoria.');
       return;
     }
+    if (!usarNomeLivre && !realizadaPorId) {
+      setError('Informe quem realizou a vistoria em campo.');
+      return;
+    }
+    if (usarNomeLivre && !realizadaPorNome.trim()) {
+      setError('Informe o nome de quem realizou a vistoria em campo.');
+      return;
+    }
 
     const dataVistoriaIso = new Date(`${dataVistoria}T12:00:00`).toISOString();
     if (Number.isNaN(new Date(dataVistoriaIso).getTime())) {
@@ -215,6 +252,8 @@ export function LancarVistoriaManualDialog({
         checklistVersaoId: selectedVersion.id,
         dataVistoria: dataVistoriaIso,
         observacoes: observacoes.trim() || undefined,
+        realizadaPorId: usarNomeLivre ? undefined : realizadaPorId,
+        realizadaPorNome: usarNomeLivre ? realizadaPorNome.trim() : undefined,
         respostas: selectedVersion.itens.map((item) =>
           buildRespostaPayload(
             item,
@@ -312,6 +351,52 @@ export function LancarVistoriaManualDialog({
                 required
               />
             </Field>
+
+            {!usarNomeLivre ? (
+              <UsuarioSinglePicker
+                label="Vistoria realizada por"
+                hint="Usuário que efetivamente realizou a vistoria em campo (conta para produtividade)."
+                value={realizadaPorId}
+                selectedUser={realizadaPorUser}
+                preferSecretariaId={selectedUnit?.secretaria.id}
+                onChange={(id, user) => {
+                  setRealizadaPorId(id);
+                  setRealizadaPorUser(user);
+                }}
+              />
+            ) : (
+              <Field label="Vistoria realizada por (nome)">
+                <input
+                  value={realizadaPorNome}
+                  onChange={(event) => setRealizadaPorNome(event.target.value)}
+                  placeholder="Nome do servidor/funcionário"
+                  className="h-10 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px]"
+                />
+              </Field>
+            )}
+            <button
+              type="button"
+              className="text-[12px] font-semibold text-[var(--brand)] hover:underline"
+              onClick={() => {
+                setUsarNomeLivre((current) => !current);
+                setRealizadaPorNome('');
+                if (usarNomeLivre && authUser) {
+                  setRealizadaPorId(authUser.id);
+                  setRealizadaPorUser({
+                    id: authUser.id,
+                    nome: authUser.nome,
+                    email: authUser.email,
+                    cpf: null,
+                    cargo: null,
+                  });
+                } else {
+                  setRealizadaPorId('');
+                  setRealizadaPorUser(null);
+                }
+              }}
+            >
+              {usarNomeLivre ? 'Selecionar usuário cadastrado' : 'Informar nome sem usuário no sistema'}
+            </button>
 
             <Field label="Observações (opcional)">
               <textarea

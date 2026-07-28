@@ -952,6 +952,10 @@ export type DashboardData = {
     chamadosPorTipo: DashboardRankingItem[];
     chamadosPorSecretaria: DashboardRankingItem[];
     totalConcluidosAnalisados: number;
+    produtividadeVistoriasPorUsuario?: Array<
+      DashboardRankingItem & { naoConformidades?: number; chamadosGerados?: number }
+    >;
+    totalVistoriasAnalisadas?: number;
   };
   pendenciasPorSecretaria: Array<{
     id: string;
@@ -1053,6 +1057,9 @@ export type CronogramaChecagem = {
     nome: string;
     email: string;
   } | null;
+  responsaveis?: Array<{
+    usuario: { id: string; nome: string; email: string };
+  }>;
 };
 
 export type CalendarioChecagemEvento = {
@@ -1072,6 +1079,7 @@ export type CalendarioChecagemEvento = {
   fiscalizacaoId?: string;
   frequencia?: CronogramaFrequencia;
   responsavelNome?: string | null;
+  responsaveisNomes?: string[];
   agenteNome?: string;
 };
 
@@ -1110,10 +1118,16 @@ export type FiscalizacaoResumo = {
   lancamentoManual?: boolean;
   dataVistoriaInformada?: string | null;
   dataLancamento?: string | null;
+  realizadaPorNome?: string | null;
+  realizadaPorLabel?: string | null;
+  lancadoPorLabel?: string | null;
+  responsaveisPrevistos?: Array<{ id: string; nome: string; email?: string }>;
+  responsaveisPrevistosLabel?: string | null;
   createdAt: string;
   secretaria: { id: string; sigla: string; nome: string };
   unidade: { id: string; nome: string; codigoPatrimonial: string; bairro?: string | null; tipo?: UnidadeTipo };
-  agente: { id: string; nome: string };
+  agente: { id: string; nome: string; email?: string };
+  lancadoPor?: { id: string; nome: string; email?: string } | null;
   checklistVersao: {
     id: string;
     versao: number;
@@ -1145,6 +1159,8 @@ export type LancamentoManualPayload = {
   checklistVersaoId: string;
   dataVistoria: string;
   observacoes?: string;
+  realizadaPorId?: string;
+  realizadaPorNome?: string;
   respostas: MobileQueuedInspection['respostas'];
 };
 
