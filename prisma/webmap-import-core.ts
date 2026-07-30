@@ -1,6 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { Prisma, PrismaClient, UnidadeTipo } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { fetchWebmapGithubStatus } from './webmap-github';
 import { logError, logInfo, logStep, logWarn } from './startup-log';
 import { resolveWebmapLayers, WEBMAP_RAW_BASE, type WebmapLayerConfig } from './webmap-layers';
@@ -137,7 +137,7 @@ export type WebmapImportResult = {
 type NormalizedUnidade = {
   codigoPatrimonial: string;
   nome: string;
-  tipo: UnidadeTipo;
+  tipo: string;
   secretariaSigla: string;
   unidadeMunicipalRaw: string | null;
   endereco: string;
@@ -503,7 +503,7 @@ type ExistingUnidade = {
   secretariaId: string;
   codigoPatrimonial: string;
   nome: string;
-  tipo: UnidadeTipo;
+  tipo: string;
   endereco: string;
   bairro: string | null;
   cep: string | null;
@@ -692,7 +692,7 @@ function normalizeExistingUnit(unit: {
   secretariaId: string;
   codigoPatrimonial: string;
   nome: string;
-  tipo: UnidadeTipo;
+  tipo: string;
   endereco: string;
   bairro: string | null;
   cep: string | null;
@@ -856,7 +856,7 @@ function normalizeFeature(
   return {
     codigoPatrimonial,
     nome: nome.trim(),
-    tipo: resolveUnidadeTipo(props, layer),
+    tipo: resolveTipoProprioCodigo(props, layer),
     secretariaSigla,
     unidadeMunicipalRaw,
     endereco: endereco || 'Endereco nao informado no webmap',
@@ -877,13 +877,13 @@ function normalizeFeature(
   };
 }
 
-function resolveUnidadeTipo(props: Record<string, unknown>, layer: WebmapLayerConfig) {
+function resolveTipoProprioCodigo(props: Record<string, unknown>, layer: WebmapLayerConfig) {
   const raw = pickString(props, ['tipo', 'TIPO', 'categoria', 'CATEGORIA'])?.toLowerCase() ?? '';
-  if (/ubs|saude|posto/.test(raw)) return UnidadeTipo.UBS;
-  if (/escola|creche|eja|infantil/.test(raw)) return UnidadeTipo.ESCOLA;
-  if (/praca|parque/.test(raw)) return UnidadeTipo.PRACA;
-  if (/predio|administr/.test(raw)) return UnidadeTipo.PREDIO_ADMINISTRATIVO;
-  if (/esport|quadra|ginasio|campo/.test(raw)) return UnidadeTipo.ESPACO_ESPORTIVO;
+  if (/ubs|saude|posto/.test(raw)) return 'UBS';
+  if (/escola|creche|eja|infantil/.test(raw)) return 'ESCOLA';
+  if (/praca|parque/.test(raw)) return 'PRACA';
+  if (/predio|administr/.test(raw)) return 'PREDIO_ADMINISTRATIVO';
+  if (/esport|quadra|ginasio|campo/.test(raw)) return 'ESPACO_ESPORTIVO';
   return layer.defaultTipo;
 }
 

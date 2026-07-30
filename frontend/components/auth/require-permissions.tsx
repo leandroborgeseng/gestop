@@ -4,7 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSessionUser } from '@/components/auth/session-context';
 import { getStoredAuth } from '@/lib/api';
-import { getDefaultAuthenticatedHref, hasAbrirChamado, hasChamadosGerenciar, hasOperationalNavAccess, isNavActive } from '@/lib/navigation';
+import {
+  getDefaultAuthenticatedHref,
+  hasAbrirChamado,
+  hasChamadosGerenciar,
+  hasMeusChamados,
+  hasOperationalNavAccess,
+  isNavActive,
+} from '@/lib/navigation';
 import { ErrorState } from '@/components/ui-states';
 
 function permissionSatisfied(required: string, userPermissions: string[]) {
@@ -13,6 +20,9 @@ function permissionSatisfied(required: string, userPermissions: string[]) {
   }
   if (required === 'chamados.abrir') {
     return hasAbrirChamado(userPermissions);
+  }
+  if (required === 'meus_chamados.visualizar') {
+    return hasMeusChamados(userPermissions);
   }
   return userPermissions.includes(required);
 }

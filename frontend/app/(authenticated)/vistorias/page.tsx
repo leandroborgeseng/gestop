@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ClipboardList, ClipboardPen, MapPin, Printer, Search, UserRound } from 'lucide-react';
+import { ClipboardList, ClipboardPen, FileDown, MapPin, Printer, Search, UserRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
 import { PageShell } from '@/components/layout/page-shell';
@@ -11,11 +11,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
+import { useSnackbar } from '@/components/ui/snackbar';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
 import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
-import { getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
+import { downloadFiscalizacaoPdf, getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { formatUnidadeTipo, UNIDADE_TIPO_LABELS } from '@/lib/unidade-tipo';
 import { formatNotaBr, notaCorHex } from '@/lib/vistoria-nota';
@@ -76,6 +77,8 @@ function NotaVistoriaDestaque({ notaGeral }: { notaGeral: number }) {
 
 export default function VistoriasPage() {
   const sessionUser = useSessionUser();
+  const snackbar = useSnackbar();
+  const [pdfBusy, setPdfBusy] = useState(false);
   const canFilterSecretaria = Boolean(
     sessionUser?.permissoes.some((permission) =>
       ['dashboard.visualizar', 'chamados.gerenciar', 'secretarias.gerenciar'].includes(permission),
@@ -390,7 +393,27 @@ export default function VistoriasPage() {
                         {!detailLoading && detail?.nota?.notaGeral != null ? (
                           <NotaVistoriaDestaque notaGeral={detail.nota.notaGeral} />
                         ) : null}
-                        <Badge variant={STATUS_BADGE[selected.status]}>{statusLabel(selected.status)}</Badge>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outlined"
+                            size="sm"
+                            disabled={pdfBusy}
+                            onClick={() => {
+                              setPdfBusy(true);
+                              void downloadFiscalizacaoPdf(selected.id)
+                                .then(() => snackbar.show('PDF gerado.', 'success'))
+                                .catch((err) =>
+                                  snackbar.show(err instanceof Error ? err.message : 'Falha ao gerar PDF.', 'error'),
+                                )
+                                .finally(() => setPdfBusy(false));
+                            }}
+                          >
+                            <FileDown className="h-3.5 w-3.5" />
+                            {pdfBusy ? 'Gerando…' : 'PDF'}
+                          </Button>
+                          <Badge variant={STATUS_BADGE[selected.status]}>{statusLabel(selected.status)}</Badge>
+                        </div>
                         {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
                           <Badge variant="info">Lançamento manual</Badge>
                         ) : null}

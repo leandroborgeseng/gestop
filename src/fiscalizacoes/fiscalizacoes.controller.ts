@@ -56,6 +56,16 @@ export class FiscalizacoesController {
     return this.fiscalizacoesService.lancamentoManual(body, user);
   }
 
+  @Get(':id/pdf')
+  @RequireAnyPermissions('fiscalizacoes.executar', 'dashboard.visualizar', 'chamados.gerenciar')
+  @Header('Content-Type', 'application/pdf')
+  async exportPdf(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    const pdf = await this.fiscalizacoesService.exportPdf(id, user);
+    return new StreamableFile(pdf, {
+      disposition: `attachment; filename="vistoria-${id.slice(0, 8)}.pdf"`,
+    });
+  }
+
   @Get(':id')
   @RequireAnyPermissions('fiscalizacoes.executar', 'dashboard.visualizar', 'chamados.gerenciar')
   getById(@Param('id') id: string, @CurrentUser() user: JwtPayload) {

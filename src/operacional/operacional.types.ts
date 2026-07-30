@@ -1,4 +1,4 @@
-import { RegiaoUnidade, UnidadeTipo } from '@prisma/client';
+import { RegiaoUnidade } from '@prisma/client';
 
 export type UnidadeSituacao = 'OPERACIONAL' | 'COM_PENDENCIAS' | 'SEM_LOCALIZACAO' | 'INATIVA';
 
@@ -10,12 +10,21 @@ export type UnidadeSlaMapa = 'DENTRO' | 'FORA' | null;
 
 export type UnidadeListQuery = {
   search?: string;
+  /** @deprecated use secretariaIds */
   secretariaId?: string;
-  tipo?: UnidadeTipo;
+  secretariaIds?: string[];
+  /** @deprecated use tipos — codigo do TipoProprio */
+  tipo?: string;
+  /** Codigos do catalogo TipoProprio */
+  tipos?: string[];
   situacao?: UnidadeSituacao;
   pendencias?: boolean;
+  /** @deprecated use bairros */
   bairro?: string;
+  bairros?: string[];
+  /** @deprecated use regioes */
   regiao?: RegiaoUnidade;
+  regioes?: RegiaoUnidade[];
   responsavel?: string;
   responsavelEmail?: string;
   /** Quando informado, redefine o que conta como pendência (default legado: CH + NC). */
@@ -57,7 +66,8 @@ export type UnidadeOperacional = {
   id: string;
   codigoPatrimonial: string;
   nome: string;
-  tipo: UnidadeTipo;
+  /** Codigo do TipoProprio */
+  tipo: string;
   endereco: string;
   bairro: string | null;
   cep: string | null;
@@ -101,7 +111,9 @@ export type ChamadosMapaQuery = {
   tipoChamadoId?: string[];
   equipeIds?: string[];
   sla?: SlaFiltro;
+  /** @deprecated use bairros */
   bairro?: string;
+  bairros?: string[];
   comUnidade?: 'TODOS' | 'COM' | 'SEM';
 };
 

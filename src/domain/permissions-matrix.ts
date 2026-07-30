@@ -13,6 +13,7 @@ const LEGACY_CHAMADOS_ABRIR = 'chamados.abrir';
 const LEGACY_CHAMADOS_EXECUTAR = 'chamados.executar';
 const LEGACY_CHAMADOS_EDITAR_ABERTURA = 'chamados.editar_abertura';
 const LEGACY_CHAMADOS_EXECUCAO_MANUAL = 'chamados.execucao_manual';
+const LEGACY_MEUS_CHAMADOS_VISUALIZAR = 'meus_chamados.visualizar';
 
 const CHAMADOS_ABRIR_ONLY_KEYS = new Set([
   permissionMatrixKey('chamados', 'abrir_chamado', 'visualizar'),
@@ -66,6 +67,14 @@ export function deriveLegacyPermissionKeys(matrixKeys: Set<string>): Set<string>
     matrixKeys.has(permissionMatrixKey('chamados', 'abrir_chamado', 'inserir'))
   ) {
     legacy.add(LEGACY_CHAMADOS_ABRIR);
+  }
+  // Meus chamados: tela própria OU quem abre/gerencia chamados (sem liberar triagem sozinha).
+  if (
+    hasPrefix('meus_chamados') ||
+    legacy.has(LEGACY_CHAMADOS_ABRIR) ||
+    legacy.has(LEGACY_CHAMADOS_GERENCIAR)
+  ) {
+    legacy.add(LEGACY_MEUS_CHAMADOS_VISUALIZAR);
   }
   if (hasPrefix('execucao') || matrixKeys.has(permissionMatrixKey('chamados', 'execucao_manual', 'executar'))) {
     legacy.add(LEGACY_CHAMADOS_EXECUTAR);
@@ -127,10 +136,15 @@ export function expandLegacyToMatrixKeys(legacyKeys: Set<string>): Set<string> {
   if (legacyKeys.has(LEGACY_CHAMADOS_GERENCIAR)) {
     grantScreen('chamados');
     grantScreen('execucao', ['visualizar', 'executar', 'inserir']);
+    grantScreen('meus_chamados', ['visualizar']);
   }
   if (legacyKeys.has(LEGACY_CHAMADOS_ABRIR)) {
     matrix.add(permissionMatrixKey('chamados', 'abrir_chamado', 'visualizar'));
     matrix.add(permissionMatrixKey('chamados', 'abrir_chamado', 'inserir'));
+    grantScreen('meus_chamados', ['visualizar']);
+  }
+  if (legacyKeys.has(LEGACY_MEUS_CHAMADOS_VISUALIZAR)) {
+    grantScreen('meus_chamados', ['visualizar']);
   }
   if (legacyKeys.has(LEGACY_CHAMADOS_EXECUTAR)) {
     grantScreen('execucao', ['visualizar', 'executar', 'inserir']);
@@ -264,6 +278,7 @@ export const NAV_SCREEN_MAP: Record<string, string> = {
   vistorias: 'vistorias',
   chamados: 'chamados',
   novo_chamado: 'chamados',
+  meus_chamados: 'meus_chamados',
   execucao: 'execucao',
   dashboard: 'dashboard',
   cronograma: 'cronograma',

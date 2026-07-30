@@ -373,20 +373,57 @@ export function buildChamadoTimelineFromHistorico(
       };
     }
 
+    if (tipo === 'observador_adicionado' || tipo === 'observador_removido') {
+      const nome =
+        typeof metadata.observadorNome === 'string' && metadata.observadorNome.trim()
+          ? metadata.observadorNome
+          : null;
+      return {
+        id: entry.id,
+        title:
+          tipo === 'observador_adicionado'
+            ? nome
+              ? `Observador adicionado: ${nome}`
+              : 'Observador adicionado'
+            : nome
+              ? `Observador removido: ${nome}`
+              : 'Observador removido',
+        date: formatTimelineDate(entry.createdAt),
+        sub: entry.alteradoPor?.nome,
+        done: true,
+        active: false,
+      };
+    }
+
     if (tipo === 'programacao_update' || entry.motivo === 'Programação de execução atualizada.') {
       const alteracoes = Array.isArray(metadata.alteracoes)
         ? (metadata.alteracoes as Array<{ campo: string; label: string; de: string; para: string }>)
         : [];
+      const statusMudou = Boolean(entry.statusAnterior && entry.statusAnterior !== entry.statusNovo);
+      const alteracoesComStatus =
+        statusMudou && !alteracoes.some((item) => item.campo === 'status')
+          ? [
+              ...alteracoes,
+              {
+                campo: 'status',
+                label: 'Status',
+                de: chamadoStatusLabel(entry.statusAnterior!),
+                para: chamadoStatusLabel(entry.statusNovo),
+              },
+            ]
+          : alteracoes;
       return {
         id: entry.id,
-        title: 'Programação de execução atualizada',
+        title: statusMudou
+          ? `Programação de execução atualizada · Status: ${chamadoStatusLabel(entry.statusAnterior!)} → ${chamadoStatusLabel(entry.statusNovo)}`
+          : 'Programação de execução atualizada',
         date: formatTimelineDate(entry.createdAt),
-        sub: timelineSubComResponsavel(entry.alteradoPor?.nome, alteracoes),
+        sub: timelineSubComResponsavel(entry.alteradoPor?.nome, alteracoesComStatus),
         done: true,
         active: false,
-        expand: alteracoes.length
+        expand: alteracoesComStatus.length
           ? {
-              alteracoes,
+              alteracoes: alteracoesComStatus,
               usuario: entry.alteradoPor?.nome,
               dataHora: formatTimelineDate(entry.createdAt),
             }

@@ -30,6 +30,7 @@ import {
   UpdateChamadoPlanejamentoDto,
   UpdateChamadoTriagemDto,
   UpdateChamadoAberturaDto,
+  UpdateChamadoObservadoresDto,
   RegistrarChamadoHistoricoDto,
   EmitirOrdensServicoDto,
   ChamadoExecucaoCheckinDto,
@@ -97,12 +98,147 @@ export class ChamadosService {
     ]);
 
     return {
-      items: items.map((item) => this.serializeChamado(item)),
+      items: items.map((item) => this.serializeChamado(item, user.sub)),
       total,
       limit,
       offset,
       hasMore: offset + items.length < total,
     };
+  }
+
+  async listMeusChamados(
+    params: { limit?: number; offset?: number; search?: string; status?: string } | undefined,
+    user: JwtPayload,
+  ) {
+    const limit = Math.min(Math.max(params?.limit ?? 50, 1), 2000);
+    const offset = Math.max(params?.offset ?? 0, 0);
+    const search = params?.search?.trim();
+    const status = params?.status?.trim().toUpperCase();
+
+    const where: Prisma.ChamadoWhereInput = {
+      AND: [
+        {
+          OR: [
+            { registradoPorId: user.sub },
+            { observadores: { some: { usuarioId: user.sub } } },
+          ],
+        },
+        ...(search
+          ? [{ codigo: { contains: search, mode: 'insensitive' as const } }]
+          : []),
+        ...(status && status !== 'TODOS' && Object.values(ChamadoStatus).includes(status as ChamadoStatus)
+          ? [{ status: status as ChamadoStatus }]
+          : []),
+      ],
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.chamado.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+        include: this.includeRelations(),
+      }),
+      this.prisma.chamado.count({ where }),
+    ]);
+
+    return {
+      items: items.map((item) => this.serializeChamado(item, user.sub)),
+      total,
+      limit,
+      offset,
+      hasMore: offset + items.length < total,
+    };
+  }
+
+  async getMeuChamado(id: string, user: JwtPayload) {
+    const chamado = await this.getChamadoOrThrow(id);
+    this.assertMeuChamadoAccess(chamado, user);
+
+    const historico = await this.prisma.historicoStatus.findMany({
+      where: { entidadeTipo: 'Chamado', entidadeId: id },
+      orderBy: { createdAt: 'asc' },
+      include: { alteradoPor: { select: { id: true, nome: true } } },
+    });
+
+    const enriched = await this.enrichHistorico(historico, id);
+    const timeline = enriched.map((entry) => this.simplifyHistoricoEntry(entry));
+
+    return {
+      ...this.serializeChamado(chamado, user.sub),
+      historico: timeline,
+      podeGerenciarObservadores: chamado.registradoPorId === user.sub,
+    };
+  }
+
+  async listUsuariosParaObservador(search?: string) {
+    const q = search?.trim();
+    const digits = q?.replace(/\D/g, '') ?? '';
+
+    return this.prisma.usuario.findMany({
+      where: {
+        ativo: true,
+        ...(q
+          ? {
+              OR: [
+                { nome: { contains: q, mode: 'insensitive' } },
+                { email: { contains: q, mode: 'insensitive' } },
+                ...(digits.length >= 3 ? [{ cpf: { contains: digits } }] : []),
+              ],
+            }
+          : {}),
+      },
+      orderBy: { nome: 'asc' },
+      take: 80,
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        cargo: true,
+        secretaria: { select: { id: true, nome: true, sigla: true } },
+      },
+    });
+  }
+
+  async updateObservadoresMeuChamado(id: string, dto: UpdateChamadoObservadoresDto, user: JwtPayload) {
+    const chamado = await this.getChamadoOrThrow(id);
+    this.assertMeuChamadoAccess(chamado, user);
+    if (chamado.registradoPorId !== user.sub) {
+      throw new ForbiddenException('Somente quem abriu o chamado pode gerenciar observadores.');
+    }
+    return this.syncObservadores(id, dto.observadorIds ?? [], user, 'meus_chamados');
+  }
+
+  async addObservadorMeuChamado(id: string, usuarioId: string, user: JwtPayload) {
+    const chamado = await this.getChamadoOrThrow(id);
+    this.assertMeuChamadoAccess(chamado, user);
+    if (chamado.registradoPorId !== user.sub) {
+      throw new ForbiddenException('Somente quem abriu o chamado pode gerenciar observadores.');
+    }
+
+    const currentIds = (chamado.observadores ?? []).map((item) => item.usuarioId);
+    if (currentIds.includes(usuarioId)) {
+      return this.serializeChamado(chamado, user.sub);
+    }
+    return this.syncObservadores(id, [...currentIds, usuarioId], user, 'meus_chamados');
+  }
+
+  async removeObservadorMeuChamado(id: string, usuarioId: string, user: JwtPayload) {
+    const chamado = await this.getChamadoOrThrow(id);
+    this.assertMeuChamadoAccess(chamado, user);
+    if (chamado.registradoPorId !== user.sub) {
+      throw new ForbiddenException('Somente quem abriu o chamado pode gerenciar observadores.');
+    }
+
+    const currentIds = (chamado.observadores ?? []).map((item) => item.usuarioId).filter((item) => item !== usuarioId);
+    return this.syncObservadores(id, currentIds, user, 'meus_chamados');
+  }
+
+  async updateObservadoresChamado(id: string, dto: UpdateChamadoObservadoresDto, user: JwtPayload) {
+    const chamado = await this.getChamadoOrThrow(id);
+    assertChamadoSecretariaAccess(user, chamado);
+    return this.syncObservadores(id, dto.observadorIds ?? [], user, 'chamados');
   }
 
   async listEmExecucaoPorEquipe(
@@ -334,7 +470,10 @@ export class ChamadosService {
       orderBy: { createdAt: 'asc' },
       include: { alteradoPor: { select: { id: true, nome: true } } },
     });
-    return { ...this.serializeChamado(chamado), historico: await this.enrichHistorico(historico, id) };
+    return {
+      ...this.serializeChamado(chamado, user.sub),
+      historico: await this.enrichHistorico(historico, id),
+    };
   }
 
   async exportChamadoPdf(id: string, user: JwtPayload) {
@@ -949,9 +1088,14 @@ export class ChamadosService {
       },
     });
 
+    if (dto.observadorIds?.length) {
+      await this.syncObservadores(chamado.id, dto.observadorIds, user, 'abertura');
+    }
+
     await this.integracoesService.notify('chamado.criado', { chamadoId: chamado.id, codigo: chamado.codigo }, user);
 
-    return this.serializeChamado(chamado);
+    const refreshed = await this.getChamadoOrThrow(chamado.id);
+    return this.serializeChamado(refreshed, user.sub);
   }
 
   async createChamadoPublico(codigoPatrimonial: string, dto: PublicCreateChamadoDto) {
@@ -1508,56 +1652,59 @@ export class ChamadosService {
       secretariaNova: secretariaNovaLabel,
     });
 
-    if (alteracoes.length === 0) {
-      return this.serializeChamado(before);
+    let chamado = before;
+    if (alteracoes.length > 0) {
+      chamado = await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.chamado.update({
+          where: { id },
+          data: {
+            enderecoBairro,
+            solicitanteNome,
+            solicitanteTelefone,
+            enderecoTexto,
+            latitude,
+            longitude,
+            secretariaId,
+            modoLocalizacao: before.modoLocalizacao,
+          },
+          include: this.includeRelations(),
+        });
+
+        await tx.historicoStatus.create({
+          data: {
+            entidadeTipo: 'Chamado',
+            entidadeId: id,
+            statusAnterior: before.status,
+            statusNovo: before.status,
+            motivo: 'Informações de abertura atualizadas.',
+            alteradoPorId: user.sub,
+            metadata: {
+              tipo: 'abertura_update',
+              alteracoes,
+            },
+          },
+        });
+
+        await tx.logAuditoria.create({
+          data: {
+            usuarioId: user.sub,
+            acao: AuditAction.UPDATE,
+            entidadeTipo: 'Chamado',
+            entidadeId: id,
+            valorAntigo: JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue,
+            valorNovo: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
+          },
+        });
+
+        return updated;
+      });
     }
 
-    const chamado = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.chamado.update({
-        where: { id },
-        data: {
-          enderecoBairro,
-          solicitanteNome,
-          solicitanteTelefone,
-          enderecoTexto,
-          latitude,
-          longitude,
-          secretariaId,
-          modoLocalizacao: before.modoLocalizacao,
-        },
-        include: this.includeRelations(),
-      });
+    if (dto.observadorIds !== undefined) {
+      return this.syncObservadores(id, dto.observadorIds ?? [], user, 'abertura');
+    }
 
-      await tx.historicoStatus.create({
-        data: {
-          entidadeTipo: 'Chamado',
-          entidadeId: id,
-          statusAnterior: before.status,
-          statusNovo: before.status,
-          motivo: 'Informações de abertura atualizadas.',
-          alteradoPorId: user.sub,
-          metadata: {
-            tipo: 'abertura_update',
-            alteracoes,
-          },
-        },
-      });
-
-      await tx.logAuditoria.create({
-        data: {
-          usuarioId: user.sub,
-          acao: AuditAction.UPDATE,
-          entidadeTipo: 'Chamado',
-          entidadeId: id,
-          valorAntigo: JSON.parse(JSON.stringify(before)) as Prisma.InputJsonValue,
-          valorNovo: JSON.parse(JSON.stringify(updated)) as Prisma.InputJsonValue,
-        },
-      });
-
-      return updated;
-    });
-
-    return this.serializeChamado(chamado);
+    return this.serializeChamado(chamado, user.sub);
   }
 
   async registrarExecucaoManual(id: string, dto: ChamadoExecucaoManualDto, user: JwtPayload) {
@@ -2198,6 +2345,16 @@ export class ChamadosService {
       },
       tipoChamado: { select: { id: true, nome: true, exigeVistoriaPrevia: true } },
       registradoPor: { select: { id: true, nome: true } },
+      observadores: {
+        orderBy: { createdAt: 'asc' as const },
+        select: {
+          id: true,
+          usuarioId: true,
+          createdAt: true,
+          origem: true,
+          usuario: { select: { id: true, nome: true, email: true } },
+        },
+      },
       naoConformidade: {
         select: {
           id: true,
@@ -2208,6 +2365,154 @@ export class ChamadosService {
         },
       },
     };
+  }
+
+  private assertMeuChamadoAccess(
+    chamado: { registradoPorId?: string | null; observadores?: Array<{ usuarioId: string }> },
+    user: JwtPayload,
+  ) {
+    const isOpener = chamado.registradoPorId === user.sub;
+    const isObserver = (chamado.observadores ?? []).some((item) => item.usuarioId === user.sub);
+    if (!isOpener && !isObserver) {
+      throw new ForbiddenException('Você não tem acesso a este chamado em Meus chamados.');
+    }
+  }
+
+  private simplifyHistoricoEntry(entry: {
+    id: string;
+    statusAnterior: string | null;
+    statusNovo: string;
+    motivo: string | null;
+    metadata: unknown;
+    createdAt: string;
+    alteradoPor: { id: string; nome: string } | null;
+    anexos?: unknown;
+  }) {
+    const metadata = (entry.metadata ?? {}) as Record<string, unknown>;
+    return {
+      id: entry.id,
+      statusAnterior: entry.statusAnterior,
+      statusNovo: entry.statusNovo,
+      motivo: entry.motivo,
+      metadata: {
+        tipo: typeof metadata.tipo === 'string' ? metadata.tipo : null,
+        descricao: typeof metadata.descricao === 'string' ? metadata.descricao : undefined,
+        alteracoes: Array.isArray(metadata.alteracoes) ? metadata.alteracoes : undefined,
+        observadorNome: typeof metadata.observadorNome === 'string' ? metadata.observadorNome : undefined,
+        observadorIds: Array.isArray(metadata.observadorIds) ? metadata.observadorIds : undefined,
+      },
+      createdAt: entry.createdAt,
+      alteradoPor: entry.alteradoPor,
+    };
+  }
+
+  private async syncObservadores(
+    chamadoId: string,
+    observadorIds: string[],
+    user: JwtPayload,
+    origem: string,
+  ) {
+    const chamado = await this.getChamadoOrThrow(chamadoId);
+    const uniqueIds = [...new Set(observadorIds.map((id) => id.trim()).filter(Boolean))];
+
+    // Quem abriu o chamado não precisa ser observador de si mesmo; remove silenciosamente.
+    const filteredIds = uniqueIds.filter((id) => id !== chamado.registradoPorId);
+
+    if (filteredIds.length > 0) {
+      const usuarios = await this.prisma.usuario.findMany({
+        where: { id: { in: filteredIds }, ativo: true },
+        select: { id: true, nome: true },
+      });
+      if (usuarios.length !== filteredIds.length) {
+        throw new BadRequestException('Um ou mais observadores são inválidos ou inativos.');
+      }
+    }
+
+    const current = chamado.observadores ?? [];
+    const currentIds = new Set(current.map((item) => item.usuarioId));
+    const nextIds = new Set(filteredIds);
+    const toAdd = filteredIds.filter((id) => !currentIds.has(id));
+    const toRemove = current.filter((item) => !nextIds.has(item.usuarioId));
+
+    if (toAdd.length === 0 && toRemove.length === 0) {
+      return this.serializeChamado(chamado, user.sub);
+    }
+
+    const usuariosById = new Map(
+      (
+        await this.prisma.usuario.findMany({
+          where: { id: { in: [...toAdd, ...toRemove.map((item) => item.usuarioId)] } },
+          select: { id: true, nome: true },
+        })
+      ).map((item) => [item.id, item.nome]),
+    );
+
+    await this.prisma.$transaction(async (tx) => {
+      if (toRemove.length > 0) {
+        await tx.chamadoObservador.deleteMany({
+          where: { id: { in: toRemove.map((item) => item.id) } },
+        });
+        for (const removed of toRemove) {
+          await tx.historicoStatus.create({
+            data: {
+              entidadeTipo: 'Chamado',
+              entidadeId: chamadoId,
+              statusAnterior: chamado.status,
+              statusNovo: chamado.status,
+              motivo: `Observador removido: ${usuariosById.get(removed.usuarioId) ?? removed.usuarioId}.`,
+              alteradoPorId: user.sub,
+              metadata: {
+                tipo: 'observador_removido',
+                observadorId: removed.usuarioId,
+                observadorNome: usuariosById.get(removed.usuarioId) ?? null,
+                origem,
+              },
+            },
+          });
+        }
+      }
+
+      for (const usuarioId of toAdd) {
+        await tx.chamadoObservador.create({
+          data: {
+            chamadoId,
+            usuarioId,
+            createdById: user.sub,
+            origem,
+          },
+        });
+        await tx.historicoStatus.create({
+          data: {
+            entidadeTipo: 'Chamado',
+            entidadeId: chamadoId,
+            statusAnterior: chamado.status,
+            statusNovo: chamado.status,
+            motivo: `Observador adicionado: ${usuariosById.get(usuarioId) ?? usuarioId}.`,
+            alteradoPorId: user.sub,
+            metadata: {
+              tipo: 'observador_adicionado',
+              observadorId: usuarioId,
+              observadorNome: usuariosById.get(usuarioId) ?? null,
+              origem,
+            },
+          },
+        });
+      }
+
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'Chamado',
+          entidadeId: chamadoId,
+          valorAntigo: { observadorIds: [...currentIds] } as Prisma.InputJsonValue,
+          valorNovo: { observadorIds: filteredIds } as Prisma.InputJsonValue,
+        },
+      });
+    });
+
+    const refreshed = await this.getChamadoOrThrow(chamadoId);
+    return this.serializeChamado(refreshed, user.sub);
   }
 
   private async findChecklistComplementarExecucao(tipoChamadoId: string | null) {
@@ -2441,12 +2746,40 @@ export class ChamadosService {
     latitude?: unknown;
     longitude?: unknown;
     unidade?: Record<string, unknown> | null;
-  }>(chamado: T) {
+    registradoPorId?: string | null;
+    observadores?: Array<{
+      id: string;
+      usuarioId: string;
+      createdAt: Date | string;
+      origem?: string | null;
+      usuario?: { id: string; nome: string; email?: string | null };
+    }>;
+  }>(chamado: T, currentUserId?: string) {
     const fotoStorageKey =
       chamado.fotoStorageKey ?? extractStorageKeyFromUrl(chamado.fotoUrl ?? null);
 
+    const observadores = (chamado.observadores ?? []).map((item) => ({
+      id: item.id,
+      usuarioId: item.usuarioId,
+      nome: item.usuario?.nome ?? item.usuarioId,
+      email: item.usuario?.email ?? null,
+      createdAt: item.createdAt instanceof Date ? item.createdAt.toISOString() : item.createdAt,
+      origem: item.origem ?? null,
+    }));
+
+    const relacaoComigo =
+      currentUserId == null
+        ? null
+        : chamado.registradoPorId === currentUserId
+          ? 'ABERTO_POR_MIM'
+          : observadores.some((item) => item.usuarioId === currentUserId)
+            ? 'OBSERVADOR'
+            : null;
+
+    const { observadores: _rawObservadores, ...rest } = chamado as T & { observadores?: unknown };
+
     return {
-      ...chamado,
+      ...rest,
       fotoUrl: resolveStoragePublicUrl(fotoStorageKey, chamado.fotoUrl ?? null),
       latitude: chamado.latitude != null ? Number(chamado.latitude) : null,
       longitude: chamado.longitude != null ? Number(chamado.longitude) : null,
@@ -2457,6 +2790,9 @@ export class ChamadosService {
             longitude: chamado.unidade.longitude != null ? Number(chamado.unidade.longitude) : null,
           }
         : chamado.unidade,
+      observadores,
+      observadorIds: observadores.map((item) => item.usuarioId),
+      relacaoComigo,
     };
   }
 

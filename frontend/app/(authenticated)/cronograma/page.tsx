@@ -10,9 +10,9 @@ import { MetricCard } from '@/components/metric-card';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Fab } from '@/components/ui/fab';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { ErrorState, LoadingState } from '@/components/ui-states';
@@ -139,9 +139,14 @@ export default function CronogramaPage() {
     setError(null);
     setSuccess(null);
 
+    if (!formUnidadeId) {
+      setError('Selecione o próprio público.');
+      return;
+    }
+
     const form = new FormData(event.currentTarget);
     const payload = {
-      unidadeId: String(form.get('unidadeId')),
+      unidadeId: formUnidadeId,
       checklistId: String(form.get('checklistId')),
       frequencia: String(form.get('frequencia')) as CronogramaFrequencia,
       proximaChecagemEm: String(form.get('proximaChecagemEm')),
@@ -190,7 +195,7 @@ export default function CronogramaPage() {
         title="Cronograma de checagens"
         description="Defina a periodicidade de vistoria por próprio e acompanhe o calendário de checagens realizadas, agendadas e atrasadas."
         backHref={backHref}
-        className={canManage ? 'overflow-y-auto pb-[calc(5.75rem+env(safe-area-inset-bottom)+1rem)] lg:pb-5' : 'overflow-y-auto'}
+        className="overflow-y-auto"
         action={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -203,7 +208,7 @@ export default function CronogramaPage() {
               Cobertura de vistorias
             </Button>
             {canManage ? (
-              <Button type="button" onClick={openCreate} className="lg:hidden">
+              <Button type="button" onClick={openCreate}>
                 <Plus className="h-4 w-4" />
                 Novo cronograma
               </Button>
@@ -243,14 +248,12 @@ export default function CronogramaPage() {
               </Select>
             </Field>
             <Field label="Próprio">
-              <Select value={unidadeId} onChange={(event) => setUnidadeId(event.target.value)}>
-                <option value="">Todos</option>
-                {unidades.map((unidade) => (
-                  <option key={unidade.id} value={unidade.id}>
-                    {unidade.nome}
-                  </option>
-                ))}
-              </Select>
+              <SearchableSelect
+                value={unidadeId}
+                onChange={setUnidadeId}
+                placeholder="Todos"
+                options={unidades.map((unidade) => ({ value: unidade.id, label: unidade.nome }))}
+              />
             </Field>
           </CardContent>
         </Card>
@@ -372,11 +375,6 @@ export default function CronogramaPage() {
 
         {canManage ? (
           <>
-            <Fab extended aria-label="Novo cronograma" onClick={openCreate} className="hidden lg:inline-flex">
-              <Plus className="h-6 w-6" />
-              Cronograma
-            </Fab>
-
             <Sheet
               open={formOpen}
               onClose={() => {
@@ -387,19 +385,15 @@ export default function CronogramaPage() {
             >
               <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
                 <Field label="Próprio público">
-                  <Select
-                    name="unidadeId"
-                    required
+                  <SearchableSelect
                     value={formUnidadeId}
-                    onChange={(event) => setFormUnidadeId(event.target.value)}
-                  >
-                    <option value="">Selecione</option>
-                    {unidades.map((unidade) => (
-                      <option key={unidade.id} value={unidade.id}>
-                        {unidade.nome} · {formatUnidadeTipo(unidade.tipo)}
-                      </option>
-                    ))}
-                  </Select>
+                    onChange={setFormUnidadeId}
+                    placeholder="Selecione"
+                    options={unidades.map((unidade) => ({
+                      value: unidade.id,
+                      label: `${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`,
+                    }))}
+                  />
                 </Field>
                 <Field label="Checklist">
                   <Select

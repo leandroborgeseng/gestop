@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { UnidadeTipo, RegiaoUnidade } from '@prisma/client';
+import { RegiaoUnidade } from '@prisma/client';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -55,6 +55,7 @@ export class OperacionalController {
     @Query('equipeIds') equipeIds?: string | string[],
     @Query('sla') sla?: SlaFiltro,
     @Query('bairro') bairro?: string,
+    @Query('bairros') bairros?: string | string[],
     @Query('comUnidade') comUnidade?: 'TODOS' | 'COM' | 'SEM',
   ) {
     const query: ChamadosMapaQuery = {
@@ -65,6 +66,7 @@ export class OperacionalController {
       equipeIds: normalizeStringArray(equipeIds),
       sla: normalizeSla(sla),
       bairro: normalizeText(bairro),
+      bairros: normalizeStringArray(bairros),
       comUnidade: comUnidade === 'COM' || comUnidade === 'SEM' ? comUnidade : undefined,
     };
 
@@ -76,11 +78,15 @@ export class OperacionalController {
     @CurrentUser() user: JwtPayload,
     @Query('search') search?: string,
     @Query('secretariaId') secretariaId?: string,
-    @Query('tipo') tipo?: UnidadeTipo,
+    @Query('secretariaIds') secretariaIds?: string | string[],
+    @Query('tipo') tipo?: string,
+    @Query('tipos') tipos?: string | string[],
     @Query('situacao') situacao?: UnidadeSituacao,
     @Query('pendencias') pendencias?: string,
     @Query('bairro') bairro?: string,
+    @Query('bairros') bairros?: string | string[],
     @Query('regiao') regiao?: RegiaoUnidade,
+    @Query('regioes') regioes?: string | string[],
     @Query('responsavel') responsavel?: string,
     @Query('responsavelEmail') responsavelEmail?: string,
     @Query('tiposPendencia') tiposPendencia?: string | string[],
@@ -91,10 +97,14 @@ export class OperacionalController {
     const query: UnidadeListQuery = {
       search: normalizeText(search),
       secretariaId: normalizeText(secretariaId),
-      tipo,
+      secretariaIds: normalizeStringArray(secretariaIds),
+      tipo: normalizeText(tipo),
+      tipos: normalizeStringArray(tipos),
       situacao,
       bairro: normalizeText(bairro),
+      bairros: normalizeStringArray(bairros),
       regiao,
+      regioes: normalizeStringArray(regioes) as RegiaoUnidade[] | undefined,
       pendencias: parseOptionalBoolean(pendencias),
       responsavel: normalizeText(responsavel),
       responsavelEmail: normalizeText(responsavelEmail)?.toLowerCase(),

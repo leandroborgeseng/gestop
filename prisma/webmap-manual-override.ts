@@ -1,4 +1,4 @@
-import { Prisma, UnidadeTipo } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 export const WEBMAP_SYNCABLE_SCALAR_FIELDS = [
   'secretariaId',
@@ -39,7 +39,7 @@ export const WEBMAP_FIELD_LABELS: Record<WebmapSyncableField, string> = {
 type UnidadeLike = {
   secretariaId: string;
   nome: string;
-  tipo: UnidadeTipo;
+  tipo: string;
   endereco: string;
   bairro: string | null;
   cep: string | null;
@@ -52,7 +52,7 @@ type UnidadeLike = {
 type UnidadeDtoLike = {
   secretariaId: string;
   nome: string;
-  tipo: UnidadeTipo;
+  tipo: string;
   endereco: string;
   bairro?: string;
   cep?: string;

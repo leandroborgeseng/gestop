@@ -7,7 +7,16 @@ import { RequireAnyPermissions, RequirePermissions } from '../auth/permissions';
 import { AdminPermissionsService } from './admin-permissions.service';
 import { PerfilAtivoDto, PerfilCreateDto, PerfilMatrizDto, PerfilUpdateDto } from './admin-permissions.dto';
 import { AdminService } from './admin.service';
-import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto, CategoriaVistoriaDto, CargoDto } from './admin.dto';
+import {
+  SecretariaDto,
+  UnidadeDto,
+  UsuarioDto,
+  EquipeDto,
+  TipoChamadoDto,
+  CategoriaVistoriaDto,
+  CargoDto,
+  TipoProprioDto,
+} from './admin.dto';
 
 @UseGuards(AuthGuard, PermissionsGuard)
 @Controller('admin')
@@ -195,6 +204,30 @@ export class AdminController {
   @Delete('tipos-chamado/:id')
   deleteTipoChamado(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.adminService.deleteTipoChamado(id, user);
+  }
+
+  @RequireAnyPermissions('usuarios.gerenciar', 'unidades.gerenciar', 'checklists.gerenciar')
+  @Get('tipos-proprio')
+  listTiposProprio() {
+    return this.adminService.listTiposProprio();
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Post('tipos-proprio')
+  createTipoProprio(@Body() body: TipoProprioDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.createTipoProprio(body, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Put('tipos-proprio/:id')
+  updateTipoProprio(@Param('id') id: string, @Body() body: TipoProprioDto, @CurrentUser() user: JwtPayload) {
+    return this.adminService.updateTipoProprio(id, body, user);
+  }
+
+  @RequirePermissions('usuarios.gerenciar')
+  @Delete('tipos-proprio/:id')
+  deleteTipoProprio(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.adminService.deleteTipoProprio(id, user);
   }
 
   @RequirePermissions('checklists.gerenciar')

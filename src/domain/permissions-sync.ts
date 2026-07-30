@@ -26,6 +26,12 @@ export async function syncPermissionsCatalog(prisma: PrismaClient) {
     modulo: 'chamados',
   });
 
+  entries.push({
+    chave: 'meus_chamados.visualizar',
+    descricao: 'Visualizar chamados abertos por mim ou em que sou observador',
+    modulo: 'meus_chamados',
+  });
+
   for (const entry of entries) {
     await prisma.permissao.upsert({
       where: { chave: entry.chave },

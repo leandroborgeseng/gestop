@@ -6,15 +6,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum UnidadeTipo {
-  ESCOLA
-  UBS
-  PRACA
-  PREDIO_ADMINISTRATIVO
-  ESPACO_ESPORTIVO
-  OUTRO
-}
-
 enum RegiaoUnidade {
   NORTE
   SUL
@@ -214,7 +205,8 @@ model UnidadePublica {
   secretariaId          String
   codigoPatrimonial     String      @unique
   nome                  String
-  tipo                  UnidadeTipo
+  /// Codigo do TipoProprio (catalogo parametrizavel). Ex.: ESCOLA, UBS.
+  tipo                  String
   endereco              String
   bairro                String?
   cep                   String?
@@ -278,6 +270,8 @@ model Usuario {
   syncEvents        OfflineSyncEvent[] @relation("SyncUsuario")
   passwordResetTokens PasswordResetToken[]
   chamadosRegistrados Chamado[] @relation("ChamadoRegistradoPor")
+  chamadosObservados ChamadoObservador[] @relation("ChamadoObservadorUsuario")
+  chamadosObservadoresCriados ChamadoObservador[] @relation("ChamadoObservadorCreatedBy")
   pushSubscriptions   PushSubscription[]
   cronogramasResponsavel CronogramaChecagem[] @relation("CronogramaResponsavel")
   cronogramasResponsaveisPrevistos CronogramaChecagemResponsavel[]
@@ -389,6 +383,22 @@ model UsuarioSecretaria {
   @@index([secretariaId])
 }
 
+/// Catalogo parametrizavel de tipos de proprio (substitui o antigo enum UnidadeTipo).
+model TipoProprio {
+  id        String   @id @default(uuid())
+  codigo    String   @unique
+  nome      String
+  descricao String?
+  ativo     Boolean  @default(true)
+  /// Tipos semeados pela migracao inicial (ESCOLA, UBS, PRACA, PREDIO_ADMINISTRATIVO, ESPACO_ESPORTIVO, OUTRO).
+  sistema   Boolean  @default(false)
+  ordem     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ativo])
+}
+
 model TipoChamado {
   id             String   @id @default(uuid())
   nome           String   @unique
@@ -473,7 +483,8 @@ model Checklist {
   descricao     String?
   finalidade    ChecklistFinalidade @default(VISTORIA)
   escopo        ChecklistEscopo     @default(GLOBAL)
-  unidadeTipo   UnidadeTipo?
+  /// Codigo do TipoProprio quando escopo = UNIDADE_TIPO.
+  unidadeTipo   String?
   ativo         Boolean             @default(true)
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
@@ -777,6 +788,7 @@ model Chamado {
   tipoChamado     TipoChamado?     @relation(fields: [tipoChamadoId], references: [id], onDelete: SetNull)
   registradoPor   Usuario?         @relation("ChamadoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
   evidencias      Evidencia[]
+  observadores    ChamadoObservador[]
 
   @@index([secretariaId])
   @@index([tipoChamadoId])
@@ -790,6 +802,24 @@ model Chamado {
   @@index([previstaExecucaoEm])
   @@index([status, equipeId])
   @@index([status, previstaExecucaoEm])
+}
+
+model ChamadoObservador {
+  id          String   @id @default(uuid())
+  chamadoId   String
+  usuarioId   String
+  createdAt   DateTime @default(now())
+  createdById String?
+  origem      String?
+
+  chamado   Chamado  @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  usuario   Usuario  @relation("ChamadoObservadorUsuario", fields: [usuarioId], references: [id], onDelete: Cascade)
+  createdBy Usuario? @relation("ChamadoObservadorCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([chamadoId, usuarioId])
+  @@index([usuarioId])
+  @@index([chamadoId])
+  @@index([createdById])
 }
 
 model HistoricoStatus {

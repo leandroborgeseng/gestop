@@ -21,7 +21,7 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
-import { createChamado, getSecretarias, getStoredAuth, getUnidades, listTiposChamadoOpcoes } from '@/lib/api';
+import { createChamado, getSecretarias, getStoredAuth, getUnidades, listTiposChamadoOpcoes, listUsuariosObservador } from '@/lib/api';
 import { formatPhoneInput, normalizePhoneForApi } from '@/lib/br-input-masks';
 import { captureCurrentPosition } from '@/lib/geolocation';
 import {
@@ -33,6 +33,8 @@ import {
 import { isWithinFrancaMunicipio } from '@/lib/franca-geo';
 import { hasChamadosGerenciar } from '@/lib/navigation';
 import { TipoChamadoOpcao, UnidadeOperacional } from '@/lib/types';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Badge } from '@/components/ui/badge';
 
 const PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
 type ModoLocalizacao = 'UNIDADE' | 'ENDERECO';
@@ -104,6 +106,11 @@ export function AbrirChamadoForm({
   const [fotoDataUrl, setFotoDataUrl] = useState<string | null>(null);
   const [fotoPreview, setFotoPreview] = useState<string | null>(null);
   const [fotoGeo, setFotoGeo] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [observadorIds, setObservadorIds] = useState<string[]>([]);
+  const [observadorPick, setObservadorPick] = useState('');
+  const [usuariosObservador, setUsuariosObservador] = useState<
+    Array<{ id: string; nome: string; email: string; secretaria?: { sigla: string } | null }>
+  >([]);
 
   const [unidades, setUnidades] = useState<UnidadeOperacional[]>([]);
   const [secretarias, setSecretarias] = useState<Array<{ id: string; nome: string; sigla: string }>>([]);
@@ -126,7 +133,21 @@ export function AbrirChamadoForm({
     listTiposChamadoOpcoes()
       .then((items) => setTiposChamado(items))
       .catch(() => undefined);
+    listUsuariosObservador()
+      .then(setUsuariosObservador)
+      .catch(() => setUsuariosObservador([]));
   }, []);
+
+  const observadorOptions = useMemo(() => {
+    const currentUserId = getStoredAuth()?.user.id;
+    const taken = new Set(observadorIds);
+    return usuariosObservador
+      .filter((usuario) => usuario.id !== currentUserId && !taken.has(usuario.id))
+      .map((usuario) => ({
+        value: usuario.id,
+        label: `${usuario.nome}${usuario.secretaria?.sigla ? ` · ${usuario.secretaria.sigla}` : ''}`,
+      }));
+  }, [usuariosObservador, observadorIds]);
 
   useEffect(() => {
     if (!initialUnidadeId || pickedUnidade?.secretaria) return;
@@ -482,6 +503,7 @@ export function AbrirChamadoForm({
         solicitanteNome: solicitanteNome.trim() || undefined,
         solicitanteTelefone: normalizePhoneForApi(solicitanteTelefone) ?? undefined,
         fotoDataUrl: fotoDataUrl ?? undefined,
+        observadorIds: observadorIds.length ? observadorIds : undefined,
       });
       snackbar.show(`Chamado ${chamado.codigo} aberto com sucesso.`, 'success');
       onSuccess?.(chamado);
@@ -492,6 +514,8 @@ export function AbrirChamadoForm({
 
       if (shouldRedirect) {
         router.push(`/chamados?search=${encodeURIComponent(chamado.codigo)}`);
+      } else if (!stayOnPage) {
+        router.push(`/meus-chamados?search=${encodeURIComponent(chamado.codigo)}`);
       } else {
         setSuccessCodigo(chamado.codigo);
       }
@@ -884,6 +908,60 @@ export function AbrirChamadoForm({
               />
             </Field>
           </div>
+
+          <Field
+            label="Observadores (opcional)"
+            hint="Usuários que acompanham o chamado em Meus chamados, sem acesso à triagem."
+          >
+            <div className="space-y-2">
+              {observadorIds.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {observadorIds.map((id) => {
+                    const usuario = usuariosObservador.find((item) => item.id === id);
+                    return (
+                      <Badge key={id} variant="muted" className="gap-1.5 pr-1">
+                        {usuario?.nome ?? id}
+                        <button
+                          type="button"
+                          className="rounded p-0.5 hover:bg-[var(--danger-bg)] hover:text-[var(--danger)]"
+                          onClick={() => setObservadorIds((current) => current.filter((item) => item !== id))}
+                          aria-label="Remover observador"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <div className="flex items-end gap-2">
+                <div className="min-w-0 flex-1">
+                  <SearchableSelect
+                    value={observadorPick}
+                    options={observadorOptions}
+                    onChange={setObservadorPick}
+                    placeholder="Buscar usuário…"
+                    disabled={busy}
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outlined"
+                  disabled={busy || !observadorPick}
+                  onClick={() => {
+                    if (!observadorPick) return;
+                    setObservadorIds((current) =>
+                      current.includes(observadorPick) ? current : [...current, observadorPick],
+                    );
+                    setObservadorPick('');
+                  }}
+                >
+                  Adicionar
+                </Button>
+              </div>
+            </div>
+          </Field>
         </>
       ) : null}
 

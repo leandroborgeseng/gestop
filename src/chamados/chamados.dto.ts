@@ -61,6 +61,22 @@ export class CreateChamadoDto {
   @IsOptional()
   @IsString()
   fotoDataUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  observadorIds?: string[];
+}
+
+export class UpdateChamadoObservadoresDto {
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  observadorIds!: string[];
+}
+
+export class AddChamadoObservadorDto {
+  @IsUUID()
+  usuarioId!: string;
 }
 
 export class PublicCreateChamadoDto {
@@ -185,6 +201,11 @@ export class UpdateChamadoAberturaDto {
   @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsString()
   secretariaId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID(undefined, { each: true })
+  observadorIds?: string[];
 }
 
 class ChamadoHistoricoAnexoDto {

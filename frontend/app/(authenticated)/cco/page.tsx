@@ -258,7 +258,22 @@ function CcoPageContent() {
       setChamadoFilters({});
       return;
     }
-    setFilters({ tiposPendencia: [...DEFAULT_TIPOS_PENDENCIA] });
+    setFilters({
+      tiposPendencia: [...DEFAULT_TIPOS_PENDENCIA],
+      secretariaId: undefined,
+      secretariaIds: undefined,
+      bairro: undefined,
+      bairros: undefined,
+      regiao: undefined,
+      regioes: undefined,
+      tipo: undefined,
+      tipos: undefined,
+      tiposChamadoId: undefined,
+      equipeIds: undefined,
+      situacao: undefined,
+      search: undefined,
+      sla: undefined,
+    });
     setKpiFilter('none');
   }
 

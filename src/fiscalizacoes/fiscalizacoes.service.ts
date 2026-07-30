@@ -15,7 +15,6 @@ import {
   NaoConformidadeStatus,
   Prisma,
   Severidade,
-  UnidadeTipo,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import {
@@ -40,8 +39,15 @@ import {
   LancamentoManualFiscalizacaoDto,
 } from './fiscalizacoes-manual.dto';
 import { buildVistoriaManualPdf } from './vistoria-manual-pdf';
+import {
+  buildVistoriaRealizadaPdf,
+  isPdfRenderableImage,
+  VistoriaRealizadaPdfAnexo,
+  VistoriaRealizadaPdfResposta,
+} from './vistoria-realizada-pdf';
+import { extractStorageKeyFromUrl } from '../storage/storage-url';
 
-const UNIDADE_TIPO_LABELS: Record<UnidadeTipo, string> = {
+const UNIDADE_TIPO_LABELS: Record<string, string> = {
   ESCOLA: 'Escola',
   UBS: 'UBS',
   PRACA: 'Praça',
@@ -241,6 +247,164 @@ export class FiscalizacoesService {
         baixadaEm: nc.baixadaEm?.toISOString() ?? null,
       })),
     };
+  }
+
+  async exportPdf(id: string, user: JwtPayload) {
+    const fiscalizacao = await this.prisma.fiscalizacao.findFirst({
+      where: { id, ...this.scopeFilter(user) },
+      include: {
+        ...listInclude,
+        unidade: {
+          select: {
+            id: true,
+            nome: true,
+            codigoPatrimonial: true,
+            bairro: true,
+            tipo: true,
+            endereco: true,
+          },
+        },
+        respostas: {
+          orderBy: { respondidoEm: 'asc' },
+          include: {
+            item: {
+              select: {
+                id: true,
+                codigo: true,
+                titulo: true,
+                tipo: true,
+                opcoes: true,
+                categoriaVistoriaId: true,
+                categoriaVistoria: { select: { id: true, nome: true } },
+              },
+            },
+            naoConformidade: {
+              select: {
+                status: true,
+                motivoBaixa: true,
+                chamado: { select: { codigo: true, status: true } },
+              },
+            },
+            evidencias: {
+              orderBy: { capturadaEm: 'asc' },
+              select: {
+                id: true,
+                mimeType: true,
+                storageKey: true,
+                url: true,
+                capturadaEm: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!fiscalizacao) {
+      throw new NotFoundException('Vistoria não encontrada.');
+    }
+
+    const nota = computeVistoriaNotas(fiscalizacao.respostas);
+    const responsaveisMap = await this.loadResponsaveisPrevistosMap([
+      { unidadeId: fiscalizacao.unidadeId, checklistId: fiscalizacao.checklistVersao.checklist.id },
+    ]);
+    const { responsaveisPrevistosLabel } = this.responsaveisPrevistosFromMap(
+      responsaveisMap,
+      fiscalizacao.unidadeId,
+      fiscalizacao.checklistVersao.checklist.id,
+    );
+
+    const serialized = this.serialize(fiscalizacao);
+
+    const resolveAnexo = async (evidencia: {
+      id: string;
+      mimeType?: string | null;
+      storageKey?: string | null;
+      url?: string;
+      capturadaEm: Date;
+    }): Promise<VistoriaRealizadaPdfAnexo> => {
+      const mimeType = evidencia.mimeType ?? null;
+      const storageKey = evidencia.storageKey ?? extractStorageKeyFromUrl(evidencia.url ?? null);
+      const base: VistoriaRealizadaPdfAnexo = {
+        id: evidencia.id,
+        legenda: 'Evidência',
+        mimeType,
+        nomeArquivo: storageKey?.split('/').pop() ?? null,
+        capturadaEm: evidencia.capturadaEm?.toISOString?.() ?? null,
+        imageBuffer: null,
+        renderError: null,
+      };
+
+      if (!isPdfRenderableImage(mimeType)) {
+        return base;
+      }
+      if (!storageKey) {
+        return { ...base, renderError: 'Arquivo anexado não renderizável no PDF' };
+      }
+
+      const loaded = await this.storageService.readObjectBuffer(storageKey, mimeType);
+      if (!loaded?.buffer.length) {
+        return { ...base, renderError: 'Arquivo anexado não renderizável no PDF' };
+      }
+      return { ...base, imageBuffer: loaded.buffer, mimeType: loaded.mimeType || mimeType };
+    };
+
+    const respostas: VistoriaRealizadaPdfResposta[] = await Promise.all(
+      fiscalizacao.respostas.map(async (resposta) => ({
+        codigo: resposta.item.codigo,
+        titulo: resposta.item.titulo,
+        categoriaNome: resposta.item.categoriaVistoria?.nome ?? null,
+        tipo: resposta.item.tipo,
+        respostaTexto: this.resolveRespostaTexto(resposta),
+        comentario: resposta.comentario,
+        conformidade: resposta.conformidade ?? null,
+        naoConformidade: resposta.naoConformidade
+          ? {
+              status: resposta.naoConformidade.status,
+              motivoBaixa: resposta.naoConformidade.motivoBaixa,
+              chamado: resposta.naoConformidade.chamado
+                ? { codigo: resposta.naoConformidade.chamado.codigo, status: resposta.naoConformidade.chamado.status }
+                : null,
+            }
+          : null,
+        evidencias: await Promise.all(resposta.evidencias.map((evidencia) => resolveAnexo(evidencia))),
+      })),
+    );
+
+    return buildVistoriaRealizadaPdf({
+      unidadeNome: fiscalizacao.unidade.nome,
+      unidadeCodigoPatrimonial: fiscalizacao.unidade.codigoPatrimonial,
+      secretariaSigla: fiscalizacao.secretaria.sigla,
+      secretariaNome: fiscalizacao.secretaria.nome,
+      endereco: fiscalizacao.unidade.endereco,
+      bairro: fiscalizacao.unidade.bairro,
+      checklistNome: fiscalizacao.checklistVersao.checklist.nome,
+      checklistVersao: fiscalizacao.checklistVersao.versao,
+      dataHora: serialized.concluidaEm ?? serialized.iniciadaEm ?? null,
+      origemLabel: serialized.origemLabel,
+      realizadaPorLabel: serialized.realizadaPorLabel,
+      lancamentoManual: serialized.lancamentoManual,
+      lancadoPorLabel: serialized.lancadoPorLabel,
+      responsaveisPrevistosLabel,
+      observacoes: fiscalizacao.observacoes,
+      notaGeral: nota.notaGeral,
+      notasPorCategoria: nota.notasPorCategoria.map((item) => ({ categoriaNome: item.categoriaNome, nota: item.nota })),
+      respostas,
+    });
+  }
+
+  private resolveRespostaTexto(resposta: {
+    valorTexto?: string | null;
+    valorBooleano?: boolean | null;
+    valorNumero?: unknown;
+    conformidade?: ConformidadeStatus | null;
+  }): string {
+    if (resposta.valorTexto?.trim()) return resposta.valorTexto.trim();
+    if (resposta.valorBooleano === true) return 'Sim';
+    if (resposta.valorBooleano === false) return 'Não';
+    if (resposta.valorNumero != null) return String(resposta.valorNumero);
+    if (resposta.conformidade) return resposta.conformidade === 'CONFORME' ? 'Conforme' : 'Não conforme';
+    return '—';
   }
 
   async getOpcoesManuais(user: JwtPayload) {
@@ -735,7 +899,7 @@ export class FiscalizacoesService {
       escopo: ChecklistEscopo;
       secretariaId?: string | null;
       unidadeId?: string | null;
-      unidadeTipo?: UnidadeTipo | null;
+      unidadeTipo?: string | null;
       ativo?: boolean;
     },
     unidadeIds: string[],

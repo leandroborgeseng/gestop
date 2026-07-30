@@ -6,6 +6,7 @@ import {
   CirclePlay,
   ClipboardCheck,
   ClipboardList,
+  Eye,
   FileSpreadsheet,
   LayoutGrid,
   MapPin,
@@ -17,6 +18,7 @@ import {
 
 import {
   hasAbrirChamadoAccess,
+  hasMeusChamadosAccess,
   isMatrixPermissionKey,
   navItemAllowedByMatrix,
   screenHasVisualizarAccess,
@@ -89,6 +91,15 @@ export const NAV_ITEMS: NavItem[] = [
     mobilePrimary: true,
   },
   {
+    id: 'meus_chamados',
+    label: 'Meus chamados',
+    shortLabel: 'Meus',
+    href: '/meus-chamados',
+    icon: Eye,
+    permissions: ['meus_chamados.visualizar', 'chamados.abrir', 'chamados.gerenciar'],
+    mobilePrimary: true,
+  },
+  {
     id: 'execucao',
     label: 'Execução',
     shortLabel: 'Execução',
@@ -147,13 +158,16 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 
 export const NAV_GROUPS: NavGroup[] = [
-  { title: 'Operação', itemIds: ['cco', 'mobile', 'vistorias', 'novo_chamado', 'chamados', 'execucao'] },
+  {
+    title: 'Operação',
+    itemIds: ['cco', 'mobile', 'vistorias', 'novo_chamado', 'meus_chamados', 'chamados', 'execucao'],
+  },
   { title: 'Gestão', itemIds: ['dashboard', 'cronograma', 'relatorios'] },
   { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
 ];
 
 /** Atalhos fixos na barra inferior mobile — Execução sempre incluído quando permitido. */
-const MOBILE_BAR_CORE = ['cco', 'mobile', 'novo_chamado', 'chamados', 'execucao'] as const;
+const MOBILE_BAR_CORE = ['cco', 'mobile', 'novo_chamado', 'meus_chamados', 'chamados', 'execucao'] as const;
 
 export function getVisibleNavItems(permissions: string[]) {
   const usesMatrix = permissions.some(isMatrixPermissionKey);
@@ -233,6 +247,10 @@ export function isNavActive(pathname: string, href: string) {
     return pathname === '/chamados/novo';
   }
 
+  if (href === '/meus-chamados') {
+    return pathname === '/meus-chamados' || pathname.startsWith('/meus-chamados/');
+  }
+
   if (href === '/chamados') {
     return (
       pathname === '/chamados' ||
@@ -260,6 +278,10 @@ export function hasChamadosGerenciar(permissions: string[]) {
 
 export function hasAbrirChamado(permissions: string[]) {
   return hasAbrirChamadoAccess(permissions);
+}
+
+export function hasMeusChamados(permissions: string[]) {
+  return hasMeusChamadosAccess(permissions);
 }
 
 export function hasChamadosExecutar(permissions: string[]) {

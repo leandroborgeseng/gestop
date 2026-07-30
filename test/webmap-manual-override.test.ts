@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { UnidadeTipo } from '@prisma/client';
 import {
   buildManualOverrideOnEdit,
   getManualOverride,
@@ -11,7 +10,7 @@ import {
 const baseUnidade = {
   secretariaId: 'sec-1',
   nome: 'Escola Teste',
-  tipo: UnidadeTipo.ESCOLA,
+  tipo: 'ESCOLA',
   endereco: 'Rua A, 100',
   bairro: 'Centro',
   cep: '14400-000',

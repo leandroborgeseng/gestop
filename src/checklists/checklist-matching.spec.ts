@@ -1,10 +1,10 @@
-import { ChecklistEscopo, UnidadeTipo } from '@prisma/client';
+import { ChecklistEscopo } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
 import { checklistAppliesToUnidade } from './checklist-matching';
 
 const unidadeEscola = {
   id: 'unidade-1',
-  tipo: UnidadeTipo.ESCOLA,
+  tipo: 'ESCOLA',
   secretariaId: 'sec-educacao',
 };
 
@@ -20,7 +20,7 @@ describe('checklistAppliesToUnidade', () => {
       checklistAppliesToUnidade(
         {
           escopo: ChecklistEscopo.UNIDADE_TIPO,
-          unidadeTipo: UnidadeTipo.ESCOLA,
+          unidadeTipo: 'ESCOLA',
           ativo: true,
         },
         unidadeEscola,
@@ -31,7 +31,7 @@ describe('checklistAppliesToUnidade', () => {
       checklistAppliesToUnidade(
         {
           escopo: ChecklistEscopo.UNIDADE_TIPO,
-          unidadeTipo: UnidadeTipo.UBS,
+          unidadeTipo: 'UBS',
           ativo: true,
         },
         unidadeEscola,
@@ -44,7 +44,7 @@ describe('checklistAppliesToUnidade', () => {
       checklistAppliesToUnidade(
         {
           escopo: ChecklistEscopo.UNIDADE_TIPO,
-          unidadeTipo: UnidadeTipo.ESCOLA,
+          unidadeTipo: 'ESCOLA',
           secretariaId: 'sec-educacao',
           ativo: true,
         },
@@ -56,7 +56,7 @@ describe('checklistAppliesToUnidade', () => {
       checklistAppliesToUnidade(
         {
           escopo: ChecklistEscopo.UNIDADE_TIPO,
-          unidadeTipo: UnidadeTipo.ESCOLA,
+          unidadeTipo: 'ESCOLA',
           secretariaId: 'sec-saude',
           ativo: true,
         },

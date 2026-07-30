@@ -1,16 +1,16 @@
-import { ChecklistEscopo, UnidadeTipo } from '@prisma/client';
+import { ChecklistEscopo } from '@prisma/client';
 
 export type ChecklistBinding = {
   escopo: ChecklistEscopo;
   secretariaId?: string | null;
   unidadeId?: string | null;
-  unidadeTipo?: UnidadeTipo | null;
+  unidadeTipo?: string | null;
   ativo?: boolean;
 };
 
 export type UnidadeBinding = {
   id: string;
-  tipo: UnidadeTipo;
+  tipo: string;
   secretariaId: string;
 };
 

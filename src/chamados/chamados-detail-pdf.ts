@@ -82,7 +82,12 @@ function resolveLogoPath() {
 function timelineTitle(entry: ChamadoDetalhePdfHistorico) {
   const tipo = typeof entry.metadata.tipo === 'string' ? entry.metadata.tipo : null;
   if (tipo === 'HISTORY_UPDATE') return 'Atualização de histórico';
-  if (tipo === 'programacao_update') return 'Programação de execução atualizada';
+  if (tipo === 'programacao_update') {
+    if (entry.statusAnterior && entry.statusAnterior !== entry.statusNovo) {
+      return `Programação de execução atualizada · Status: ${chamadoStatusLabel(entry.statusAnterior)} → ${chamadoStatusLabel(entry.statusNovo)}`;
+    }
+    return 'Programação de execução atualizada';
+  }
   if (tipo === 'triagem_update') return 'Triagem atualizada';
   if (tipo === 'atribuicao_update') return 'Atribuição atualizada';
   if (tipo === 'abertura_update') return 'Informações de abertura atualizadas';
@@ -122,7 +127,7 @@ function drawAnexo(
 ) {
   y = ensureSpace(doc, y, 24, marginTop);
   doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text(anexo.legenda, left + 8, y, { width: width - 8 });
-  y += 10;
+  y = doc.y + 4;
 
   const metaParts = [
     anexo.capturadaEm ? new Date(anexo.capturadaEm).toLocaleString('pt-BR') : null,
@@ -131,29 +136,45 @@ function drawAnexo(
   ].filter(Boolean);
   if (metaParts.length) {
     doc.font('Helvetica').fontSize(7).fillColor(TEXT_MUTED).text(metaParts.join(' · '), left + 8, y, { width: width - 8 });
-    y += 10;
+    y = doc.y + 4;
   }
 
   const isImage = isPdfRenderableImage(anexo.mimeType);
   if (isImage && anexo.imageBuffer?.length) {
-    const maxH = 220;
-    y = ensureSpace(doc, y, Math.min(maxH, 160) + 8, marginTop);
+    // Metade da largura útil (ticket 162); altura limitada para não engolir a página.
+    const maxW = Math.max(80, (width - 16) * 0.5);
+    const maxH = 240;
     try {
-      doc.image(anexo.imageBuffer, left + 8, y, {
-        fit: [width - 16, maxH],
-      });
-      // pdfkit não retorna altura facilmente; estima por fit
-      y += Math.min(maxH, 180) + 8;
+      // pdfkit expõe openImage em runtime; tipagens oficiais não declaram o método.
+      const image = (
+        doc as InstanceType<typeof PDFDocument> & {
+          openImage: (src: Buffer) => { width: number; height: number };
+        }
+      ).openImage(anexo.imageBuffer);
+      const naturalW = Math.max(1, image.width);
+      const naturalH = Math.max(1, image.height);
+      const scale = Math.min(maxW / naturalW, maxH / naturalH, 1);
+      const drawW = Math.max(1, naturalW * scale);
+      const drawH = Math.max(1, naturalH * scale);
+      const gapAfter = 12;
+
+      y = ensureSpace(doc, y, drawH + gapAfter, marginTop);
+      doc.image(anexo.imageBuffer, left + 8, y, { width: drawW, height: drawH });
+      y += drawH + gapAfter;
     } catch {
-      doc.font('Helvetica-Oblique').fontSize(8).fillColor(TEXT_MUTED).text('Arquivo anexado não renderizável no PDF', left + 8, y);
-      y += 12;
+      doc
+        .font('Helvetica-Oblique')
+        .fontSize(8)
+        .fillColor(TEXT_MUTED)
+        .text('Arquivo anexado não renderizável no PDF', left + 8, y);
+      y += 14;
     }
     return y;
   }
 
   if (isImage && anexo.renderError) {
     doc.font('Helvetica-Oblique').fontSize(8).fillColor(TEXT_MUTED).text(anexo.renderError, left + 8, y);
-    y += 12;
+    y += 14;
     return y;
   }
 
@@ -165,7 +186,7 @@ function drawAnexo(
     .text(`Arquivo anexado: ${fileLabel}${anexo.mimeType ? ` (${anexo.mimeType})` : ''}`, left + 8, y, {
       width: width - 8,
     });
-  y += 12;
+  y = doc.y + 8;
   return y;
 }
 

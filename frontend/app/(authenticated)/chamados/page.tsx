@@ -23,6 +23,7 @@ import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
 import { ChamadoHistoricoForm } from '@/components/chamados/chamado-historico-form';
 import { ChamadoAberturaSection } from '@/components/chamados/chamado-abertura-section';
 import { ChamadoDescricaoExpandivel } from '@/components/chamados/chamado-descricao-expandivel';
+import { ChamadoObservadoresSection } from '@/components/chamados/chamado-observadores-section';
 import { ChamadosFiltrosPanel, ChamadosFiltrosValue } from '@/components/chamados/chamados-filtros-panel';
 import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
@@ -1048,6 +1049,13 @@ function ChamadoDetailPanel({
           </div>
 
           <ChamadoAberturaSection resumo={resumo} busy={busy} onSaved={onRefreshDetail} />
+
+          <ChamadoObservadoresSection
+            chamado={resumo}
+            canManage
+            mode="chamados"
+            onChanged={onRefreshDetail}
+          />
 
           {resumo.fotoUrl ? (
             <div>

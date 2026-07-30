@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, Briefcase, ClipboardList, DatabaseBackup, Download, Layers3, MapPin, Shield, UserRound, UsersRound } from 'lucide-react';
+import { Building2, Briefcase, ClipboardList, DatabaseBackup, Download, Layers3, MapPin, Shield, Tags, UserRound, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
 import { BackupPanel } from '@/components/admin/backup-panel';
@@ -48,15 +48,28 @@ import {
   saveAdminUnidade,
   saveAdminUsuario,
   deleteAdminTipoChamado,
+  deleteAdminTipoProprio,
   deleteAdminCategoriaVistoria,
   listAdminCategoriasVistoria,
+  listAdminTiposProprio,
   saveAdminCategoriaVistoria,
+  saveAdminTipoProprio,
   listAdminCargos,
   saveAdminCargo,
   anonymizeUsuarioLgpd,
   purgeAuditoriaLgpd,
 } from '@/lib/api';
-import { AdminCategoriaVistoria, AdminCargo, AdminEquipe, AdminPerfil, AdminSecretaria, AdminTipoChamado, AdminUnidade, AdminUsuario, UnidadeTipo } from '@/lib/types';
+import {
+  AdminCategoriaVistoria,
+  AdminCargo,
+  AdminEquipe,
+  AdminPerfil,
+  AdminSecretaria,
+  AdminTipoChamado,
+  AdminTipoProprio,
+  AdminUnidade,
+  AdminUsuario,
+} from '@/lib/types';
 import {
   formatCpfInput,
   formatPhoneInput,
@@ -75,9 +88,19 @@ import {
   validatePasswordPolicy,
 } from '@/lib/password-policy';
 
-type Tab = 'secretarias' | 'unidades' | 'usuarios' | 'equipes' | 'cargos' | 'tipos-chamado' | 'categorias-vistoria' | 'permissoes' | 'backup' | 'importacao';
+type Tab =
+  | 'secretarias'
+  | 'unidades'
+  | 'usuarios'
+  | 'equipes'
+  | 'cargos'
+  | 'tipos-chamado'
+  | 'tipos-proprio'
+  | 'categorias-vistoria'
+  | 'permissoes'
+  | 'backup'
+  | 'importacao';
 
-const tipos: UnidadeTipo[] = ['ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO', 'ESPACO_ESPORTIVO', 'OUTRO'];
 const regioes: RegiaoUnidade[] = ['NORTE', 'SUL', 'LESTE', 'OESTE', 'CENTRO'];
 
 export default function AdminPage() {
@@ -89,6 +112,7 @@ export default function AdminPage() {
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
   const [equipes, setEquipes] = useState<AdminEquipe[]>([]);
   const [tiposChamado, setTiposChamado] = useState<AdminTipoChamado[]>([]);
+  const [tiposProprio, setTiposProprio] = useState<AdminTipoProprio[]>([]);
   const [categoriasVistoria, setCategoriasVistoria] = useState<AdminCategoriaVistoria[]>([]);
   const [cargos, setCargos] = useState<AdminCargo[]>([]);
   const [perfis, setPerfis] = useState<AdminPerfil[]>([]);
@@ -100,13 +124,24 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [nextSecretarias, nextUnidades, nextUsuarios, nextEquipes, nextPerfis, nextTiposChamado, nextCategorias, nextCargos] = await Promise.all([
+      const [
+        nextSecretarias,
+        nextUnidades,
+        nextUsuarios,
+        nextEquipes,
+        nextPerfis,
+        nextTiposChamado,
+        nextTiposProprio,
+        nextCategorias,
+        nextCargos,
+      ] = await Promise.all([
         listAdminSecretarias(),
         listAdminUnidades(),
         listAdminUsuarios(),
         listAdminEquipes(),
         listAdminPerfis(),
         listAdminTiposChamado(),
+        listAdminTiposProprio(),
         listAdminCategoriasVistoria(),
         listAdminCargos(),
       ]);
@@ -116,6 +151,7 @@ export default function AdminPage() {
       setEquipes(nextEquipes);
       setPerfis(nextPerfis);
       setTiposChamado(nextTiposChamado);
+      setTiposProprio(nextTiposProprio);
       setCategoriasVistoria(nextCategorias);
       setCargos(nextCargos);
     } catch (err) {
@@ -173,6 +209,7 @@ export default function AdminPage() {
               { id: 'equipes', label: 'Equipes', icon: <UsersRound className="h-4 w-4" />, count: equipes.length },
               { id: 'cargos', label: 'Cargos', icon: <Briefcase className="h-4 w-4" />, count: cargos.length },
               { id: 'tipos-chamado', label: 'Tipos de chamado', icon: <ClipboardList className="h-4 w-4" />, count: tiposChamado.length },
+              { id: 'tipos-proprio', label: 'Tipos de próprio', icon: <Tags className="h-4 w-4" />, count: tiposProprio.length },
               { id: 'categorias-vistoria', label: 'Categorias vistoria', icon: <Layers3 className="h-4 w-4" />, count: categoriasVistoria.length },
               { id: 'permissoes', label: 'Permissões', icon: <Shield className="h-4 w-4" /> },
               { id: 'backup', label: 'Backup S3', icon: <DatabaseBackup className="h-4 w-4" /> },
@@ -187,7 +224,7 @@ export default function AdminPage() {
           <SecretariasPanel secretarias={secretarias} mutate={mutate} />
         ) : null}
         {!loading && tab === 'unidades' ? (
-          <UnidadesPanel secretarias={secretarias} unidades={unidades} mutate={mutate} />
+          <UnidadesPanel secretarias={secretarias} unidades={unidades} tiposProprio={tiposProprio} mutate={mutate} />
         ) : null}
         {!loading && tab === 'usuarios' ? (
           <UsuariosPanel secretarias={secretarias} usuarios={usuarios} equipes={equipes} perfis={perfis} cargos={cargos} mutate={mutate} />
@@ -200,6 +237,9 @@ export default function AdminPage() {
         ) : null}
         {!loading && tab === 'tipos-chamado' ? (
           <TiposChamadoPanel tipos={tiposChamado} mutate={mutate} />
+        ) : null}
+        {!loading && tab === 'tipos-proprio' ? (
+          <TiposProprioPanel tipos={tiposProprio} mutate={mutate} />
         ) : null}
         {!loading && tab === 'categorias-vistoria' ? (
           <CategoriasVistoriaPanel categorias={categoriasVistoria} mutate={mutate} />
@@ -403,7 +443,17 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
   );
 }
 
-function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSecretaria[]; unidades: AdminUnidade[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
+function UnidadesPanel({
+  secretarias,
+  unidades,
+  tiposProprio,
+  mutate,
+}: {
+  secretarias: AdminSecretaria[];
+  unidades: AdminUnidade[];
+  tiposProprio: AdminTipoProprio[];
+  mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
+}) {
   const [editing, setEditing] = useState<AdminUnidade | null>(null);
   const [filterCodigo, setFilterCodigo] = useState('');
   const [filterNome, setFilterNome] = useState('');
@@ -423,9 +473,23 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
     [unidades],
   );
 
+  const tiposAtivos = useMemo(() => tiposProprio.filter((tipo) => tipo.ativo), [tiposProprio]);
+  const tiposParaSelect = useMemo(() => {
+    if (!editing) return tiposAtivos;
+    if (tiposAtivos.some((tipo) => tipo.codigo === editing.tipo)) return tiposAtivos;
+    const atual = tiposProprio.find((tipo) => tipo.codigo === editing.tipo);
+    return atual ? [atual, ...tiposAtivos] : tiposAtivos;
+  }, [editing, tiposAtivos, tiposProprio]);
+
   const tipoOptions = useMemo(
-    () => tipos.map((tipo) => ({ value: tipo, label: formatUnidadeTipo(tipo) })),
-    [],
+    () =>
+      [...new Set(unidades.map((u) => u.tipo))]
+        .sort()
+        .map((tipo) => ({
+          value: tipo,
+          label: formatUnidadeTipo(tipo, tiposProprio.map((item) => ({ codigo: item.codigo, nome: item.nome }))),
+        })),
+    [unidades, tiposProprio],
   );
 
   const origemOptions = useMemo(() => {
@@ -536,9 +600,9 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
             <Field label="Nome"><Input name="nome" required /></Field>
             <Field label="Tipo">
               <Select name="tipo" required>
-                {tipos.map((tipo) => (
-                  <option key={tipo} value={tipo}>
-                    {formatUnidadeTipo(tipo)}
+                {tiposAtivos.map((tipo) => (
+                  <option key={tipo.codigo} value={tipo.codigo}>
+                    {tipo.nome}
                   </option>
                 ))}
               </Select>
@@ -621,7 +685,12 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
                       {formatUnidadeOrigem(unidade)}
                     </Badge>
                   </DataTableCell>
-                  <DataTableCell>{formatUnidadeTipo(unidade.tipo)}</DataTableCell>
+                  <DataTableCell>
+                    {formatUnidadeTipo(
+                      unidade.tipo,
+                      tiposProprio.map((item) => ({ codigo: item.codigo, nome: item.nome })),
+                    )}
+                  </DataTableCell>
                   <DataTableCell mono>{unidade.secretaria.sigla}</DataTableCell>
                   <DataTableCell>
                     <Badge variant={unidade.ativo ? 'success' : 'muted'}>{unidade.ativo ? 'Ativo' : 'Inativo'}</Badge>
@@ -696,9 +765,9 @@ function UnidadesPanel({ secretarias, unidades, mutate }: { secretarias: AdminSe
             </Field>
             <Field label="Tipo">
               <Select name="tipo" defaultValue={editing.tipo} required>
-                {tipos.map((tipo) => (
-                  <option key={tipo} value={tipo}>
-                    {formatUnidadeTipo(tipo)}
+                {tiposParaSelect.map((tipo) => (
+                  <option key={tipo.codigo} value={tipo.codigo}>
+                    {tipo.nome}{tipo.ativo ? '' : ' (inativo)'}
                   </option>
                 ))}
               </Select>
@@ -1440,6 +1509,189 @@ function EquipesPanel({
                           Reativar
                         </Button>
                       )}
+                    </div>
+                  </DataTableCell>
+                </DataTableRow>
+              ))
+            )}
+          </DataTableBody>
+        </DataTable>
+      </div>
+    </div>
+  );
+}
+
+function TiposProprioPanel({
+  tipos,
+  mutate,
+}: {
+  tipos: AdminTipoProprio[];
+  mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
+}) {
+  const [editing, setEditing] = useState<AdminTipoProprio | null>(null);
+  const [filterNome, setFilterNome] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+
+  const filtersActive = Boolean(filterNome || filterStatus);
+
+  const filtered = useMemo(
+    () =>
+      tipos.filter(
+        (tipo) =>
+          (matchesText(tipo.nome, filterNome) || matchesText(tipo.codigo, filterNome)) &&
+          matchesStatus(tipo.ativo, filterStatus),
+      ),
+    [tipos, filterNome, filterStatus],
+  );
+
+  function clearFilters() {
+    setFilterNome('');
+    setFilterStatus('');
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = {
+      nome: String(form.get('nome')),
+      descricao: String(form.get('descricao') || ''),
+      ativo: editing?.ativo ?? true,
+    };
+    const ok = await mutate(
+      () => saveAdminTipoProprio(payload, editing?.id),
+      editing ? 'Tipo de próprio atualizado.' : 'Tipo de próprio cadastrado.',
+    );
+    if (ok) {
+      setEditing(null);
+      event.currentTarget.reset();
+    }
+  }
+
+  async function toggleAtivo(tipo: AdminTipoProprio) {
+    const nextAtivo = !tipo.ativo;
+    await mutate(
+      () =>
+        saveAdminTipoProprio(
+          { nome: tipo.nome, descricao: tipo.descricao ?? '', ativo: nextAtivo },
+          tipo.id,
+        ),
+      nextAtivo ? 'Tipo de próprio reativado.' : 'Tipo de próprio inativado.',
+    );
+    if (editing?.id === tipo.id) setEditing({ ...tipo, ativo: nextAtivo });
+  }
+
+  return (
+    <div className="space-y-6">
+      <TipBanner id="admin-tipos-proprio">
+        Tipos parametrizam o campo &quot;tipo&quot; dos próprios e o vínculo de checklists por tipo. Tipos do sistema
+        podem ser editados ou inativados, mas não excluídos.
+      </TipBanner>
+
+      <FormSection title={editing ? 'Editar tipo de próprio' : 'Novo tipo de próprio'}>
+        <form key={editing?.id ?? 'new-tipo-proprio'} onSubmit={submit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Nome"
+              hint={editing ? `Código: ${editing.codigo}` : 'O código é gerado automaticamente a partir do nome.'}
+            >
+              <Input name="nome" required defaultValue={editing?.nome} placeholder="Ex.: Biblioteca" />
+            </Field>
+            <Field label="Descrição">
+              <Input name="descricao" defaultValue={editing?.descricao ?? ''} />
+            </Field>
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" variant="filled">
+              {editing ? 'Salvar' : 'Cadastrar'}
+            </Button>
+            {editing ? (
+              <Button type="button" variant="text" onClick={() => setEditing(null)}>
+                Cancelar
+              </Button>
+            ) : null}
+          </div>
+        </form>
+      </FormSection>
+
+      <div>
+        <DataTableFiltersBar
+          active={filtersActive}
+          onClear={clearFilters}
+          resultCount={filtered.length}
+          totalCount={tipos.length}
+        />
+        <DataTable>
+          <DataTableHead>
+            <tr>
+              <DataTableHeaderCell>Nome</DataTableHeaderCell>
+              <DataTableHeaderCell>Código</DataTableHeaderCell>
+              <DataTableHeaderCell>Descrição</DataTableHeaderCell>
+              <DataTableHeaderCell>Status</DataTableHeaderCell>
+              <DataTableHeaderCell>Ações</DataTableHeaderCell>
+            </tr>
+            <DataTableFilterRow>
+              <DataTableFilterCell>
+                <DataTableTextFilter
+                  value={filterNome}
+                  onChange={setFilterNome}
+                  placeholder="Nome ou código"
+                  aria-label="Filtrar nome"
+                />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+              <DataTableFilterCell />
+              <DataTableFilterCell>
+                <DataTableSelectFilter
+                  value={filterStatus}
+                  onChange={setFilterStatus}
+                  options={STATUS_FILTER_OPTIONS}
+                  aria-label="Filtrar status"
+                />
+              </DataTableFilterCell>
+              <DataTableFilterCell />
+            </DataTableFilterRow>
+          </DataTableHead>
+          <DataTableBody>
+            {filtered.length === 0 ? (
+              <DataTableRow>
+                <DataTableCell colSpan={5} className="py-6 text-center text-[var(--ink-3)]">
+                  {tipos.length === 0 ? 'Nenhum tipo cadastrado.' : 'Nenhum registro corresponde aos filtros.'}
+                </DataTableCell>
+              </DataTableRow>
+            ) : (
+              filtered.map((tipo) => (
+                <DataTableRow key={tipo.id}>
+                  <DataTableCell>
+                    {tipo.nome}
+                    {tipo.sistema ? (
+                      <Badge variant="muted" className="ml-2">
+                        Sistema
+                      </Badge>
+                    ) : null}
+                  </DataTableCell>
+                  <DataTableCell mono>{tipo.codigo}</DataTableCell>
+                  <DataTableCell>{tipo.descricao || '—'}</DataTableCell>
+                  <DataTableCell>
+                    <Badge variant={tipo.ativo ? 'success' : 'muted'}>{tipo.ativo ? 'Ativo' : 'Inativo'}</Badge>
+                  </DataTableCell>
+                  <DataTableCell>
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="text" size="sm" onClick={() => setEditing(tipo)}>
+                        Editar
+                      </Button>
+                      <Button variant="text" size="sm" onClick={() => void toggleAtivo(tipo)}>
+                        {tipo.ativo ? 'Inativar' : 'Reativar'}
+                      </Button>
+                      {!tipo.sistema && !tipo.ativo ? (
+                        <Button
+                          variant="text"
+                          size="sm"
+                          className="text-red-700"
+                          onClick={() => void mutate(() => deleteAdminTipoProprio(tipo.id), 'Tipo excluído.')}
+                        >
+                          Excluir
+                        </Button>
+                      ) : null}
                     </div>
                   </DataTableCell>
                 </DataTableRow>

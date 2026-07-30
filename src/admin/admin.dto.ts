@@ -1,5 +1,5 @@
 import { IsArray, IsBoolean, IsEmail, IsEnum, IsNumber, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
-import { EquipeTipo, RegiaoUnidade, UnidadeTipo } from '@prisma/client';
+import { EquipeTipo, RegiaoUnidade } from '@prisma/client';
 import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH_NEW } from '../auth/password-policy';
 
 export class SecretariaDto {
@@ -40,8 +40,9 @@ export class UnidadeDto {
   @MinLength(2)
   nome!: string;
 
-  @IsEnum(UnidadeTipo)
-  tipo!: UnidadeTipo;
+  @IsString()
+  @MinLength(1)
+  tipo!: string;
 
   @IsString()
   endereco!: string;
@@ -234,6 +235,20 @@ export class CargoDto {
   @IsString()
   @MinLength(2)
   nome!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  ativo?: boolean;
+}
+
+export class TipoProprioDto {
+  @IsString()
+  @MinLength(2)
+  nome!: string;
+
+  @IsOptional()
+  @IsString()
+  descricao?: string;
 
   @IsOptional()
   @IsBoolean()

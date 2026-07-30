@@ -15,6 +15,7 @@ import {
   UpdateChamadoPlanejamentoDto,
   UpdateChamadoTriagemDto,
   UpdateChamadoAberturaDto,
+  UpdateChamadoObservadoresDto,
   RegistrarChamadoHistoricoDto,
   EmitirOrdensServicoDto,
   ChamadoExecucaoManualDto,
@@ -227,6 +228,16 @@ export class ChamadosController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.chamadosService.updateAbertura(id, body, user);
+  }
+
+  @RequirePermissions('chamados.gerenciar')
+  @Put(':id/observadores')
+  updateObservadores(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: UpdateChamadoObservadoresDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.chamadosService.updateObservadoresChamado(id, body, user);
   }
 
   @RequirePermissions('chamados.gerenciar')

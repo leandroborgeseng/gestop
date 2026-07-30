@@ -2,6 +2,13 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
 import { chamadoStatusLabel, formatDateBr, prioridadeLabel } from '../chamados/chamados-sla';
+import { parseBooleanoOpcoes } from '../checklists/checklist-item.rules';
+import {
+  LIKERT_CATALOGO,
+  parseLikertConfig,
+  resolveLikertConformidade,
+  type LikertNivelId,
+} from '../domain/likert-scale';
 
 const BRAND_PRIMARY = '#0066cc';
 const TEXT_PRIMARY = '#1a1a1a';
@@ -15,6 +22,15 @@ const LOGO_CANDIDATES = [
 ];
 
 const LIKERT_DEFAULT = ['Péssimo', 'Ruim', 'Regular', 'Bom', 'Ótimo'];
+
+const CONFORMIDADE_LABEL: Record<'CONFORME' | 'NAO_CONFORME', string> = {
+  CONFORME: 'Conforme',
+  NAO_CONFORME: 'Não conforme',
+};
+
+function withConformidade(label: string, conformidade: 'CONFORME' | 'NAO_CONFORME') {
+  return `${label} (${CONFORMIDADE_LABEL[conformidade]})`;
+}
 
 function resolveLogoPath() {
   return LOGO_CANDIDATES.find((candidate) => existsSync(candidate)) ?? null;
@@ -171,17 +187,23 @@ function parseMcOptions(opcoes: unknown): string[] {
 }
 
 function parseLikertLabels(opcoes: unknown): string[] {
-  const map: Record<string, string> = {
-    PESSIMO: 'Péssimo',
-    RUIM: 'Ruim',
-    REGULAR: 'Regular',
-    BOM: 'Bom',
-    OTIMO: 'Ótimo',
-  };
-  if (!opcoes || typeof opcoes !== 'object' || Array.isArray(opcoes)) return LIKERT_DEFAULT;
-  const niveis = (opcoes as { niveis?: unknown }).niveis;
-  if (!Array.isArray(niveis) || niveis.length === 0) return LIKERT_DEFAULT;
-  return niveis.map((nivel) => map[String(nivel)] ?? String(nivel));
+  const config = parseLikertConfig(opcoes);
+  if (!config.niveis.length) return LIKERT_DEFAULT.map((label, index) => {
+    const id = (['PESSIMO', 'RUIM', 'REGULAR', 'BOM', 'OTIMO'] as LikertNivelId[])[index];
+    return withConformidade(label, resolveLikertConformidade(LIKERT_CATALOGO[id], config.opcoes));
+  });
+  return config.niveis.map((nivel) =>
+    withConformidade(nivel.label, resolveLikertConformidade(nivel, config.opcoes)),
+  );
+}
+
+function parseBooleanoLabels(opcoes: unknown): string[] {
+  const config = parseBooleanoOpcoes(opcoes);
+  return [
+    withConformidade('Sim', config.simConformidade ?? 'CONFORME'),
+    withConformidade('Não', config.naoConformidade ?? 'NAO_CONFORME'),
+    'Não aplicável',
+  ];
 }
 
 function isTextoLongo(opcoes: unknown) {
@@ -191,21 +213,15 @@ function isTextoLongo(opcoes: unknown) {
 
 function estimateOptionRows(doc: InstanceType<typeof PDFDocument>, labels: string[], width: number) {
   doc.font('Helvetica').fontSize(8);
-  let x = 0;
-  let rows = 1;
-  const gap = 12;
+  let totalHeight = 0;
   const box = 10;
-
+  const gap = 4;
   for (const label of labels) {
-    const labelWidth = Math.min(doc.widthOfString(label) + box + 6, width);
-    if (x + labelWidth > width && x > 0) {
-      x = 0;
-      rows += 1;
-    }
-    x += labelWidth + gap;
+    const textWidth = Math.max(40, width - box - 8);
+    const textHeight = Math.max(12, doc.heightOfString(label, { width: textWidth }));
+    totalHeight += Math.max(16, textHeight + 4) + gap;
   }
-
-  return rows;
+  return Math.max(1, Math.ceil(totalHeight / 16));
 }
 
 function drawOptionRow(
@@ -215,30 +231,22 @@ function drawOptionRow(
   width: number,
   y: number,
 ): number {
-  let x = left;
-  let rowY = y;
-  const gap = 12;
   const box = 10;
-  const rowHeight = 16;
-
   doc.font('Helvetica').fontSize(8);
 
   for (const label of labels) {
-    const labelWidth = Math.min(doc.widthOfString(label) + box + 6, width);
-    if (x + labelWidth > left + width && x > left) {
-      x = left;
-      rowY += rowHeight;
-      rowY = ensureSpace(doc, rowY, rowHeight);
-    }
-    drawCheckbox(doc, x, rowY, box);
-    doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(label, x + box + 4, rowY + 1, {
-      width: labelWidth - box - 4,
-      lineBreak: false,
+    const textWidth = Math.max(40, width - box - 8);
+    const textHeight = Math.max(12, doc.heightOfString(label, { width: textWidth }));
+    const rowHeight = Math.max(16, textHeight + 4);
+    y = ensureSpace(doc, y, rowHeight);
+    drawCheckbox(doc, left, y, box);
+    doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(label, left + box + 4, y + 1, {
+      width: textWidth,
     });
-    x += labelWidth + gap;
+    y += rowHeight + 2;
   }
 
-  return rowY + rowHeight;
+  return y;
 }
 
 function drawAnswerLines(
@@ -262,7 +270,7 @@ function drawAnswerLines(
 
 function resolveOptionLabels(item: VistoriaManualPdfItem): string[] | null {
   const tipo = item.tipo;
-  if (tipo === 'BOOLEANO') return ['Sim', 'Não', 'Não aplicável'];
+  if (tipo === 'BOOLEANO') return parseBooleanoLabels(item.opcoes);
   if (tipo === 'ESCALA_LIKERT') return parseLikertLabels(item.opcoes);
   if (tipo === 'MULTIPLA_ESCOLHA') {
     const options = parseMcOptions(item.opcoes);
@@ -365,14 +373,14 @@ function drawPergunta(
   }
 
   if (item.exigeEvidencia || tipo === 'FOTO') {
-    y = ensureSpace(doc, y, 14);
-    doc
-      .font('Helvetica-Oblique')
-      .fontSize(7.5)
-      .fillColor(BRAND_PRIMARY)
-      .text('⚠ Este item exige foto — encaminhar conforme instrução do cabeçalho.', left, y, {
-        width,
-      });
+    y = ensureSpace(doc, y, 28);
+    const evidenciaMsg =
+      tipo === 'FOTO'
+        ? '⚠ Este item exige foto — encaminhar conforme instrução do cabeçalho.'
+        : '⚠ Se a resposta marcada for Não conforme, encaminhar foto conforme instruções do cabeçalho.';
+    doc.font('Helvetica-Oblique').fontSize(7.5).fillColor(BRAND_PRIMARY).text(evidenciaMsg, left, y, {
+      width,
+    });
     y = doc.y + 4;
   }
 

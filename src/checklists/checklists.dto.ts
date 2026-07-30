@@ -10,7 +10,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
-import { ChecklistEscopo, ChecklistFinalidade, ChecklistItemTipo, UnidadeTipo } from '@prisma/client';
+import { ChecklistEscopo, ChecklistFinalidade, ChecklistItemTipo } from '@prisma/client';
 
 export class ChecklistDto {
   @IsString()
@@ -37,8 +37,8 @@ export class ChecklistDto {
   unidadeId?: string;
 
   @IsOptional()
-  @IsEnum(UnidadeTipo)
-  unidadeTipo?: UnidadeTipo;
+  @IsString()
+  unidadeTipo?: string;
 
   @IsOptional()
   @IsArray()

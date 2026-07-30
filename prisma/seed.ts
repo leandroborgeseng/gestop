@@ -19,7 +19,6 @@ import {
   ChamadoStatus,
   PrismaClient,
   Severidade,
-  UnidadeTipo,
 } from '@prisma/client';
 import { hashPassword } from '../src/auth/password';
 import { logError, logInfo, logStep, logWarn, maskDatabaseUrl, isProductionRuntime } from './startup-log';
@@ -133,7 +132,7 @@ async function main() {
         secretariaId: educacao.id,
         codigoPatrimonial: 'PMF-ESC-001',
         nome: 'EMEB Prof. Florestan Fernandes',
-        tipo: UnidadeTipo.ESCOLA,
+        tipo: 'ESCOLA',
         endereco: 'Rua Major Claudiano, 1840',
         bairro: 'Centro',
         cep: '14400-690',
@@ -147,7 +146,7 @@ async function main() {
         secretariaId: saude.id,
         codigoPatrimonial: 'PMF-UBS-001',
         nome: 'UBS Jardim Aeroporto',
-        tipo: UnidadeTipo.UBS,
+        tipo: 'UBS',
         endereco: 'Avenida Brasil, 2500',
         bairro: 'Jardim Aeroporto',
         cep: '14404-063',
@@ -161,7 +160,7 @@ async function main() {
         secretariaId: servicos.id,
         codigoPatrimonial: 'PMF-PRC-001',
         nome: 'Praca Nossa Senhora da Conceicao',
-        tipo: UnidadeTipo.PRACA,
+        tipo: 'PRACA',
         endereco: 'Praca Nossa Senhora da Conceicao',
         bairro: 'Centro',
         cep: '14400-730',
@@ -184,6 +183,7 @@ async function main() {
       ['chamados.executar', 'Executar chamados em campo', 'chamados'],
       ['chamados.editar_abertura', 'Editar informações de abertura do chamado', 'chamados'],
       ['chamados.execucao_manual', 'Lançar execução de chamado manualmente', 'chamados'],
+      ['meus_chamados.visualizar', 'Visualizar chamados abertos por mim ou em que sou observador', 'meus_chamados'],
       ['dashboard.visualizar', 'Visualizar indicadores operacionais', 'dashboard'],
       ['auditoria.visualizar', 'Visualizar trilhas de auditoria', 'auditoria'],
     ].map(([chave, descricao, modulo]) =>
@@ -228,7 +228,10 @@ async function main() {
         .filter((permissao) => permissao.chave === 'chamados.executar')
         .map((permissao) => ({ perfilId: manutencaoPerfil.id, permissaoId: permissao.id })),
       ...permissoes
-        .filter((permissao) => permissao.chave === 'chamados.abrir')
+        .filter(
+          (permissao) =>
+            permissao.chave === 'chamados.abrir' || permissao.chave === 'meus_chamados.visualizar',
+        )
         .map((permissao) => ({ perfilId: solicitacaoPerfil.id, permissaoId: permissao.id })),
     ],
   });
@@ -302,7 +305,7 @@ async function main() {
       nome: 'Vistoria Predial Escolar',
       descricao: 'Checklist basico para fiscalizacao de escolas municipais.',
       escopo: ChecklistEscopo.UNIDADE_TIPO,
-      unidadeTipo: UnidadeTipo.ESCOLA,
+      unidadeTipo: 'ESCOLA',
     },
   });
 

@@ -37,6 +37,14 @@ export class ChecklistsService {
     });
   }
 
+  listTiposProprioOpcoes() {
+    return this.prisma.tipoProprio.findMany({
+      where: { ativo: true },
+      orderBy: [{ ordem: 'asc' }, { nome: 'asc' }],
+      select: { id: true, codigo: true, nome: true },
+    });
+  }
+
   async getChecklist(id: string): Promise<ChecklistWithRelations> {
     const checklist = await this.prisma.checklist.findUnique({
       where: { id },

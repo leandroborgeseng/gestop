@@ -11,7 +11,16 @@ import {
   isWebmapImported,
   mergeMetadataWithManualOverride,
 } from '../../prisma/webmap-manual-override';
-import { SecretariaDto, UnidadeDto, UsuarioDto, EquipeDto, TipoChamadoDto, CategoriaVistoriaDto, CargoDto } from './admin.dto';
+import {
+  SecretariaDto,
+  UnidadeDto,
+  UsuarioDto,
+  EquipeDto,
+  TipoChamadoDto,
+  CategoriaVistoriaDto,
+  CargoDto,
+  TipoProprioDto,
+} from './admin.dto';
 import { ensureGeoCoordinates, normalizeEmail, normalizeSigla } from './admin.rules';
 import { isValidCpf, normalizeCpf } from '../common/br-documents';
 
@@ -84,13 +93,14 @@ export class AdminService {
 
   async createUnidade(dto: UnidadeDto, user: JwtPayload) {
     ensureCoordinatesOrThrow(dto.latitude, dto.longitude);
+    await this.ensureTipoProprioExiste(dto.tipo);
 
     const unidade = await this.prisma.unidadePublica.create({
       data: {
         secretariaId: dto.secretariaId,
         codigoPatrimonial: dto.codigoPatrimonial.trim().toUpperCase(),
         nome: dto.nome.trim(),
-        tipo: dto.tipo,
+        tipo: dto.tipo.trim(),
         endereco: dto.endereco.trim(),
         bairro: dto.bairro?.trim(),
         cep: dto.cep?.trim(),
@@ -109,6 +119,7 @@ export class AdminService {
   async updateUnidade(id: string, dto: UnidadeDto, user: JwtPayload) {
     ensureCoordinatesOrThrow(dto.latitude, dto.longitude);
     const before = await this.getUnidadeOrThrow(id);
+    await this.ensureTipoProprioExiste(dto.tipo, { allowInactiveCodigo: before.tipo });
     const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
     const beforeMetadata = (before.metadata as Record<string, unknown> | null) ?? {};
     const shouldTrackOverride = isWebmapImported(beforeMetadata) || Boolean(getManualOverride(beforeMetadata));
@@ -117,7 +128,7 @@ export class AdminService {
       secretaria: { connect: { id: dto.secretariaId } },
       codigoPatrimonial: dto.codigoPatrimonial.trim().toUpperCase(),
       nome: dto.nome.trim(),
-      tipo: dto.tipo,
+      tipo: dto.tipo.trim(),
       endereco: dto.endereco.trim(),
       bairro: dto.bairro?.trim() ?? null,
       cep: dto.cep?.trim() ?? null,
@@ -433,6 +444,109 @@ export class AdminService {
     await this.prisma.tipoChamado.delete({ where: { id } });
     await this.audit(user, AuditAction.DELETE, 'TipoChamado', id, before, null);
     return { ok: true };
+  }
+
+  listTiposProprio() {
+    return this.prisma.tipoProprio.findMany({
+      orderBy: [{ ordem: 'asc' }, { nome: 'asc' }],
+    });
+  }
+
+  async createTipoProprio(dto: TipoProprioDto, user: JwtPayload) {
+    const codigo = await this.gerarCodigoTipoProprioUnico(dto.nome);
+    const maiorOrdem = await this.prisma.tipoProprio.aggregate({ _max: { ordem: true } });
+
+    const tipo = await this.prisma.tipoProprio.create({
+      data: {
+        codigo,
+        nome: dto.nome.trim(),
+        descricao: dto.descricao?.trim(),
+        ativo: dto.ativo ?? true,
+        sistema: false,
+        ordem: (maiorOrdem._max.ordem ?? 0) + 1,
+      },
+    });
+
+    await this.audit(user, AuditAction.CREATE, 'TipoProprio', tipo.id, null, tipo);
+    return tipo;
+  }
+
+  async updateTipoProprio(id: string, dto: TipoProprioDto, user: JwtPayload) {
+    const before = await this.getTipoProprioOrThrow(id);
+    const tipo = await this.prisma.tipoProprio.update({
+      where: { id },
+      data: {
+        // Codigo é imutável (chave usada em UnidadePublica.tipo e Checklist.unidadeTipo).
+        nome: dto.nome.trim(),
+        descricao: dto.descricao?.trim() ?? null,
+        ativo: dto.ativo ?? true,
+      },
+    });
+
+    await this.audit(user, AuditAction.UPDATE, 'TipoProprio', id, before, tipo);
+    return tipo;
+  }
+
+  async deleteTipoProprio(id: string, user: JwtPayload) {
+    const before = await this.getTipoProprioOrThrow(id);
+
+    if (before.sistema) {
+      throw new BadRequestException('Tipos de próprio padrão do sistema não podem ser excluídos. Inative em vez de excluir.');
+    }
+
+    const [emUsoUnidades, emUsoChecklists] = await Promise.all([
+      this.prisma.unidadePublica.count({ where: { tipo: before.codigo } }),
+      this.prisma.checklist.count({ where: { unidadeTipo: before.codigo } }),
+    ]);
+    if (emUsoUnidades > 0 || emUsoChecklists > 0) {
+      // Soft-inactivate when still referenced by units/checklists.
+      const tipo = await this.prisma.tipoProprio.update({
+        where: { id },
+        data: { ativo: false },
+      });
+      await this.audit(user, AuditAction.UPDATE, 'TipoProprio', id, before, tipo);
+      return { ok: true, inactivated: true };
+    }
+
+    await this.prisma.tipoProprio.delete({ where: { id } });
+    await this.audit(user, AuditAction.DELETE, 'TipoProprio', id, before, null);
+    return { ok: true };
+  }
+
+  private async ensureTipoProprioExiste(codigo: string, opts?: { allowInactiveCodigo?: string }) {
+    const normalized = codigo.trim();
+    const tipo = await this.prisma.tipoProprio.findUnique({ where: { codigo: normalized } });
+    if (!tipo) {
+      throw new BadRequestException('Tipo de próprio inválido.');
+    }
+    if (!tipo.ativo && tipo.codigo !== opts?.allowInactiveCodigo) {
+      throw new BadRequestException('Tipo de próprio inativo.');
+    }
+  }
+
+  private async gerarCodigoTipoProprioUnico(nome: string) {
+    const base =
+      nome
+        .trim()
+        .toUpperCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^A-Z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '') || 'TIPO';
+
+    let candidato = base;
+    let sufixo = 2;
+    while (await this.prisma.tipoProprio.findUnique({ where: { codigo: candidato } })) {
+      candidato = `${base}_${sufixo}`;
+      sufixo += 1;
+    }
+    return candidato;
+  }
+
+  private getTipoProprioOrThrow(id: string) {
+    return this.prisma.tipoProprio.findUniqueOrThrow({ where: { id } }).catch(() => {
+      throw new NotFoundException('Tipo de próprio não encontrado');
+    });
   }
 
   listPerfis() {

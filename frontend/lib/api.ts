@@ -6,8 +6,10 @@ import {
   AdminUsuario,
   AdminEquipe,
   AdminTipoChamado,
+  AdminTipoProprio,
   AdminCategoriaVistoria,
   AdminCargo,
+  TipoProprioOpcao,
   EquipeOpcao,
   TipoChamadoOpcao,
   ChamadosEmExecucaoResponse,
@@ -487,6 +489,26 @@ export function deleteAdminTipoChamado(id: string) {
   return request<{ ok: boolean }>(`/admin/tipos-chamado/${id}`, { method: 'DELETE' });
 }
 
+export function listAdminTiposProprio() {
+  return request<AdminTipoProprio[]>('/admin/tipos-proprio');
+}
+
+export function saveAdminTipoProprio(payload: Record<string, unknown>, id?: string) {
+  return request<AdminTipoProprio>(`/admin/tipos-proprio${id ? `/${id}` : ''}`, {
+    method: id ? 'PUT' : 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAdminTipoProprio(id: string) {
+  return request<{ ok: boolean; inactivated?: boolean }>(`/admin/tipos-proprio/${id}`, { method: 'DELETE' });
+}
+
+export function listTiposProprioOpcoes() {
+  return request<TipoProprioOpcao[]>('/checklists/tipos-proprio/opcoes');
+}
+
 export function listAdminCategoriasVistoria() {
   return request<AdminCategoriaVistoria[]>('/admin/categorias-vistoria');
 }
@@ -826,6 +848,7 @@ export function createChamado(payload: {
   solicitanteEmail?: string;
   solicitanteTelefone?: string;
   fotoDataUrl?: string;
+  observadorIds?: string[];
 }) {
   return request<ChamadoResumo>('/chamados', {
     method: 'POST',
@@ -836,6 +859,68 @@ export function createChamado(payload: {
 
 export function getChamado(id: string) {
   return request<ChamadoDetalhe>(`/chamados/${id}`);
+}
+
+export function listMeusChamados(params?: {
+  limit?: number;
+  offset?: number;
+  search?: string;
+  status?: string;
+}) {
+  const search = new URLSearchParams();
+  if (params?.limit != null) search.set('limit', String(params.limit));
+  if (params?.offset != null) search.set('offset', String(params.offset));
+  if (params?.search?.trim()) search.set('search', params.search.trim());
+  if (params?.status?.trim()) search.set('status', params.status.trim());
+  const query = search.toString();
+  return request<ChamadosListResponse>(`/meus-chamados${query ? `?${query}` : ''}`);
+}
+
+export function getMeuChamado(id: string) {
+  return request<ChamadoDetalhe>(`/meus-chamados/${id}`);
+}
+
+export function listUsuariosObservador(search?: string) {
+  const query = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  return request<
+    Array<{
+      id: string;
+      nome: string;
+      email: string;
+      cargo?: string | null;
+      secretaria?: { id: string; nome: string; sigla: string } | null;
+    }>
+  >(`/meus-chamados/usuarios/opcoes${query}`);
+}
+
+export function updateMeuChamadoObservadores(id: string, observadorIds: string[]) {
+  return request<ChamadoResumo>(`/meus-chamados/${id}/observadores`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ observadorIds }),
+  });
+}
+
+export function addMeuChamadoObservador(id: string, usuarioId: string) {
+  return request<ChamadoResumo>(`/meus-chamados/${id}/observadores`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ usuarioId }),
+  });
+}
+
+export function removeMeuChamadoObservador(id: string, usuarioId: string) {
+  return request<ChamadoResumo>(`/meus-chamados/${id}/observadores/${usuarioId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function updateChamadoObservadores(id: string, observadorIds: string[]) {
+  return request<ChamadoResumo>(`/chamados/${id}/observadores`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ observadorIds }),
+  });
 }
 
 export function updateChamadoStatus(
@@ -911,6 +996,7 @@ export function updateChamadoAbertura(
     latitude?: number | null;
     longitude?: number | null;
     secretariaId?: string | null;
+    observadorIds?: string[];
   },
 ) {
   return request<ChamadoResumo>(`/chamados/${id}/abertura`, {
@@ -953,6 +1039,23 @@ export function getFiscalizacao(id: string) {
 
 export function getFiscalizacaoOpcoesManuais() {
   return request<FiscalizacaoOpcoesManuais>('/fiscalizacoes/opcoes-manuais');
+}
+
+export async function downloadFiscalizacaoPdf(id: string) {
+  const token = getStoredAuth()?.accessToken;
+  const response = await fetch(`${API_BASE_URL}/fiscalizacoes/${id}/pdf`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error('Falha ao gerar PDF da vistoria.');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `vistoria-${id.slice(0, 8)}.pdf`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export async function downloadVistoriaManualPdf(payload: {

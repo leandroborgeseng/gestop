@@ -90,6 +90,7 @@ export const NAV_SCREEN_MAP: Record<string, string> = {
   vistorias: 'vistorias',
   chamados: 'chamados',
   novo_chamado: 'chamados',
+  meus_chamados: 'meus_chamados',
   execucao: 'execucao',
   dashboard: 'dashboard',
   cronograma: 'cronograma',
@@ -126,12 +127,25 @@ export function hasAbrirChamadoAccess(permissoes: string[]) {
   );
 }
 
+export function hasMeusChamadosAccess(permissoes: string[]) {
+  if (permissoes.includes('meus_chamados.visualizar')) return true;
+  if (permissoes.includes('chamados.abrir') || permissoes.includes('chamados.gerenciar')) return true;
+  return (
+    screenHasVisualizarAccess('meus_chamados', permissoes) ||
+    hasAbrirChamadoAccess(permissoes)
+  );
+}
+
 export function navItemAllowedByMatrix(itemId: string, permissoes: string[]) {
   const hasMatrix = permissoes.some(isMatrixPermissionKey);
   if (!hasMatrix) return null;
 
   if (itemId === 'novo_chamado') {
     return hasAbrirChamadoAccess(permissoes);
+  }
+
+  if (itemId === 'meus_chamados') {
+    return hasMeusChamadosAccess(permissoes);
   }
 
   const telaId = NAV_SCREEN_MAP[itemId];

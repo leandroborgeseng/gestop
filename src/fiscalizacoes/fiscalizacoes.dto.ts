@@ -1,4 +1,4 @@
-import { FiscalizacaoStatus, UnidadeTipo } from '@prisma/client';
+import { FiscalizacaoStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
@@ -16,8 +16,8 @@ export class ListFiscalizacoesQueryDto {
   agenteId?: string;
 
   @IsOptional()
-  @IsEnum(UnidadeTipo)
-  tipo?: UnidadeTipo;
+  @IsString()
+  tipo?: string;
 
   @IsOptional()
   @IsEnum(FiscalizacaoStatus)

@@ -66,6 +66,14 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
     ],
   },
   {
+    id: 'meus_chamados',
+    label: 'Meus chamados',
+    functions: [
+      { id: '_tela', label: 'Meus chamados', actions: ['visualizar'] },
+      { id: 'consultar', label: 'Consultar meus chamados', actions: ['visualizar'] },
+    ],
+  },
+  {
     id: 'execucao',
     label: 'Execução',
     functions: [

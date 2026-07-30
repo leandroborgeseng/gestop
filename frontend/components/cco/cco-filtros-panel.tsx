@@ -11,6 +11,7 @@ import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { CHAMADO_STATUS_META } from '@/lib/chamado-status';
 import {
   ChamadosMapaFilters,
+  SecretariaOption,
   SlaFiltro,
   TipoPendencia,
   UnidadeFilters,
@@ -19,6 +20,7 @@ import {
   UnidadeTipo,
 } from '@/lib/types';
 import { CcoMapMode } from '@/components/operational-map';
+import { FilterMultiSelect } from '@/components/cco/filter-multi-select';
 
 const SELECT_CLASS =
   'h-9 w-full min-w-0 max-w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs';
@@ -48,6 +50,18 @@ function toggleMultiValue<T extends string>(current: T[] | undefined, value: T, 
   return [...selected, value];
 }
 
+/** Une o valor singular legado (ex.: `secretariaId`) com o novo campo plural (ex.: `secretariaIds`). */
+function mergeLegacySingular<T extends string>(plural: T[] | undefined, singular: T | undefined): T[] {
+  if (plural?.length) return plural;
+  return singular ? [singular] : [];
+}
+
+function summarizeList(labels: string[], max = 2): string {
+  if (labels.length === 0) return '';
+  const shown = labels.slice(0, max);
+  return shown.length < labels.length ? `${shown.join(', ')} +${labels.length - shown.length}` : shown.join(', ');
+}
+
 function summarizeCcoFiltros(opts: {
   tab: 'proprios' | 'chamados';
   filters: UnidadeFilters;
@@ -56,6 +70,7 @@ function summarizeCcoFiltros(opts: {
   defaultTiposPendencia: TipoPendencia[];
   tiposChamado: Array<{ id: string; nome: string }>;
   equipes: Array<{ id: string; nome: string }>;
+  secretarias: SecretariaOption[];
 }): string {
   const parts: string[] = [];
 
@@ -74,44 +89,67 @@ function summarizeCcoFiltros(opts: {
           .join(', '),
       );
     }
-    if (opts.filters.tiposChamadoId?.length) {
-      const nomes = opts.filters.tiposChamadoId
-        .map((id) => opts.tiposChamado.find((t) => t.id === id)?.nome ?? id)
-        .slice(0, 2);
+
+    const tiposChamadoIds = opts.filters.tiposChamadoId ?? [];
+    if (tiposChamadoIds.length) {
       parts.push(
-        nomes.length < opts.filters.tiposChamadoId.length
-          ? `${nomes.join(', ')} +${opts.filters.tiposChamadoId.length - nomes.length}`
-          : nomes.join(', '),
+        summarizeList(tiposChamadoIds.map((id) => opts.tiposChamado.find((t) => t.id === id)?.nome ?? id)),
       );
     }
-    if (opts.filters.secretariaId) parts.push('Secretaria');
-    if (opts.filters.bairro) parts.push(opts.filters.bairro);
-    if (opts.filters.regiao) parts.push(formatRegiaoUnidade(opts.filters.regiao as RegiaoUnidade));
-    if (opts.filters.tipo) parts.push(formatUnidadeTipo(opts.filters.tipo as UnidadeTipo));
-    if (opts.filters.equipeIds?.length) {
-      const nome = opts.equipes.find((e) => e.id === opts.filters.equipeIds?.[0])?.nome;
-      parts.push(nome ?? 'Equipe');
+
+    const secretariaIds = mergeLegacySingular(opts.filters.secretariaIds, opts.filters.secretariaId);
+    if (secretariaIds.length) {
+      parts.push(
+        summarizeList(secretariaIds.map((id) => opts.secretarias.find((s) => s.id === id)?.sigla ?? id)),
+      );
     }
+
+    const bairros = mergeLegacySingular(opts.filters.bairros, opts.filters.bairro);
+    if (bairros.length) parts.push(summarizeList(bairros));
+
+    const regioes = mergeLegacySingular(opts.filters.regioes, opts.filters.regiao);
+    if (regioes.length) {
+      parts.push(summarizeList(regioes.map((regiao) => formatRegiaoUnidade(regiao as RegiaoUnidade))));
+    }
+
+    const tiposProprio = mergeLegacySingular(opts.filters.tipos, opts.filters.tipo);
+    if (tiposProprio.length) {
+      parts.push(summarizeList(tiposProprio.map((tipo) => formatUnidadeTipo(tipo as UnidadeTipo))));
+    }
+
+    const equipeIds = opts.filters.equipeIds ?? [];
+    if (equipeIds.length) {
+      parts.push(summarizeList(equipeIds.map((id) => opts.equipes.find((e) => e.id === id)?.nome ?? id)));
+    }
+
     if (opts.filters.sla === 'FORA') parts.push('SLA fora');
     else if (opts.filters.sla === 'DENTRO') parts.push('SLA dentro');
     if (opts.filters.search?.trim()) parts.push(`“${opts.filters.search.trim()}”`);
   } else {
-    if (opts.chamadoFilters.status?.length) {
-      const st = opts.chamadoFilters.status[0];
-      parts.push(CHAMADO_STATUS_META[st]?.label ?? st);
+    const status = opts.chamadoFilters.status ?? [];
+    if (status.length) {
+      parts.push(summarizeList(status.map((st) => CHAMADO_STATUS_META[st]?.label ?? st)));
     }
-    if (opts.chamadoFilters.prioridade?.length) parts.push(opts.chamadoFilters.prioridade[0]);
-    if (opts.chamadoFilters.tipoChamadoId?.length) {
-      const nome = opts.tiposChamado.find((t) => t.id === opts.chamadoFilters.tipoChamadoId?.[0])?.nome;
-      parts.push(nome ?? 'Tipo');
+
+    const prioridade = opts.chamadoFilters.prioridade ?? [];
+    if (prioridade.length) parts.push(summarizeList(prioridade));
+
+    const tipoChamadoIds = opts.chamadoFilters.tipoChamadoId ?? [];
+    if (tipoChamadoIds.length) {
+      parts.push(summarizeList(tipoChamadoIds.map((id) => opts.tiposChamado.find((t) => t.id === id)?.nome ?? id)));
     }
-    if (opts.chamadoFilters.bairro) parts.push(opts.chamadoFilters.bairro);
+
+    const bairros = mergeLegacySingular(opts.chamadoFilters.bairros, opts.chamadoFilters.bairro);
+    if (bairros.length) parts.push(summarizeList(bairros));
+
     if (opts.chamadoFilters.comUnidade === 'COM') parts.push('Com próprio');
     else if (opts.chamadoFilters.comUnidade === 'SEM') parts.push('Sem próprio');
-    if (opts.chamadoFilters.equipeIds?.length) {
-      const nome = opts.equipes.find((e) => e.id === opts.chamadoFilters.equipeIds?.[0])?.nome;
-      parts.push(nome ?? 'Equipe');
+
+    const equipeIds = opts.chamadoFilters.equipeIds ?? [];
+    if (equipeIds.length) {
+      parts.push(summarizeList(equipeIds.map((id) => opts.equipes.find((e) => e.id === id)?.nome ?? id)));
     }
+
     if (opts.chamadoFilters.sla === 'FORA') parts.push('SLA fora');
     else if (opts.chamadoFilters.sla === 'DENTRO') parts.push('SLA dentro');
     if (opts.chamadoFilters.search?.trim()) parts.push(`“${opts.chamadoFilters.search.trim()}”`);
@@ -159,10 +197,46 @@ export function CcoFiltrosPanel({
 
   const tiposPendenciaSelected = filters.tiposPendencia ?? defaultTiposPendencia;
   const chamadosPendenciaAtivo = tiposPendenciaSelected.includes('CHAMADOS');
+  const secretarias = opcoesFiltro?.secretarias ?? [];
   const equipes = opcoesFiltro?.equipes ?? [];
   const tiposChamado = opcoesFiltro?.tiposChamado ?? [];
   const tiposChamadoSelecionados = filters.tiposChamadoId ?? [];
-  const tiposChamadoDisponiveis = tiposChamado.filter((tipo) => !tiposChamadoSelecionados.includes(tipo.id));
+
+  const secretariaOptions = useMemo(
+    () => secretarias.map((s) => ({ value: s.id, label: s.sigla })),
+    [secretarias],
+  );
+  const bairroOptions = useMemo(
+    () => (opcoesFiltro?.bairros ?? []).map((b) => ({ value: b, label: b })),
+    [opcoesFiltro],
+  );
+  const regiaoOptions = useMemo(
+    () => (opcoesFiltro?.regioes ?? []).map((r) => ({ value: r, label: formatRegiaoUnidade(r) })),
+    [opcoesFiltro],
+  );
+  const tipoOptions = useMemo(
+    () => (opcoesFiltro?.tipos ?? []).map((t) => ({ value: t, label: formatUnidadeTipo(t) })),
+    [opcoesFiltro],
+  );
+  const equipeOptions = useMemo(() => equipes.map((e) => ({ value: e.id, label: e.nome })), [equipes]);
+  const tipoChamadoOptions = useMemo(
+    () => tiposChamado.map((t) => ({ value: t.id, label: t.nome })),
+    [tiposChamado],
+  );
+  const statusOptions = useMemo(
+    () => CHAMADO_STATUS_OPTIONS.map((status) => ({ value: status, label: CHAMADO_STATUS_META[status]?.label ?? status })),
+    [],
+  );
+  const prioridadeOptions = useMemo(
+    () => CHAMADO_PRIORIDADE_OPTIONS.map((prioridade) => ({ value: prioridade, label: prioridade })),
+    [],
+  );
+
+  const secretariaIdsSelected = mergeLegacySingular(filters.secretariaIds, filters.secretariaId);
+  const bairrosSelected = mergeLegacySingular(filters.bairros, filters.bairro);
+  const regioesSelected = mergeLegacySingular(filters.regioes, filters.regiao);
+  const tiposSelected = mergeLegacySingular(filters.tipos, filters.tipo);
+  const chamadoBairrosSelected = mergeLegacySingular(chamadoFilters.bairros, chamadoFilters.bairro);
 
   const summary = useMemo(
     () =>
@@ -174,8 +248,9 @@ export function CcoFiltrosPanel({
         defaultTiposPendencia,
         tiposChamado,
         equipes,
+        secretarias,
       }),
-    [tab, filters, chamadoFilters, kpiFilter, defaultTiposPendencia, tiposChamado, equipes],
+    [tab, filters, chamadoFilters, kpiFilter, defaultTiposPendencia, tiposChamado, equipes, secretarias],
   );
 
   return (
@@ -281,128 +356,53 @@ export function CcoFiltrosPanel({
               </div>
 
               {chamadosPendenciaAtivo ? (
-                <div className="min-w-0">
-                  <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-semibold text-[var(--ink-3)]">
-                    <span>Tipo de chamado</span>
-                    {tiposChamadoSelecionados.length ? (
-                      <button
-                        type="button"
-                        className="text-[var(--brand)] hover:underline"
-                        onClick={() => onFiltersChange((prev) => ({ ...prev, tiposChamadoId: undefined }))}
-                      >
-                        Limpar tipos
-                      </button>
-                    ) : (
-                      <span>Nenhum selecionado</span>
-                    )}
-                  </div>
-                  <select
-                    value=""
-                    onChange={(event) => {
-                      const id = event.target.value;
-                      if (!id) return;
-                      onFiltersChange((prev) => {
-                        const current = prev.tiposChamadoId ?? [];
-                        if (current.includes(id)) return prev;
-                        return { ...prev, tiposChamadoId: [...current, id] };
-                      });
-                    }}
-                    className={SELECT_CLASS}
-                  >
-                    <option value="">
-                      {tiposChamadoDisponiveis.length
-                        ? 'Selecionar tipo de chamado…'
-                        : tiposChamado.length
-                          ? 'Todos os tipos já selecionados'
-                          : 'Nenhum tipo disponível'}
-                    </option>
-                    {tiposChamadoDisponiveis.map((tipo) => (
-                      <option key={tipo.id} value={tipo.id}>
-                        {tipo.nome}
-                      </option>
-                    ))}
-                  </select>
-                  {tiposChamadoSelecionados.length ? (
-                    <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
-                      {tiposChamadoSelecionados.map((id) => {
-                        const tipo = tiposChamado.find((item) => item.id === id);
-                        return (
-                          <Chip
-                            key={id}
-                            active
-                            onClick={() =>
-                              onFiltersChange((prev) => {
-                                const next = (prev.tiposChamadoId ?? []).filter((item) => item !== id);
-                                return { ...prev, tiposChamadoId: next.length ? next : undefined };
-                              })
-                            }
-                          >
-                            {tipo?.nome ?? id} ×
-                          </Chip>
-                        );
-                      })}
-                    </div>
-                  ) : null}
-                </div>
+                <FilterMultiSelect
+                  label="Tipo de chamado"
+                  placeholder="Selecionar tipo de chamado…"
+                  options={tipoChamadoOptions}
+                  selected={tiposChamadoSelecionados}
+                  onChange={(next) => onFiltersChange((prev) => ({ ...prev, tiposChamadoId: next }))}
+                />
               ) : null}
 
               <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                <select
-                  value={filters.secretariaId ?? ''}
-                  onChange={(event) =>
-                    onFiltersChange((prev) => ({ ...prev, secretariaId: event.target.value || undefined }))
+                <FilterMultiSelect
+                  label="Secretaria"
+                  placeholder="Selecionar secretaria…"
+                  options={secretariaOptions}
+                  selected={secretariaIdsSelected}
+                  onChange={(next) =>
+                    onFiltersChange((prev) => ({ ...prev, secretariaIds: next, secretariaId: undefined }))
                   }
-                  className={SELECT_CLASS}
-                >
-                  <option value="">Todas secretarias</option>
-                  {(opcoesFiltro?.secretarias ?? []).map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.sigla}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.bairro ?? ''}
-                  onChange={(event) =>
-                    onFiltersChange((prev) => ({ ...prev, bairro: event.target.value || undefined }))
-                  }
-                  className={SELECT_CLASS}
-                >
-                  <option value="">Todos bairros</option>
-                  {(opcoesFiltro?.bairros ?? []).map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.regiao ?? ''}
-                  onChange={(event) =>
-                    onFiltersChange((prev) => ({ ...prev, regiao: event.target.value || undefined }))
-                  }
-                  className={SELECT_CLASS}
-                >
-                  <option value="">Todas regiões</option>
-                  {(opcoesFiltro?.regioes ?? []).map((regiao) => (
-                    <option key={regiao} value={regiao}>
-                      {formatRegiaoUnidade(regiao)}
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={filters.tipo ?? ''}
-                  onChange={(event) =>
-                    onFiltersChange((prev) => ({ ...prev, tipo: event.target.value || undefined }))
-                  }
-                  className={SELECT_CLASS}
-                >
-                  <option value="">Todos tipos de próprio</option>
-                  {(opcoesFiltro?.tipos ?? []).map((tipo) => (
-                    <option key={tipo} value={tipo}>
-                      {formatUnidadeTipo(tipo)}
-                    </option>
-                  ))}
-                </select>
+                />
+                <FilterMultiSelect
+                  label="Bairro"
+                  placeholder="Selecionar bairro…"
+                  options={bairroOptions}
+                  selected={bairrosSelected}
+                  onChange={(next) => onFiltersChange((prev) => ({ ...prev, bairros: next, bairro: undefined }))}
+                />
+                <FilterMultiSelect
+                  label="Região"
+                  placeholder="Selecionar região…"
+                  options={regiaoOptions}
+                  selected={regioesSelected}
+                  onChange={(next) => onFiltersChange((prev) => ({ ...prev, regioes: next, regiao: undefined }))}
+                />
+                <FilterMultiSelect
+                  label="Tipo de próprio"
+                  placeholder="Selecionar tipo de próprio…"
+                  options={tipoOptions}
+                  selected={tiposSelected}
+                  onChange={(next) => onFiltersChange((prev) => ({ ...prev, tipos: next, tipo: undefined }))}
+                />
+                <FilterMultiSelect
+                  label="Equipe do chamado"
+                  placeholder="Selecionar equipe…"
+                  options={equipeOptions}
+                  selected={filters.equipeIds ?? []}
+                  onChange={(next) => onFiltersChange((prev) => ({ ...prev, equipeIds: next }))}
+                />
                 <select
                   value={mapMode}
                   onChange={(event) => onMapModeChange(event.target.value as CcoMapMode)}
@@ -430,71 +430,43 @@ export function CcoFiltrosPanel({
             </>
           ) : (
             <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              <select
-                value={(chamadoFilters.status ?? [])[0] ?? ''}
-                onChange={(event) =>
-                  onChamadoFiltersChange((prev) => ({
-                    ...prev,
-                    status: event.target.value ? [event.target.value] : undefined,
-                  }))
+              <FilterMultiSelect
+                label="Status"
+                placeholder="Selecionar status…"
+                options={statusOptions}
+                selected={chamadoFilters.status ?? []}
+                onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, status: next }))}
+              />
+              <FilterMultiSelect
+                label="Prioridade"
+                placeholder="Selecionar prioridade…"
+                options={prioridadeOptions}
+                selected={chamadoFilters.prioridade ?? []}
+                onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, prioridade: next }))}
+              />
+              <FilterMultiSelect
+                label="Tipo de chamado"
+                placeholder="Selecionar tipo de chamado…"
+                options={tipoChamadoOptions}
+                selected={chamadoFilters.tipoChamadoId ?? []}
+                onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, tipoChamadoId: next }))}
+              />
+              <FilterMultiSelect
+                label="Bairro"
+                placeholder="Selecionar bairro…"
+                options={bairroOptions}
+                selected={chamadoBairrosSelected}
+                onChange={(next) =>
+                  onChamadoFiltersChange((prev) => ({ ...prev, bairros: next, bairro: undefined }))
                 }
-                className={SELECT_CLASS}
-              >
-                <option value="">Todos status</option>
-                {CHAMADO_STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
-                    {CHAMADO_STATUS_META[status]?.label ?? status}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={(chamadoFilters.prioridade ?? [])[0] ?? ''}
-                onChange={(event) =>
-                  onChamadoFiltersChange((prev) => ({
-                    ...prev,
-                    prioridade: event.target.value ? [event.target.value] : undefined,
-                  }))
-                }
-                className={SELECT_CLASS}
-              >
-                <option value="">Todas prioridades</option>
-                {CHAMADO_PRIORIDADE_OPTIONS.map((prioridade) => (
-                  <option key={prioridade} value={prioridade}>
-                    {prioridade}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={(chamadoFilters.tipoChamadoId ?? [])[0] ?? ''}
-                onChange={(event) =>
-                  onChamadoFiltersChange((prev) => ({
-                    ...prev,
-                    tipoChamadoId: event.target.value ? [event.target.value] : undefined,
-                  }))
-                }
-                className={SELECT_CLASS}
-              >
-                <option value="">Todos tipos de chamado</option>
-                {tiposChamado.map((tipo) => (
-                  <option key={tipo.id} value={tipo.id}>
-                    {tipo.nome}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={chamadoFilters.bairro ?? ''}
-                onChange={(event) =>
-                  onChamadoFiltersChange((prev) => ({ ...prev, bairro: event.target.value || undefined }))
-                }
-                className={SELECT_CLASS}
-              >
-                <option value="">Todos bairros</option>
-                {(opcoesFiltro?.bairros ?? []).map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
+              />
+              <FilterMultiSelect
+                label="Equipe do chamado"
+                placeholder="Selecionar equipe…"
+                options={equipeOptions}
+                selected={chamadoFilters.equipeIds ?? []}
+                onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, equipeIds: next }))}
+              />
               <select
                 value={chamadoFilters.comUnidade ?? 'TODOS'}
                 onChange={(event) =>
@@ -513,30 +485,6 @@ export function CcoFiltrosPanel({
           )}
 
           <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            <select
-              value={
-                tab === 'proprios'
-                  ? (filters.equipeIds ?? [])[0] ?? ''
-                  : (chamadoFilters.equipeIds ?? [])[0] ?? ''
-              }
-              onChange={(event) => {
-                const value = event.target.value || undefined;
-                const equipeIds = value ? [value] : undefined;
-                if (tab === 'proprios') {
-                  onFiltersChange((prev) => ({ ...prev, equipeIds }));
-                } else {
-                  onChamadoFiltersChange((prev) => ({ ...prev, equipeIds }));
-                }
-              }}
-              className={SELECT_CLASS}
-            >
-              <option value="">Equipe do chamado: Todas</option>
-              {equipes.map((equipe) => (
-                <option key={equipe.id} value={equipe.id}>
-                  {equipe.nome}
-                </option>
-              ))}
-            </select>
             <select
               value={(tab === 'proprios' ? filters.sla : chamadoFilters.sla) ?? ''}
               onChange={(event) => {

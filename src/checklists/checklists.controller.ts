@@ -18,6 +18,11 @@ export class ChecklistsController {
     return this.checklistsService.listChecklists();
   }
 
+  @Get('tipos-proprio/opcoes')
+  listTiposProprioOpcoes() {
+    return this.checklistsService.listTiposProprioOpcoes();
+  }
+
   @Get(':id')
   getChecklist(@Param('id') id: string) {
     return this.checklistsService.getChecklist(id);

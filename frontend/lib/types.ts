@@ -1,10 +1,12 @@
+/** Codigo do catalogo TipoProprio (string aberta; literals legado para autocompletar). */
 export type UnidadeTipo =
   | 'ESCOLA'
   | 'UBS'
   | 'PRACA'
   | 'PREDIO_ADMINISTRATIVO'
   | 'ESPACO_ESPORTIVO'
-  | 'OUTRO';
+  | 'OUTRO'
+  | (string & {});
 
 export type UnidadeSituacao = 'OPERACIONAL' | 'COM_PENDENCIAS' | 'SEM_LOCALIZACAO' | 'INATIVA';
 
@@ -187,12 +189,20 @@ export type UnidadeDetalhe = UnidadeOperacional & {
 
 export type UnidadeFilters = {
   search?: string;
+  /** @deprecated use secretariaIds */
   secretariaId?: string;
+  secretariaIds?: string[];
+  /** @deprecated use tipos */
   tipo?: string;
+  tipos?: string[];
   situacao?: string;
   pendencias?: string;
+  /** @deprecated use bairros */
   bairro?: string;
+  bairros?: string[];
+  /** @deprecated use regioes */
   regiao?: string;
+  regioes?: string[];
   responsavel?: string;
   responsavelEmail?: string;
   tiposPendencia?: TipoPendencia[];
@@ -230,7 +240,9 @@ export type ChamadosMapaFilters = {
   tipoChamadoId?: string[];
   equipeIds?: string[];
   sla?: SlaFiltro;
+  /** @deprecated use bairros */
   bairro?: string;
+  bairros?: string[];
   comUnidade?: 'TODOS' | 'COM' | 'SEM';
 };
 
@@ -435,8 +447,24 @@ export type AdminTipoChamado = {
   ativo: boolean;
 };
 
+export type AdminTipoProprio = {
+  id: string;
+  codigo: string;
+  nome: string;
+  descricao?: string | null;
+  ativo: boolean;
+  sistema: boolean;
+  ordem: number;
+};
+
 export type TipoChamadoOpcao = {
   id: string;
+  nome: string;
+};
+
+export type TipoProprioOpcao = {
+  id: string;
+  codigo: string;
   nome: string;
 };
 
@@ -821,6 +849,18 @@ export type ChamadoResumo = {
   tipoChamado?: { id: string; nome: string; exigeVistoriaPrevia?: boolean } | null;
   naoConformidade?: ChamadoNaoConformidade | null;
   registradoPor?: { id: string; nome: string } | null;
+  observadores?: ChamadoObservador[];
+  observadorIds?: string[];
+  relacaoComigo?: 'ABERTO_POR_MIM' | 'OBSERVADOR' | null;
+};
+
+export type ChamadoObservador = {
+  id: string;
+  usuarioId: string;
+  nome: string;
+  email?: string | null;
+  createdAt: string;
+  origem?: string | null;
 };
 
 export type ChamadoDetalhe = ChamadoResumo & {
@@ -834,6 +874,7 @@ export type ChamadoDetalhe = ChamadoResumo & {
     alteradoPor?: { id: string; nome: string } | null;
     anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null }>;
   }>;
+  podeGerenciarObservadores?: boolean;
 };
 
 export type ChamadoEvidencia = {

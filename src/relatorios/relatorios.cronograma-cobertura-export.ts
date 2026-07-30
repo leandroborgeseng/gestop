@@ -1,7 +1,7 @@
-import { CronogramaFrequencia, UnidadeTipo } from '@prisma/client';
+import { CronogramaFrequencia } from '@prisma/client';
 import { formatIsoDate } from './relatorios.csv';
 
-const UNIDADE_TIPO_LABELS: Record<UnidadeTipo, string> = {
+const UNIDADE_TIPO_LABELS: Record<string, string> = {
   ESCOLA: 'Escola',
   UBS: 'UBS',
   PRACA: 'Praça',
@@ -33,7 +33,7 @@ export type CronogramaCoberturaCronograma = {
 export type CronogramaCoberturaUnidade = {
   codigoPatrimonial: string;
   nome: string;
-  tipo: UnidadeTipo;
+  tipo: string;
   endereco: string;
   secretaria: { sigla: string; nome: string };
   cronogramas: CronogramaCoberturaCronograma[];

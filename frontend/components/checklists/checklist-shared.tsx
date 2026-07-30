@@ -13,8 +13,8 @@ import {
   CHECKLIST_ESCOPO_LABELS,
   formatChecklistVinculo,
   formatUnidadeTipo,
-  UNIDADE_TIPO_LABELS,
 } from '@/lib/unidade-tipo';
+import { listTiposProprioOpcoes } from '@/lib/api';
 import {
   AdminSecretaria,
   AdminCategoriaVistoria,
@@ -24,7 +24,7 @@ import {
   ChecklistModel,
   ChecklistVersao,
   TipoChamadoOpcao,
-  UnidadeTipo,
+  TipoProprioOpcao,
 } from '@/lib/types';
 import { LikertScale } from '@/components/checklists/likert-scale';
 import {
@@ -71,14 +71,6 @@ export const tiposItem: ChecklistItemTipo[] = [
   'FOTO',
   'ASSINATURA',
   'DATA',
-];
-export const tiposUnidade: UnidadeTipo[] = [
-  'ESCOLA',
-  'UBS',
-  'PRACA',
-  'PREDIO_ADMINISTRATIVO',
-  'ESPACO_ESPORTIVO',
-  'OUTRO',
 ];
 
 export type ItemDraft = {
@@ -127,8 +119,32 @@ export function ChecklistBindingFields({
   defaultSecretariaId?: string;
   defaultUnidadeTipo?: string;
 }) {
+  const [tiposProprio, setTiposProprio] = useState<TipoProprioOpcao[]>([]);
   const showSecretaria = escopo === 'SECRETARIA' || escopo === 'UNIDADE_TIPO';
   const showUnidadeTipo = escopo === 'UNIDADE_TIPO';
+
+  useEffect(() => {
+    let cancelled = false;
+    void listTiposProprioOpcoes()
+      .then((tipos) => {
+        if (!cancelled) setTiposProprio(tipos);
+      })
+      .catch(() => {
+        if (!cancelled) setTiposProprio([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const tiposParaSelect = (() => {
+    if (!defaultUnidadeTipo) return tiposProprio;
+    if (tiposProprio.some((tipo) => tipo.codigo === defaultUnidadeTipo)) return tiposProprio;
+    return [
+      { id: defaultUnidadeTipo, codigo: defaultUnidadeTipo, nome: formatUnidadeTipo(defaultUnidadeTipo) },
+      ...tiposProprio,
+    ];
+  })();
 
   return (
     <>
@@ -153,9 +169,9 @@ export function ChecklistBindingFields({
         >
           <Select name="unidadeTipo" required defaultValue={defaultUnidadeTipo}>
             <option value="">Selecione o tipo do próprio</option>
-            {tiposUnidade.map((tipo) => (
-              <option key={tipo} value={tipo}>
-                {UNIDADE_TIPO_LABELS[tipo]}
+            {tiposParaSelect.map((tipo) => (
+              <option key={tipo.codigo} value={tipo.codigo}>
+                {tipo.nome}
               </option>
             ))}
           </Select>

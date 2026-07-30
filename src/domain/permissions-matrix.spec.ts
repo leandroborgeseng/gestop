@@ -39,6 +39,18 @@ describe('permissions-matrix', () => {
     const legacy = deriveLegacyPermissionKeys(matrix);
     expect(legacy.has('chamados.gerenciar')).toBe(false);
     expect(legacy.has('chamados.abrir')).toBe(true);
+    expect(legacy.has('meus_chamados.visualizar')).toBe(true);
+  });
+
+  it('não libera triagem/CCO só com Meus chamados', () => {
+    const matrix = new Set([
+      permissionMatrixKey('meus_chamados', '_tela', 'visualizar'),
+      permissionMatrixKey('meus_chamados', 'consultar', 'visualizar'),
+    ]);
+    const legacy = deriveLegacyPermissionKeys(matrix);
+    expect(legacy.has('meus_chamados.visualizar')).toBe(true);
+    expect(legacy.has('chamados.gerenciar')).toBe(false);
+    expect(legacy.has('dashboard.visualizar')).toBe(false);
   });
 
   it('resolve matriz efetiva a partir de legado quando não há chaves matriz', () => {

@@ -16,6 +16,7 @@ const GESTOR_SECRETARIA_PERMISSOES = [
 const NOVAS_PERMISSOES = [
   ['chamados.editar_abertura', 'Editar informacoes de abertura do chamado', 'chamados'],
   ['chamados.execucao_manual', 'Lancar execucao de chamado manualmente', 'chamados'],
+  ['meus_chamados.visualizar', 'Visualizar chamados abertos por mim ou em que sou observador', 'meus_chamados'],
 ] as const;
 
 const connectionString =
@@ -169,22 +170,25 @@ export async function syncSystemRbac(prisma: PrismaClient) {
     },
   });
 
-  const abrirChamadoKeys = [
+  const solicitacaoKeys = [
     'matriz.chamados.abrir_chamado.visualizar',
     'matriz.chamados.abrir_chamado.inserir',
     'chamados.abrir',
+    'matriz.meus_chamados._tela.visualizar',
+    'matriz.meus_chamados.consultar.visualizar',
+    'meus_chamados.visualizar',
   ] as const;
 
-  const abrirPermissoes = await prisma.permissao.findMany({
-    where: { chave: { in: [...abrirChamadoKeys] } },
+  const solicitacaoPermissoes = await prisma.permissao.findMany({
+    where: { chave: { in: [...solicitacaoKeys] } },
     select: { id: true, chave: true },
   });
 
-  // Garante que o perfil Solicitação tenha exatamente as permissões de abertura.
+  // Garante que o perfil Solicitação tenha abertura + Meus chamados (sem triagem).
   await prisma.perfilPermissao.deleteMany({ where: { perfilId: solicitacaoPerfil.id } });
-  if (abrirPermissoes.length > 0) {
+  if (solicitacaoPermissoes.length > 0) {
     await prisma.perfilPermissao.createMany({
-      data: abrirPermissoes.map((permissao) => ({
+      data: solicitacaoPermissoes.map((permissao) => ({
         perfilId: solicitacaoPerfil.id,
         permissaoId: permissao.id,
       })),
@@ -193,7 +197,7 @@ export async function syncSystemRbac(prisma: PrismaClient) {
 
   logInfo(
     'sync-rbac',
-    `Perfil "${solicitacaoPerfil.nome}" sincronizado (${abrirPermissoes.length} permissoes de abertura).`,
+    `Perfil "${solicitacaoPerfil.nome}" sincronizado (${solicitacaoPermissoes.length} permissoes de abertura/meus chamados).`,
   );
 }
 

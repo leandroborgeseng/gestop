@@ -25,6 +25,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
 import { Field } from '@/components/ui/field';
 import { Select } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { captureCurrentPosition, toGeoCheckin } from '@/lib/geolocation';
@@ -425,23 +426,21 @@ export default function MobilePage() {
                 </CardHeader>
                 <CardContent className="space-y-4 pt-0">
                   <Field label="Próprio público">
-                    <Select
+                    <SearchableSelect
                       value={unidadeId}
-                      onChange={(e) => {
-                        setUnidadeId(e.target.value);
+                      placeholder="Selecione"
+                      onChange={(next) => {
+                        setUnidadeId(next);
                         setChecklistId('');
                         setResponses({});
                       }}
-                    >
-                      <option value="">Selecione</option>
-                      {fieldPackage.unidades.map((unidade) => (
-                        <option key={unidade.id} value={unidade.id}>
-                          {fieldPackage.secretariaEscopo?.todas
-                            ? `${unidade.secretaria.sigla} · ${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`
-                            : `${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`}
-                        </option>
-                      ))}
-                    </Select>
+                      options={fieldPackage.unidades.map((unidade) => ({
+                        value: unidade.id,
+                        label: fieldPackage.secretariaEscopo?.todas
+                          ? `${unidade.secretaria.sigla} · ${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`
+                          : `${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`,
+                      }))}
+                    />
                   </Field>
                   <Field label="Checklist">
                     <Select

@@ -15,6 +15,7 @@ import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Select } from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { LoadingState } from '@/components/ui-states';
@@ -304,23 +305,21 @@ export function LancarVistoriaManualDialog({
         {opcoes ? (
           <>
             <Field label="Próprio">
-              <Select
+              <SearchableSelect
                 value={unidadeId}
-                onChange={(event) => {
-                  setUnidadeId(event.target.value);
+                placeholder="Selecione"
+                onChange={(next) => {
+                  setUnidadeId(next);
                   setChecklistId('');
                   setResponses({});
                 }}
-              >
-                <option value="">Selecione</option>
-                {opcoes.unidades.map((unidade) => (
-                  <option key={unidade.id} value={unidade.id}>
-                    {opcoes.secretariaEscopo?.todas
-                      ? `${unidade.secretaria.sigla} · ${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`
-                      : `${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`}
-                  </option>
-                ))}
-              </Select>
+                options={opcoes.unidades.map((unidade) => ({
+                  value: unidade.id,
+                  label: opcoes.secretariaEscopo?.todas
+                    ? `${unidade.secretaria.sigla} · ${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`
+                    : `${unidade.nome} · ${formatUnidadeTipo(unidade.tipo)}`,
+                }))}
+              />
             </Field>
 
             <Field label="Checklist">

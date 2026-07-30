@@ -6,7 +6,6 @@ import {
   FiscalizacaoStatus,
   NaoConformidadeStatus,
   Prisma,
-  UnidadeTipo,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import {
@@ -180,11 +179,10 @@ export class OperacionalService {
               select: { id: true, nome: true, sigla: true },
             }),
         this.listBairros(),
-        this.prisma.unidadePublica.findMany({
-          where: { ativo: true, ...resolveUnidadeSecretariaFilter(user) },
-          distinct: ['tipo'],
-          orderBy: { tipo: 'asc' },
-          select: { tipo: true },
+        this.prisma.tipoProprio.findMany({
+          where: { ativo: true },
+          orderBy: [{ ordem: 'asc' }, { nome: 'asc' }],
+          select: { codigo: true },
         }),
         scopeIds && scopeIds.length === 0
           ? Promise.resolve([])
@@ -242,7 +240,7 @@ export class OperacionalService {
     return {
       secretarias,
       bairros,
-      tipos: tiposRows.map((item) => item.tipo),
+      tipos: tiposRows.map((item) => item.codigo),
       regioes: regioesRows.map((item) => item.regiao).filter((regiao): regiao is NonNullable<typeof regiao> => Boolean(regiao)),
       categoriasVistoria,
       responsaveis,
@@ -257,8 +255,28 @@ export class OperacionalService {
     if (scopeIds && scopeIds.length === 0) {
       return [];
     }
-    const effectiveQuery =
-      scopeIds && scopeIds.length === 1 ? { ...query, secretariaId: scopeIds[0] } : query;
+
+    const querySecretariaIds = query.secretariaIds?.length
+      ? query.secretariaIds
+      : query.secretariaId
+        ? [query.secretariaId]
+        : undefined;
+
+    let effectiveSecretariaIds = querySecretariaIds;
+    if (scopeIds) {
+      effectiveSecretariaIds = querySecretariaIds?.length
+        ? querySecretariaIds.filter((id) => scopeIds.includes(id))
+        : scopeIds;
+      if (effectiveSecretariaIds.length === 0) {
+        return [];
+      }
+    }
+
+    const effectiveQuery: UnidadeListQuery = {
+      ...query,
+      secretariaId: undefined,
+      secretariaIds: effectiveSecretariaIds,
+    };
     const tiposPendencia = this.resolveTiposPendencia(query.tiposPendencia);
     const usesChamados = tiposPendencia.includes('CHAMADOS');
     const usesNc = tiposPendencia.includes('NAO_CONFORMIDADES');
@@ -268,10 +286,7 @@ export class OperacionalService {
     // Equipe/SLA olham chamados abertos independente do chip de tipo de pendência.
     const chamadoWhere = this.buildChamadoPendenciaWhere({ tiposChamadoId, equipeIds });
 
-    const where: Prisma.UnidadePublicaWhereInput = {
-      ...this.buildUnidadeWhere(effectiveQuery),
-      ...(scopeIds && scopeIds.length > 1 ? { secretariaId: { in: scopeIds } } : {}),
-    };
+    const where: Prisma.UnidadePublicaWhereInput = this.buildUnidadeWhere(effectiveQuery);
     const unidades = await this.prisma.unidadePublica.findMany({
       where,
       orderBy: [{ secretaria: { sigla: 'asc' } }, { nome: 'asc' }],
@@ -401,36 +416,41 @@ export class OperacionalService {
   }
 
   async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload): Promise<ChamadoMapaItem[]> {
-    const where: Prisma.ChamadoWhereInput = {
-      ...resolveChamadoSecretariaFilter(user),
-      ...(query.status?.length ? { status: { in: query.status as ChamadoStatus[] } } : {}),
-      ...(query.prioridade?.length ? { prioridade: { in: query.prioridade as ChamadoPrioridade[] } } : {}),
-      ...(query.tipoChamadoId?.length ? { tipoChamadoId: { in: query.tipoChamadoId } } : {}),
-      ...(query.equipeIds?.length ? { equipeId: { in: query.equipeIds } } : {}),
-      ...(query.comUnidade === 'COM' ? { unidadeId: { not: null } } : {}),
-      ...(query.comUnidade === 'SEM' ? { unidadeId: null } : {}),
-      ...(query.bairro
-        ? {
-            OR: [
-              { enderecoBairro: { equals: query.bairro, mode: 'insensitive' } },
-              { unidade: { bairro: { equals: query.bairro, mode: 'insensitive' } } },
-            ],
-          }
-        : {}),
-      ...(query.search
-        ? {
-            OR: [
-              { codigo: { contains: query.search, mode: 'insensitive' } },
-              { titulo: { contains: query.search, mode: 'insensitive' } },
-              { descricao: { contains: query.search, mode: 'insensitive' } },
-              { enderecoTexto: { contains: query.search, mode: 'insensitive' } },
-              { enderecoBairro: { contains: query.search, mode: 'insensitive' } },
-              { unidade: { nome: { contains: query.search, mode: 'insensitive' } } },
-              { unidade: { codigoPatrimonial: { contains: query.search, mode: 'insensitive' } } },
-            ],
-          }
-        : {}),
-    };
+    const bairros = query.bairros?.length ? query.bairros : query.bairro ? [query.bairro] : undefined;
+
+    const conditions: Prisma.ChamadoWhereInput[] = [resolveChamadoSecretariaFilter(user)];
+
+    if (query.status?.length) conditions.push({ status: { in: query.status as ChamadoStatus[] } });
+    if (query.prioridade?.length) conditions.push({ prioridade: { in: query.prioridade as ChamadoPrioridade[] } });
+    if (query.tipoChamadoId?.length) conditions.push({ tipoChamadoId: { in: query.tipoChamadoId } });
+    if (query.equipeIds?.length) conditions.push({ equipeId: { in: query.equipeIds } });
+    if (query.comUnidade === 'COM') conditions.push({ unidadeId: { not: null } });
+    if (query.comUnidade === 'SEM') conditions.push({ unidadeId: null });
+
+    if (bairros?.length) {
+      conditions.push({
+        OR: bairros.flatMap((bairro) => [
+          { enderecoBairro: { equals: bairro, mode: 'insensitive' as const } },
+          { unidade: { bairro: { equals: bairro, mode: 'insensitive' as const } } },
+        ]),
+      });
+    }
+
+    if (query.search) {
+      conditions.push({
+        OR: [
+          { codigo: { contains: query.search, mode: 'insensitive' } },
+          { titulo: { contains: query.search, mode: 'insensitive' } },
+          { descricao: { contains: query.search, mode: 'insensitive' } },
+          { enderecoTexto: { contains: query.search, mode: 'insensitive' } },
+          { enderecoBairro: { contains: query.search, mode: 'insensitive' } },
+          { unidade: { nome: { contains: query.search, mode: 'insensitive' } } },
+          { unidade: { codigoPatrimonial: { contains: query.search, mode: 'insensitive' } } },
+        ],
+      });
+    }
+
+    const where: Prisma.ChamadoWhereInput = { AND: conditions };
 
     const chamados = await this.prisma.chamado.findMany({
       where,
@@ -1126,12 +1146,33 @@ export class OperacionalService {
         : {}),
     };
 
+    const secretariaIds = query.secretariaIds?.length
+      ? query.secretariaIds
+      : query.secretariaId
+        ? [query.secretariaId]
+        : undefined;
+    const tipos = query.tipos?.length ? query.tipos : query.tipo ? [query.tipo] : undefined;
+    const bairros = query.bairros?.length ? query.bairros : query.bairro ? [query.bairro] : undefined;
+    const regioes = query.regioes?.length ? query.regioes : query.regiao ? [query.regiao] : undefined;
+
     return {
       ...(query.situacao === 'INATIVA' ? { ativo: false } : { ativo: true }),
-      ...(query.secretariaId ? { secretariaId: query.secretariaId } : {}),
-      ...(query.tipo ? { tipo: query.tipo as UnidadeTipo } : {}),
-      ...(query.bairro ? { bairro: { equals: query.bairro, mode: 'insensitive' } } : {}),
-      ...(query.regiao ? { regiao: query.regiao } : {}),
+      ...(secretariaIds?.length === 1
+        ? { secretariaId: secretariaIds[0] }
+        : secretariaIds?.length
+          ? { secretariaId: { in: secretariaIds } }
+          : {}),
+      ...(tipos?.length === 1
+        ? { tipo: tipos[0] as any }
+        : tipos?.length
+          ? { tipo: { in: tipos } as any }
+          : {}),
+      ...(bairros?.length === 1
+        ? { bairro: { equals: bairros[0], mode: 'insensitive' } }
+        : bairros?.length
+          ? { bairro: { in: bairros } }
+          : {}),
+      ...(regioes?.length === 1 ? { regiao: regioes[0] } : regioes?.length ? { regiao: { in: regioes } } : {}),
       ...(Object.keys(secretariaFilter).length > 0 ? { secretaria: secretariaFilter } : {}),
       ...(query.search
         ? {

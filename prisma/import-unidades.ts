@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, UnidadeTipo } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import { logError, logInfo, logStep, logWarn, maskDatabaseUrl } from './startup-log';
 
 const connectionString =
@@ -15,7 +15,7 @@ type CsvRow = {
   secretaria_sigla: string;
   codigo_patrimonial: string;
   nome: string;
-  tipo: UnidadeTipo;
+  tipo: string;
   endereco: string;
   bairro?: string;
   cep?: string;
@@ -25,7 +25,14 @@ type CsvRow = {
   ativo: boolean;
 };
 
-const VALID_TIPOS = new Set<string>(Object.values(UnidadeTipo));
+const VALID_TIPOS = new Set<string>([
+  'ESCOLA',
+  'UBS',
+  'PRACA',
+  'PREDIO_ADMINISTRATIVO',
+  'ESPACO_ESPORTIVO',
+  'OUTRO',
+]);
 
 async function main() {
   const args = process.argv.slice(2);
@@ -149,7 +156,7 @@ function parseCsv(content: string): CsvRow[] {
       secretaria_sigla: record.secretaria_sigla,
       codigo_patrimonial: record.codigo_patrimonial,
       nome: record.nome,
-      tipo: tipo as UnidadeTipo,
+      tipo: tipo as string,
       endereco: record.endereco,
       bairro: record.bairro || undefined,
       cep: record.cep || undefined,
