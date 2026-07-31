@@ -95,6 +95,7 @@ export const NAV_SCREEN_MAP: Record<string, string> = {
   dashboard: 'dashboard',
   cronograma: 'cronograma',
   relatorios: 'relatorios',
+  documentos: 'documentos',
   admin: 'admin',
   checklists: 'checklists',
   integracoes: 'integracoes',

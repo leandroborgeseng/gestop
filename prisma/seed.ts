@@ -184,6 +184,13 @@ async function main() {
       ['chamados.editar_abertura', 'Editar informações de abertura do chamado', 'chamados'],
       ['chamados.execucao_manual', 'Lançar execução de chamado manualmente', 'chamados'],
       ['meus_chamados.visualizar', 'Visualizar chamados abertos por mim ou em que sou observador', 'meus_chamados'],
+      ['documentos.visualizar', 'Visualizar documentos do módulo Documentos', 'documentos'],
+      ['documentos.criar_avulso', 'Criar documento avulso', 'documentos'],
+      ['documentos.editar_vinculo', 'Editar vínculos de documento', 'documentos'],
+      ['documentos.gerar_pdf', 'Gerar e visualizar PDF de documento', 'documentos'],
+      ['documentos.coletar_assinatura', 'Coletar assinatura de documento', 'documentos'],
+      ['documentos.cancelar_assinado', 'Cancelar PDF assinado', 'documentos'],
+      ['documentos.administrar', 'Administrar documentos', 'documentos'],
       ['dashboard.visualizar', 'Visualizar indicadores operacionais', 'dashboard'],
       ['auditoria.visualizar', 'Visualizar trilhas de auditoria', 'auditoria'],
     ].map(([chave, descricao, modulo]) =>

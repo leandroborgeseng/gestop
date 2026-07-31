@@ -11,6 +11,7 @@ import {
   Clock,
   Crosshair,
   FileDown,
+  FileText,
   GitBranch,
   Inbox,
   Megaphone,
@@ -26,6 +27,7 @@ import { ChamadoDescricaoExpandivel } from '@/components/chamados/chamado-descri
 import { ChamadoObservadoresSection } from '@/components/chamados/chamado-observadores-section';
 import { ChamadosFiltrosPanel, ChamadosFiltrosValue } from '@/components/chamados/chamados-filtros-panel';
 import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
+import { DocumentosRelacionadosPanel } from '@/components/documentos/documentos-relacionados-panel';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
@@ -621,6 +623,7 @@ function ChamadoDetailPanel({
   const snackbar = useSnackbar();
   const [pendingStatus, setPendingStatus] = useState<ChamadoStatus>('ABERTO');
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
   const [pendingEquipePlanejamentoId, setPendingEquipePlanejamentoId] = useState('');
@@ -708,6 +711,16 @@ function ChamadoDetailPanel({
                 <FileDown className="h-3.5 w-3.5" />
                 {pdfBusy ? 'Gerando…' : 'PDF'}
               </Button>
+              <Button
+                type="button"
+                variant="outlined"
+                size="sm"
+                disabled={busy}
+                onClick={() => setDocsOpen((current) => !current)}
+              >
+                <FileText className="h-3.5 w-3.5" />
+                Documentos relacionados
+              </Button>
               <Badge variant={prioridadeVariant(resumo.prioridade)}>{resumo.prioridade}</Badge>
               <Badge variant={st.badge}>{st.label}</Badge>
             </div>
@@ -724,6 +737,9 @@ function ChamadoDetailPanel({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
+          {docsOpen ? (
+            <DocumentosRelacionadosPanel chamadoId={resumo.id} onClose={() => setDocsOpen(false)} />
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard
               label="Prevista execução"

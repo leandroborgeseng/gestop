@@ -31,6 +31,14 @@ export class StorageService {
     throw new BadRequestException('Envie a evidencia como upload (data URL). URLs externas nao sao aceitas.');
   }
 
+  /** Persiste buffer arbitrário (ex.: PDF de documento formal). */
+  async persistBuffer(buffer: Buffer, mimeType: string, prefix = 'documentos'): Promise<StoredObject> {
+    if (!buffer?.length) {
+      throw new BadRequestException('Arquivo vazio.');
+    }
+    return this.storeBuffer(buffer, mimeType, prefix);
+  }
+
   async deleteStoredObject(storageKey: string) {
     const normalizedKey = storageKey.trim();
     if (!normalizedKey) return;
@@ -215,6 +223,8 @@ function extensionFromMime(mimeType: string) {
       return '.webp';
     case 'image/heic':
       return '.heic';
+    case 'application/pdf':
+      return '.pdf';
     default:
       return '.bin';
   }

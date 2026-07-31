@@ -109,6 +109,20 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
     ],
   },
   {
+    id: 'documentos',
+    label: 'Documentos',
+    functions: [
+      { id: '_tela', label: 'Documentos', actions: [...PERMISSION_ACTIONS] },
+      { id: 'consultar', label: 'Visualizar documentos', actions: ['visualizar'] },
+      { id: 'avulso', label: 'Criar documento avulso', actions: ['inserir'] },
+      { id: 'editar_vinculo', label: 'Editar vínculo', actions: ['alterar'] },
+      { id: 'gerar_pdf', label: 'Gerar PDF', actions: ['visualizar', 'executar'] },
+      { id: 'coletar_assinatura', label: 'Coletar assinatura', actions: ['executar'] },
+      { id: 'cancelar_assinado', label: 'Cancelar PDF assinado', actions: ['executar'] },
+      { id: 'administrar', label: 'Administrar documentos', actions: ['alterar', 'excluir', 'executar'] },
+    ],
+  },
+  {
     id: 'checklists',
     label: 'Checklists',
     functions: [

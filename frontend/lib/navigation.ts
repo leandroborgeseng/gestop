@@ -8,6 +8,7 @@ import {
   ClipboardList,
   Eye,
   FileSpreadsheet,
+  FileText,
   LayoutGrid,
   MapPin,
   Megaphone,
@@ -134,6 +135,20 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'dashboard.visualizar',
   },
   {
+    id: 'documentos',
+    label: 'Documentos',
+    shortLabel: 'Docs',
+    href: '/documentos',
+    icon: FileText,
+    permissions: [
+      'documentos.visualizar',
+      'documentos.administrar',
+      'dashboard.visualizar',
+      'chamados.gerenciar',
+      'fiscalizacoes.executar',
+    ],
+  },
+  {
     id: 'admin',
     label: 'Administração',
     href: '/admin',
@@ -162,7 +177,7 @@ export const NAV_GROUPS: NavGroup[] = [
     title: 'Operação',
     itemIds: ['cco', 'mobile', 'vistorias', 'novo_chamado', 'meus_chamados', 'chamados', 'execucao'],
   },
-  { title: 'Gestão', itemIds: ['dashboard', 'cronograma', 'relatorios'] },
+  { title: 'Gestão', itemIds: ['dashboard', 'cronograma', 'relatorios', 'documentos'] },
   { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
 ];
 

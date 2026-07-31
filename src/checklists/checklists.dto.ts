@@ -25,6 +25,12 @@ export class ChecklistDto {
   @IsEnum(ChecklistFinalidade)
   finalidade?: ChecklistFinalidade;
 
+  /** Onde o checklist pode ser usado (multi-seleção). */
+  @IsOptional()
+  @IsArray()
+  @IsEnum(ChecklistFinalidade, { each: true })
+  finalidades?: ChecklistFinalidade[];
+
   @IsEnum(ChecklistEscopo)
   escopo!: ChecklistEscopo;
 

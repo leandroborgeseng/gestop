@@ -66,4 +66,17 @@ describe('permissions-matrix', () => {
     expect(payload.legacyKeys).toContain('permissoes.gerenciar');
     expect(payload.allKeys).toContain('permissoes.gerenciar');
   });
+
+  it('deriva permissões legadas do módulo Documentos', () => {
+    const matrix = new Set([
+      permissionMatrixKey('documentos', '_tela', 'visualizar'),
+      permissionMatrixKey('documentos', 'consultar', 'visualizar'),
+      permissionMatrixKey('documentos', 'coletar_assinatura', 'executar'),
+      permissionMatrixKey('documentos', 'administrar', 'alterar'),
+    ]);
+    const legacy = deriveLegacyPermissionKeys(matrix);
+    expect(legacy.has('documentos.visualizar')).toBe(true);
+    expect(legacy.has('documentos.coletar_assinatura')).toBe(true);
+    expect(legacy.has('documentos.administrar')).toBe(true);
+  });
 });

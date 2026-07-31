@@ -11,12 +11,22 @@ const GESTOR_SECRETARIA_PERMISSOES = [
   'chamados.editar_abertura',
   'chamados.execucao_manual',
   'dashboard.visualizar',
+  'documentos.visualizar',
+  'documentos.gerar_pdf',
+  'documentos.coletar_assinatura',
 ] as const;
 
 const NOVAS_PERMISSOES = [
   ['chamados.editar_abertura', 'Editar informacoes de abertura do chamado', 'chamados'],
   ['chamados.execucao_manual', 'Lancar execucao de chamado manualmente', 'chamados'],
   ['meus_chamados.visualizar', 'Visualizar chamados abertos por mim ou em que sou observador', 'meus_chamados'],
+  ['documentos.visualizar', 'Visualizar documentos do modulo Documentos', 'documentos'],
+  ['documentos.criar_avulso', 'Criar documento avulso', 'documentos'],
+  ['documentos.editar_vinculo', 'Editar vinculos de documento', 'documentos'],
+  ['documentos.gerar_pdf', 'Gerar e visualizar PDF de documento', 'documentos'],
+  ['documentos.coletar_assinatura', 'Coletar assinatura de documento', 'documentos'],
+  ['documentos.cancelar_assinado', 'Cancelar PDF assinado', 'documentos'],
+  ['documentos.administrar', 'Administrar documentos', 'documentos'],
 ] as const;
 
 const connectionString =

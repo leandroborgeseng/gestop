@@ -28,6 +28,7 @@ import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import { ChamadosService } from '../chamados/chamados.service';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 import { CronogramaService } from '../cronograma/cronograma.service';
+import { DocumentosService } from '../documentos/documentos.service';
 import { validateChecklistResponses } from '../domain/checklist-response.rules';
 import { computeVistoriaNotas } from '../domain/vistoria-nota';
 import { buildFieldPackageChecklistWhere } from '../mobile/field-package';
@@ -101,6 +102,7 @@ export class FiscalizacoesService {
     private readonly chamadosService: ChamadosService,
     private readonly storageService: StorageService,
     private readonly cronogramaService: CronogramaService,
+    private readonly documentosService: DocumentosService,
   ) {}
 
   async list(query: ListFiscalizacoesQueryDto, user: JwtPayload) {
@@ -839,10 +841,54 @@ export class FiscalizacoesService {
         concluidaEm: dataVistoria,
       });
 
+      await this.registrarDocumentoVistoria({
+        fiscalizacaoId: fiscalizacao.id,
+        secretariaId: unidade.secretariaId,
+        unidadeId: unidade.id,
+        checklistVersaoId: checklistVersao.id,
+        responsavelId: agenteId,
+        criadoPorId: user.sub,
+        titulo: `Relatório de vistoria · ${unidade.nome}`,
+        user,
+      });
+
       return this.getById(fiscalizacao.id, user);
     } catch (error) {
       await this.storageService.deleteStoredObjects(persistedStorageKeys);
       throw error;
+    }
+  }
+
+  private async registrarDocumentoVistoria(input: {
+    fiscalizacaoId: string;
+    secretariaId: string;
+    unidadeId: string;
+    checklistVersaoId: string;
+    responsavelId: string;
+    criadoPorId: string;
+    titulo: string;
+    user: JwtPayload;
+  }) {
+    let pdfBuffer: Buffer | null = null;
+    try {
+      pdfBuffer = await this.exportPdf(input.fiscalizacaoId, input.user);
+    } catch {
+      pdfBuffer = null;
+    }
+
+    try {
+      await this.documentosService.upsertFromFiscalizacao({
+        fiscalizacaoId: input.fiscalizacaoId,
+        secretariaId: input.secretariaId,
+        unidadeId: input.unidadeId,
+        checklistVersaoId: input.checklistVersaoId,
+        responsavelId: input.responsavelId,
+        criadoPorId: input.criadoPorId,
+        titulo: input.titulo,
+        pdfBuffer,
+      });
+    } catch {
+      // Não bloqueia a conclusão da vistoria se a camada documental falhar.
     }
   }
 

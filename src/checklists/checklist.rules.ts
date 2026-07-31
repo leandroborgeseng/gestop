@@ -24,34 +24,62 @@ export function normalizeItemCode(code: string) {
   return code.trim().toUpperCase().replace(/\s+/g, '-');
 }
 
+export function resolveChecklistFinalidades(dto: ChecklistDto): ChecklistFinalidade[] {
+  const fromArray = (dto.finalidades ?? []).filter(Boolean);
+  if (fromArray.length > 0) {
+    return Array.from(new Set(fromArray));
+  }
+  return [dto.finalidade ?? ChecklistFinalidade.VISTORIA];
+}
+
+export function resolvePrimaryFinalidade(finalidades: ChecklistFinalidade[]): ChecklistFinalidade {
+  if (finalidades.includes(ChecklistFinalidade.CHAMADO)) return ChecklistFinalidade.CHAMADO;
+  if (finalidades.includes(ChecklistFinalidade.VISTORIA)) return ChecklistFinalidade.VISTORIA;
+  if (finalidades.includes(ChecklistFinalidade.DOCUMENTO_AVULSO)) return ChecklistFinalidade.DOCUMENTO_AVULSO;
+  return ChecklistFinalidade.VISTORIA;
+}
+
 export function validateChecklistEscopo(dto: ChecklistDto) {
-  const finalidade = dto.finalidade ?? ChecklistFinalidade.VISTORIA;
-  if (finalidade === ChecklistFinalidade.CHAMADO) {
+  const finalidades = resolveChecklistFinalidades(dto);
+  if (finalidades.length === 0) {
+    throw new Error('Selecione ao menos uma finalidade de uso do checklist.');
+  }
+
+  if (finalidades.includes(ChecklistFinalidade.CHAMADO)) {
     if (!dto.tipoChamadoIds?.length) {
       throw new Error('Vincule o checklist a ao menos um tipo de chamado.');
     }
-    return;
   }
 
-  if (dto.escopo === ChecklistEscopo.UNIDADE_TIPO && !dto.unidadeTipo) {
-    throw new Error('Informe o tipo de proprio para checklists com escopo por tipo.');
-  }
+  const needsEscopo =
+    finalidades.includes(ChecklistFinalidade.VISTORIA) ||
+    (finalidades.includes(ChecklistFinalidade.DOCUMENTO_AVULSO) &&
+      !finalidades.includes(ChecklistFinalidade.CHAMADO));
 
-  if (dto.escopo === ChecklistEscopo.SECRETARIA && !dto.secretariaId) {
-    throw new Error('Informe a secretaria para checklists com escopo por secretaria.');
-  }
+  if (!needsEscopo) return;
 
-  if (dto.escopo === ChecklistEscopo.UNIDADE && !dto.unidadeId) {
-    throw new Error('Informe o proprio para checklists com escopo por unidade.');
+  if (finalidades.includes(ChecklistFinalidade.VISTORIA)) {
+    if (dto.escopo === ChecklistEscopo.UNIDADE_TIPO && !dto.unidadeTipo) {
+      throw new Error('Informe o tipo de proprio para checklists com escopo por tipo.');
+    }
+    if (dto.escopo === ChecklistEscopo.SECRETARIA && !dto.secretariaId) {
+      throw new Error('Informe a secretaria para checklists com escopo por secretaria.');
+    }
+    if (dto.escopo === ChecklistEscopo.UNIDADE && !dto.unidadeId) {
+      throw new Error('Informe o proprio para checklists com escopo por unidade.');
+    }
   }
 }
 
 export function normalizeChecklistBinding(dto: ChecklistDto): ChecklistDto {
-  const finalidade = dto.finalidade ?? ChecklistFinalidade.VISTORIA;
-  if (finalidade === ChecklistFinalidade.CHAMADO) {
+  const finalidades = resolveChecklistFinalidades(dto);
+  const finalidade = resolvePrimaryFinalidade(finalidades);
+
+  if (finalidade === ChecklistFinalidade.CHAMADO && !finalidades.includes(ChecklistFinalidade.VISTORIA)) {
     return {
       ...dto,
       finalidade,
+      finalidades,
       escopo: ChecklistEscopo.GLOBAL,
       secretariaId: undefined,
       unidadeId: undefined,
@@ -60,13 +88,31 @@ export function normalizeChecklistBinding(dto: ChecklistDto): ChecklistDto {
     };
   }
 
+  if (finalidade === ChecklistFinalidade.DOCUMENTO_AVULSO && !finalidades.includes(ChecklistFinalidade.VISTORIA)) {
+    return {
+      ...dto,
+      finalidade,
+      finalidades,
+      escopo: dto.escopo ?? ChecklistEscopo.GLOBAL,
+      secretariaId: dto.secretariaId || undefined,
+      unidadeId: dto.unidadeId || undefined,
+      unidadeTipo: dto.unidadeTipo || undefined,
+      tipoChamadoIds: finalidades.includes(ChecklistFinalidade.CHAMADO)
+        ? Array.from(new Set((dto.tipoChamadoIds ?? []).map((id) => id.trim()).filter(Boolean)))
+        : undefined,
+    };
+  }
+
   const base = {
     ...dto,
     finalidade,
+    finalidades,
     secretariaId: dto.secretariaId || undefined,
     unidadeId: dto.unidadeId || undefined,
     unidadeTipo: dto.unidadeTipo || undefined,
-    tipoChamadoIds: undefined,
+    tipoChamadoIds: finalidades.includes(ChecklistFinalidade.CHAMADO)
+      ? Array.from(new Set((dto.tipoChamadoIds ?? []).map((id) => id.trim()).filter(Boolean)))
+      : undefined,
   };
 
   switch (dto.escopo) {

@@ -10,6 +10,7 @@ import {
   Camera,
   CheckCircle2,
   Crosshair,
+  FileText,
   LoaderCircle,
   MapPin,
   Paperclip,
@@ -28,6 +29,7 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { useCanGerenciarChamados, useCanLancarExecucaoManual } from '@/components/auth/session-context';
 import { MembroExternoPicker } from '@/components/chamados/membro-externo-picker';
+import { DocumentosRelacionadosPanel } from '@/components/documentos/documentos-relacionados-panel';
 import {
   ChamadoExecucaoChecklistSection,
   ChecklistRespostaDraft,
@@ -199,6 +201,7 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
   const [evidencias, setEvidencias] = useState<ChamadoEvidencia[]>([]);
   const [previewEvidenceUrl, setPreviewEvidenceUrl] = useState<string | null>(null);
+  const [docsOpen, setDocsOpen] = useState(false);
   const [showManualForm, setShowManualForm] = useState(false);
   const [manualDataExecucao, setManualDataExecucao] = useState(() => new Date().toISOString().slice(0, 10));
   const [manualRelatorio, setManualRelatorio] = useState('');
@@ -593,14 +596,25 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
                 ) : null}
               </p>
             </div>
-            {canGerenciar ? (
-              <Link href={`/chamados?id=${detail.id}`} className="text-[13px] font-semibold text-[var(--brand-hover)]">
-                Ver na triagem
-              </Link>
-            ) : null}
+            <div className="flex flex-col items-end gap-2">
+              <Button type="button" size="sm" variant="outlined" onClick={() => setDocsOpen((current) => !current)}>
+                <FileText className="h-3.5 w-3.5" />
+                Documentos relacionados
+              </Button>
+              {canGerenciar ? (
+                <Link href={`/chamados?id=${detail.id}`} className="text-[13px] font-semibold text-[var(--brand-hover)]">
+                  Ver na triagem
+                </Link>
+              ) : null}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="pt-4">
+          {docsOpen ? (
+            <div className="mb-4">
+              <DocumentosRelacionadosPanel chamadoId={detail.id} onClose={() => setDocsOpen(false)} />
+            </div>
+          ) : null}
           <ol className="grid grid-cols-3 gap-2">
             {STEPS.map((item, index) => {
               const active = item.id === step;

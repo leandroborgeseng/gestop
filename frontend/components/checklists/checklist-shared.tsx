@@ -213,10 +213,24 @@ export function CreateChecklistForm({
   formId?: string;
   hideActions?: boolean;
 }) {
-  const [finalidade, setFinalidade] = useState<'VISTORIA' | 'CHAMADO'>('VISTORIA');
+  const [finalidades, setFinalidades] = useState<Array<'VISTORIA' | 'CHAMADO' | 'DOCUMENTO_AVULSO'>>(['VISTORIA']);
   const [escopo, setEscopo] = useState<ChecklistEscopo>('UNIDADE_TIPO');
   const [tipoChamadoIds, setTipoChamadoIds] = useState<string[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
+  const usaVistoria = finalidades.includes('VISTORIA');
+  const usaChamado = finalidades.includes('CHAMADO');
+  const usaDocumento = finalidades.includes('DOCUMENTO_AVULSO');
+
+  function toggleFinalidade(value: 'VISTORIA' | 'CHAMADO' | 'DOCUMENTO_AVULSO') {
+    setFinalidades((current) => {
+      const has = current.includes(value);
+      if (has) {
+        const next = current.filter((item) => item !== value);
+        return next.length ? next : current;
+      }
+      return [...current, value];
+    });
+  }
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -225,33 +239,41 @@ export function CreateChecklistForm({
     const selectedEscopo = String(form.get('escopo') || 'GLOBAL') as ChecklistEscopo;
     const unidadeTipo = String(form.get('unidadeTipo') || '');
 
-    if (finalidade === 'CHAMADO' && tipoChamadoIds.length === 0) {
+    if (finalidades.length === 0) {
+      setFormError('Selecione ao menos uma finalidade de uso.');
+      return;
+    }
+
+    if (usaChamado && tipoChamadoIds.length === 0) {
       setFormError('Selecione ao menos um tipo de chamado.');
       return;
     }
 
-    if (finalidade === 'VISTORIA' && selectedEscopo === 'UNIDADE_TIPO' && !unidadeTipo) {
+    if (usaVistoria && selectedEscopo === 'UNIDADE_TIPO' && !unidadeTipo) {
       setFormError('Selecione o tipo de próprio para vincular o checklist.');
       return;
     }
 
-    if (finalidade === 'VISTORIA' && selectedEscopo === 'SECRETARIA' && !String(form.get('secretariaId') || '')) {
+    if (usaVistoria && selectedEscopo === 'SECRETARIA' && !String(form.get('secretariaId') || '')) {
       setFormError('Selecione a secretaria para vincular o checklist.');
       return;
     }
+
+    const finalidade = usaChamado && !usaVistoria ? 'CHAMADO' : usaVistoria ? 'VISTORIA' : 'DOCUMENTO_AVULSO';
 
     onSubmit({
       nome: String(form.get('nome')),
       descricao: String(form.get('descricao') || ''),
       finalidade,
-      escopo: finalidade === 'CHAMADO' ? 'GLOBAL' : selectedEscopo,
-      secretariaId: finalidade === 'CHAMADO' ? '' : String(form.get('secretariaId') || ''),
-      unidadeTipo: finalidade === 'CHAMADO' ? undefined : unidadeTipo || undefined,
-      tipoChamadoIds: finalidade === 'CHAMADO' ? tipoChamadoIds : undefined,
+      finalidades,
+      escopo: usaChamado && !usaVistoria ? 'GLOBAL' : selectedEscopo,
+      secretariaId: usaChamado && !usaVistoria ? '' : String(form.get('secretariaId') || ''),
+      unidadeTipo: usaChamado && !usaVistoria ? undefined : unidadeTipo || undefined,
+      tipoChamadoIds: usaChamado ? tipoChamadoIds : undefined,
       ativo: true,
     });
     event.currentTarget.reset();
-    setFinalidade('VISTORIA');
+    setFinalidades(['VISTORIA']);
     setEscopo('UNIDADE_TIPO');
     setTipoChamadoIds([]);
   }
@@ -264,18 +286,29 @@ export function CreateChecklistForm({
       <Field label="Descrição">
         <Input name="descricao" />
       </Field>
-      <Field label="Finalidade do checklist" hint="Vistoria mantém notas/NC. Chamado é complementar na execução.">
-        <Select
-          value={finalidade}
-          onChange={(event) => setFinalidade(event.target.value as 'VISTORIA' | 'CHAMADO')}
-        >
-          <option value="VISTORIA">Vistoria</option>
-          <option value="CHAMADO">Chamado</option>
-        </Select>
+      <Field
+        label="Finalidades de uso"
+        hint="Controle onde o checklist aparece: Vistoria, Execução de chamado e/ou Documento avulso."
+      >
+        <div className="space-y-1.5 rounded-[var(--r-md)] border border-[var(--line)] p-2">
+          {(
+            [
+              ['VISTORIA', 'Vistoria'],
+              ['CHAMADO', 'Execução de chamado'],
+              ['DOCUMENTO_AVULSO', 'Documento avulso'],
+            ] as const
+          ).map(([value, label]) => (
+            <label key={value} className="flex items-center gap-2 text-[13px] text-[var(--ink)]">
+              <input type="checkbox" checked={finalidades.includes(value)} onChange={() => toggleFinalidade(value)} />
+              {label}
+            </label>
+          ))}
+        </div>
       </Field>
-      {finalidade === 'VISTORIA' ? (
+      {usaVistoria || (usaDocumento && !usaChamado) ? (
         <ChecklistBindingFields escopo={escopo} onEscopoChange={setEscopo} secretarias={secretarias} />
-      ) : (
+      ) : null}
+      {usaChamado ? (
         <Field label="Tipo de chamado" hint="O checklist será aplicado na execução desses tipos.">
           <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-2">
             {tiposChamado.map((tipo) => {
@@ -300,7 +333,7 @@ export function CreateChecklistForm({
             ) : null}
           </div>
         </Field>
-      )}
+      ) : null}
       {formError ? <p className="md-body-md text-red-700">{formError}</p> : null}
       {hideActions ? null : (
         <div className="flex flex-wrap gap-2 pt-2">
@@ -365,64 +398,62 @@ export function ChecklistHeader({
   onDeactivate: () => void;
   onUpdateBinding: (payload: Record<string, unknown>) => void;
 }) {
-  const isChamado = checklist.finalidade === 'CHAMADO';
+  const resolvedFinalidades = (checklist.finalidades?.length
+    ? checklist.finalidades
+    : checklist.finalidade
+      ? [checklist.finalidade]
+      : ['VISTORIA']) as Array<'VISTORIA' | 'CHAMADO' | 'DOCUMENTO_AVULSO'>;
+  const isChamado = resolvedFinalidades.includes('CHAMADO') && !resolvedFinalidades.includes('VISTORIA');
   const [editOpen, setEditOpen] = useState(false);
   const [escopo, setEscopo] = useState<ChecklistEscopo>(checklist.escopo);
+  const [finalidades, setFinalidades] = useState(resolvedFinalidades);
   const [tipoChamadoIds, setTipoChamadoIds] = useState<string[]>(
     () => checklist.tiposChamado?.map((item) => item.tipoChamado.id) ?? [],
   );
   const [formError, setFormError] = useState<string | null>(null);
+  const usaVistoria = finalidades.includes('VISTORIA');
+  const usaChamado = finalidades.includes('CHAMADO');
 
   useEffect(() => {
     if (editOpen) {
       setEscopo(checklist.escopo);
+      setFinalidades(resolvedFinalidades);
       setTipoChamadoIds(checklist.tiposChamado?.map((item) => item.tipoChamado.id) ?? []);
       setFormError(null);
     }
-  }, [editOpen, checklist.escopo, checklist.tiposChamado]);
+  }, [editOpen, checklist.escopo, checklist.tiposChamado, checklist.finalidade, checklist.finalidades]);
 
   function submitBinding(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
     const form = new FormData(event.currentTarget);
 
-    if (isChamado) {
-      if (tipoChamadoIds.length === 0) {
-        setFormError('Selecione ao menos um tipo de chamado.');
-        return;
-      }
-      onUpdateBinding({
-        nome: checklist.nome,
-        descricao: checklist.descricao ?? '',
-        finalidade: 'CHAMADO',
-        escopo: 'GLOBAL',
-        tipoChamadoIds,
-        ativo: checklist.ativo,
-      });
-      setEditOpen(false);
+    if (finalidades.length === 0) {
+      setFormError('Selecione ao menos uma finalidade.');
+      return;
+    }
+    if (usaChamado && tipoChamadoIds.length === 0) {
+      setFormError('Selecione ao menos um tipo de chamado.');
       return;
     }
 
-    const selectedEscopo = String(form.get('escopo')) as ChecklistEscopo;
+    const selectedEscopo = String(form.get('escopo') || checklist.escopo) as ChecklistEscopo;
     const unidadeTipo = String(form.get('unidadeTipo') || '');
-
-    if (selectedEscopo === 'UNIDADE_TIPO' && !unidadeTipo) {
+    if (usaVistoria && selectedEscopo === 'UNIDADE_TIPO' && !unidadeTipo && !checklist.unidadeTipo) {
       setFormError('Selecione o tipo de próprio para vincular o checklist.');
       return;
     }
 
-    if (selectedEscopo === 'SECRETARIA' && !String(form.get('secretariaId') || '')) {
-      setFormError('Selecione a secretaria para vincular o checklist.');
-      return;
-    }
-
+    const finalidade = usaChamado && !usaVistoria ? 'CHAMADO' : usaVistoria ? 'VISTORIA' : 'DOCUMENTO_AVULSO';
     onUpdateBinding({
       nome: checklist.nome,
       descricao: checklist.descricao ?? '',
-      finalidade: 'VISTORIA',
-      escopo: selectedEscopo,
-      secretariaId: String(form.get('secretariaId') || ''),
-      unidadeTipo: unidadeTipo || undefined,
+      finalidade,
+      finalidades,
+      escopo: usaChamado && !usaVistoria ? 'GLOBAL' : selectedEscopo,
+      secretariaId: usaChamado && !usaVistoria ? '' : String(form.get('secretariaId') || checklist.secretaria?.id || ''),
+      unidadeTipo: usaChamado && !usaVistoria ? undefined : unidadeTipo || checklist.unidadeTipo || undefined,
+      tipoChamadoIds: usaChamado ? tipoChamadoIds : undefined,
       ativo: checklist.ativo,
     });
     setEditOpen(false);
@@ -438,7 +469,14 @@ export function ChecklistHeader({
                 <ClipboardList className="h-3.5 w-3.5" />
                 {checklist.ativo ? 'Ativo' : 'Inativo'}
               </Chip>
-              <Chip variant="default">{isChamado ? 'Finalidade: Chamado' : 'Finalidade: Vistoria'}</Chip>
+              <Chip variant="default">
+                Finalidade:{' '}
+                {resolvedFinalidades
+                  .map((item) =>
+                    item === 'CHAMADO' ? 'Chamado' : item === 'DOCUMENTO_AVULSO' ? 'Documento avulso' : 'Vistoria',
+                  )
+                  .join(' · ')}
+              </Chip>
             </div>
             <h2 className="md-headline-md mt-3 text-[var(--md-on-surface)]">{checklist.nome}</h2>
             <p className="md-body-md mt-1 text-[var(--md-on-surface-variant)]">
@@ -460,7 +498,36 @@ export function ChecklistHeader({
       </Card>
       <Sheet open={editOpen} onClose={() => setEditOpen(false)} title="Vínculo do checklist">
         <form onSubmit={submitBinding} className="space-y-4">
-          {isChamado ? (
+          <Field label="Finalidades de uso">
+            <div className="space-y-1.5 rounded-[var(--r-md)] border border-[var(--line)] p-2">
+              {(
+                [
+                  ['VISTORIA', 'Vistoria'],
+                  ['CHAMADO', 'Execução de chamado'],
+                  ['DOCUMENTO_AVULSO', 'Documento avulso'],
+                ] as const
+              ).map(([value, label]) => (
+                <label key={value} className="flex items-center gap-2 text-[13px] text-[var(--ink)]">
+                  <input
+                    type="checkbox"
+                    checked={finalidades.includes(value)}
+                    onChange={() =>
+                      setFinalidades((current) => {
+                        const has = current.includes(value);
+                        if (has) {
+                          const next = current.filter((item) => item !== value);
+                          return next.length ? next : current;
+                        }
+                        return [...current, value];
+                      })
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </Field>
+          {usaChamado ? (
             <Field label="Tipo de chamado" hint="O checklist será aplicado na execução desses tipos.">
               <div className="max-h-48 space-y-1.5 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-2">
                 {tiposChamado.map((tipo) => {
@@ -485,7 +552,8 @@ export function ChecklistHeader({
                 ) : null}
               </div>
             </Field>
-          ) : (
+          ) : null}
+          {usaVistoria || (!usaChamado && finalidades.includes('DOCUMENTO_AVULSO')) ? (
             <ChecklistBindingFields
               key={`${checklist.id}-${checklist.unidadeTipo ?? ''}-${checklist.secretariaId ?? ''}`}
               escopo={escopo}
@@ -494,7 +562,7 @@ export function ChecklistHeader({
               defaultSecretariaId={checklist.secretariaId ?? ''}
               defaultUnidadeTipo={checklist.unidadeTipo ?? ''}
             />
-          )}
+          ) : null}
           {formError ? <p className="md-body-md text-red-700">{formError}</p> : null}
           <div className="flex flex-wrap gap-2 pt-2">
             <Button type="submit" variant="filled" className="flex-1">

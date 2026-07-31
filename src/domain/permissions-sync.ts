@@ -32,6 +32,44 @@ export async function syncPermissionsCatalog(prisma: PrismaClient) {
     modulo: 'meus_chamados',
   });
 
+  entries.push(
+    {
+      chave: 'documentos.visualizar',
+      descricao: 'Visualizar documentos do módulo Documentos',
+      modulo: 'documentos',
+    },
+    {
+      chave: 'documentos.criar_avulso',
+      descricao: 'Criar documento avulso',
+      modulo: 'documentos',
+    },
+    {
+      chave: 'documentos.editar_vinculo',
+      descricao: 'Editar vínculos de documento',
+      modulo: 'documentos',
+    },
+    {
+      chave: 'documentos.gerar_pdf',
+      descricao: 'Gerar e visualizar PDF de documento',
+      modulo: 'documentos',
+    },
+    {
+      chave: 'documentos.coletar_assinatura',
+      descricao: 'Coletar assinatura de documento',
+      modulo: 'documentos',
+    },
+    {
+      chave: 'documentos.cancelar_assinado',
+      descricao: 'Cancelar PDF assinado',
+      modulo: 'documentos',
+    },
+    {
+      chave: 'documentos.administrar',
+      descricao: 'Administrar documentos',
+      modulo: 'documentos',
+    },
+  );
+
   for (const entry of entries) {
     await prisma.permissao.upsert({
       where: { chave: entry.chave },

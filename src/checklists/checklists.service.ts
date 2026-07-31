@@ -64,12 +64,16 @@ export class ChecklistsService {
     await this.ensureUnidadeAtiva(binding.unidadeId);
     await this.ensureTiposChamadoAtivos(binding.tipoChamadoIds);
     const finalidade = (binding.finalidade ?? ChecklistFinalidade.VISTORIA) as ChecklistFinalidade;
+    const finalidades = (binding.finalidades?.length ? binding.finalidades : [finalidade]) as ChecklistFinalidade[];
+    const linkTiposChamado =
+      finalidades.includes(ChecklistFinalidade.CHAMADO) && Boolean(binding.tipoChamadoIds?.length);
 
     const checklist = await this.prisma.checklist.create({
       data: {
         nome: binding.nome.trim(),
         descricao: binding.descricao?.trim(),
         finalidade,
+        finalidades,
         escopo: binding.escopo,
         secretariaId: binding.secretariaId || null,
         unidadeId: binding.unidadeId || null,
@@ -82,10 +86,10 @@ export class ChecklistsService {
             estrutura: {},
           },
         },
-        ...(finalidade === ChecklistFinalidade.CHAMADO && binding.tipoChamadoIds?.length
+        ...(linkTiposChamado
           ? {
               tiposChamado: {
-                create: binding.tipoChamadoIds.map((tipoChamadoId) => ({ tipoChamadoId })),
+                create: binding.tipoChamadoIds!.map((tipoChamadoId) => ({ tipoChamadoId })),
               },
             }
           : {}),
@@ -104,6 +108,9 @@ export class ChecklistsService {
     await this.ensureTiposChamadoAtivos(binding.tipoChamadoIds);
     const before = await this.getChecklist(id);
     const finalidade = (binding.finalidade ?? ChecklistFinalidade.VISTORIA) as ChecklistFinalidade;
+    const finalidades = (binding.finalidades?.length ? binding.finalidades : [finalidade]) as ChecklistFinalidade[];
+    const linkTiposChamado =
+      finalidades.includes(ChecklistFinalidade.CHAMADO) && Boolean(binding.tipoChamadoIds?.length);
 
     await this.prisma.checklistTipoChamado.deleteMany({ where: { checklistId: id } });
     const checklist = await this.prisma.checklist.update({
@@ -112,15 +119,16 @@ export class ChecklistsService {
         nome: binding.nome.trim(),
         descricao: binding.descricao?.trim() ?? null,
         finalidade,
+        finalidades,
         escopo: binding.escopo,
         secretariaId: binding.secretariaId || null,
         unidadeId: binding.unidadeId || null,
         unidadeTipo: binding.unidadeTipo || null,
         ativo: binding.ativo ?? true,
-        ...(finalidade === ChecklistFinalidade.CHAMADO && binding.tipoChamadoIds?.length
+        ...(linkTiposChamado
           ? {
               tiposChamado: {
-                create: binding.tipoChamadoIds.map((tipoChamadoId) => ({ tipoChamadoId })),
+                create: binding.tipoChamadoIds!.map((tipoChamadoId) => ({ tipoChamadoId })),
               },
             }
           : {}),
@@ -187,7 +195,7 @@ export class ChecklistsService {
   async updateVersion(versionId: string, dto: ChecklistVersionDto, user: JwtPayload) {
     const version = await this.prisma.checklistVersao.findUnique({
       where: { id: versionId },
-      include: { itens: true, checklist: { select: { finalidade: true } } },
+      include: { itens: true, checklist: { select: { finalidade: true, finalidades: true } } },
     });
 
     if (!version) {
@@ -200,7 +208,9 @@ export class ChecklistsService {
       throw new BadRequestException(error instanceof Error ? error.message : 'Versao bloqueada');
     }
 
-    const finalidadeChamado = version.checklist.finalidade === ChecklistFinalidade.CHAMADO;
+    const finalidadeChamado =
+      version.checklist.finalidade === ChecklistFinalidade.CHAMADO ||
+      (version.checklist.finalidades ?? []).includes(ChecklistFinalidade.CHAMADO);
 
     try {
       assertValidChecklistVersion(dto, { finalidadeChamado });
@@ -251,7 +261,7 @@ export class ChecklistsService {
   async publishVersion(versionId: string, user: JwtPayload) {
     const version = await this.prisma.checklistVersao.findUnique({
       where: { id: versionId },
-      include: { itens: true, checklist: { select: { finalidade: true } } },
+      include: { itens: true, checklist: { select: { finalidade: true, finalidades: true } } },
     });
 
     if (!version) {
@@ -266,7 +276,9 @@ export class ChecklistsService {
       throw new BadRequestException('Nao e possivel publicar checklist sem itens');
     }
 
-    const finalidadeChamado = version.checklist.finalidade === ChecklistFinalidade.CHAMADO;
+    const finalidadeChamado =
+      version.checklist.finalidade === ChecklistFinalidade.CHAMADO ||
+      (version.checklist.finalidades ?? []).includes(ChecklistFinalidade.CHAMADO);
 
     try {
       assertValidChecklistVersion(

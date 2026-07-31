@@ -17,6 +17,7 @@ import {
   resolveChamadoSecretariaFilter,
   resolveEquipeSecretariaFilter,
 } from '../auth/secretaria-scope';
+import { DocumentosService } from '../documentos/documentos.service';
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -79,6 +80,7 @@ export class ChamadosService {
     private readonly integracoesService: IntegracoesService,
     private readonly storageService: StorageService,
     private readonly emailService: EmailService,
+    private readonly documentosService: DocumentosService,
   ) {}
 
   async listChamados(params: { limit?: number; offset?: number } | undefined, user: JwtPayload) {
@@ -925,6 +927,12 @@ export class ChamadosService {
       }
 
       return updated;
+    });
+
+    await this.registrarDocumentoExecucao(chamado, user, {
+      relatorio: dto.relatorio.trim(),
+      checklistVersaoId: checklistRespostas?.checklistVersaoId ?? null,
+      origem: 'execucao_campo',
     });
 
     return this.serializeChamado(chamado);
@@ -1815,7 +1823,52 @@ export class ChamadosService {
       return updated;
     });
 
+    await this.registrarDocumentoExecucao(chamado, user, {
+      relatorio: dto.relatorio.trim(),
+      checklistVersaoId: null,
+      origem: 'execucao_manual',
+    });
+
     return this.serializeChamado(chamado);
+  }
+
+  private async registrarDocumentoExecucao(
+    chamado: {
+      id: string;
+      codigo: string;
+      secretariaId: string;
+      unidadeId?: string | null;
+      enderecoTexto?: string | null;
+      responsavelId?: string | null;
+      descricao?: string | null;
+    },
+    user: JwtPayload,
+    opts: { relatorio: string; checklistVersaoId?: string | null; origem: string },
+  ) {
+    let pdfBuffer: Buffer | null = null;
+    try {
+      pdfBuffer = await this.exportChamadoPdf(chamado.id, user);
+    } catch {
+      pdfBuffer = null;
+    }
+
+    try {
+      await this.documentosService.upsertFromChamadoExecucao({
+        chamadoId: chamado.id,
+        secretariaId: chamado.secretariaId,
+        unidadeId: chamado.unidadeId ?? null,
+        enderecoTexto: chamado.enderecoTexto ?? null,
+        checklistVersaoId: opts.checklistVersaoId ?? null,
+        responsavelId: chamado.responsavelId ?? user.sub,
+        criadoPorId: user.sub,
+        titulo: `Relatório de execução · ${chamado.codigo}`,
+        descricao: opts.relatorio || chamado.descricao || null,
+        pdfBuffer,
+        metadata: { origemExecucao: opts.origem },
+      });
+    } catch {
+      // Não bloqueia a conclusão da execução.
+    }
   }
 
   async registrarHistorico(id: string, dto: RegistrarChamadoHistoricoDto, user: JwtPayload) {
@@ -2521,7 +2574,7 @@ export class ChamadosService {
     const checklist = await this.prisma.checklist.findFirst({
       where: {
         ativo: true,
-        finalidade: 'CHAMADO',
+        OR: [{ finalidade: 'CHAMADO' }, { finalidades: { has: 'CHAMADO' } }],
         tiposChamado: { some: { tipoChamadoId } },
         versoes: { some: { status: 'PUBLICADA' } },
       },

@@ -632,7 +632,7 @@ export type WebmapSyncAllResult = {
 };
 
 export type ChecklistEscopo = 'GLOBAL' | 'SECRETARIA' | 'UNIDADE_TIPO' | 'UNIDADE';
-export type ChecklistFinalidade = 'VISTORIA' | 'CHAMADO';
+export type ChecklistFinalidade = 'VISTORIA' | 'CHAMADO' | 'DOCUMENTO_AVULSO';
 export type ChecklistVersaoStatus = 'RASCUNHO' | 'PUBLICADA' | 'ARQUIVADA';
 export type ChecklistItemTipo = 'TEXTO' | 'NUMERO' | 'BOOLEANO' | 'MULTIPLA_ESCOLHA' | 'ESCALA_LIKERT' | 'FOTO' | 'ASSINATURA' | 'DATA';
 
@@ -666,6 +666,7 @@ export type ChecklistModel = {
   nome: string;
   descricao?: string | null;
   finalidade?: ChecklistFinalidade;
+  finalidades?: ChecklistFinalidade[];
   escopo: ChecklistEscopo;
   unidadeTipo?: UnidadeTipo | null;
   ativo: boolean;
@@ -1321,4 +1322,109 @@ export type BackupS3ConfigPayload = {
   endpoint?: string | null;
   timezone?: string | null;
   forcePathStyle?: boolean;
+};
+
+export type DocumentoTipo =
+  | 'RELATORIO_VISTORIA'
+  | 'CHECKLIST_PREENCHIDO'
+  | 'RELATORIO_EXECUCAO'
+  | 'RELATORIO_FOTOGRAFICO'
+  | 'NOTIFICACAO'
+  | 'AUTO'
+  | 'TERMO'
+  | 'TERMO_CIENCIA'
+  | 'DOCUMENTO_AVULSO'
+  | 'OUTRO';
+
+export type DocumentoSituacao =
+  | 'RASCUNHO'
+  | 'GERADO'
+  | 'SEM_ASSINATURA_EXTERNA'
+  | 'ASSINATURA_PENDENTE'
+  | 'ASSINADO_VIGENTE'
+  | 'CANCELADO'
+  | 'SUBSTITUIDO'
+  | 'INVALIDO';
+
+export type DocumentoOrigem = 'VISTORIA' | 'CHAMADO_EXECUCAO' | 'AVULSO' | 'SISTEMA';
+
+export type DocumentoResumo = {
+  id: string;
+  codigo: string;
+  codigoValidacao: string;
+  tipo: DocumentoTipo;
+  situacao: DocumentoSituacao;
+  origem: DocumentoOrigem;
+  titulo: string;
+  descricao?: string | null;
+  secretaria?: { id: string; nome: string; sigla: string } | null;
+  unidade?: { id: string; nome: string; codigoPatrimonial: string; endereco?: string | null } | null;
+  chamado?: { id: string; codigo: string; status: string } | null;
+  fiscalizacao?: {
+    id: string;
+    status: string;
+    concluidaEm?: string | null;
+    unidadeNome?: string | null;
+    unidadeCodigo?: string | null;
+  } | null;
+  checklist?: { versaoId: string; versao: number; nome?: string | null } | null;
+  enderecoTexto?: string | null;
+  responsavel?: { id: string; nome: string; email?: string | null } | null;
+  criadoPor?: { id: string; nome: string; email?: string | null } | null;
+  possuiPdfOriginal: boolean;
+  possuiPdfAssinado: boolean;
+  assinaturas: Array<{
+    id: string;
+    assinanteNome: string;
+    assinanteDocumento?: string | null;
+    canal: string;
+    coletadaEm: string;
+    assinanteUsuario?: { id: string; nome: string } | null;
+    coletadaPor?: { id: string; nome: string } | null;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+  linkValidacao?: string;
+};
+
+export type DocumentoDetalhe = DocumentoResumo & {
+  historico: Array<{
+    id: string;
+    statusAnterior?: string | null;
+    statusNovo: string;
+    motivo?: string | null;
+    metadata?: unknown;
+    createdAt: string;
+    alteradoPor?: { id: string; nome: string } | null;
+  }>;
+};
+
+export type DocumentosListResponse = {
+  total: number;
+  items: DocumentoResumo[];
+};
+
+export type DocumentoValidacaoPublica = {
+  codigo: string;
+  codigoValidacao: string;
+  codigoVerificador?: string;
+  verificadorConfirmado?: boolean;
+  tipo: DocumentoTipo;
+  situacao: DocumentoSituacao;
+  titulo: string;
+  secretaria: { sigla: string; nome: string };
+  unidade?: { nome: string; codigoPatrimonial: string } | null;
+  chamadoCodigo?: string | null;
+  criadoEm: string;
+  possuiPdfOriginal: boolean;
+  possuiPdfAssinado: boolean;
+  assinaturas: Array<{
+    assinanteNome: string;
+    assinanteDocumento?: string | null;
+    assinanteEmail?: string | null;
+    qualificacao?: string | null;
+    coletadaEm: string;
+    canal: string;
+  }>;
+  valido: boolean;
 };

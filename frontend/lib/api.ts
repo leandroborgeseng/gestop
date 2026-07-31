@@ -53,6 +53,10 @@ import {
   BackupS3ConfigPayload,
   BackupS3ObjectItem,
   BackupS3StatusResponse,
+  DocumentoDetalhe,
+  DocumentoResumo,
+  DocumentosListResponse,
+  DocumentoValidacaoPublica,
 } from './types';
 import { toGeoCheckin } from '@/lib/geolocation';
 import { notifyAuthExpired } from './security';
@@ -1407,4 +1411,229 @@ export function restoreBackup(payload: { objectKey: string; confirmacao: string 
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
+}
+
+export function listDocumentos(params?: {
+  search?: string;
+  tipo?: string;
+  situacao?: string;
+  origem?: string;
+  secretariaId?: string;
+  unidadeId?: string;
+  chamadoId?: string;
+  fiscalizacaoId?: string;
+  responsavelId?: string;
+  from?: string;
+  to?: string;
+  assinatura?: string;
+  avulso?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const query = new URLSearchParams();
+  if (params?.search) query.set('search', params.search);
+  if (params?.tipo) query.set('tipo', params.tipo);
+  if (params?.situacao) query.set('situacao', params.situacao);
+  if (params?.origem) query.set('origem', params.origem);
+  if (params?.secretariaId) query.set('secretariaId', params.secretariaId);
+  if (params?.unidadeId) query.set('unidadeId', params.unidadeId);
+  if (params?.chamadoId) query.set('chamadoId', params.chamadoId);
+  if (params?.fiscalizacaoId) query.set('fiscalizacaoId', params.fiscalizacaoId);
+  if (params?.responsavelId) query.set('responsavelId', params.responsavelId);
+  if (params?.from) query.set('from', params.from);
+  if (params?.to) query.set('to', params.to);
+  if (params?.assinatura) query.set('assinatura', params.assinatura);
+  if (params?.avulso) query.set('avulso', params.avulso);
+  if (params?.limit != null) query.set('limit', String(params.limit));
+  if (params?.offset != null) query.set('offset', String(params.offset));
+  const qs = query.toString();
+  return request<DocumentosListResponse>(`/documentos${qs ? `?${qs}` : ''}`);
+}
+
+export function getDocumento(id: string) {
+  return request<DocumentoDetalhe>(`/documentos/${id}`);
+}
+
+export function listDocumentosPorChamado(chamadoId: string) {
+  return request<DocumentosListResponse>(`/documentos/por-chamado/${chamadoId}`);
+}
+
+export function listDocumentosPorFiscalizacao(fiscalizacaoId: string) {
+  return request<DocumentosListResponse>(`/documentos/por-fiscalizacao/${fiscalizacaoId}`);
+}
+
+export function listDocumentosChecklistsAvulso() {
+  return request<
+    Array<{
+      id: string;
+      nome: string;
+      descricao?: string | null;
+      finalidade?: string;
+      finalidades?: string[];
+      secretaria?: { id: string; nome: string; sigla: string } | null;
+      versaoPublicada: {
+        id: string;
+        versao: number;
+        itens: Array<{
+          id: string;
+          codigo: string;
+          titulo: string;
+          tipo: string;
+          obrigatorio: boolean;
+          exigeEvidencia: boolean;
+          opcoes?: unknown;
+          ordem: number;
+        }>;
+      };
+    }>
+  >('/documentos/checklists-avulso');
+}
+
+export function createDocumentoAvulso(payload: {
+  tipo: string;
+  titulo?: string;
+  descricao?: string;
+  secretariaId: string;
+  checklistVersaoId: string;
+  unidadeId?: string;
+  chamadoId?: string;
+  fiscalizacaoId?: string;
+  enderecoTexto?: string;
+  latitude?: number;
+  longitude?: number;
+  concluir?: boolean;
+  respostas?: Array<{
+    itemId: string;
+    conformidade?: string;
+    valorBooleano?: boolean | null;
+    valorTexto?: string | null;
+    valorNumero?: number | null;
+    comentario?: string | null;
+    evidenciaDataUrls?: string[];
+  }>;
+}) {
+  return request<DocumentoResumo>('/documentos/avulso', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function salvarDocumentoRespostas(
+  id: string,
+  payload: {
+    respostas: Array<{
+      itemId: string;
+      conformidade?: string;
+      valorBooleano?: boolean | null;
+      valorTexto?: string | null;
+      valorNumero?: number | null;
+      comentario?: string | null;
+      evidenciaDataUrls?: string[];
+    }>;
+    concluir?: boolean;
+  },
+) {
+  return request<DocumentoResumo>(`/documentos/${id}/respostas`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function concluirDocumento(id: string) {
+  return request<DocumentoResumo>(`/documentos/${id}/concluir`, { method: 'POST' });
+}
+
+export function gerarDocumentoPdfOriginal(id: string) {
+  return request<DocumentoResumo>(`/documentos/${id}/gerar-pdf`, { method: 'POST' });
+}
+
+export function coletarAssinaturaDocumento(
+  id: string,
+  payload: {
+    assinanteNome: string;
+    assinanteDocumento: string;
+    assinanteEmail: string;
+    qualificacao: string;
+    qualificacaoOutro?: string;
+    assinaturaDataUrl: string;
+    mimeType?: string;
+    timezone?: string;
+    dispositivo?: string;
+    sessaoId?: string;
+    latitude?: number;
+    longitude?: number;
+    precisaoMetros?: number;
+    localizacaoEm?: string;
+  },
+) {
+  return request<DocumentoResumo>(`/documentos/${id}/assinatura`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function marcarAssinaturaPendenteDocumento(id: string) {
+  return request<DocumentoResumo>(`/documentos/${id}/assinatura-pendente`, { method: 'POST' });
+}
+
+export function cancelarDocumentoAssinado(id: string, motivo: string) {
+  return request<DocumentoResumo>(`/documentos/${id}/cancelar-assinado`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ motivo }),
+  });
+}
+
+export function updateDocumentoVinculos(
+  id: string,
+  payload: {
+    unidadeId?: string | null;
+    chamadoId?: string | null;
+    fiscalizacaoId?: string | null;
+    enderecoTexto?: string | null;
+    justificativa?: string;
+  },
+) {
+  return request<DocumentoResumo>(`/documentos/${id}/vinculos`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+async function downloadDocumentoPdfVariante(id: string, variante: 'original' | 'assinado', codigo: string) {
+  const token = getStoredAuth()?.accessToken;
+  const response = await fetch(`${API_BASE_URL}/documentos/${id}/pdf/${variante}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error(`Falha ao baixar PDF ${variante} do documento.`);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `${codigo.replace(/[^a-zA-Z0-9-]/g, '')}-${variante}.pdf`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function downloadDocumentoPdfOriginal(id: string, codigo: string) {
+  return downloadDocumentoPdfVariante(id, 'original', codigo);
+}
+
+export function downloadDocumentoPdfAssinado(id: string, codigo: string) {
+  return downloadDocumentoPdfVariante(id, 'assinado', codigo);
+}
+
+export function getPublicDocumentoValidacao(codigo: string, verificador?: string) {
+  const query = new URLSearchParams();
+  if (verificador?.trim()) query.set('v', verificador.trim().toUpperCase());
+  const qs = query.toString();
+  return publicRequest<DocumentoValidacaoPublica>(
+    `/public/documentos/validar/${encodeURIComponent(codigo.trim().toUpperCase())}${qs ? `?${qs}` : ''}`,
+  );
 }

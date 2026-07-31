@@ -21,6 +21,8 @@ import {
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import { ChamadosService } from '../chamados/chamados.service';
 import { CronogramaService } from '../cronograma/cronograma.service';
+import { DocumentosService } from '../documentos/documentos.service';
+import { FiscalizacoesService } from '../fiscalizacoes/fiscalizacoes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { MobileSyncFiscalizacaoDto } from './mobile.dto';
@@ -37,6 +39,9 @@ export class MobileService {
     private readonly chamadosService: ChamadosService,
     private readonly storageService: StorageService,
     private readonly cronogramaService: CronogramaService,
+    private readonly documentosService: DocumentosService,
+    @Inject(forwardRef(() => FiscalizacoesService))
+    private readonly fiscalizacoesService: FiscalizacoesService,
   ) {}
 
   async getFieldPackage(user: JwtPayload) {
@@ -319,6 +324,27 @@ export class MobileService {
         checklistId: checklistVersao.checklist.id,
         concluidaEm: new Date(dto.concluidaEm),
       });
+
+      let pdfBuffer: Buffer | null = null;
+      try {
+        pdfBuffer = await this.fiscalizacoesService.exportPdf(result.fiscalizacao.id, user);
+      } catch {
+        pdfBuffer = null;
+      }
+      try {
+        await this.documentosService.upsertFromFiscalizacao({
+          fiscalizacaoId: result.fiscalizacao.id,
+          secretariaId: unidade.secretariaId,
+          unidadeId: unidade.id,
+          checklistVersaoId: checklistVersao.id,
+          responsavelId: user.sub,
+          criadoPorId: user.sub,
+          titulo: `Relatório de vistoria · ${unidade.nome}`,
+          pdfBuffer,
+        });
+      } catch {
+        // Não bloqueia sincronização da vistoria.
+      }
 
       return {
         status: 'sincronizado',

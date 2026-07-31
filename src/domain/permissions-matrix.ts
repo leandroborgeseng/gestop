@@ -14,6 +14,13 @@ const LEGACY_CHAMADOS_EXECUTAR = 'chamados.executar';
 const LEGACY_CHAMADOS_EDITAR_ABERTURA = 'chamados.editar_abertura';
 const LEGACY_CHAMADOS_EXECUCAO_MANUAL = 'chamados.execucao_manual';
 const LEGACY_MEUS_CHAMADOS_VISUALIZAR = 'meus_chamados.visualizar';
+const LEGACY_DOCUMENTOS_VISUALIZAR = 'documentos.visualizar';
+const LEGACY_DOCUMENTOS_CRIAR_AVULSO = 'documentos.criar_avulso';
+const LEGACY_DOCUMENTOS_EDITAR_VINCULO = 'documentos.editar_vinculo';
+const LEGACY_DOCUMENTOS_GERAR_PDF = 'documentos.gerar_pdf';
+const LEGACY_DOCUMENTOS_COLETAR_ASSINATURA = 'documentos.coletar_assinatura';
+const LEGACY_DOCUMENTOS_CANCELAR_ASSINADO = 'documentos.cancelar_assinado';
+const LEGACY_DOCUMENTOS_ADMINISTRAR = 'documentos.administrar';
 
 const CHAMADOS_ABRIR_ONLY_KEYS = new Set([
   permissionMatrixKey('chamados', 'abrir_chamado', 'visualizar'),
@@ -94,6 +101,40 @@ export function deriveLegacyPermissionKeys(matrixKeys: Set<string>): Set<string>
   if (hasPrefix('cco') || hasPrefix('dashboard') || hasPrefix('cronograma') || hasPrefix('relatorios') || hasPrefix('vistorias')) {
     legacy.add(LEGACY_DASHBOARD_VISUALIZAR);
   }
+  if (hasPrefix('documentos')) {
+    legacy.add(LEGACY_DOCUMENTOS_VISUALIZAR);
+    if (
+      matrixKeys.has(permissionMatrixKey('documentos', 'avulso', 'inserir')) ||
+      matrixKeys.has(permissionMatrixKey('documentos', '_tela', 'inserir'))
+    ) {
+      legacy.add(LEGACY_DOCUMENTOS_CRIAR_AVULSO);
+    }
+    if (
+      matrixKeys.has(permissionMatrixKey('documentos', 'editar_vinculo', 'alterar')) ||
+      matrixKeys.has(permissionMatrixKey('documentos', '_tela', 'alterar'))
+    ) {
+      legacy.add(LEGACY_DOCUMENTOS_EDITAR_VINCULO);
+    }
+    if (
+      matrixKeys.has(permissionMatrixKey('documentos', 'gerar_pdf', 'executar')) ||
+      matrixKeys.has(permissionMatrixKey('documentos', 'gerar_pdf', 'visualizar'))
+    ) {
+      legacy.add(LEGACY_DOCUMENTOS_GERAR_PDF);
+    }
+    if (matrixKeys.has(permissionMatrixKey('documentos', 'coletar_assinatura', 'executar'))) {
+      legacy.add(LEGACY_DOCUMENTOS_COLETAR_ASSINATURA);
+    }
+    if (matrixKeys.has(permissionMatrixKey('documentos', 'cancelar_assinado', 'executar'))) {
+      legacy.add(LEGACY_DOCUMENTOS_CANCELAR_ASSINADO);
+    }
+    if (
+      matrixKeys.has(permissionMatrixKey('documentos', 'administrar', 'alterar')) ||
+      matrixKeys.has(permissionMatrixKey('documentos', 'administrar', 'excluir')) ||
+      matrixKeys.has(permissionMatrixKey('documentos', 'administrar', 'executar'))
+    ) {
+      legacy.add(LEGACY_DOCUMENTOS_ADMINISTRAR);
+    }
+  }
   if (hasPrefix('checklists')) {
     legacy.add(LEGACY_CHECKLISTS_GERENCIAR);
   }
@@ -166,6 +207,30 @@ export function expandLegacyToMatrixKeys(legacyKeys: Set<string>): Set<string> {
     grantScreen('relatorios', ['visualizar', 'executar']);
     grantScreen('vistorias', ['visualizar']);
     grantScreen('integracoes', ['visualizar']);
+    grantScreen('documentos', ['visualizar']);
+  }
+  if (legacyKeys.has(LEGACY_DOCUMENTOS_VISUALIZAR)) {
+    grantScreen('documentos', ['visualizar']);
+  }
+  if (legacyKeys.has(LEGACY_DOCUMENTOS_CRIAR_AVULSO)) {
+    matrix.add(permissionMatrixKey('documentos', 'avulso', 'inserir'));
+    matrix.add(permissionMatrixKey('documentos', '_tela', 'inserir'));
+  }
+  if (legacyKeys.has(LEGACY_DOCUMENTOS_EDITAR_VINCULO)) {
+    matrix.add(permissionMatrixKey('documentos', 'editar_vinculo', 'alterar'));
+  }
+  if (legacyKeys.has(LEGACY_DOCUMENTOS_GERAR_PDF)) {
+    matrix.add(permissionMatrixKey('documentos', 'gerar_pdf', 'visualizar'));
+    matrix.add(permissionMatrixKey('documentos', 'gerar_pdf', 'executar'));
+  }
+  if (legacyKeys.has(LEGACY_DOCUMENTOS_COLETAR_ASSINATURA)) {
+    matrix.add(permissionMatrixKey('documentos', 'coletar_assinatura', 'executar'));
+  }
+  if (legacyKeys.has(LEGACY_DOCUMENTOS_CANCELAR_ASSINADO)) {
+    matrix.add(permissionMatrixKey('documentos', 'cancelar_assinado', 'executar'));
+  }
+  if (legacyKeys.has(LEGACY_DOCUMENTOS_ADMINISTRAR)) {
+    grantScreen('documentos');
   }
   if (legacyKeys.has(LEGACY_CHECKLISTS_GERENCIAR)) {
     grantScreen('checklists');
@@ -283,6 +348,7 @@ export const NAV_SCREEN_MAP: Record<string, string> = {
   dashboard: 'dashboard',
   cronograma: 'cronograma',
   relatorios: 'relatorios',
+  documentos: 'documentos',
   admin: 'admin',
   checklists: 'checklists',
   integracoes: 'integracoes',

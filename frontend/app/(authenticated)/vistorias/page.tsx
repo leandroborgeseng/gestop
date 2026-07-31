@@ -2,9 +2,10 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ClipboardList, ClipboardPen, FileDown, MapPin, Printer, Search, UserRound } from 'lucide-react';
+import { ClipboardList, ClipboardPen, FileDown, FileText, MapPin, Printer, Search, UserRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
+import { DocumentosRelacionadosPanel } from '@/components/documentos/documentos-relacionados-panel';
 import { PageShell } from '@/components/layout/page-shell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -79,6 +80,7 @@ export default function VistoriasPage() {
   const sessionUser = useSessionUser();
   const snackbar = useSnackbar();
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
   const canFilterSecretaria = Boolean(
     sessionUser?.permissoes.some((permission) =>
       ['dashboard.visualizar', 'chamados.gerenciar', 'secretarias.gerenciar'].includes(permission),
@@ -412,6 +414,15 @@ export default function VistoriasPage() {
                             <FileDown className="h-3.5 w-3.5" />
                             {pdfBusy ? 'Gerando…' : 'PDF'}
                           </Button>
+                          <Button
+                            type="button"
+                            variant="outlined"
+                            size="sm"
+                            onClick={() => setDocsOpen((current) => !current)}
+                          >
+                            <FileText className="h-3.5 w-3.5" />
+                            Documentos relacionados
+                          </Button>
                           <Badge variant={STATUS_BADGE[selected.status]}>{statusLabel(selected.status)}</Badge>
                         </div>
                         {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
@@ -423,6 +434,12 @@ export default function VistoriasPage() {
 
                   <div className="flex-1 space-y-4 overflow-y-auto p-5">
                     {detailLoading ? <LoadingState label="Carregando detalhe..." /> : null}
+                    {docsOpen ? (
+                      <DocumentosRelacionadosPanel
+                        fiscalizacaoId={selected.id}
+                        onClose={() => setDocsOpen(false)}
+                      />
+                    ) : null}
                     <dl className="grid gap-3 sm:grid-cols-2">
                       <DetailField label="Checklist">{selected.checklistVersao.checklist.nome} (v{selected.checklistVersao.versao})</DetailField>
                       <DetailField label="Origem">{(detail ?? selected).origemLabel ?? selected.origem}</DetailField>

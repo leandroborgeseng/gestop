@@ -24,6 +24,7 @@ enum ChecklistEscopo {
 enum ChecklistFinalidade {
   VISTORIA
   CHAMADO
+  DOCUMENTO_AVULSO
 }
 
 enum ChecklistVersaoStatus {
@@ -117,6 +118,37 @@ enum ChamadoStatus {
   CANCELADO
 }
 
+enum DocumentoTipo {
+  RELATORIO_VISTORIA
+  CHECKLIST_PREENCHIDO
+  RELATORIO_EXECUCAO
+  RELATORIO_FOTOGRAFICO
+  NOTIFICACAO
+  AUTO
+  TERMO
+  TERMO_CIENCIA
+  DOCUMENTO_AVULSO
+  OUTRO
+}
+
+enum DocumentoSituacao {
+  RASCUNHO
+  GERADO
+  SEM_ASSINATURA_EXTERNA
+  ASSINATURA_PENDENTE
+  ASSINADO_VIGENTE
+  CANCELADO
+  SUBSTITUIDO
+  INVALIDO
+}
+
+enum DocumentoOrigem {
+  VISTORIA
+  CHAMADO_EXECUCAO
+  AVULSO
+  SISTEMA
+}
+
 enum ChamadoOrigem {
   MANUAL
   QR_CODE
@@ -194,6 +226,7 @@ model Secretaria {
   checklists        Checklist[]
   fiscalizacoes     Fiscalizacao[]
   chamados          Chamado[]
+  documentos        Documento[]
   dashboardSnapshots DashboardSnapshot[]
   equipes           Equipe[]
 
@@ -223,6 +256,7 @@ model UnidadePublica {
   fiscalizacoes    Fiscalizacao[]
   naoConformidades NaoConformidade[]
   chamados         Chamado[]
+  documentos       Documento[]
   checklists       Checklist[]
   dashboardSnapshots DashboardSnapshot[]
   cronogramas      CronogramaChecagem[]
@@ -272,6 +306,10 @@ model Usuario {
   chamadosRegistrados Chamado[] @relation("ChamadoRegistradoPor")
   chamadosObservados ChamadoObservador[] @relation("ChamadoObservadorUsuario")
   chamadosObservadoresCriados ChamadoObservador[] @relation("ChamadoObservadorCreatedBy")
+  documentosResponsavel Documento[] @relation("DocumentoResponsavel")
+  documentosCriados Documento[] @relation("DocumentoCriadoPor")
+  documentoAssinaturas DocumentoAssinatura[] @relation("DocumentoAssinaturaUsuario")
+  documentoAssinaturasColetadas DocumentoAssinatura[] @relation("DocumentoAssinaturaColetadaPor")
   pushSubscriptions   PushSubscription[]
   cronogramasResponsavel CronogramaChecagem[] @relation("CronogramaResponsavel")
   cronogramasResponsaveisPrevistos CronogramaChecagemResponsavel[]
@@ -481,7 +519,10 @@ model Checklist {
   unidadeId     String?
   nome          String
   descricao     String?
+  /// Finalidade principal (escopo/binding). Preferir `finalidades` para multi-uso.
   finalidade    ChecklistFinalidade @default(VISTORIA)
+  /// Onde o checklist pode ser usado (Vistoria, Execução, Documento avulso).
+  finalidades   ChecklistFinalidade[] @default([VISTORIA])
   escopo        ChecklistEscopo     @default(GLOBAL)
   /// Codigo do TipoProprio quando escopo = UNIDADE_TIPO.
   unidadeTipo   String?
@@ -528,6 +569,7 @@ model ChecklistVersao {
   publicadoPor Usuario?        @relation("ChecklistVersaoPublicadoPor", fields: [publicadoPorId], references: [id], onDelete: SetNull)
   itens        ChecklistItem[]
   fiscalizacoes Fiscalizacao[]
+  documentos   Documento[]
 
   @@unique([checklistId, versao])
   @@index([status])
@@ -554,6 +596,7 @@ model ChecklistItem {
 
   checklistVersao   ChecklistVersao    @relation(fields: [checklistVersaoId], references: [id], onDelete: Cascade)
   categoriaVistoria CategoriaVistoria? @relation(fields: [categoriaVistoriaId], references: [id], onDelete: SetNull)
+  documentoRespostas DocumentoResposta[]
   respostas         RespostaChecklist[]
   naoConformidades  NaoConformidade[]
 
@@ -601,6 +644,7 @@ model Fiscalizacao {
   respostas       RespostaChecklist[]
   evidencias      Evidencia[]
   naoConformidades NaoConformidade[]
+  documentos      Documento[]
 
   @@index([secretariaId])
   @@index([unidadeId])
@@ -789,6 +833,7 @@ model Chamado {
   registradoPor   Usuario?         @relation("ChamadoRegistradoPor", fields: [registradoPorId], references: [id], onDelete: SetNull)
   evidencias      Evidencia[]
   observadores    ChamadoObservador[]
+  documentos      Documento[]
 
   @@index([secretariaId])
   @@index([tipoChamadoId])
@@ -838,6 +883,133 @@ model HistoricoStatus {
   @@index([entidadeTipo, entidadeId])
   @@index([alteradoPorId])
   @@index([createdAt])
+}
+
+model DocumentoSequencia {
+  ano    Int @id
+  ultimo Int @default(0)
+}
+
+model Documento {
+  id                     String             @id @default(uuid())
+  codigo                 String             @unique
+  codigoValidacao        String             @unique
+  tipo                   DocumentoTipo
+  situacao               DocumentoSituacao  @default(GERADO)
+  origem                 DocumentoOrigem
+  titulo                 String
+  descricao              String?
+  secretariaId           String
+  unidadeId              String?
+  chamadoId              String?
+  fiscalizacaoId         String?
+  checklistVersaoId      String?
+  enderecoTexto          String?
+  latitude               Decimal?           @db.Decimal(10, 7)
+  longitude              Decimal?           @db.Decimal(10, 7)
+  responsavelId          String?
+  criadoPorId            String?
+  pdfOriginalStorageKey  String?
+  pdfOriginalUrl         String?
+  pdfOriginalSha256      String?
+  pdfAssinadoStorageKey  String?
+  pdfAssinadoUrl         String?
+  pdfAssinadoSha256      String?
+  conteudoTravadoEm      DateTime?
+  substituidoPorId       String?
+  metadata               Json?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  secretaria      Secretaria       @relation(fields: [secretariaId], references: [id], onDelete: Restrict)
+  unidade         UnidadePublica?  @relation(fields: [unidadeId], references: [id], onDelete: SetNull)
+  chamado         Chamado?         @relation(fields: [chamadoId], references: [id], onDelete: SetNull)
+  fiscalizacao    Fiscalizacao?    @relation(fields: [fiscalizacaoId], references: [id], onDelete: SetNull)
+  checklistVersao ChecklistVersao? @relation(fields: [checklistVersaoId], references: [id], onDelete: SetNull)
+  responsavel     Usuario?         @relation("DocumentoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  criadoPor       Usuario?         @relation("DocumentoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  substituidoPor  Documento?       @relation("DocumentoSubstituicao", fields: [substituidoPorId], references: [id], onDelete: SetNull)
+  substitutos     Documento[]      @relation("DocumentoSubstituicao")
+  assinaturas     DocumentoAssinatura[]
+  respostas       DocumentoResposta[]
+
+  @@index([secretariaId])
+  @@index([unidadeId])
+  @@index([chamadoId])
+  @@index([fiscalizacaoId])
+  @@index([checklistVersaoId])
+  @@index([responsavelId])
+  @@index([criadoPorId])
+  @@index([tipo])
+  @@index([situacao])
+  @@index([origem])
+  @@index([createdAt])
+  @@index([codigoValidacao])
+}
+
+model DocumentoResposta {
+  id             String              @id @default(uuid())
+  documentoId    String
+  itemId         String
+  conformidade   ConformidadeStatus?
+  valorTexto     String?
+  valorNumero    Decimal?            @db.Decimal(14, 4)
+  valorBooleano  Boolean?
+  valorJson      Json?
+  comentario     String?
+  respondidoEm   DateTime            @default(now())
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  documento Documento     @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+  item      ChecklistItem @relation(fields: [itemId], references: [id], onDelete: Restrict)
+
+  @@unique([documentoId, itemId])
+  @@index([itemId])
+  @@index([conformidade])
+}
+
+model DocumentoAssinatura {
+  id                   String    @id @default(uuid())
+  documentoId          String
+  assinanteNome        String
+  assinanteDocumento   String?
+  assinanteEmail       String?
+  qualificacao         String?
+  qualificacaoOutro    String?
+  assinanteUsuarioId   String?
+  canal                String    @default("externa")
+  evidenciaStorageKey  String?
+  evidenciaUrl         String?
+  evidenciaSha256      String?
+  coletadaEm           DateTime  @default(now())
+  coletadaPorId        String?
+  timezone             String?
+  ip                   String?
+  userAgent            String?
+  dispositivo          String?
+  sessaoId             String?
+  latitude             Decimal?  @db.Decimal(10, 7)
+  longitude            Decimal?  @db.Decimal(10, 7)
+  precisaoMetros       Decimal?  @db.Decimal(8, 2)
+  localizacaoEm        DateTime?
+  pdfOriginalSha256    String?
+  pdfAssinadoSha256    String?
+  invalida             Boolean   @default(false)
+  invalidadaEm         DateTime?
+  invalidadaMotivo     String?
+  metadata             Json?
+  createdAt            DateTime  @default(now())
+
+  documento          Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+  assinanteUsuario   Usuario?  @relation("DocumentoAssinaturaUsuario", fields: [assinanteUsuarioId], references: [id], onDelete: SetNull)
+  coletadaPor        Usuario?  @relation("DocumentoAssinaturaColetadaPor", fields: [coletadaPorId], references: [id], onDelete: SetNull)
+
+  @@index([documentoId])
+  @@index([assinanteUsuarioId])
+  @@index([coletadaPorId])
+  @@index([coletadaEm])
+  @@index([invalida])
 }
 
 model LogAuditoria {
