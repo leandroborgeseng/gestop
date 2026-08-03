@@ -1624,7 +1624,10 @@ export async function fetchDocumentoPdfBlobUrl(id: string, variante: 'original' 
         : 'PDF assinado não disponível para este documento.',
     );
   }
-  const blob = await response.blob();
+  const raw = await response.blob();
+  // Garante MIME application/pdf — essencial para visualizadores móveis/PWA com blob URL.
+  const blob =
+    raw.type === 'application/pdf' ? raw : new Blob([raw], { type: 'application/pdf' });
   return URL.createObjectURL(blob);
 }
 

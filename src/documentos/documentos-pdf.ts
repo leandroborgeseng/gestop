@@ -228,15 +228,18 @@ export async function buildDocumentoPdf(input: DocumentoPdfInput): Promise<Buffe
     }
 
     if (input.incluirBlocoAutenticidade !== false) {
-      const textColWidth = width - 150;
+      // ~3/4 texto · ~1/4 QR — evita sobreposição e URL truncada auto-linkada incompleta.
+      const qrSize = 96;
+      const qrGap = 14;
+      const textColWidth = Math.max(220, width - qrSize - qrGap - 20);
       const hashRaw = input.hashResumo?.replace(/…$/, '') ?? null;
       const hashDisplay = hashRaw ? summarizeForPdfDisplay(hashRaw, 16) : null;
-      const urlDisplay = summarizeForPdfDisplay(input.validationUrl, 58);
+      const linkLabel = 'Acessar validação do documento';
 
-      y = ensureSpace(doc, y, 210, marginTop);
+      y = ensureSpace(doc, y, 200, marginTop);
       y += 8;
       const blockTop = y;
-      const blockHeight = 190;
+      const blockHeight = 178;
       doc.rect(left, blockTop, width, blockHeight).strokeColor(BORDER).stroke();
 
       let cursorY = blockTop + 10;
@@ -249,7 +252,7 @@ export async function buildDocumentoPdf(input: DocumentoPdfInput): Promise<Buffe
         .fontSize(7.5)
         .fillColor(TEXT)
         .text(
-          'Documento original. Conferência: QR Code ou página pública com Código do documento + Código verificador.',
+          'Documento original. Conferência pelo QR Code ou pela página pública (código do documento + verificador).',
           left + 10,
           cursorY,
           { width: textColWidth },
@@ -268,10 +271,21 @@ export async function buildDocumentoPdf(input: DocumentoPdfInput): Promise<Buffe
       cursorY = doc.y + 2;
       if (hashDisplay) {
         doc.text(`Hash (PDF original): ${hashDisplay}`, left + 10, cursorY, { width: textColWidth });
-        cursorY = doc.y + 2;
+        cursorY = doc.y + 4;
+      } else {
+        cursorY += 2;
       }
-      doc.text(`Link: ${urlDisplay}`, left + 10, cursorY, { width: textColWidth });
-      doc.image(qrBuffer, left + width - 130, blockTop + 12, { fit: [110, 110] });
+      // Texto curto em uma linha com hyperlink para a URL pública completa (QR usa a mesma URL).
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor(BRAND)
+        .text(linkLabel, left + 10, cursorY, {
+          width: textColWidth,
+          link: input.validationUrl,
+          underline: true,
+        });
+      doc.image(qrBuffer, left + width - qrSize - 10, blockTop + 14, { fit: [qrSize, qrSize] });
     }
 
     doc.end();

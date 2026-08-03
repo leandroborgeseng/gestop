@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, PDFString, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import QRCode from 'qrcode';
 import { summarizeForPdfDisplay, wrapPdfText } from './documentos-validation';
 
@@ -50,6 +50,25 @@ function drawWrappedText(
     y -= opts.lineHeight;
   }
   return y;
+}
+
+/** Hyperlink URI em área retangular (coordenadas pdf-lib: origem inferior esquerda). */
+function addUriLink(page: PDFPage, opts: { x: number; y: number; width: number; height: number; url: string }) {
+  const context = page.doc.context;
+  const annotRef = context.register(
+    context.obj({
+      Type: 'Annot',
+      Subtype: 'Link',
+      Rect: [opts.x, opts.y, opts.x + opts.width, opts.y + opts.height],
+      Border: [0, 0, 0],
+      A: {
+        Type: 'Action',
+        S: 'URI',
+        URI: PDFString.of(opts.url),
+      },
+    }),
+  );
+  page.node.addAnnot(annotRef);
 }
 
 /**
@@ -168,27 +187,28 @@ export async function appendAssinaturasAoPdfOriginal(
   const authPage = finalDoc.addPage([595.28, 841.89]);
   const authYTop = authPage.getHeight() - 50;
   const hashDisplay = summarizeForPdfDisplay(hashConteudoAssinado, 16);
-  const urlDisplay = summarizeForPdfDisplay(auth.validationUrl, 52);
-  const textColWidth = width - 140;
-  const maxChars = 48;
+  const qrSize = 96;
+  const qrGap = 14;
+  const textColWidth = Math.max(220, width - qrSize - qrGap - 20);
+  const maxChars = Math.max(36, Math.floor(textColWidth / 4.6));
+  const linkLabel = 'Acessar validação do documento';
 
   const authLines = [
     'Versão assinada vigente — situação atual deste PDF.',
-    'Conferência: QR Code ou página pública com Código do documento + Código verificador.',
+    'Conferência pelo QR Code ou pela página pública (código do documento + verificador).',
     `Código do documento: ${auth.codigo}`,
     `Código verificador: ${auth.codigoVerificador}`,
     `Código de validação: ${auth.codigoValidacao}`,
     `Situação: ${auth.situacaoLabel}`,
     `Gerado em: ${auth.geradoEm}`,
     `Hash (PDF assinado): ${hashDisplay}`,
-    `Link: ${urlDisplay}`,
   ];
 
-  let estimatedHeight = 36;
+  let estimatedHeight = 52;
   for (const line of authLines) {
     estimatedHeight += wrapPdfText(line, maxChars).length * 11 + 2;
   }
-  const boxHeight = Math.max(180, Math.min(280, estimatedHeight));
+  const boxHeight = Math.max(168, Math.min(240, estimatedHeight));
   const boxTop = authYTop;
 
   authPage.drawRectangle({
@@ -205,6 +225,7 @@ export async function appendAssinaturasAoPdfOriginal(
     size: 11,
     font: fontBold2,
     color: rgb(0, 0.4, 0.8),
+    maxWidth: textColWidth,
   });
 
   let textY = boxTop - 34;
@@ -222,11 +243,30 @@ export async function appendAssinaturasAoPdfOriginal(
     textY -= 2;
   }
 
+  textY -= 4;
+  const linkSize = 8;
+  const linkWidth = Math.min(textColWidth, font2.widthOfTextAtSize(linkLabel, linkSize) + 2);
+  authPage.drawText(linkLabel, {
+    x: left + 10,
+    y: textY,
+    size: linkSize,
+    font: font2,
+    color: rgb(0, 0.4, 0.8),
+    maxWidth: textColWidth,
+  });
+  addUriLink(authPage, {
+    x: left + 10,
+    y: textY - 2,
+    width: linkWidth,
+    height: linkSize + 4,
+    url: auth.validationUrl,
+  });
+
   authPage.drawImage(qrImage, {
-    x: left + width - 120,
-    y: Math.max(boxTop - boxHeight + 10, boxTop - 130),
-    width: 100,
-    height: 100,
+    x: left + width - qrSize - 10,
+    y: Math.max(boxTop - boxHeight + 10, boxTop - qrSize - 18),
+    width: qrSize,
+    height: qrSize,
   });
 
   const pdfBuffer = Buffer.from(await finalDoc.save());

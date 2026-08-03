@@ -60,6 +60,7 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfVariante, setPdfVariante] = useState<'original' | 'assinado'>('original');
+  const [pdfEmbedFailed, setPdfEmbedFailed] = useState(false);
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
@@ -110,6 +111,7 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
       setQualificacao(QUALIFICACOES[0]);
       setQualificacaoOutro('');
       setPdfError(null);
+      setPdfEmbedFailed(false);
       if (pdfUrl) {
         URL.revokeObjectURL(pdfUrl);
         setPdfUrl(null);
@@ -121,6 +123,7 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
     setPdfVariante(variante);
     setPdfLoading(true);
     setPdfError(null);
+    setPdfEmbedFailed(false);
 
     let active = true;
     let objectUrl: string | null = null;
@@ -278,10 +281,27 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
 
   const podeContinuar = Boolean(pdfUrl) && !pdfLoading && !pdfError;
   const assinaturaStep = step === 'assinatura';
+  const conferenciaStep = step === 'conferencia';
+
+  function abrirDocumentoPdf() {
+    if (!pdfUrl) return;
+    const opened = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+    if (!opened) {
+      const anchor = document.createElement('a');
+      anchor.href = pdfUrl;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.download = `${documento.codigo.replace(/[^a-zA-Z0-9-]/g, '')}-${pdfVariante}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      snackbar.show('Se o PDF não abriu, use o arquivo baixado para conferir o documento.', 'info');
+    }
+  }
 
   const sheetClassName = cn(
     step === 'conferencia' || step === 'dados' ? 'md:max-w-3xl' : 'md:max-w-4xl',
-    assinaturaStep &&
+    (assinaturaStep || conferenciaStep) &&
       mobile &&
       'inset-0 max-h-[100dvh] rounded-none pb-[env(safe-area-inset-bottom)]',
   );
@@ -317,8 +337,10 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
           'flex flex-col gap-4',
           assinaturaStep
             ? 'h-[min(88dvh,760px)] max-h-[min(88dvh,760px)] md:h-[min(78vh,640px)]'
-            : 'max-h-[min(85dvh,720px)]',
-          assinaturaStep && mobile && 'h-[calc(100dvh-7.5rem)] max-h-none',
+            : conferenciaStep
+              ? 'h-[min(88dvh,820px)] max-h-[min(88dvh,820px)] md:h-[min(80vh,720px)]'
+              : 'max-h-[min(85dvh,720px)]',
+          (assinaturaStep || conferenciaStep) && mobile && 'h-[calc(100dvh-7.5rem)] max-h-none',
         )}
       >
         {step === 'conferencia' ? (
@@ -332,27 +354,81 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
               </p>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--canvas-2)]">
+            <div
+              className={cn(
+                'relative min-h-0 flex-1 overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--canvas-2)]',
+                mobile ? 'min-h-[45dvh]' : 'min-h-[320px]',
+              )}
+            >
               {pdfLoading ? (
-                <div className="flex h-[50vh] items-center justify-center p-4">
+                <div className="flex h-full min-h-[40vh] items-center justify-center p-4">
                   <LoadingState label="Carregando documento..." />
                 </div>
               ) : null}
               {pdfError ? (
-                <div className="flex h-[40vh] items-center justify-center p-4 text-center text-[13px] text-[var(--danger)]">
+                <div className="flex h-full min-h-[30vh] items-center justify-center p-4 text-center text-[13px] text-[var(--danger)]">
                   {pdfError.includes('não disponível') || pdfError.includes('Falha')
                     ? 'Documento em geração. Aguarde para coletar assinatura.'
                     : pdfError}
                 </div>
               ) : null}
-              {pdfUrl ? (
-                <iframe
-                  title="Documento para conferência"
-                  src={pdfUrl}
-                  className="h-[min(55vh,520px)] w-full bg-white"
-                />
+              {pdfUrl && !pdfEmbedFailed ? (
+                mobile ? (
+                  <object
+                    data={`${pdfUrl}#view=FitH`}
+                    type="application/pdf"
+                    className="h-full min-h-[45dvh] w-full bg-white"
+                    aria-label="Documento para conferência"
+                  >
+                    <div className="flex h-full min-h-[40dvh] flex-col items-center justify-center gap-3 p-4 text-center">
+                      <p className="text-[13px] text-[var(--ink-2)]">
+                        Não foi possível exibir o PDF neste dispositivo. Toque em Abrir documento para visualizar.
+                      </p>
+                      <Button type="button" variant="filled" onClick={abrirDocumentoPdf}>
+                        Abrir documento
+                      </Button>
+                    </div>
+                  </object>
+                ) : (
+                  <iframe
+                    title="Documento para conferência"
+                    src={`${pdfUrl}#view=FitH`}
+                    className="h-full min-h-[min(55vh,520px)] w-full bg-white"
+                    onError={() => setPdfEmbedFailed(true)}
+                  />
+                )
+              ) : null}
+              {pdfUrl && pdfEmbedFailed ? (
+                <div className="flex h-full min-h-[40dvh] flex-col items-center justify-center gap-3 p-4 text-center">
+                  <p className="text-[13px] text-[var(--ink-2)]">
+                    Não foi possível exibir o PDF neste dispositivo. Toque em Abrir documento para visualizar.
+                  </p>
+                  <Button type="button" variant="filled" onClick={abrirDocumentoPdf}>
+                    Abrir documento
+                  </Button>
+                </div>
               ) : null}
             </div>
+
+            {pdfUrl ? (
+              <div className="shrink-0 space-y-2">
+                {mobile || pdfEmbedFailed ? (
+                  <p className="text-[12px] text-[var(--ink-3)]">
+                    {mobile
+                      ? 'Se a prévia aparecer escura ou incompleta, abra o documento no visualizador do aparelho e volte para continuar a assinatura.'
+                      : 'Não foi possível exibir o PDF neste navegador. Abra o documento para conferir antes de continuar.'}
+                  </p>
+                ) : null}
+                <Button
+                  type="button"
+                  variant={mobile || pdfEmbedFailed ? 'outlined' : 'text'}
+                  className="w-full"
+                  onClick={abrirDocumentoPdf}
+                >
+                  Abrir documento
+                </Button>
+              </div>
+            ) : null}
 
             <div className="shrink-0">
               <Button
