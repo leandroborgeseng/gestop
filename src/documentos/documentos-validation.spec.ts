@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildPublicValidationUrl,
+  displayAssinanteCpf,
+  displayAssinanteEmail,
+  maskCpf,
+  maskEmail,
   summarizeForPdfDisplay,
   wrapPdfText,
 } from './documentos-validation';
@@ -42,5 +46,13 @@ describe('documentos-validation urls', () => {
     const lines = wrapPdfText('https://gestop.up.railway.app/documento/validar/ABCDEF1234567890?v=XYZ', 40);
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.every((line) => line.length <= 40)).toBe(true);
+  });
+
+  it('mascara CPF e e-mail para exibição pública', () => {
+    expect(maskCpf('215.938.038-99')).toBe('*.938.038-**');
+    expect(maskEmail('peterson@franca.sp.gov.br')).toBe('pe***@franca.sp.gov.br');
+    expect(displayAssinanteCpf({ cpfNaoInformado: true })).toBe('não informado');
+    expect(displayAssinanteEmail({ emailNaoInformado: true })).toBe('não informado');
+    expect(displayAssinanteCpf({ cpf: '21593803899' })).toBe('*.938.038-**');
   });
 });

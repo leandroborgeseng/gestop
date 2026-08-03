@@ -42,18 +42,42 @@ export function sha256Buffer(buffer: Buffer) {
   return createHash('sha256').update(buffer).digest('hex');
 }
 
+/** Máscara visual de CPF para PDF/telas públicas (ex.: *.938.038-**). */
 export function maskCpf(cpf?: string | null) {
   const digits = (cpf ?? '').replace(/\D/g, '');
-  if (digits.length < 11) return cpf ? '***.***.***-**' : null;
-  return `***.***.***-${digits.slice(-2)}`;
+  if (digits.length < 11) return cpf ? '*.***.***-**' : null;
+  return `*.${digits.slice(3, 6)}.${digits.slice(6, 9)}-**`;
 }
 
+/** Máscara visual de e-mail para PDF/telas públicas (ex.: pe***@franca.sp.gov.br). */
 export function maskEmail(email?: string | null) {
   const value = (email ?? '').trim();
   if (!value || !value.includes('@')) return email ? '***@***' : null;
   const [user, domain] = value.split('@');
   const visible = user.slice(0, Math.min(2, user.length));
   return `${visible}***@${domain}`;
+}
+
+/** Exibição segura de CPF da assinatura: mascarado ou “não informado”. */
+export function displayAssinanteCpf(opts: {
+  cpf?: string | null;
+  cpfNaoInformado?: boolean;
+}) {
+  if (opts.cpfNaoInformado) return 'não informado';
+  const digits = (opts.cpf ?? '').replace(/\D/g, '');
+  if (!digits) return 'não informado';
+  return maskCpf(opts.cpf) ?? 'não informado';
+}
+
+/** Exibição segura de e-mail da assinatura: mascarado ou “não informado”. */
+export function displayAssinanteEmail(opts: {
+  email?: string | null;
+  emailNaoInformado?: boolean;
+}) {
+  if (opts.emailNaoInformado) return 'não informado';
+  const value = (opts.email ?? '').trim();
+  if (!value) return 'não informado';
+  return maskEmail(opts.email) ?? 'não informado';
 }
 
 export function buildPublicValidationPath(codigoValidacao: string, codigoVerificador?: string) {

@@ -31,8 +31,8 @@ import {
   buildPublicValidationUrl,
   generateCodigoValidacao,
   generateCodigoVerificador,
-  maskCpf,
-  maskEmail,
+  displayAssinanteCpf,
+  displayAssinanteEmail,
   sha256Buffer,
   verifyCodigoVerificador,
 } from './documentos-validation';
@@ -183,8 +183,21 @@ export class DocumentosService {
       include: { alteradoPor: { select: { id: true, nome: true } } },
     });
 
+    const podeVerAssinaturasAnteriores = this.canSeeAssinaturasAnteriores(user);
+    const anteriores = (documento.assinaturas ?? [])
+      .filter((item) => item.invalida)
+      .sort((a, b) => {
+        const aEm = a.invalidadaEm?.getTime() ?? a.coletadaEm.getTime();
+        const bEm = b.invalidadaEm?.getTime() ?? b.coletadaEm.getTime();
+        return bEm - aEm;
+      });
+
     return {
-      ...this.serialize(documento),
+      ...this.serialize(documento, { fullPii: true }),
+      podeVerAssinaturasAnteriores,
+      assinaturasAnteriores: podeVerAssinaturasAnteriores
+        ? anteriores.map((item) => this.mapAssinaturaApi(item, { fullPii: true }))
+        : [],
       historico: historico.map((item) => ({
         id: item.id,
         statusAnterior: item.statusAnterior,
@@ -764,12 +777,14 @@ export class DocumentosService {
       const meta = this.asRecord(assinatura.metadata);
       assinaturasPdf.push({
         assinanteNome: assinatura.assinanteNome,
-        assinanteDocumento: meta.cpfNaoInformado
-          ? 'não informado'
-          : assinatura.assinanteDocumento,
-        assinanteEmail: meta.emailNaoInformado
-          ? 'não informado'
-          : assinatura.assinanteEmail,
+        assinanteDocumento: displayAssinanteCpf({
+          cpf: assinatura.assinanteDocumento,
+          cpfNaoInformado: Boolean(meta.cpfNaoInformado),
+        }),
+        assinanteEmail: displayAssinanteEmail({
+          email: assinatura.assinanteEmail,
+          emailNaoInformado: Boolean(meta.emailNaoInformado),
+        }),
         qualificacao: assinatura.qualificacaoOutro?.trim() || assinatura.qualificacao,
         coletadaEm: assinatura.coletadaEm.toISOString(),
         imageBuffer,
@@ -828,7 +843,16 @@ export class DocumentosService {
       }`,
       user.sub,
       {
+        acao: 'coletar_assinatura',
         pdfAssinadoSha256: hashArquivoFinal,
+        assinanteNome: dto.assinanteNome.trim(),
+        assinanteDocumento: cpfInformado
+          ? dto.assinanteDocumento!.trim()
+          : 'CPF não informado',
+        assinanteEmail: emailInformado ? dto.assinanteEmail!.trim() : 'E-mail não informado',
+        qualificacao: dto.qualificacaoOutro?.trim() || dto.qualificacao.trim(),
+        coletadaPorId: user.sub,
+        coletadaPorNome: user.nome,
         ...identificacaoMeta,
       },
     );
@@ -897,16 +921,29 @@ export class DocumentosService {
     const now = new Date();
     const assinaturasValidas = before.assinaturas.filter((item) => !item.invalida);
 
-    await this.prisma.documentoAssinatura.updateMany({
-      where: { documentoId: id, invalida: false },
-      data: {
-        invalida: true,
-        invalidadaEm: now,
-        invalidadaMotivo: motivo,
-      },
-    });
+    for (const assinatura of assinaturasValidas) {
+      const meta = this.asRecord(assinatura.metadata);
+      await this.prisma.documentoAssinatura.update({
+        where: { id: assinatura.id },
+        data: {
+          invalida: true,
+          invalidadaEm: now,
+          invalidadaMotivo: motivo,
+          metadata: {
+            ...meta,
+            invalidadaPorId: user.sub,
+            invalidadaPorNome: user.nome,
+            invalidadaPorEmail: user.email,
+            pdfAssinadoSha256Cancelado: before.pdfAssinadoSha256,
+          } as Prisma.InputJsonValue,
+        },
+      });
+    }
 
     const nextSituacao = DocumentoSituacao.SEM_ASSINATURA_EXTERNA;
+    const assinaturasInvalidasSnapshot = assinaturasValidas.map((item) =>
+      this.snapshotAssinaturaHistorico(item),
+    );
     const updated = await this.prisma.documento.update({
       where: { id },
       data: {
@@ -920,11 +957,8 @@ export class DocumentosService {
             motivo,
             em: now.toISOString(),
             porId: user.sub,
-            assinaturasInvalidas: assinaturasValidas.map((item) => ({
-              id: item.id,
-              assinanteNome: item.assinanteNome,
-              coletadaEm: item.coletadaEm.toISOString(),
-            })),
+            porNome: user.nome,
+            assinaturasInvalidas: assinaturasInvalidasSnapshot,
           },
         } as Prisma.InputJsonValue,
       },
@@ -939,12 +973,11 @@ export class DocumentosService {
       user.sub,
       {
         acao: 'cancelar_pdf_assinado',
-        assinaturasInvalidas: assinaturasValidas.map((item) => ({
-          assinanteNome: item.assinanteNome,
-          coletadaEm: item.coletadaEm.toISOString(),
-        })),
+        assinaturasInvalidas: assinaturasInvalidasSnapshot,
         canceladoPorId: user.sub,
+        canceladoPorNome: user.nome,
         canceladoEm: now.toISOString(),
+        pdfAssinadoSha256Cancelado: before.pdfAssinadoSha256,
       },
     );
     await this.audit(
@@ -1426,12 +1459,14 @@ export class DocumentosService {
         );
         return {
           assinanteNome: item.assinanteNome,
-          assinanteDocumento: meta.cpfNaoInformado
-            ? 'não informado'
-            : maskCpf(item.assinanteDocumento),
-          assinanteEmail: meta.emailNaoInformado
-            ? 'não informado'
-            : maskEmail(item.assinanteEmail),
+          assinanteDocumento: displayAssinanteCpf({
+            cpf: item.assinanteDocumento,
+            cpfNaoInformado: Boolean(meta.cpfNaoInformado),
+          }),
+          assinanteEmail: displayAssinanteEmail({
+            email: item.assinanteEmail,
+            emailNaoInformado: Boolean(meta.emailNaoInformado),
+          }),
           qualificacao: item.qualificacao,
           coletadaEm: item.coletadaEm.toISOString(),
           canal: item.canal,
@@ -1839,10 +1874,17 @@ export class DocumentosService {
           );
           imageBuffer = loaded?.buffer ?? null;
         }
+        const meta = this.asRecord(assinatura.metadata);
         assinaturasPdf.push({
           assinanteNome: assinatura.assinanteNome,
-          assinanteDocumento: assinatura.assinanteDocumento,
-          assinanteEmail: assinatura.assinanteEmail,
+          assinanteDocumento: displayAssinanteCpf({
+            cpf: assinatura.assinanteDocumento,
+            cpfNaoInformado: Boolean(meta.cpfNaoInformado),
+          }),
+          assinanteEmail: displayAssinanteEmail({
+            email: assinatura.assinanteEmail,
+            emailNaoInformado: Boolean(meta.emailNaoInformado),
+          }),
           qualificacao: assinatura.qualificacaoOutro?.trim() || assinatura.qualificacao,
           coletadaEm: assinatura.coletadaEm.toISOString(),
           imageBuffer,
@@ -2185,7 +2227,101 @@ export class DocumentosService {
     return hash.length > 16 ? `${hash.slice(0, 16)}…` : hash;
   }
 
-  private serialize(documento: DocumentoLoaded | any) {
+  private canSeeAssinaturasAnteriores(user: JwtPayload) {
+    return (
+      user.permissoes.includes('documentos.administrar') ||
+      user.permissoes.includes('auditoria.visualizar') ||
+      user.permissoes.includes('usuarios.gerenciar')
+    );
+  }
+
+  private snapshotAssinaturaHistorico(item: {
+    id: string;
+    assinanteNome: string;
+    assinanteDocumento?: string | null;
+    assinanteEmail?: string | null;
+    qualificacao?: string | null;
+    qualificacaoOutro?: string | null;
+    coletadaEm: Date;
+    coletadaPorId?: string | null;
+    metadata?: unknown;
+  }) {
+    const meta = this.asRecord(item.metadata);
+    const cpfNaoInformado = Boolean(meta.cpfNaoInformado);
+    const emailNaoInformado = Boolean(meta.emailNaoInformado);
+    return {
+      id: item.id,
+      assinanteNome: item.assinanteNome,
+      assinanteDocumento: cpfNaoInformado
+        ? 'CPF não informado'
+        : item.assinanteDocumento ?? 'CPF não informado',
+      assinanteEmail: emailNaoInformado
+        ? 'E-mail não informado'
+        : item.assinanteEmail ?? 'E-mail não informado',
+      qualificacao: item.qualificacaoOutro?.trim() || item.qualificacao || null,
+      coletadaEm: item.coletadaEm.toISOString(),
+      coletadaPorId: item.coletadaPorId ?? null,
+      cpfNaoInformado,
+      emailNaoInformado,
+      justificativaIdentificacao:
+        typeof meta.justificativaIdentificacao === 'string'
+          ? meta.justificativaIdentificacao
+          : null,
+    };
+  }
+
+  private mapAssinaturaApi(
+    item: any,
+    opts: { fullPii: boolean },
+  ) {
+    const meta = this.asRecord(item.metadata);
+    const cpfNaoInformado = Boolean(meta.cpfNaoInformado);
+    const emailNaoInformado = Boolean(meta.emailNaoInformado);
+    return {
+      id: item.id,
+      assinanteNome: item.assinanteNome,
+      assinanteDocumento: opts.fullPii
+        ? cpfNaoInformado
+          ? 'não informado'
+          : item.assinanteDocumento ?? 'não informado'
+        : displayAssinanteCpf({
+            cpf: item.assinanteDocumento,
+            cpfNaoInformado,
+          }),
+      assinanteEmail: opts.fullPii
+        ? emailNaoInformado
+          ? 'não informado'
+          : item.assinanteEmail ?? 'não informado'
+        : displayAssinanteEmail({
+            email: item.assinanteEmail,
+            emailNaoInformado,
+          }),
+      qualificacao: item.qualificacao,
+      qualificacaoOutro: item.qualificacaoOutro,
+      canal: item.canal,
+      coletadaEm: item.coletadaEm?.toISOString?.() ?? item.coletadaEm,
+      invalida: Boolean(item.invalida),
+      invalidadaEm: item.invalidadaEm?.toISOString?.() ?? item.invalidadaEm ?? null,
+      invalidadaMotivo: item.invalidadaMotivo ?? null,
+      invalidadaPorId:
+        typeof meta.invalidadaPorId === 'string' ? meta.invalidadaPorId : null,
+      invalidadaPorNome:
+        typeof meta.invalidadaPorNome === 'string' ? meta.invalidadaPorNome : null,
+      cpfNaoInformado,
+      emailNaoInformado,
+      justificativaIdentificacao:
+        typeof meta.justificativaIdentificacao === 'string'
+          ? meta.justificativaIdentificacao
+          : null,
+      assinanteUsuario: item.assinanteUsuario ?? null,
+      coletadaPor: item.coletadaPor ?? null,
+      evidenciaUrl: item.evidenciaUrl ?? null,
+    };
+  }
+
+  private serialize(documento: DocumentoLoaded | any, opts?: { fullPii?: boolean }) {
+    // Telas internas autenticadas: CPF/e-mail completos. Validação pública usa map próprio mascarado.
+    const fullPii = opts?.fullPii !== false;
     const codigoVerificador = generateCodigoVerificador(
       documento.codigo,
       documento.codigoValidacao,
@@ -2270,38 +2406,11 @@ export class DocumentosService {
             }
           : null,
       })),
-      // Somente assinaturas válidas do PDF assinado vigente (invalidas ficam no histórico).
+      // Somente assinaturas válidas do PDF assinado vigente.
+      // Interno (fullPii): CPF/e-mail completos; listagens usam máscara por padrão.
       assinaturas: (documento.assinaturas ?? [])
         .filter((item: any) => !item.invalida)
-        .map((item: any) => {
-          const meta = this.asRecord(item.metadata);
-          return {
-            id: item.id,
-            assinanteNome: item.assinanteNome,
-            assinanteDocumento: meta.cpfNaoInformado
-              ? 'não informado'
-              : item.assinanteDocumento,
-            assinanteEmail: meta.emailNaoInformado
-              ? 'não informado'
-              : item.assinanteEmail,
-            qualificacao: item.qualificacao,
-            qualificacaoOutro: item.qualificacaoOutro,
-            canal: item.canal,
-            coletadaEm: item.coletadaEm?.toISOString?.() ?? item.coletadaEm,
-            invalida: false,
-            invalidadaEm: null,
-            invalidadaMotivo: null,
-            cpfNaoInformado: Boolean(meta.cpfNaoInformado),
-            emailNaoInformado: Boolean(meta.emailNaoInformado),
-            justificativaIdentificacao:
-              typeof meta.justificativaIdentificacao === 'string'
-                ? meta.justificativaIdentificacao
-                : null,
-            assinanteUsuario: item.assinanteUsuario ?? null,
-            coletadaPor: item.coletadaPor ?? null,
-            evidenciaUrl: item.evidenciaUrl ?? null,
-          };
-        }),
+        .map((item: any) => this.mapAssinaturaApi(item, { fullPii })),
       createdAt: documento.createdAt?.toISOString?.() ?? documento.createdAt,
       updatedAt: documento.updatedAt?.toISOString?.() ?? documento.updatedAt,
       linkValidacao: buildPublicValidationUrl(documento.codigoValidacao, codigoVerificador),

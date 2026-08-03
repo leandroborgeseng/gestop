@@ -476,54 +476,151 @@ function DocumentoDetail({
       </div>
 
       <div>
-        <p className="mb-2 text-[12px] font-semibold text-[var(--ink)]">Assinaturas</p>
+        <p className="mb-2 text-[12px] font-semibold text-[var(--ink)]">Assinaturas vigentes</p>
         {documento.assinaturas?.length ? (
-          <ul className="space-y-1 text-[12px] text-[var(--ink-2)]">
+          <ul className="space-y-2 text-[12px] text-[var(--ink-2)]">
             {documento.assinaturas.map((item) => (
-              <li key={item.id}>
-                <span className="font-medium text-[var(--ink)]">{item.assinanteNome}</span>
-                {' · '}
-                CPF{' '}
-                {item.cpfNaoInformado || item.assinanteDocumento === 'não informado'
-                  ? 'não informado'
-                  : item.assinanteDocumento || '—'}
-                {' · '}
-                E-mail{' '}
-                {item.emailNaoInformado || item.assinanteEmail === 'não informado'
-                  ? 'não informado'
-                  : item.assinanteEmail || '—'}
-                {' · '}
-                {new Date(item.coletadaEm).toLocaleString('pt-BR')} · {item.canal}
+              <li key={item.id} className="rounded-[10px] border border-[var(--line)] bg-[var(--canvas-2)] px-3 py-2">
+                <p className="font-medium text-[var(--ink)]">{item.assinanteNome}</p>
+                <p>
+                  {item.qualificacaoOutro || item.qualificacao || '—'}
+                  {' · '}
+                  CPF{' '}
+                  {item.cpfNaoInformado || item.assinanteDocumento === 'não informado'
+                    ? 'não informado'
+                    : item.assinanteDocumento || '—'}
+                  {' · '}
+                  E-mail{' '}
+                  {item.emailNaoInformado || item.assinanteEmail === 'não informado'
+                    ? 'não informado'
+                    : item.assinanteEmail || '—'}
+                </p>
+                <p className="text-[var(--ink-3)]">
+                  {new Date(item.coletadaEm).toLocaleString('pt-BR')}
+                  {item.coletadaPor?.nome ? ` · coletada por ${item.coletadaPor.nome}` : ''}
+                </p>
                 {item.justificativaIdentificacao ? (
-                  <span className="block text-[var(--ink-3)]">
-                    Justificativa: {item.justificativaIdentificacao}
-                  </span>
+                  <p className="text-[var(--ink-3)]">Justificativa: {item.justificativaIdentificacao}</p>
                 ) : null}
               </li>
             ))}
           </ul>
         ) : (
-          <p className="text-[12px] text-[var(--ink-3)]">Nenhuma assinatura externa vigente</p>
+          <p className="text-[12px] text-[var(--ink-3)]">Nenhuma assinatura vigente</p>
         )}
       </div>
+
+      {documento.podeVerAssinaturasAnteriores ? (
+        <div>
+          <p className="mb-1 text-[12px] font-semibold text-[var(--ink)]">Assinaturas anteriores</p>
+          <p className="mb-2 text-[11px] text-[var(--ink-3)]">
+            Assinaturas de PDFs assinados cancelados ou substituídos — apenas histórico/auditoria, não vigentes.
+          </p>
+          {documento.assinaturasAnteriores?.length ? (
+            <ul className="space-y-2 text-[12px] text-[var(--ink-2)]">
+              {documento.assinaturasAnteriores.map((item) => (
+                <li
+                  key={item.id}
+                  className="rounded-[10px] border border-dashed border-[var(--line)] bg-[var(--surface)] px-3 py-2"
+                >
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-[var(--ink)]">{item.assinanteNome}</span>
+                    <Badge variant="muted">Não vigente</Badge>
+                  </div>
+                  <p>
+                    {item.qualificacaoOutro || item.qualificacao || '—'}
+                    {' · '}
+                    CPF{' '}
+                    {item.cpfNaoInformado || item.assinanteDocumento === 'não informado'
+                      ? 'não informado'
+                      : item.assinanteDocumento || '—'}
+                    {' · '}
+                    E-mail{' '}
+                    {item.emailNaoInformado || item.assinanteEmail === 'não informado'
+                      ? 'não informado'
+                      : item.assinanteEmail || '—'}
+                  </p>
+                  <p className="text-[var(--ink-3)]">
+                    Assinada em {new Date(item.coletadaEm).toLocaleString('pt-BR')}
+                    {item.coletadaPor?.nome ? ` · coletada por ${item.coletadaPor.nome}` : ''}
+                  </p>
+                  {item.invalidadaEm ? (
+                    <p className="text-[var(--ink-3)]">
+                      Invalidada em {new Date(item.invalidadaEm).toLocaleString('pt-BR')}
+                      {item.invalidadaPorNome ? ` · por ${item.invalidadaPorNome}` : ''}
+                    </p>
+                  ) : null}
+                  {item.invalidadaMotivo ? (
+                    <p className="text-[var(--ink-2)]">Motivo: {item.invalidadaMotivo}</p>
+                  ) : null}
+                  {item.justificativaIdentificacao ? (
+                    <p className="text-[var(--ink-3)]">
+                      Justificativa de identificação: {item.justificativaIdentificacao}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[12px] text-[var(--ink-3)]">Nenhuma assinatura anterior registrada</p>
+          )}
+        </div>
+      ) : null}
 
       {documento.historico?.length ? (
         <div>
           <p className="mb-2 text-[12px] font-semibold text-[var(--ink)]">Histórico</p>
           <ol className="space-y-2 border-l-2 border-[var(--line)] pl-3">
-            {documento.historico.map((item) => (
-              <li key={item.id} className="text-[12px]">
-                <p className="font-semibold text-[var(--ink)]">
-                  {item.statusAnterior ? `${item.statusAnterior} → ` : ''}
-                  {item.statusNovo}
-                </p>
-                <p className="text-[var(--ink-3)]">
-                  {new Date(item.createdAt).toLocaleString('pt-BR')}
-                  {item.alteradoPor ? ` · ${item.alteradoPor.nome}` : ''}
-                </p>
-                {item.motivo ? <p className="text-[var(--ink-2)]">{item.motivo}</p> : null}
-              </li>
-            ))}
+            {documento.historico.map((item) => {
+              const meta =
+                item.metadata && typeof item.metadata === 'object'
+                  ? (item.metadata as Record<string, unknown>)
+                  : null;
+              const assinaturasInvalidas = Array.isArray(meta?.assinaturasInvalidas)
+                ? (meta.assinaturasInvalidas as Array<Record<string, unknown>>)
+                : [];
+              return (
+                <li key={item.id} className="text-[12px]">
+                  <p className="font-semibold text-[var(--ink)]">
+                    {item.statusAnterior ? `${item.statusAnterior} → ` : ''}
+                    {item.statusNovo}
+                  </p>
+                  <p className="text-[var(--ink-3)]">
+                    {new Date(item.createdAt).toLocaleString('pt-BR')}
+                    {item.alteradoPor ? ` · ${item.alteradoPor.nome}` : ''}
+                  </p>
+                  {item.motivo ? <p className="text-[var(--ink-2)]">{item.motivo}</p> : null}
+                  {typeof meta?.assinanteNome === 'string' ? (
+                    <p className="text-[var(--ink-3)]">
+                      Assinante: {meta.assinanteNome}
+                      {typeof meta.assinanteDocumento === 'string' ? ` · CPF ${meta.assinanteDocumento}` : ''}
+                      {typeof meta.assinanteEmail === 'string' ? ` · E-mail ${meta.assinanteEmail}` : ''}
+                      {typeof meta.qualificacao === 'string' ? ` · ${meta.qualificacao}` : ''}
+                    </p>
+                  ) : null}
+                  {typeof meta?.justificativaIdentificacao === 'string' ? (
+                    <p className="text-[var(--ink-3)]">
+                      Justificativa: {meta.justificativaIdentificacao}
+                    </p>
+                  ) : null}
+                  {assinaturasInvalidas.length > 0 ? (
+                    <ul className="mt-1 space-y-0.5 text-[var(--ink-3)]">
+                      {assinaturasInvalidas.map((assinatura, index) => (
+                        <li key={String(assinatura.id ?? index)}>
+                          Invalidada: {String(assinatura.assinanteNome ?? '—')}
+                          {assinatura.assinanteDocumento
+                            ? ` · CPF ${String(assinatura.assinanteDocumento)}`
+                            : ''}
+                          {assinatura.assinanteEmail
+                            ? ` · E-mail ${String(assinatura.assinanteEmail)}`
+                            : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </li>
+              );
+            })}
           </ol>
         </div>
       ) : null}

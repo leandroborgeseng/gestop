@@ -1380,8 +1380,15 @@ export type DocumentoResumo = {
     assinanteNome: string;
     assinanteDocumento?: string | null;
     assinanteEmail?: string | null;
+    qualificacao?: string | null;
+    qualificacaoOutro?: string | null;
     canal: string;
     coletadaEm: string;
+    invalida?: boolean;
+    invalidadaEm?: string | null;
+    invalidadaMotivo?: string | null;
+    invalidadaPorId?: string | null;
+    invalidadaPorNome?: string | null;
     cpfNaoInformado?: boolean;
     emailNaoInformado?: boolean;
     justificativaIdentificacao?: string | null;
@@ -1395,6 +1402,8 @@ export type DocumentoResumo = {
 
 export type DocumentoDetalhe = DocumentoResumo & {
   conteudoTravado?: boolean;
+  podeVerAssinaturasAnteriores?: boolean;
+  assinaturasAnteriores?: DocumentoResumo['assinaturas'];
   historico: Array<{
     id: string;
     statusAnterior?: string | null;
