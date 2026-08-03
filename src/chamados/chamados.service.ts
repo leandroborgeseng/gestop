@@ -18,6 +18,7 @@ import {
   resolveEquipeSecretariaFilter,
 } from '../auth/secretaria-scope';
 import { DocumentosService } from '../documentos/documentos.service';
+import { buildRelatorioExecucaoPdf } from '../documentos/relatorio-execucao-pdf';
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -932,7 +933,15 @@ export class ChamadosService {
     await this.registrarDocumentoExecucao(chamado, user, {
       relatorio: dto.relatorio.trim(),
       checklistVersaoId: checklistRespostas?.checklistVersaoId ?? null,
+      checklistNome: checklistRespostas?.checklistNome ?? null,
+      checklistRespostas: checklistRespostas?.respostas ?? [],
       origem: 'execucao_campo',
+      impedimento: Boolean(dto.impedimento),
+      impedimentoMotivo: dto.impedimento ? dto.impedimentoMotivo?.trim() ?? null : null,
+      evidenciaIds: evidenciasExecucao.map((item) => item.id),
+      equipeNome: participantes.equipeExecutora.nome,
+      participantesLabel: participantes.participantes.map((item) => item.nome).join(', '),
+      executadoEm: new Date().toISOString(),
     });
 
     return this.serializeChamado(chamado);
@@ -1826,7 +1835,15 @@ export class ChamadosService {
     await this.registrarDocumentoExecucao(chamado, user, {
       relatorio: dto.relatorio.trim(),
       checklistVersaoId: null,
+      checklistNome: null,
+      checklistRespostas: [],
       origem: 'execucao_manual',
+      impedimento: Boolean(dto.impedimento),
+      impedimentoMotivo: dto.impedimento ? dto.impedimentoMotivo?.trim() ?? null : null,
+      evidenciaIds,
+      equipeNome: participantes.equipeExecutora.nome,
+      participantesLabel: participantes.participantes.map((item) => item.nome).join(', '),
+      executadoEm: dataExecucao.toISOString(),
     });
 
     return this.serializeChamado(chamado);
@@ -1836,39 +1853,275 @@ export class ChamadosService {
     chamado: {
       id: string;
       codigo: string;
+      status: string;
       secretariaId: string;
       unidadeId?: string | null;
       enderecoTexto?: string | null;
       responsavelId?: string | null;
       descricao?: string | null;
+      secretaria?: { nome: string; sigla: string } | null;
+      unidade?: {
+        nome?: string | null;
+        codigoPatrimonial?: string | null;
+        endereco?: string | null;
+      } | null;
+      tipoChamado?: { nome?: string | null } | null;
+      responsavel?: { nome?: string | null } | null;
+      equipe?: { nome?: string | null } | null;
     },
     user: JwtPayload,
-    opts: { relatorio: string; checklistVersaoId?: string | null; origem: string },
+    opts: {
+      relatorio: string;
+      checklistVersaoId?: string | null;
+      checklistNome?: string | null;
+      checklistRespostas?: Array<{
+        itemId: string;
+        codigo: string;
+        titulo: string;
+        tipo: string;
+        naoSeAplica?: boolean;
+        valorBooleano?: boolean | null;
+        valorTexto?: string | null;
+        valorNumero?: number | null;
+        comentario?: string | null;
+        evidenciaUrls?: string[];
+      }>;
+      origem: string;
+      impedimento?: boolean;
+      impedimentoMotivo?: string | null;
+      evidenciaIds: string[];
+      equipeNome?: string | null;
+      participantesLabel?: string | null;
+      executadoEm: string;
+    },
   ) {
-    let pdfBuffer: Buffer | null = null;
     try {
-      pdfBuffer = await this.exportChamadoPdf(chamado.id, user);
-    } catch {
-      pdfBuffer = null;
-    }
+      const historico = await this.prisma.historicoStatus.findFirst({
+        where: {
+          entidadeTipo: 'Chamado',
+          entidadeId: chamado.id,
+          OR: [
+            { metadata: { path: ['tipo'], equals: 'execucao_conclusao' } },
+            { metadata: { path: ['tipo'], equals: 'execucao_manual' } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
 
-    try {
-      await this.documentosService.upsertFromChamadoExecucao({
+      const upserted = await this.documentosService.upsertFromChamadoExecucao({
         chamadoId: chamado.id,
         secretariaId: chamado.secretariaId,
         unidadeId: chamado.unidadeId ?? null,
-        enderecoTexto: chamado.enderecoTexto ?? null,
+        enderecoTexto: chamado.enderecoTexto ?? chamado.unidade?.endereco ?? null,
         checklistVersaoId: opts.checklistVersaoId ?? null,
         responsavelId: chamado.responsavelId ?? user.sub,
         criadoPorId: user.sub,
         titulo: `Relatório de execução · ${chamado.codigo}`,
         descricao: opts.relatorio || chamado.descricao || null,
+        pdfBuffer: null,
+        metadata: {
+          origemExecucao: opts.origem,
+          historicoExecucaoId: historico?.id ?? null,
+          evidenciaIds: opts.evidenciaIds,
+          checklistNome: opts.checklistNome ?? null,
+        },
+      });
+
+      if (upserted.possuiPdfOriginal) {
+        return;
+      }
+
+      const pdfBuffer = await this.buildRelatorioExecucaoPdfBuffer(chamado, user, opts, upserted.codigo);
+      if (!pdfBuffer?.length) return;
+
+      await this.documentosService.attachPdfOriginalIfAbsent({
+        documentoId: upserted.id,
         pdfBuffer,
-        metadata: { origemExecucao: opts.origem },
+        userId: user.sub,
+        motivo: 'PDF original gerado automaticamente a partir da execução do chamado',
+        metadataExtra: { origemPdf: 'relatorio_execucao' },
       });
     } catch {
       // Não bloqueia a conclusão da execução.
     }
+  }
+
+  private async buildRelatorioExecucaoPdfBuffer(
+    chamado: {
+      id: string;
+      codigo: string;
+      status: string;
+      secretaria?: { nome: string; sigla: string } | null;
+      unidade?: {
+        nome?: string | null;
+        codigoPatrimonial?: string | null;
+        endereco?: string | null;
+      } | null;
+      enderecoTexto?: string | null;
+      tipoChamado?: { nome?: string | null } | null;
+      responsavel?: { nome?: string | null } | null;
+      equipe?: { nome?: string | null } | null;
+    },
+    user: JwtPayload,
+    opts: {
+      relatorio: string;
+      checklistNome?: string | null;
+      checklistVersaoId?: string | null;
+      checklistRespostas?: Array<{
+        codigo: string;
+        titulo: string;
+        tipo: string;
+        naoSeAplica?: boolean;
+        valorBooleano?: boolean | null;
+        valorTexto?: string | null;
+        valorNumero?: number | null;
+        comentario?: string | null;
+        evidenciaUrls?: string[];
+      }>;
+      origem: string;
+      impedimento?: boolean;
+      impedimentoMotivo?: string | null;
+      evidenciaIds: string[];
+      equipeNome?: string | null;
+      participantesLabel?: string | null;
+      executadoEm: string;
+    },
+    documentoCodigo?: string | null,
+  ) {
+    const evidencias = opts.evidenciaIds.length
+      ? await this.prisma.evidencia.findMany({
+          where: { id: { in: opts.evidenciaIds }, chamadoId: chamado.id },
+          orderBy: { capturadaEm: 'asc' },
+          select: {
+            id: true,
+            mimeType: true,
+            storageKey: true,
+            url: true,
+            metadata: true,
+          },
+        })
+      : [];
+
+    const evidenciasGerais = [];
+    for (let index = 0; index < evidencias.length; index++) {
+      const evidencia = evidencias[index];
+      const storageKey = evidencia.storageKey ?? extractStorageKeyFromUrl(evidencia.url);
+      let imageBuffer: Buffer | null = null;
+      if (storageKey && isPdfRenderableImage(evidencia.mimeType)) {
+        const loaded = await this.storageService.readObjectBuffer(storageKey, evidencia.mimeType);
+        imageBuffer = loaded?.buffer ?? null;
+      }
+      const meta = (evidencia.metadata ?? {}) as { nome?: string; descricao?: string };
+      evidenciasGerais.push({
+        legenda: meta.descricao?.trim() || meta.nome?.trim() || `Evidência ${index + 1}`,
+        mimeType: evidencia.mimeType,
+        nomeArquivo: storageKey?.split('/').pop() ?? meta.nome ?? null,
+        imageBuffer,
+      });
+    }
+
+    const respostas = [];
+    for (const item of opts.checklistRespostas ?? []) {
+      const evidenciasItem = [];
+      for (let index = 0; index < (item.evidenciaUrls ?? []).length; index++) {
+        const url = item.evidenciaUrls![index];
+        const anexo = await this.resolveExecucaoAnexoFromUrl(url, `Evidência da pergunta ${index + 1}`);
+        evidenciasItem.push(anexo);
+      }
+      respostas.push({
+        codigo: item.codigo,
+        titulo: item.titulo,
+        tipo: item.tipo,
+        respostaTexto: this.formatExecucaoRespostaTexto(item),
+        comentario: item.comentario ?? null,
+        conformidade: null,
+        naoSeAplica: Boolean(item.naoSeAplica),
+        evidencias: evidenciasItem,
+      });
+    }
+
+    let checklistVersao: number | null = null;
+    if (opts.checklistVersaoId) {
+      const versao = await this.prisma.checklistVersao.findUnique({
+        where: { id: opts.checklistVersaoId },
+        select: { versao: true },
+      });
+      checklistVersao = versao?.versao ?? null;
+    }
+
+    const localLabel = chamado.unidade
+      ? `${chamado.unidade.codigoPatrimonial ?? ''} ${chamado.unidade.nome ?? ''}`.trim()
+      : chamado.enderecoTexto?.trim() || 'Local livre';
+
+    return buildRelatorioExecucaoPdf({
+      documentoCodigo: documentoCodigo ?? null,
+      chamadoCodigo: chamado.codigo,
+      tipoChamadoNome: chamado.tipoChamado?.nome ?? null,
+      secretariaLabel: chamado.secretaria
+        ? `${chamado.secretaria.sigla} — ${chamado.secretaria.nome}`
+        : '—',
+      localLabel,
+      endereco: chamado.enderecoTexto || chamado.unidade?.endereco || null,
+      statusLabel: chamado.status,
+      responsavelLabel: chamado.responsavel?.nome ?? null,
+      equipeLabel: opts.equipeNome || chamado.equipe?.nome || null,
+      executadoEm: new Date(opts.executadoEm).toLocaleString('pt-BR'),
+      registradoPorLabel: user.nome || user.email || user.sub,
+      origemExecucaoLabel:
+        opts.origem === 'execucao_manual' ? 'Lançamento manual' : 'Execução em campo',
+      relatorio: opts.relatorio,
+      impedimento: Boolean(opts.impedimento),
+      impedimentoMotivo: opts.impedimentoMotivo ?? null,
+      participantesLabel: opts.participantesLabel ?? null,
+      checklistNome: opts.checklistNome ?? null,
+      checklistVersao,
+      respostas,
+      evidenciasGerais,
+    });
+  }
+
+  private formatExecucaoRespostaTexto(item: {
+    naoSeAplica?: boolean;
+    valorBooleano?: boolean | null;
+    valorTexto?: string | null;
+    valorNumero?: number | null;
+  }) {
+    if (item.naoSeAplica) return 'Não se aplica';
+    if (item.valorBooleano != null) return item.valorBooleano ? 'Sim' : 'Não';
+    if (item.valorNumero != null) return String(item.valorNumero);
+    return item.valorTexto?.trim() || '—';
+  }
+
+  private async resolveExecucaoAnexoFromUrl(url: string, legenda: string) {
+    const trimmed = url.trim();
+    if (trimmed.startsWith('data:')) {
+      const match = /^data:([^;]+);base64,(.+)$/i.exec(trimmed);
+      if (!match) {
+        return { legenda, mimeType: null, nomeArquivo: null, imageBuffer: null };
+      }
+      const mimeType = match[1];
+      const imageBuffer = Buffer.from(match[2], 'base64');
+      return {
+        legenda,
+        mimeType,
+        nomeArquivo: null,
+        imageBuffer: isPdfRenderableImage(mimeType) ? imageBuffer : null,
+      };
+    }
+
+    const storageKey = extractStorageKeyFromUrl(trimmed);
+    if (!storageKey) {
+      return { legenda, mimeType: null, nomeArquivo: trimmed.split('/').pop() ?? null, imageBuffer: null };
+    }
+    const loaded = await this.storageService.readObjectBuffer(storageKey);
+    return {
+      legenda,
+      mimeType: loaded?.mimeType ?? null,
+      nomeArquivo: storageKey.split('/').pop() ?? null,
+      imageBuffer:
+        loaded?.buffer && isPdfRenderableImage(loaded.mimeType) ? loaded.buffer : null,
+    };
   }
 
   async registrarHistorico(id: string, dto: RegistrarChamadoHistoricoDto, user: JwtPayload) {

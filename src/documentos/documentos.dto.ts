@@ -203,15 +203,30 @@ export class ColetarAssinaturaDto {
   @MaxLength(200)
   assinanteNome!: string;
 
+  @IsOptional()
   @IsString()
-  @MinLength(11)
   @MaxLength(20)
-  assinanteDocumento!: string;
+  assinanteDocumento?: string;
 
+  @IsOptional()
   @IsString()
-  @MinLength(3)
   @MaxLength(200)
-  assinanteEmail!: string;
+  assinanteEmail?: string;
+
+  /** Quando true, permite gravar sem CPF. */
+  @IsOptional()
+  @IsBoolean()
+  cpfNaoInformado?: boolean;
+
+  /** Quando true, permite gravar sem e-mail. */
+  @IsOptional()
+  @IsBoolean()
+  emailNaoInformado?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(400)
+  justificativaIdentificacao?: string;
 
   @IsString()
   @MinLength(2)
@@ -277,7 +292,18 @@ export class ValidarDocumentoPublicoQueryDto {
 
   @IsOptional()
   @IsString()
-  codigo?: string;
+  verificador?: string;
+}
+
+export class ValidarDocumentoPorCodigoQueryDto {
+  @IsString()
+  @MinLength(6)
+  @MaxLength(40)
+  codigo!: string;
+
+  @IsOptional()
+  @IsString()
+  v?: string;
 
   @IsOptional()
   @IsString()

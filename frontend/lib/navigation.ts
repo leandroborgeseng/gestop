@@ -153,7 +153,7 @@ export const NAV_ITEMS: NavItem[] = [
     label: 'Administração',
     href: '/admin',
     icon: Settings,
-    permission: 'usuarios.gerenciar',
+    permissions: ['usuarios.gerenciar', 'secretarias.gerenciar', 'unidades.gerenciar', 'permissoes.gerenciar'],
   },
   {
     id: 'checklists',

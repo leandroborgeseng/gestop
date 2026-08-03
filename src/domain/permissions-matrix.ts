@@ -139,10 +139,34 @@ export function deriveLegacyPermissionKeys(matrixKeys: Set<string>): Set<string>
     legacy.add(LEGACY_CHECKLISTS_GERENCIAR);
   }
   if (hasPrefix('admin')) {
-    legacy.add(LEGACY_USUARIOS_GERENCIAR);
-    legacy.add(LEGACY_SECRETARIAS_GERENCIAR);
-    legacy.add(LEGACY_UNIDADES_GERENCIAR);
     legacy.add(LEGACY_AUDITORIA_VISUALIZAR);
+    const hasAdminFn = (fn: string, ...actions: string[]) =>
+      actions.some((acao) => matrixKeys.has(permissionMatrixKey('admin', fn, acao as never)));
+
+    // Superusuário legado só quando a tela Administração (_tela) ou cadastros legado
+    // tiverem ações de escrita — visualizar por aba não concede usuarios.gerenciar.
+    if (
+      hasAdminFn('_tela', 'inserir', 'alterar', 'excluir', 'executar') ||
+      hasAdminFn('cadastros', 'inserir', 'alterar', 'excluir')
+    ) {
+      legacy.add(LEGACY_USUARIOS_GERENCIAR);
+    }
+    if (hasAdminFn('secretarias', 'inserir', 'alterar', 'excluir') || hasAdminFn('cadastros', 'inserir', 'alterar', 'excluir')) {
+      legacy.add(LEGACY_SECRETARIAS_GERENCIAR);
+    }
+    if (
+      hasAdminFn('proprios', 'inserir', 'alterar', 'excluir') ||
+      hasAdminFn('importacao', 'executar') ||
+      hasAdminFn('cadastros', 'inserir', 'alterar', 'excluir')
+    ) {
+      legacy.add(LEGACY_UNIDADES_GERENCIAR);
+    }
+    if (hasAdminFn('permissoes', 'visualizar', 'inserir', 'alterar', 'excluir')) {
+      legacy.add(LEGACY_PERMISSOES_GERENCIAR);
+    }
+    if (hasAdminFn('categorias_vistoria', 'inserir', 'alterar', 'excluir')) {
+      legacy.add(LEGACY_CHECKLISTS_GERENCIAR);
+    }
   }
   if (hasPrefix('permissoes')) {
     legacy.add(LEGACY_PERMISSOES_GERENCIAR);
@@ -240,11 +264,17 @@ export function expandLegacyToMatrixKeys(legacyKeys: Set<string>): Set<string> {
     grantScreen('permissoes', ['visualizar', 'alterar', 'inserir']);
   }
   if (legacyKeys.has(LEGACY_SECRETARIAS_GERENCIAR)) {
-    matrix.add(permissionMatrixKey('admin', 'cadastros', 'visualizar'));
-    matrix.add(permissionMatrixKey('admin', 'cadastros', 'inserir'));
-    matrix.add(permissionMatrixKey('admin', 'cadastros', 'alterar'));
+    for (const acao of ['visualizar', 'inserir', 'alterar', 'excluir'] as const) {
+      matrix.add(permissionMatrixKey('admin', 'secretarias', acao));
+      matrix.add(permissionMatrixKey('admin', 'cadastros', acao));
+    }
   }
   if (legacyKeys.has(LEGACY_UNIDADES_GERENCIAR)) {
+    for (const acao of ['visualizar', 'inserir', 'alterar', 'excluir'] as const) {
+      matrix.add(permissionMatrixKey('admin', 'proprios', acao));
+    }
+    matrix.add(permissionMatrixKey('admin', 'importacao', 'visualizar'));
+    matrix.add(permissionMatrixKey('admin', 'importacao', 'executar'));
     matrix.add(permissionMatrixKey('admin', 'cadastros', 'visualizar'));
     matrix.add(permissionMatrixKey('admin', 'cadastros', 'alterar'));
   }

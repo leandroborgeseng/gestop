@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, createHash } from 'node:crypto';
+import { resolvePublicFrontendUrl } from '../config/env';
 
 function secret() {
   return (
@@ -60,12 +61,54 @@ export function buildPublicValidationPath(codigoValidacao: string, codigoVerific
   return codigoVerificador ? `${base}?v=${encodeURIComponent(codigoVerificador)}` : base;
 }
 
+/**
+ * URL absoluta pública de validação (QR Code / links externos).
+ * Usa FRONTEND_PUBLIC_URL (e fallbacks) — nunca deve ficar só o caminho relativo em produção.
+ */
 export function buildPublicValidationUrl(codigoValidacao: string, codigoVerificador?: string) {
-  const app =
-    process.env.PUBLIC_APP_URL?.trim() ||
-    process.env.FRONTEND_URL?.trim() ||
-    process.env.APP_URL?.trim() ||
-    '';
+  const app = resolvePublicFrontendUrl();
   const path = buildPublicValidationPath(codigoValidacao, codigoVerificador);
-  return app ? `${app.replace(/\/$/, '')}${path}` : path;
+  if (app) {
+    return `${app}${path}`;
+  }
+  // Desenvolvimento local sem FRONTEND_PUBLIC_URL: ainda gera URL absoluta usável no celular via localhost.
+  if (!isProductionLike()) {
+    return `http://localhost:3000${path}`;
+  }
+  return path;
+}
+
+function isProductionLike() {
+  return (
+    process.env.NODE_ENV === 'production' ||
+    Boolean(process.env.RAILWAY_ENVIRONMENT) ||
+    Boolean(process.env.COOLIFY) ||
+    Boolean(process.env.COOLIFY_RESOURCE_UUID)
+  );
+}
+
+/** Texto curto para exibição em PDF (hash/URL), sem alterar o valor usado no QR. */
+export function summarizeForPdfDisplay(value: string, maxChars = 42) {
+  const trimmed = value.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return `${trimmed.slice(0, Math.max(1, maxChars - 1))}…`;
+}
+
+export function wrapPdfText(text: string, maxCharsPerLine: number): string[] {
+  const value = text.trim();
+  if (!value) return [];
+  if (value.length <= maxCharsPerLine) return [value];
+
+  const lines: string[] = [];
+  let remaining = value;
+  while (remaining.length > maxCharsPerLine) {
+    let breakAt = remaining.lastIndexOf(' ', maxCharsPerLine);
+    if (breakAt < Math.floor(maxCharsPerLine * 0.45)) {
+      breakAt = maxCharsPerLine;
+    }
+    lines.push(remaining.slice(0, breakAt).trimEnd());
+    remaining = remaining.slice(breakAt).trimStart();
+  }
+  if (remaining) lines.push(remaining);
+  return lines;
 }

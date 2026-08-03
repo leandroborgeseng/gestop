@@ -26,6 +26,7 @@ import {
   type DocumentoPdfAssinatura,
   type DocumentoPdfResposta,
 } from './documentos-pdf';
+import { appendAssinaturasAoPdfOriginal } from './documentos-pdf-assinado';
 import {
   buildPublicValidationUrl,
   generateCodigoValidacao,
@@ -35,6 +36,9 @@ import {
   sha256Buffer,
   verifyCodigoVerificador,
 } from './documentos-validation';
+import { buildRelatorioExecucaoPdf } from './relatorio-execucao-pdf';
+import { extractStorageKeyFromUrl } from '../storage/storage-url';
+import { isPdfRenderableImage } from '../fiscalizacoes/vistoria-realizada-pdf';
 import {
   CancelarDocumentoDto,
   ColetarAssinaturaDto,
@@ -457,7 +461,36 @@ export class DocumentosService {
       return this.concluirDocumento(id, user);
     }
 
-    const pdfBuffer = await this.buildDocumentoPdfBuffer(before, { incluirAssinaturas: false });
+    const meta = this.asRecord(before.metadata);
+    const origemPdf = typeof meta.origemPdf === 'string' ? meta.origemPdf : null;
+    const isAutoOrigem =
+      before.origem === DocumentoOrigem.CHAMADO_EXECUCAO || before.origem === DocumentoOrigem.VISTORIA;
+    const pdfCanonico =
+      origemPdf === 'relatorio_execucao' || origemPdf === 'relatorio_vistoria';
+
+    if (before.pdfOriginalStorageKey && (!isAutoOrigem || pdfCanonico)) {
+      throw new BadRequestException(
+        'PDF original já existe e não pode ser sobrescrito. Use cancelamento/retificação com auditoria se precisar de nova versão.',
+      );
+    }
+
+    if (before.origem === DocumentoOrigem.VISTORIA) {
+      throw new BadRequestException(
+        before.pdfOriginalStorageKey
+          ? 'PDF original de vistoria já existe e não pode ser sobrescrito.'
+          : 'PDF original de vistoria ainda pendente. Ele é gerado automaticamente na conclusão da vistoria.',
+      );
+    }
+
+    let pdfBuffer: Buffer;
+    let origemPdfNext = origemPdf;
+    if (before.origem === DocumentoOrigem.CHAMADO_EXECUCAO) {
+      pdfBuffer = await this.buildRelatorioExecucaoFromDocumento(before);
+      origemPdfNext = 'relatorio_execucao';
+    } else {
+      pdfBuffer = await this.buildDocumentoPdfBuffer(before, { incluirAssinaturas: false });
+    }
+
     const hash = sha256Buffer(pdfBuffer);
     const stored = await this.storageService.persistBuffer(pdfBuffer, 'application/pdf', 'documentos');
 
@@ -473,19 +506,92 @@ export class DocumentosService {
         pdfOriginalStorageKey: stored.storageKey,
         pdfOriginalUrl: stored.url,
         pdfOriginalSha256: hash,
+        metadata: {
+          ...meta,
+          origemPdf: origemPdfNext,
+        } as Prisma.InputJsonValue,
       },
       include: DOCUMENTO_INCLUDE,
     });
 
-    await this.registrarHistorico(id, before.situacao, nextSituacao, 'PDF original regenerado', user.sub, {
-      pdfOriginalSha256: hash,
-    });
+    await this.registrarHistorico(
+      id,
+      before.situacao,
+      nextSituacao,
+      before.pdfOriginalStorageKey
+        ? 'PDF original corrigido a partir da fonte da execução'
+        : 'PDF original gerado',
+      user.sub,
+      { pdfOriginalSha256: hash, origemPdf: origemPdfNext },
+    );
     await this.audit(
       user.sub,
       AuditAction.UPDATE,
       id,
-      { situacao: before.situacao },
-      { situacao: nextSituacao, pdfOriginalSha256: hash },
+      { situacao: before.situacao, pdfOriginalSha256: before.pdfOriginalSha256 },
+      { situacao: nextSituacao, pdfOriginalSha256: hash, origemPdf: origemPdfNext },
+    );
+
+    return this.serialize(updated);
+  }
+
+  /**
+   * Anexa PDF original somente se ainda não existir (imutável após criação).
+   */
+  async attachPdfOriginalIfAbsent(input: {
+    documentoId: string;
+    pdfBuffer: Buffer;
+    userId?: string | null;
+    motivo?: string;
+    metadataExtra?: Record<string, unknown>;
+  }) {
+    const documento = await this.prisma.documento.findUnique({
+      where: { id: input.documentoId },
+      select: {
+        id: true,
+        situacao: true,
+        pdfOriginalStorageKey: true,
+        metadata: true,
+        conteudoTravadoEm: true,
+      },
+    });
+    if (!documento) throw new NotFoundException('Documento não encontrado.');
+    if (documento.pdfOriginalStorageKey) {
+      return this.serialize(await this.requireDocumentoFullById(documento.id));
+    }
+    if (documento.conteudoTravadoEm) {
+      throw new BadRequestException('Conteúdo do documento está travado.');
+    }
+
+    const hash = sha256Buffer(input.pdfBuffer);
+    const stored = await this.storageService.persistBuffer(input.pdfBuffer, 'application/pdf', 'documentos');
+    const nextSituacao =
+      documento.situacao === DocumentoSituacao.RASCUNHO || documento.situacao === DocumentoSituacao.GERADO
+        ? DocumentoSituacao.SEM_ASSINATURA_EXTERNA
+        : documento.situacao;
+
+    const updated = await this.prisma.documento.update({
+      where: { id: documento.id },
+      data: {
+        situacao: nextSituacao,
+        pdfOriginalStorageKey: stored.storageKey,
+        pdfOriginalUrl: stored.url,
+        pdfOriginalSha256: hash,
+        metadata: {
+          ...this.asRecord(documento.metadata),
+          ...(input.metadataExtra ?? {}),
+        } as Prisma.InputJsonValue,
+      },
+      include: DOCUMENTO_INCLUDE,
+    });
+
+    await this.registrarHistorico(
+      documento.id,
+      documento.situacao,
+      nextSituacao,
+      input.motivo ?? 'PDF original anexado',
+      input.userId ?? null,
+      { pdfOriginalSha256: hash },
     );
 
     return this.serialize(updated);
@@ -582,17 +688,46 @@ export class DocumentosService {
       throw new BadRequestException('Informe a assinatura como data URL.');
     }
 
+    const cpfInformado = Boolean(dto.assinanteDocumento?.replace(/\D/g, '').trim());
+    const emailInformado = Boolean(dto.assinanteEmail?.trim());
+    const cpfNaoInformado = Boolean(dto.cpfNaoInformado) || !cpfInformado;
+    const emailNaoInformado = Boolean(dto.emailNaoInformado) || !emailInformado;
+
+    if (!cpfInformado && !dto.cpfNaoInformado) {
+      throw new BadRequestException('Informe o CPF ou marque que o assinante não informou CPF.');
+    }
+    if (!emailInformado && !dto.emailNaoInformado) {
+      throw new BadRequestException('Informe o e-mail ou marque que o assinante não informou e-mail.');
+    }
+    if ((cpfNaoInformado || emailNaoInformado) && !(dto.justificativaIdentificacao?.trim().length)) {
+      throw new BadRequestException(
+        'Informe a justificativa quando CPF e/ou e-mail não forem informados pelo assinante.',
+      );
+    }
+    if (cpfInformado && dto.assinanteDocumento!.replace(/\D/g, '').length < 11) {
+      throw new BadRequestException('CPF inválido.');
+    }
+    if (emailInformado && !dto.assinanteEmail!.includes('@')) {
+      throw new BadRequestException('E-mail inválido.');
+    }
+
     const stored = await this.storageService.persistEvidenceUrl(dto.assinaturaDataUrl, dto.mimeType);
     const evidenciaSha256 = stored.checksum || sha256Buffer(
       Buffer.from(dto.assinaturaDataUrl.split(',')[1] ?? '', 'base64'),
     );
 
+    const identificacaoMeta = {
+      cpfNaoInformado: cpfNaoInformado && !cpfInformado,
+      emailNaoInformado: emailNaoInformado && !emailInformado,
+      justificativaIdentificacao: dto.justificativaIdentificacao?.trim() || null,
+    };
+
     await this.prisma.documentoAssinatura.create({
       data: {
         documentoId: id,
         assinanteNome: dto.assinanteNome.trim(),
-        assinanteDocumento: dto.assinanteDocumento.trim(),
-        assinanteEmail: dto.assinanteEmail.trim(),
+        assinanteDocumento: cpfInformado ? dto.assinanteDocumento!.trim() : null,
+        assinanteEmail: emailInformado ? dto.assinanteEmail!.trim() : null,
         qualificacao: dto.qualificacao.trim(),
         qualificacaoOutro: dto.qualificacaoOutro?.trim() || null,
         canal: 'externa',
@@ -608,12 +743,60 @@ export class DocumentosService {
         precisaoMetros: dto.precisaoMetros ?? null,
         localizacaoEm: dto.localizacaoEm ? new Date(dto.localizacaoEm) : null,
         pdfOriginalSha256: before.pdfOriginalSha256,
+        metadata: identificacaoMeta as Prisma.InputJsonValue,
       },
     });
 
     const withAssinaturas = await this.requireDocumentoFull(id, user);
-    const pdfBuffer = await this.buildDocumentoPdfBuffer(withAssinaturas, { incluirAssinaturas: true });
-    const hashAssinado = sha256Buffer(pdfBuffer);
+    const basePdf = await this.resolvePdfBaseParaAssinatura(withAssinaturas);
+
+    const assinaturasValidas = withAssinaturas.assinaturas.filter((item) => !item.invalida);
+    const assinaturasPdf = [];
+    for (const assinatura of assinaturasValidas) {
+      let imageBuffer: Buffer | null = null;
+      if (assinatura.evidenciaStorageKey) {
+        const loaded = await this.storageService.readObjectBuffer(
+          assinatura.evidenciaStorageKey,
+          'image/png',
+        );
+        imageBuffer = loaded?.buffer ?? null;
+      }
+      const meta = this.asRecord(assinatura.metadata);
+      assinaturasPdf.push({
+        assinanteNome: assinatura.assinanteNome,
+        assinanteDocumento: meta.cpfNaoInformado
+          ? 'não informado'
+          : assinatura.assinanteDocumento,
+        assinanteEmail: meta.emailNaoInformado
+          ? 'não informado'
+          : assinatura.assinanteEmail,
+        qualificacao: assinatura.qualificacaoOutro?.trim() || assinatura.qualificacao,
+        coletadaEm: assinatura.coletadaEm.toISOString(),
+        imageBuffer,
+      });
+    }
+
+    const codigoVerificador = generateCodigoVerificador(
+      withAssinaturas.codigo,
+      withAssinaturas.codigoValidacao,
+    );
+    const validationUrl = buildPublicValidationUrl(
+      withAssinaturas.codigoValidacao,
+      codigoVerificador,
+    );
+
+    const { pdfBuffer, hashArquivoFinal } = await appendAssinaturasAoPdfOriginal(
+      basePdf,
+      assinaturasPdf,
+      {
+        codigo: withAssinaturas.codigo,
+        codigoValidacao: withAssinaturas.codigoValidacao,
+        codigoVerificador,
+        situacaoLabel: SITUACAO_LABELS[DocumentoSituacao.ASSINADO_VIGENTE],
+        geradoEm: new Date().toLocaleString('pt-BR'),
+        validationUrl,
+      },
+    );
     const storedPdf = await this.storageService.persistBuffer(pdfBuffer, 'application/pdf', 'documentos');
 
     const now = new Date();
@@ -624,22 +807,30 @@ export class DocumentosService {
         conteudoTravadoEm: before.conteudoTravadoEm ?? now,
         pdfAssinadoStorageKey: storedPdf.storageKey,
         pdfAssinadoUrl: storedPdf.url,
-        pdfAssinadoSha256: hashAssinado,
+        pdfAssinadoSha256: hashArquivoFinal,
       },
       include: DOCUMENTO_INCLUDE,
     });
 
     await this.prisma.documentoAssinatura.updateMany({
-      where: { documentoId: id, invalida: false, pdfAssinadoSha256: null },
-      data: { pdfAssinadoSha256: hashAssinado },
+      where: { documentoId: id, invalida: false },
+      data: { pdfAssinadoSha256: hashArquivoFinal },
     });
 
     await this.registrarHistorico(
       id,
       before.situacao,
       DocumentoSituacao.ASSINADO_VIGENTE,
-      `Assinatura coletada: ${dto.assinanteNome.trim()}`,
+      `Assinatura coletada: ${dto.assinanteNome.trim()}${
+        identificacaoMeta.cpfNaoInformado || identificacaoMeta.emailNaoInformado
+          ? ' (identificação parcial)'
+          : ''
+      }`,
       user.sub,
+      {
+        pdfAssinadoSha256: hashArquivoFinal,
+        ...identificacaoMeta,
+      },
     );
     await this.audit(
       user.sub,
@@ -649,16 +840,50 @@ export class DocumentosService {
       {
         situacao: DocumentoSituacao.ASSINADO_VIGENTE,
         assinanteNome: dto.assinanteNome.trim(),
-        pdfAssinadoSha256: hashAssinado,
+        pdfAssinadoSha256: hashArquivoFinal,
+        ...identificacaoMeta,
       },
     );
 
     return this.serialize(updated);
   }
 
+  /**
+   * Base do PDF para assinatura: conteúdo sem selo antigo de autenticidade do original
+   * (evita “Sem assinatura externa” residual no PDF assinado).
+   */
+  private async resolvePdfBaseParaAssinatura(documento: DocumentoLoaded) {
+    const usaBuilderDocumento =
+      documento.origem === DocumentoOrigem.AVULSO ||
+      documento.origem === DocumentoOrigem.SISTEMA ||
+      documento.tipo === DocumentoTipo.DOCUMENTO_AVULSO;
+
+    if (usaBuilderDocumento) {
+      return this.buildDocumentoPdfBuffer(documento, {
+        incluirAssinaturas: false,
+        incluirBlocoAutenticidade: false,
+      });
+    }
+
+    if (!documento.pdfOriginalStorageKey) {
+      throw new BadRequestException('PDF original indisponível para assinatura.');
+    }
+    const originalLoaded = await this.storageService.readObjectBuffer(
+      documento.pdfOriginalStorageKey,
+      'application/pdf',
+    );
+    if (!originalLoaded?.buffer.length) {
+      throw new NotFoundException('PDF original não encontrado no armazenamento.');
+    }
+    return originalLoaded.buffer;
+  }
+
   async cancelarAssinado(id: string, dto: CancelarDocumentoDto, user: JwtPayload) {
     this.assertPermission(user, ['documentos.cancelar_assinado', 'documentos.administrar']);
     const before = await this.requireDocumentoFull(id, user);
+    if (!before.pdfAssinadoStorageKey) {
+      throw new BadRequestException('Não há PDF assinado vigente para cancelar.');
+    }
     if (
       before.situacao !== DocumentoSituacao.ASSINADO_VIGENTE &&
       before.situacao !== DocumentoSituacao.ASSINATURA_PENDENTE
@@ -670,6 +895,7 @@ export class DocumentosService {
 
     const motivo = dto.motivo.trim();
     const now = new Date();
+    const assinaturasValidas = before.assinaturas.filter((item) => !item.invalida);
 
     await this.prisma.documentoAssinatura.updateMany({
       where: { documentoId: id, invalida: false },
@@ -694,6 +920,11 @@ export class DocumentosService {
             motivo,
             em: now.toISOString(),
             porId: user.sub,
+            assinaturasInvalidas: assinaturasValidas.map((item) => ({
+              id: item.id,
+              assinanteNome: item.assinanteNome,
+              coletadaEm: item.coletadaEm.toISOString(),
+            })),
           },
         } as Prisma.InputJsonValue,
       },
@@ -704,10 +935,77 @@ export class DocumentosService {
       id,
       before.situacao,
       nextSituacao,
-      motivo,
+      `PDF assinado vigente cancelado: ${motivo}`,
       user.sub,
-      { acao: 'cancelar_pdf_assinado' },
+      {
+        acao: 'cancelar_pdf_assinado',
+        assinaturasInvalidas: assinaturasValidas.map((item) => ({
+          assinanteNome: item.assinanteNome,
+          coletadaEm: item.coletadaEm.toISOString(),
+        })),
+        canceladoPorId: user.sub,
+        canceladoEm: now.toISOString(),
+      },
     );
+    await this.audit(
+      user.sub,
+      AuditAction.UPDATE,
+      id,
+      { situacao: before.situacao, pdfAssinadoSha256: before.pdfAssinadoSha256 },
+      {
+        situacao: nextSituacao,
+        motivo,
+        assinaturasInvalidasCount: assinaturasValidas.length,
+      },
+    );
+
+    return this.serialize(updated);
+  }
+
+  /**
+   * Alterna marcação operacional de assinatura pendente (não invalida assinaturas nem PDF).
+   */
+  async toggleAssinaturaPendente(id: string, user: JwtPayload) {
+    this.assertPermission(user, ['documentos.coletar_assinatura', 'documentos.administrar']);
+    const before = await this.requireDocumentoFull(id, user);
+    if (!before.pdfOriginalStorageKey) {
+      throw new BadRequestException('Gere o PDF original antes de alterar a pendência de assinatura.');
+    }
+    if (
+      before.situacao === DocumentoSituacao.CANCELADO ||
+      before.situacao === DocumentoSituacao.SUBSTITUIDO ||
+      before.situacao === DocumentoSituacao.INVALIDO ||
+      before.situacao === DocumentoSituacao.RASCUNHO
+    ) {
+      throw new BadRequestException('Documento não permite alterar pendência de assinatura nesta situação.');
+    }
+
+    const temAssinaturaVigente =
+      Boolean(before.pdfAssinadoStorageKey) &&
+      before.assinaturas.some((item) => !item.invalida);
+
+    let nextSituacao: DocumentoSituacao;
+    let motivo: string;
+
+    if (before.situacao === DocumentoSituacao.ASSINATURA_PENDENTE) {
+      nextSituacao = temAssinaturaVigente
+        ? DocumentoSituacao.ASSINADO_VIGENTE
+        : DocumentoSituacao.SEM_ASSINATURA_EXTERNA;
+      motivo = 'Pendência de assinatura removida';
+    } else {
+      nextSituacao = DocumentoSituacao.ASSINATURA_PENDENTE;
+      motivo = 'Assinatura marcada como pendente';
+    }
+
+    const updated = await this.prisma.documento.update({
+      where: { id },
+      data: { situacao: nextSituacao },
+      include: DOCUMENTO_INCLUDE,
+    });
+
+    await this.registrarHistorico(id, before.situacao, nextSituacao, motivo, user.sub, {
+      acao: 'toggle_assinatura_pendente',
+    });
     await this.audit(
       user.sub,
       AuditAction.UPDATE,
@@ -719,25 +1017,9 @@ export class DocumentosService {
     return this.serialize(updated);
   }
 
+  /** @deprecated use toggleAssinaturaPendente */
   async marcarAssinaturaPendente(id: string, user: JwtPayload) {
-    this.assertPermission(user, ['documentos.coletar_assinatura', 'documentos.administrar']);
-    const before = await this.requireDocumento(id, user);
-    if (!before.pdfOriginalStorageKey) {
-      throw new BadRequestException('Gere o PDF original antes de marcar assinatura pendente.');
-    }
-    const updated = await this.prisma.documento.update({
-      where: { id },
-      data: { situacao: DocumentoSituacao.ASSINATURA_PENDENTE },
-      include: DOCUMENTO_INCLUDE,
-    });
-    await this.registrarHistorico(
-      id,
-      before.situacao,
-      DocumentoSituacao.ASSINATURA_PENDENTE,
-      'Assinatura marcada como pendente',
-      user.sub,
-    );
-    return this.serialize(updated);
+    return this.toggleAssinaturaPendente(id, user);
   }
 
   /**
@@ -794,6 +1076,8 @@ export class DocumentosService {
       if (existing.conteudoTravadoEm || existing.situacao === DocumentoSituacao.ASSINADO_VIGENTE) {
         return this.serialize(await this.requireDocumentoFullById(existing.id));
       }
+      const canAttachPdf = Boolean(stored) && !existing.pdfOriginalStorageKey;
+      const existingMeta = this.asRecord(existing.metadata);
       const updated = await this.prisma.documento.update({
         where: { id: existing.id },
         data: {
@@ -801,13 +1085,20 @@ export class DocumentosService {
           descricao: input.descricao ?? existing.descricao,
           checklistVersaoId: input.checklistVersaoId ?? existing.checklistVersaoId,
           responsavelId: input.responsavelId ?? existing.responsavelId,
-          ...(stored
+          metadata: {
+            ...existingMeta,
+            ...(canAttachPdf || existing.pdfOriginalStorageKey
+              ? { origemPdf: existingMeta.origemPdf ?? 'relatorio_vistoria' }
+              : {}),
+          } as Prisma.InputJsonValue,
+          ...(canAttachPdf
             ? {
-                pdfOriginalStorageKey: stored.storageKey,
-                pdfOriginalUrl: stored.url,
-                pdfOriginalSha256: stored.sha256,
+                pdfOriginalStorageKey: stored!.storageKey,
+                pdfOriginalUrl: stored!.url,
+                pdfOriginalSha256: stored!.sha256,
                 situacao:
-                  existing.situacao === DocumentoSituacao.RASCUNHO
+                  existing.situacao === DocumentoSituacao.RASCUNHO ||
+                  existing.situacao === DocumentoSituacao.GERADO
                     ? DocumentoSituacao.SEM_ASSINATURA_EXTERNA
                     : existing.situacao,
               }
@@ -839,7 +1130,10 @@ export class DocumentosService {
         pdfOriginalStorageKey: stored?.storageKey ?? null,
         pdfOriginalUrl: stored?.url ?? null,
         pdfOriginalSha256: stored?.sha256 ?? null,
-        metadata: { codigoVerificador } as Prisma.InputJsonValue,
+        metadata: {
+          codigoVerificador,
+          ...(stored ? { origemPdf: 'relatorio_vistoria' } : {}),
+        } as Prisma.InputJsonValue,
       },
       include: DOCUMENTO_INCLUDE,
     });
@@ -910,9 +1204,13 @@ export class DocumentosService {
       if (existing.conteudoTravadoEm || existing.situacao === DocumentoSituacao.ASSINADO_VIGENTE) {
         return this.serialize(await this.requireDocumentoFullById(existing.id));
       }
+      const canAttachPdf = Boolean(stored) && !existing.pdfOriginalStorageKey;
       const mergedMeta = {
         ...this.asRecord(existing.metadata),
         ...(input.metadata ?? {}),
+        ...(canAttachPdf || existing.pdfOriginalStorageKey
+          ? { origemPdf: this.asRecord(existing.metadata).origemPdf ?? 'relatorio_execucao' }
+          : {}),
       };
       const updated = await this.prisma.documento.update({
         where: { id: existing.id },
@@ -924,13 +1222,14 @@ export class DocumentosService {
           checklistVersaoId: input.checklistVersaoId ?? existing.checklistVersaoId,
           responsavelId: input.responsavelId ?? existing.responsavelId,
           metadata: mergedMeta as Prisma.InputJsonValue,
-          ...(stored
+          ...(canAttachPdf
             ? {
-                pdfOriginalStorageKey: stored.storageKey,
-                pdfOriginalUrl: stored.url,
-                pdfOriginalSha256: stored.sha256,
+                pdfOriginalStorageKey: stored!.storageKey,
+                pdfOriginalUrl: stored!.url,
+                pdfOriginalSha256: stored!.sha256,
                 situacao:
-                  existing.situacao === DocumentoSituacao.RASCUNHO
+                  existing.situacao === DocumentoSituacao.RASCUNHO ||
+                  existing.situacao === DocumentoSituacao.GERADO
                     ? DocumentoSituacao.SEM_ASSINATURA_EXTERNA
                     : existing.situacao,
               }
@@ -966,6 +1265,7 @@ export class DocumentosService {
         metadata: {
           codigoVerificador,
           ...(input.metadata ?? {}),
+          ...(stored ? { origemPdf: 'relatorio_execucao' } : {}),
         } as Prisma.InputJsonValue,
       },
       include: DOCUMENTO_INCLUDE,
@@ -982,47 +1282,121 @@ export class DocumentosService {
     return this.serialize(created);
   }
 
+  /**
+   * Validação pública por código de validação (link/QR) + código verificador.
+   */
   async validarPublico(codigoValidacao: string, codigoVerificador?: string | null) {
     const codigo = codigoValidacao.trim().toUpperCase();
     if (!codigo) throw new NotFoundException('Código de validação inválido.');
 
+    const provided = (codigoVerificador ?? '').trim().toUpperCase();
+    if (!provided) {
+      throw new BadRequestException('Informe o código verificador para confirmar a autenticidade.');
+    }
+
     const documento = await this.prisma.documento.findFirst({
       where: { codigoValidacao: codigo },
-      include: {
-        secretaria: { select: { sigla: true, nome: true } },
-        unidade: { select: { nome: true, codigoPatrimonial: true } },
-        chamado: { select: { codigo: true } },
-        assinaturas: {
-          where: { invalida: false },
-          orderBy: { coletadaEm: 'desc' },
-          select: {
-            assinanteNome: true,
-            assinanteDocumento: true,
-            assinanteEmail: true,
-            qualificacao: true,
-            coletadaEm: true,
-            canal: true,
-          },
-        },
-      },
+      include: this.publicValidacaoInclude(),
     });
 
     if (!documento) throw new NotFoundException('Documento não encontrado para este código.');
 
-    const expectedVerificador = generateCodigoVerificador(documento.codigo, documento.codigoValidacao);
-    const provided = (codigoVerificador ?? '').trim();
-    let verificadorConfirmado = false;
-    if (provided) {
-      verificadorConfirmado = verifyCodigoVerificador(
-        documento.codigo,
-        documento.codigoValidacao,
-        provided,
-      );
-      if (!verificadorConfirmado) {
-        throw new NotFoundException('Código verificador inválido para este documento.');
-      }
+    if (!verifyCodigoVerificador(documento.codigo, documento.codigoValidacao, provided)) {
+      throw new NotFoundException('Código verificador inválido para este documento.');
     }
 
+    return this.serializeValidacaoPublica(documento, true);
+  }
+
+  /**
+   * Validação pública manual por código do documento + código verificador
+   * (sem exigir digitação do código de validação longo).
+   */
+  async validarPublicoPorDocumento(codigoDocumento: string, codigoVerificador?: string | null) {
+    const codigo = codigoDocumento.trim().toUpperCase();
+    if (!codigo || codigo.length < 6) {
+      throw new BadRequestException('Informe o código do documento.');
+    }
+
+    const provided = (codigoVerificador ?? '').trim().toUpperCase();
+    if (!provided) {
+      throw new BadRequestException('Informe o código verificador para confirmar a autenticidade.');
+    }
+
+    const documento = await this.prisma.documento.findFirst({
+      where: { codigo },
+      include: this.publicValidacaoInclude(),
+    });
+
+    // Resposta genérica: não confirma existência sem o verificador correto.
+    if (!documento || !verifyCodigoVerificador(documento.codigo, documento.codigoValidacao, provided)) {
+      throw new NotFoundException('Documento não encontrado ou código verificador inválido.');
+    }
+
+    return this.serializeValidacaoPublica(documento, true);
+  }
+
+  private publicValidacaoInclude() {
+    return {
+      secretaria: { select: { sigla: true, nome: true } },
+      unidade: { select: { nome: true, codigoPatrimonial: true } },
+      chamado: { select: { codigo: true } },
+      fiscalizacao: {
+        select: {
+          id: true,
+          concluidaEm: true,
+          unidade: { select: { nome: true, codigoPatrimonial: true } },
+        },
+      },
+      assinaturas: {
+        where: { invalida: false },
+        orderBy: { coletadaEm: 'desc' as const },
+        select: {
+          assinanteNome: true,
+          assinanteDocumento: true,
+          assinanteEmail: true,
+          qualificacao: true,
+          coletadaEm: true,
+          canal: true,
+          metadata: true,
+        },
+      },
+    };
+  }
+
+  private serializeValidacaoPublica(
+    documento: {
+      codigo: string;
+      codigoValidacao: string;
+      tipo: DocumentoTipo;
+      situacao: DocumentoSituacao;
+      titulo: string;
+      createdAt: Date;
+      pdfOriginalStorageKey: string | null;
+      pdfAssinadoStorageKey: string | null;
+      pdfOriginalSha256: string | null;
+      pdfAssinadoSha256: string | null;
+      secretaria: { sigla: string; nome: string };
+      unidade: { nome: string; codigoPatrimonial: string } | null;
+      chamado: { codigo: string } | null;
+      fiscalizacao: {
+        id: string;
+        concluidaEm: Date | null;
+        unidade: { nome: string; codigoPatrimonial: string } | null;
+      } | null;
+      assinaturas: Array<{
+        assinanteNome: string;
+        assinanteDocumento: string | null;
+        assinanteEmail: string | null;
+        qualificacao: string | null;
+        coletadaEm: Date;
+        canal: string;
+        metadata?: unknown;
+      }>;
+    },
+    verificadorConfirmado: boolean,
+  ) {
+    const expectedVerificador = generateCodigoVerificador(documento.codigo, documento.codigoValidacao);
     return {
       codigo: documento.codigo,
       codigoValidacao: documento.codigoValidacao,
@@ -1034,6 +1408,9 @@ export class DocumentosService {
       secretaria: documento.secretaria,
       unidade: documento.unidade,
       chamadoCodigo: documento.chamado?.codigo ?? null,
+      vistoriaLabel: documento.fiscalizacao
+        ? `${documento.fiscalizacao.unidade?.codigoPatrimonial ?? ''} ${documento.fiscalizacao.unidade?.nome ?? 'Vistoria'}`.trim()
+        : null,
       criadoEm: documento.createdAt.toISOString(),
       possuiPdfOriginal: Boolean(documento.pdfOriginalStorageKey),
       possuiPdfAssinado: Boolean(documento.pdfAssinadoStorageKey),
@@ -1043,14 +1420,25 @@ export class DocumentosService {
       pdfAssinadoSha256: documento.pdfAssinadoSha256
         ? `${documento.pdfAssinadoSha256.slice(0, 16)}…`
         : null,
-      assinaturas: documento.assinaturas.map((item) => ({
-        assinanteNome: item.assinanteNome,
-        assinanteDocumento: maskCpf(item.assinanteDocumento),
-        assinanteEmail: maskEmail(item.assinanteEmail),
-        qualificacao: item.qualificacao,
-        coletadaEm: item.coletadaEm.toISOString(),
-        canal: item.canal,
-      })),
+      assinaturas: documento.assinaturas.map((item) => {
+        const meta = this.asRecord(
+          (item as { metadata?: unknown }).metadata,
+        );
+        return {
+          assinanteNome: item.assinanteNome,
+          assinanteDocumento: meta.cpfNaoInformado
+            ? 'não informado'
+            : maskCpf(item.assinanteDocumento),
+          assinanteEmail: meta.emailNaoInformado
+            ? 'não informado'
+            : maskEmail(item.assinanteEmail),
+          qualificacao: item.qualificacao,
+          coletadaEm: item.coletadaEm.toISOString(),
+          canal: item.canal,
+          cpfNaoInformado: Boolean(meta.cpfNaoInformado),
+          emailNaoInformado: Boolean(meta.emailNaoInformado),
+        };
+      }),
       valido:
         documento.situacao === DocumentoSituacao.ASSINADO_VIGENTE ||
         documento.situacao === DocumentoSituacao.SEM_ASSINATURA_EXTERNA ||
@@ -1200,9 +1588,202 @@ export class DocumentosService {
     });
   }
 
+  private async buildRelatorioExecucaoFromDocumento(documento: DocumentoLoaded) {
+    if (!documento.chamadoId) {
+      throw new BadRequestException('Documento de execução sem chamado vinculado.');
+    }
+
+    const chamado = await this.prisma.chamado.findUnique({
+      where: { id: documento.chamadoId },
+      select: {
+        id: true,
+        codigo: true,
+        status: true,
+        enderecoTexto: true,
+        secretaria: { select: { nome: true, sigla: true } },
+        unidade: {
+          select: { nome: true, codigoPatrimonial: true, endereco: true },
+        },
+        tipoChamado: { select: { nome: true } },
+        responsavel: { select: { nome: true } },
+        equipe: { select: { nome: true } },
+      },
+    });
+    if (!chamado) throw new NotFoundException('Chamado vinculado não encontrado.');
+
+    const meta = this.asRecord(documento.metadata);
+    const historicoId = typeof meta.historicoExecucaoId === 'string' ? meta.historicoExecucaoId : null;
+    const historico = historicoId
+      ? await this.prisma.historicoStatus.findUnique({ where: { id: historicoId } })
+      : await this.prisma.historicoStatus.findFirst({
+          where: {
+            entidadeTipo: 'Chamado',
+            entidadeId: chamado.id,
+            OR: [
+              { metadata: { path: ['tipo'], equals: 'execucao_conclusao' } },
+              { metadata: { path: ['tipo'], equals: 'execucao_manual' } },
+            ],
+          },
+          orderBy: { createdAt: 'desc' },
+        });
+
+    const histMeta = this.asRecord(historico?.metadata);
+    const evidenciaIds = Array.isArray(histMeta.evidenciaIds)
+      ? histMeta.evidenciaIds.filter((item): item is string => typeof item === 'string')
+      : Array.isArray(meta.evidenciaIds)
+        ? meta.evidenciaIds.filter((item): item is string => typeof item === 'string')
+        : [];
+
+    const evidencias = evidenciaIds.length
+      ? await this.prisma.evidencia.findMany({
+          where: { id: { in: evidenciaIds }, chamadoId: chamado.id },
+          orderBy: { capturadaEm: 'asc' },
+          select: { mimeType: true, storageKey: true, url: true, metadata: true },
+        })
+      : [];
+
+    const evidenciasGerais = [];
+    for (let index = 0; index < evidencias.length; index++) {
+      const evidencia = evidencias[index];
+      const storageKey = evidencia.storageKey ?? extractStorageKeyFromUrl(evidencia.url);
+      let imageBuffer: Buffer | null = null;
+      if (storageKey && isPdfRenderableImage(evidencia.mimeType)) {
+        const loaded = await this.storageService.readObjectBuffer(storageKey, evidencia.mimeType);
+        imageBuffer = loaded?.buffer ?? null;
+      }
+      const evMeta = this.asRecord(evidencia.metadata);
+      evidenciasGerais.push({
+        legenda:
+          (typeof evMeta.descricao === 'string' && evMeta.descricao) ||
+          (typeof evMeta.nome === 'string' && evMeta.nome) ||
+          `Evidência ${index + 1}`,
+        mimeType: evidencia.mimeType,
+        nomeArquivo: storageKey?.split('/').pop() ?? null,
+        imageBuffer,
+      });
+    }
+
+    const checklistComplementar = this.asRecord(histMeta.checklistComplementar);
+    const respostasRaw = Array.isArray(checklistComplementar.respostas)
+      ? checklistComplementar.respostas
+      : [];
+    const respostas = [];
+    for (const raw of respostasRaw) {
+      const item = this.asRecord(raw);
+      const evidenciaUrls = Array.isArray(item.evidenciaUrls)
+        ? item.evidenciaUrls.filter((url): url is string => typeof url === 'string')
+        : [];
+      const evidenciasItem: Array<{
+        legenda: string;
+        mimeType: string | null;
+        nomeArquivo: string | null;
+        imageBuffer: Buffer | null;
+      }> = [];
+      for (let index = 0; index < evidenciaUrls.length; index++) {
+        const url = evidenciaUrls[index];
+        let mimeType: string | null = null;
+        let nomeArquivo: string | null = url.startsWith('data:')
+          ? null
+          : url.split('/').pop() ?? null;
+        let imageBuffer: Buffer | null = null;
+
+        if (url.startsWith('data:')) {
+          const match = /^data:([^;]+);base64,(.+)$/i.exec(url);
+          if (match && isPdfRenderableImage(match[1])) {
+            mimeType = match[1];
+            imageBuffer = Buffer.from(match[2], 'base64');
+          }
+        } else {
+          const storageKey = extractStorageKeyFromUrl(url);
+          if (storageKey) {
+            const loaded = await this.storageService.readObjectBuffer(storageKey);
+            mimeType = loaded?.mimeType ?? null;
+            nomeArquivo = storageKey.split('/').pop() ?? null;
+            imageBuffer =
+              loaded?.buffer && isPdfRenderableImage(loaded.mimeType) ? loaded.buffer : null;
+          }
+        }
+
+        evidenciasItem.push({
+          legenda: `Evidência da pergunta ${index + 1}`,
+          mimeType,
+          nomeArquivo,
+          imageBuffer,
+        });
+      }
+
+      const naoSeAplica = Boolean(item.naoSeAplica);
+      let respostaTexto = '—';
+      if (naoSeAplica) respostaTexto = 'Não se aplica';
+      else if (typeof item.valorBooleano === 'boolean') respostaTexto = item.valorBooleano ? 'Sim' : 'Não';
+      else if (item.valorNumero != null) respostaTexto = String(item.valorNumero);
+      else if (typeof item.valorTexto === 'string' && item.valorTexto.trim()) respostaTexto = item.valorTexto.trim();
+
+      respostas.push({
+        codigo: typeof item.codigo === 'string' ? item.codigo : String(item.itemId ?? ''),
+        titulo: typeof item.titulo === 'string' ? item.titulo : 'Item',
+        tipo: typeof item.tipo === 'string' ? item.tipo : null,
+        respostaTexto,
+        comentario: typeof item.comentario === 'string' ? item.comentario : null,
+        conformidade: null,
+        naoSeAplica,
+        evidencias: evidenciasItem,
+      });
+    }
+
+    const participantes = Array.isArray(histMeta.participantes)
+      ? histMeta.participantes
+          .map((item) => this.asRecord(item))
+          .map((item) => (typeof item.nome === 'string' ? item.nome : null))
+          .filter((nome): nome is string => Boolean(nome))
+          .join(', ')
+      : null;
+    const equipeMeta = this.asRecord(histMeta.equipeExecutora);
+    const checklistNome =
+      (typeof checklistComplementar.checklistNome === 'string' && checklistComplementar.checklistNome) ||
+      (typeof meta.checklistNome === 'string' && meta.checklistNome) ||
+      documento.checklistVersao?.checklist?.nome ||
+      null;
+
+    return buildRelatorioExecucaoPdf({
+      documentoCodigo: documento.codigo,
+      chamadoCodigo: chamado.codigo,
+      tipoChamadoNome: chamado.tipoChamado?.nome ?? null,
+      secretariaLabel: chamado.secretaria
+        ? `${chamado.secretaria.sigla} — ${chamado.secretaria.nome}`
+        : '—',
+      localLabel: chamado.unidade
+        ? `${chamado.unidade.codigoPatrimonial ?? ''} ${chamado.unidade.nome}`.trim()
+        : chamado.enderecoTexto || 'Local livre',
+      endereco: chamado.enderecoTexto || chamado.unidade?.endereco || null,
+      statusLabel: chamado.status,
+      responsavelLabel: chamado.responsavel?.nome ?? documento.responsavel?.nome ?? null,
+      equipeLabel:
+        (typeof equipeMeta.nome === 'string' && equipeMeta.nome) || chamado.equipe?.nome || null,
+      executadoEm: historico
+        ? new Date(historico.createdAt).toLocaleString('pt-BR')
+        : new Date(documento.createdAt).toLocaleString('pt-BR'),
+      registradoPorLabel: documento.criadoPor?.nome ?? null,
+      origemExecucaoLabel:
+        histMeta.tipo === 'execucao_manual' ? 'Lançamento manual' : 'Execução em campo',
+      relatorio:
+        (typeof histMeta.relatorio === 'string' && histMeta.relatorio) ||
+        documento.descricao ||
+        '—',
+      impedimento: Boolean(histMeta.impedimento),
+      impedimentoMotivo:
+        typeof histMeta.impedimentoMotivo === 'string' ? histMeta.impedimentoMotivo : null,
+      participantesLabel: participantes,
+      checklistNome,
+      checklistVersao: documento.checklistVersao?.versao ?? null,
+      respostas,
+      evidenciasGerais,
+    });
+  }
+
   private async buildDocumentoPdfBuffer(
     documento: DocumentoLoaded,
-    options: { incluirAssinaturas: boolean },
+    options: { incluirAssinaturas: boolean; incluirBlocoAutenticidade?: boolean },
   ) {
     const codigoVerificador = generateCodigoVerificador(documento.codigo, documento.codigoValidacao);
     const validationUrl = buildPublicValidationUrl(documento.codigoValidacao, codigoVerificador);
@@ -1299,6 +1880,7 @@ export class DocumentosService {
       respostas: respostasPdf,
       assinaturas: assinaturasPdf,
       incluirAssinaturas: options.incluirAssinaturas,
+      incluirBlocoAutenticidade: options.incluirBlocoAutenticidade !== false,
     });
   }
 
@@ -1609,6 +2191,16 @@ export class DocumentosService {
       documento.codigoValidacao,
     );
     const evidenciasPorItem = this.readEvidenciasPorItem(documento.metadata);
+    const meta = this.asRecord(documento.metadata);
+    const origemPdf = typeof meta.origemPdf === 'string' ? meta.origemPdf : null;
+    const pdfOriginalCanonico =
+      !documento.pdfOriginalStorageKey
+        ? false
+        : documento.origem === DocumentoOrigem.CHAMADO_EXECUCAO
+          ? origemPdf === 'relatorio_execucao'
+          : documento.origem === DocumentoOrigem.VISTORIA
+            ? origemPdf === 'relatorio_vistoria' || origemPdf == null
+            : true;
 
     return {
       id: documento.id,
@@ -1618,6 +2210,8 @@ export class DocumentosService {
       tipo: documento.tipo,
       situacao: documento.situacao,
       origem: documento.origem,
+      origemPdf,
+      pdfOriginalCanonico,
       titulo: documento.titulo,
       descricao: documento.descricao,
       secretaria: documento.secretaria ?? null,
@@ -1676,22 +2270,38 @@ export class DocumentosService {
             }
           : null,
       })),
-      assinaturas: (documento.assinaturas ?? []).map((item: any) => ({
-        id: item.id,
-        assinanteNome: item.assinanteNome,
-        assinanteDocumento: item.assinanteDocumento,
-        assinanteEmail: item.assinanteEmail,
-        qualificacao: item.qualificacao,
-        qualificacaoOutro: item.qualificacaoOutro,
-        canal: item.canal,
-        coletadaEm: item.coletadaEm?.toISOString?.() ?? item.coletadaEm,
-        invalida: Boolean(item.invalida),
-        invalidadaEm: item.invalidadaEm?.toISOString?.() ?? item.invalidadaEm ?? null,
-        invalidadaMotivo: item.invalidadaMotivo ?? null,
-        assinanteUsuario: item.assinanteUsuario ?? null,
-        coletadaPor: item.coletadaPor ?? null,
-        evidenciaUrl: item.evidenciaUrl ?? null,
-      })),
+      // Somente assinaturas válidas do PDF assinado vigente (invalidas ficam no histórico).
+      assinaturas: (documento.assinaturas ?? [])
+        .filter((item: any) => !item.invalida)
+        .map((item: any) => {
+          const meta = this.asRecord(item.metadata);
+          return {
+            id: item.id,
+            assinanteNome: item.assinanteNome,
+            assinanteDocumento: meta.cpfNaoInformado
+              ? 'não informado'
+              : item.assinanteDocumento,
+            assinanteEmail: meta.emailNaoInformado
+              ? 'não informado'
+              : item.assinanteEmail,
+            qualificacao: item.qualificacao,
+            qualificacaoOutro: item.qualificacaoOutro,
+            canal: item.canal,
+            coletadaEm: item.coletadaEm?.toISOString?.() ?? item.coletadaEm,
+            invalida: false,
+            invalidadaEm: null,
+            invalidadaMotivo: null,
+            cpfNaoInformado: Boolean(meta.cpfNaoInformado),
+            emailNaoInformado: Boolean(meta.emailNaoInformado),
+            justificativaIdentificacao:
+              typeof meta.justificativaIdentificacao === 'string'
+                ? meta.justificativaIdentificacao
+                : null,
+            assinanteUsuario: item.assinanteUsuario ?? null,
+            coletadaPor: item.coletadaPor ?? null,
+            evidenciaUrl: item.evidenciaUrl ?? null,
+          };
+        }),
       createdAt: documento.createdAt?.toISOString?.() ?? documento.createdAt,
       updatedAt: documento.updatedAt?.toISOString?.() ?? documento.updatedAt,
       linkValidacao: buildPublicValidationUrl(documento.codigoValidacao, codigoVerificador),

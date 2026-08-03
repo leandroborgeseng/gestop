@@ -12,6 +12,7 @@ import {
   hasOperationalNavAccess,
   isNavActive,
 } from '@/lib/navigation';
+import { hasAnyAdminVisualizarAccess } from '@/lib/permissions-matrix';
 import { ErrorState } from '@/components/ui-states';
 
 function permissionSatisfied(required: string, userPermissions: string[]) {
@@ -23,6 +24,9 @@ function permissionSatisfied(required: string, userPermissions: string[]) {
   }
   if (required === 'meus_chamados.visualizar') {
     return hasMeusChamados(userPermissions);
+  }
+  if (required === 'admin.visualizar') {
+    return hasAnyAdminVisualizarAccess(userPermissions);
   }
   return userPermissions.includes(required);
 }

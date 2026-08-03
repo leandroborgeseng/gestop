@@ -153,3 +153,76 @@ export function navItemAllowedByMatrix(itemId: string, permissoes: string[]) {
   if (!telaId) return null;
   return screenHasVisualizarAccess(telaId, permissoes);
 }
+
+export type AdminTabPermissionId =
+  | 'secretarias'
+  | 'proprios'
+  | 'usuarios'
+  | 'equipes'
+  | 'cargos'
+  | 'tipos_chamado'
+  | 'tipos_proprio'
+  | 'categorias_vistoria'
+  | 'permissoes'
+  | 'backup'
+  | 'importacao';
+
+const ADMIN_CADASTROS_TABS: AdminTabPermissionId[] = ['secretarias', 'proprios', 'usuarios'];
+
+const ADMIN_TAB_LEGACY: Partial<Record<AdminTabPermissionId, string[]>> = {
+  secretarias: ['secretarias.gerenciar'],
+  proprios: ['unidades.gerenciar'],
+  usuarios: ['usuarios.gerenciar'],
+  equipes: ['usuarios.gerenciar'],
+  cargos: ['usuarios.gerenciar'],
+  tipos_chamado: ['usuarios.gerenciar'],
+  tipos_proprio: ['usuarios.gerenciar', 'unidades.gerenciar'],
+  categorias_vistoria: ['checklists.gerenciar', 'usuarios.gerenciar'],
+  permissoes: ['permissoes.gerenciar', 'usuarios.gerenciar'],
+  backup: ['usuarios.gerenciar'],
+  importacao: ['unidades.gerenciar', 'usuarios.gerenciar'],
+};
+
+/** Verifica permissão de ação em uma aba da Administração (matriz fina + legado). */
+export function hasAdminTabAccess(
+  tab: AdminTabPermissionId,
+  action: PermissionAction,
+  permissoes: string[],
+) {
+  const hasMatrixAdmin = permissoes.some((key) => key.startsWith('matriz.admin.'));
+  if (hasMatrixAdmin) {
+    if (permissoes.includes(buildMatrixKey('admin', tab, action))) return true;
+    if (
+      ADMIN_CADASTROS_TABS.includes(tab) &&
+      permissoes.includes(buildMatrixKey('admin', 'cadastros', action))
+    ) {
+      return true;
+    }
+    // Sem chave fina: não usar usuarios.gerenciar derivado para liberar todas as abas
+    return false;
+  }
+
+  if (permissoes.includes('usuarios.gerenciar')) return true;
+  return (ADMIN_TAB_LEGACY[tab] ?? []).some((key) => permissoes.includes(key));
+}
+
+export function hasAnyAdminVisualizarAccess(permissoes: string[]) {
+  if (permissoes.includes('usuarios.gerenciar')) return true;
+  if (screenHasVisualizarAccess('admin', permissoes)) return true;
+  const tabs: AdminTabPermissionId[] = [
+    'secretarias',
+    'proprios',
+    'usuarios',
+    'equipes',
+    'cargos',
+    'tipos_chamado',
+    'tipos_proprio',
+    'categorias_vistoria',
+    'permissoes',
+    'backup',
+    'importacao',
+  ];
+  return tabs.some((tab) => hasAdminTabAccess(tab, 'visualizar', permissoes));
+}
+
+export const ADMINISTRADOR_SISTEMA_NOME = 'Administrador do Sistema';

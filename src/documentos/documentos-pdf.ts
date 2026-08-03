@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
+import { summarizeForPdfDisplay } from './documentos-validation';
 
 const BRAND = '#0066cc';
 const TEXT = '#1a1a1a';
@@ -61,6 +62,8 @@ export type DocumentoPdfInput = {
   respostas: DocumentoPdfResposta[];
   assinaturas?: DocumentoPdfAssinatura[];
   incluirAssinaturas: boolean;
+  /** Quando false, gera só o conteúdo (base para PDF assinado). Default true. */
+  incluirBlocoAutenticidade?: boolean;
 };
 
 function ensureSpace(doc: PDFKit.PDFDocument, y: number, needed: number, marginTop: number) {
@@ -224,32 +227,52 @@ export async function buildDocumentoPdf(input: DocumentoPdfInput): Promise<Buffe
       }
     }
 
-    // Bloco de autenticação
-    y = ensureSpace(doc, y, 160, marginTop);
-    y += 8;
-    doc.rect(left, y, width, 140).strokeColor(BORDER).stroke();
-    const blockY = y + 10;
-    doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND).text('Autenticidade do documento', left + 10, blockY);
-    doc
-      .font('Helvetica')
-      .fontSize(8)
-      .fillColor(TEXT)
-      .text(
-        'A autenticidade deste documento pode ser conferida na página pública do SIGMA, mediante os códigos abaixo ou pelo QR Code.',
-        left + 10,
-        blockY + 16,
-        { width: width - 160 },
-      );
-    doc.font('Helvetica').fontSize(8).fillColor(MUTED).text(`Código do documento: ${input.codigo}`, left + 10, blockY + 48);
-    doc.text(`Código verificador: ${input.codigoVerificador}`, left + 10, blockY + 62);
-    doc.text(`Código de validação: ${input.codigoValidacao}`, left + 10, blockY + 76);
-    doc.text(`Situação: ${input.situacaoLabel}`, left + 10, blockY + 90);
-    doc.text(`Gerado em: ${input.geradoEm}`, left + 10, blockY + 104);
-    if (input.hashResumo) {
-      doc.text(`Hash: ${input.hashResumo.slice(0, 16)}…`, left + 10, blockY + 118);
+    if (input.incluirBlocoAutenticidade !== false) {
+      const textColWidth = width - 150;
+      const hashRaw = input.hashResumo?.replace(/…$/, '') ?? null;
+      const hashDisplay = hashRaw ? summarizeForPdfDisplay(hashRaw, 16) : null;
+      const urlDisplay = summarizeForPdfDisplay(input.validationUrl, 58);
+
+      y = ensureSpace(doc, y, 210, marginTop);
+      y += 8;
+      const blockTop = y;
+      const blockHeight = 190;
+      doc.rect(left, blockTop, width, blockHeight).strokeColor(BORDER).stroke();
+
+      let cursorY = blockTop + 10;
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND).text('Autenticidade do documento', left + 10, cursorY, {
+        width: textColWidth,
+      });
+      cursorY = doc.y + 4;
+      doc
+        .font('Helvetica')
+        .fontSize(7.5)
+        .fillColor(TEXT)
+        .text(
+          'Documento original. Conferência: QR Code ou página pública com Código do documento + Código verificador.',
+          left + 10,
+          cursorY,
+          { width: textColWidth },
+        );
+      cursorY = doc.y + 6;
+      doc.font('Helvetica').fontSize(8).fillColor(MUTED);
+      doc.text(`Código do documento: ${input.codigo}`, left + 10, cursorY, { width: textColWidth });
+      cursorY = doc.y + 2;
+      doc.text(`Código verificador: ${input.codigoVerificador}`, left + 10, cursorY, { width: textColWidth });
+      cursorY = doc.y + 2;
+      doc.text(`Código de validação: ${input.codigoValidacao}`, left + 10, cursorY, { width: textColWidth });
+      cursorY = doc.y + 2;
+      doc.text(`Situação: ${input.situacaoLabel}`, left + 10, cursorY, { width: textColWidth });
+      cursorY = doc.y + 2;
+      doc.text(`Gerado em: ${input.geradoEm}`, left + 10, cursorY, { width: textColWidth });
+      cursorY = doc.y + 2;
+      if (hashDisplay) {
+        doc.text(`Hash (PDF original): ${hashDisplay}`, left + 10, cursorY, { width: textColWidth });
+        cursorY = doc.y + 2;
+      }
+      doc.text(`Link: ${urlDisplay}`, left + 10, cursorY, { width: textColWidth });
+      doc.image(qrBuffer, left + width - 130, blockTop + 12, { fit: [110, 110] });
     }
-    doc.text(input.validationUrl, left + 10, blockY + 128, { width: width - 160, ellipsis: true });
-    doc.image(qrBuffer, left + width - 130, blockY + 8, { fit: [110, 110] });
 
     doc.end();
   });

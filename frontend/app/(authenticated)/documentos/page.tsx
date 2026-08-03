@@ -18,7 +18,7 @@ import {
   gerarDocumentoPdfOriginal,
   getDocumento,
   listDocumentos,
-  marcarAssinaturaPendenteDocumento,
+  toggleAssinaturaPendenteDocumento,
 } from '@/lib/api';
 import { ColetarAssinaturaDialog } from '@/components/documentos/coletar-assinatura-dialog';
 import { NovoDocumentoAvulsoDialog } from '@/components/documentos/novo-documento-avulso-dialog';
@@ -312,7 +312,12 @@ function DocumentosPageContent() {
                 onConcluir={() => void runAction(() => concluirDocumento(selected.id), 'Documento concluído.')}
                 onColetar={() => setAssinaturaOpen(true)}
                 onPendente={() =>
-                  void runAction(() => marcarAssinaturaPendenteDocumento(selected.id), 'Assinatura marcada como pendente.')
+                  void runAction(
+                    () => toggleAssinaturaPendenteDocumento(selected.id),
+                    (detail?.situacao ?? selected.situacao) === 'ASSINATURA_PENDENTE'
+                      ? 'Pendência de assinatura removida.'
+                      : 'Assinatura marcada como pendente.',
+                  )
                 }
                 onCancelar={() => {
                   const motivo = window.prompt(
@@ -357,6 +362,30 @@ function DocumentoDetail({
   onCancelar: () => void;
 }) {
   const situacao = DOCUMENTO_SITUACAO_META[documento.situacao];
+  const origemAutomatica =
+    documento.origem === 'CHAMADO_EXECUCAO' || documento.origem === 'VISTORIA';
+  const situacaoPermitePdf =
+    documento.situacao !== 'ASSINADO_VIGENTE' &&
+    documento.situacao !== 'CANCELADO' &&
+    documento.situacao !== 'SUBSTITUIDO' &&
+    documento.situacao !== 'INVALIDO' &&
+    !documento.conteudoTravado;
+  const precisaCorrigirPdfExecucao =
+    documento.origem === 'CHAMADO_EXECUCAO' &&
+    documento.possuiPdfOriginal &&
+    documento.pdfOriginalCanonico === false &&
+    situacaoPermitePdf;
+  const podeRecuperarPdfExecucao =
+    documento.origem === 'CHAMADO_EXECUCAO' && !documento.possuiPdfOriginal && situacaoPermitePdf;
+  const podeGerarPdfOriginal =
+    (!origemAutomatica &&
+      !documento.possuiPdfOriginal &&
+      (documento.situacao === 'RASCUNHO' ||
+        documento.situacao === 'GERADO' ||
+        documento.situacao === 'SEM_ASSINATURA_EXTERNA' ||
+        documento.situacao === 'ASSINATURA_PENDENTE')) ||
+    precisaCorrigirPdfExecucao ||
+    podeRecuperarPdfExecucao;
 
   return (
     <div className="space-y-4">
@@ -397,13 +426,23 @@ function DocumentoDetail({
             Concluir documento
           </Button>
         ) : null}
-        <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onGerarPdf}>
-          Gerar PDF original
-        </Button>
+        {podeGerarPdfOriginal ? (
+          <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onGerarPdf}>
+            {precisaCorrigirPdfExecucao
+              ? 'Corrigir PDF original'
+              : podeRecuperarPdfExecucao
+                ? 'Tentar gerar PDF original'
+                : 'Gerar PDF original'}
+          </Button>
+        ) : null}
         {documento.possuiPdfOriginal ? (
           <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onPdfOriginal}>
             Visualizar PDF original
           </Button>
+        ) : origemAutomatica ? (
+          <span className="inline-flex items-center rounded-[8px] border border-amber-200 bg-amber-50 px-2.5 py-1 text-[12px] font-medium text-amber-800">
+            PDF original pendente
+          </span>
         ) : null}
         {documento.possuiPdfAssinado ? (
           <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onPdfAssinado}>
@@ -424,27 +463,49 @@ function DocumentoDetail({
           Copiar link de validação
         </Button>
         <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onPendente}>
-          Assinatura pendente
+          {documento.situacao === 'ASSINATURA_PENDENTE'
+            ? 'Desmarcar assinatura pendente'
+            : 'Marcar assinatura pendente'}
         </Button>
-        {(documento.situacao === 'ASSINADO_VIGENTE' || documento.situacao === 'ASSINATURA_PENDENTE') && (
+        {documento.possuiPdfAssinado &&
+        (documento.situacao === 'ASSINADO_VIGENTE' || documento.situacao === 'ASSINATURA_PENDENTE') ? (
           <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancelar}>
             Cancelar PDF assinado vigente
           </Button>
-        )}
+        ) : null}
       </div>
 
-      {documento.assinaturas?.length ? (
-        <div>
-          <p className="mb-2 text-[12px] font-semibold text-[var(--ink)]">Assinaturas</p>
+      <div>
+        <p className="mb-2 text-[12px] font-semibold text-[var(--ink)]">Assinaturas</p>
+        {documento.assinaturas?.length ? (
           <ul className="space-y-1 text-[12px] text-[var(--ink-2)]">
             {documento.assinaturas.map((item) => (
               <li key={item.id}>
-                {item.assinanteNome} · {new Date(item.coletadaEm).toLocaleString('pt-BR')} · {item.canal}
+                <span className="font-medium text-[var(--ink)]">{item.assinanteNome}</span>
+                {' · '}
+                CPF{' '}
+                {item.cpfNaoInformado || item.assinanteDocumento === 'não informado'
+                  ? 'não informado'
+                  : item.assinanteDocumento || '—'}
+                {' · '}
+                E-mail{' '}
+                {item.emailNaoInformado || item.assinanteEmail === 'não informado'
+                  ? 'não informado'
+                  : item.assinanteEmail || '—'}
+                {' · '}
+                {new Date(item.coletadaEm).toLocaleString('pt-BR')} · {item.canal}
+                {item.justificativaIdentificacao ? (
+                  <span className="block text-[var(--ink-3)]">
+                    Justificativa: {item.justificativaIdentificacao}
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
-        </div>
-      ) : null}
+        ) : (
+          <p className="text-[12px] text-[var(--ink-3)]">Nenhuma assinatura externa vigente</p>
+        )}
+      </div>
 
       {documento.historico?.length ? (
         <div>

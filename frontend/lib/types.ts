@@ -1355,6 +1355,8 @@ export type DocumentoResumo = {
   tipo: DocumentoTipo;
   situacao: DocumentoSituacao;
   origem: DocumentoOrigem;
+  origemPdf?: string | null;
+  pdfOriginalCanonico?: boolean;
   titulo: string;
   descricao?: string | null;
   secretaria?: { id: string; nome: string; sigla: string } | null;
@@ -1377,8 +1379,12 @@ export type DocumentoResumo = {
     id: string;
     assinanteNome: string;
     assinanteDocumento?: string | null;
+    assinanteEmail?: string | null;
     canal: string;
     coletadaEm: string;
+    cpfNaoInformado?: boolean;
+    emailNaoInformado?: boolean;
+    justificativaIdentificacao?: string | null;
     assinanteUsuario?: { id: string; nome: string } | null;
     coletadaPor?: { id: string; nome: string } | null;
   }>;
@@ -1388,6 +1394,7 @@ export type DocumentoResumo = {
 };
 
 export type DocumentoDetalhe = DocumentoResumo & {
+  conteudoTravado?: boolean;
   historico: Array<{
     id: string;
     statusAnterior?: string | null;
@@ -1415,6 +1422,7 @@ export type DocumentoValidacaoPublica = {
   secretaria: { sigla: string; nome: string };
   unidade?: { nome: string; codigoPatrimonial: string } | null;
   chamadoCodigo?: string | null;
+  vistoriaLabel?: string | null;
   criadoEm: string;
   possuiPdfOriginal: boolean;
   possuiPdfAssinado: boolean;
@@ -1425,6 +1433,9 @@ export type DocumentoValidacaoPublica = {
     qualificacao?: string | null;
     coletadaEm: string;
     canal: string;
+    cpfNaoInformado?: boolean;
+    emailNaoInformado?: boolean;
+    justificativaIdentificacao?: string | null;
   }>;
   valido: boolean;
 };

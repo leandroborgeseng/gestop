@@ -162,6 +162,18 @@ function LoginContent() {
                 </Link>
               </p>
             </form>
+
+            <div className="mt-6 border-t border-[var(--line)] pt-4 text-center">
+              <Link
+                href="/documento/validar"
+                className="text-[13px] font-medium text-[var(--ink-3)] underline-offset-2 transition hover:text-[var(--brand)] hover:underline"
+              >
+                Validar documento
+              </Link>
+              <p className="mt-1 text-[11px] text-[var(--ink-4)]">
+                Conferir autenticidade sem entrar no sistema
+              </p>
+            </div>
           </CardContent>
         </Card>
       </div>

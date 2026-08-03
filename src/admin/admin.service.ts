@@ -1,9 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditAction, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
+import {
+  assertSecretariaNoEscopo,
+  resolveEquipeSecretariaFilter,
+  resolveSecretariaScopeIds,
+  resolveUnidadeSecretariaFilter,
+} from '../auth/secretaria-scope';
 import { validatePasswordPolicy } from '../auth/password-policy';
 import { hashPassword } from '../auth/password';
 import { resolveAuditUsuarioId } from '../audit/audit.util';
+import { ADMINISTRADOR_SISTEMA_NOME } from '../domain/permissions-catalog';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   buildManualOverrideOnEdit,
@@ -28,13 +35,17 @@ import { isValidCpf, normalizeCpf } from '../common/br-documents';
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
 
-  listSecretarias() {
+  listSecretarias(user: JwtPayload) {
+    const scopeIds = resolveSecretariaScopeIds(user);
     return this.prisma.secretaria.findMany({
+      where: scopeIds ? { id: { in: scopeIds } } : undefined,
       orderBy: { nome: 'asc' },
     });
   }
 
   async createSecretaria(dto: SecretariaDto, user: JwtPayload) {
+    this.assertPodeCriarSecretaria(user);
+
     const secretaria = await this.prisma.secretaria.create({
       data: {
         nome: dto.nome.trim(),
@@ -46,11 +57,12 @@ export class AdminService {
       },
     });
 
-    await this.audit(user, AuditAction.CREATE, 'Secretaria', secretaria.id, null, secretaria);
+    await this.audit(user, AuditAction.CREATE, 'Secretaria', secretaria.id, null, secretaria, 'secretarias');
     return secretaria;
   }
 
   async updateSecretaria(id: string, dto: SecretariaDto, user: JwtPayload) {
+    this.assertSecretariaNoEscopoAdmin(user, id);
     const before = await this.getSecretariaOrThrow(id);
     const secretaria = await this.prisma.secretaria.update({
       where: { id },
@@ -64,24 +76,25 @@ export class AdminService {
       },
     });
 
-    await this.audit(user, AuditAction.UPDATE, 'Secretaria', id, before, secretaria);
+    await this.audit(user, AuditAction.UPDATE, 'Secretaria', id, before, secretaria, 'secretarias');
     return secretaria;
   }
 
   async deleteSecretaria(id: string, user: JwtPayload) {
+    this.assertSecretariaNoEscopoAdmin(user, id);
     const before = await this.getSecretariaOrThrow(id);
     const secretaria = await this.prisma.secretaria.update({
       where: { id },
       data: { ativo: false },
     });
 
-    await this.audit(user, AuditAction.DELETE, 'Secretaria', id, before, secretaria);
+    await this.audit(user, AuditAction.DELETE, 'Secretaria', id, before, secretaria, 'secretarias');
     return secretaria;
   }
 
-  listUnidades() {
+  listUnidades(user: JwtPayload) {
     return this.prisma.unidadePublica.findMany({
-      where: { ativo: true },
+      where: { ativo: true, ...resolveUnidadeSecretariaFilter(user) },
       orderBy: [{ secretaria: { sigla: 'asc' } }, { nome: 'asc' }],
       include: {
         secretaria: {
@@ -94,10 +107,11 @@ export class AdminService {
   async createUnidade(dto: UnidadeDto, user: JwtPayload) {
     ensureCoordinatesOrThrow(dto.latitude, dto.longitude);
     await this.ensureTipoProprioExiste(dto.tipo);
+    const secretariaId = this.resolveSecretariaIdForCreate(user, dto.secretariaId);
 
     const unidade = await this.prisma.unidadePublica.create({
       data: {
-        secretariaId: dto.secretariaId,
+        secretariaId,
         codigoPatrimonial: dto.codigoPatrimonial.trim().toUpperCase(),
         nome: dto.nome.trim(),
         tipo: dto.tipo.trim(),
@@ -112,20 +126,22 @@ export class AdminService {
       },
     });
 
-    await this.audit(user, AuditAction.CREATE, 'UnidadePublica', unidade.id, null, unidade);
+    await this.audit(user, AuditAction.CREATE, 'UnidadePublica', unidade.id, null, unidade, 'proprios');
     return unidade;
   }
 
   async updateUnidade(id: string, dto: UnidadeDto, user: JwtPayload) {
     ensureCoordinatesOrThrow(dto.latitude, dto.longitude);
     const before = await this.getUnidadeOrThrow(id);
+    this.assertSecretariaNoEscopoAdmin(user, before.secretariaId);
+    const secretariaId = this.resolveSecretariaIdForCreate(user, dto.secretariaId);
     await this.ensureTipoProprioExiste(dto.tipo, { allowInactiveCodigo: before.tipo });
     const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
     const beforeMetadata = (before.metadata as Record<string, unknown> | null) ?? {};
     const shouldTrackOverride = isWebmapImported(beforeMetadata) || Boolean(getManualOverride(beforeMetadata));
 
     const updateData: Prisma.UnidadePublicaUpdateInput = {
-      secretaria: { connect: { id: dto.secretariaId } },
+      secretaria: { connect: { id: secretariaId } },
       codigoPatrimonial: dto.codigoPatrimonial.trim().toUpperCase(),
       nome: dto.nome.trim(),
       tipo: dto.tipo.trim(),
@@ -158,12 +174,13 @@ export class AdminService {
       data: updateData,
     });
 
-    await this.audit(user, AuditAction.UPDATE, 'UnidadePublica', id, before, unidade);
+    await this.audit(user, AuditAction.UPDATE, 'UnidadePublica', id, before, unidade, 'proprios');
     return unidade;
   }
 
   async deleteUnidade(id: string, user: JwtPayload) {
     const before = await this.getUnidadeOrThrow(id);
+    this.assertSecretariaNoEscopoAdmin(user, before.secretariaId);
     const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
     const beforeMetadata = (before.metadata as Record<string, unknown> | null) ?? {};
 
@@ -185,60 +202,46 @@ export class AdminService {
       data: updateData,
     });
 
-    await this.audit(user, AuditAction.DELETE, 'UnidadePublica', id, before, unidade);
+    await this.audit(user, AuditAction.DELETE, 'UnidadePublica', id, before, unidade, 'proprios');
     return unidade;
   }
 
-  listUsuarios() {
+  listUsuarios(user: JwtPayload) {
+    const scopeIds = resolveSecretariaScopeIds(user);
+    const where: Prisma.UsuarioWhereInput = scopeIds
+      ? {
+          OR: [
+            { secretariaId: { in: scopeIds } },
+            { secretariasVinculos: { some: { secretariaId: { in: scopeIds } } } },
+          ],
+        }
+      : {};
+
     return this.prisma.usuario.findMany({
+      where,
       orderBy: { nome: 'asc' },
-      select: {
-        id: true,
-        nome: true,
-        email: true,
-        cpf: true,
-        telefone: true,
-        cargo: true,
-        ativo: true,
-        secretariaId: true,
-        secretaria: { select: { id: true, nome: true, sigla: true } },
-        perfis: {
-          select: {
-            perfil: { select: { id: true, nome: true } },
-          },
-        },
-        equipes: {
-          select: {
-            equipe: { select: { id: true, nome: true, ativo: true } },
-          },
-        },
-      },
+      select: this.usuarioSelect(),
     });
   }
 
-  listEquipes() {
+  listEquipes(user: JwtPayload) {
     return this.prisma.equipe.findMany({
+      where: resolveEquipeSecretariaFilter(user),
       orderBy: { nome: 'asc' },
-      include: {
-        secretaria: { select: { id: true, nome: true, sigla: true } },
-        membros: {
-          select: {
-            usuario: { select: { id: true, nome: true, email: true, ativo: true } },
-          },
-        },
-        _count: { select: { chamados: true } },
-      },
+      include: this.equipeInclude(),
     });
   }
 
   async createEquipe(dto: EquipeDto, user: JwtPayload) {
+    const secretariaId =
+      this.resolveSecretariaIdForCreate(user, dto.secretariaId || null, { required: false }) || null;
     await this.ensureUsuariosExist(dto.usuarioIds);
-    await this.ensureEquipeMembrosCoerentes(dto.secretariaId, dto.usuarioIds);
-    await this.ensureEquipeUnica(dto.codigo.trim(), dto.nome.trim(), dto.secretariaId || null);
+    await this.ensureEquipeMembrosCoerentes(secretariaId, dto.usuarioIds);
+    await this.ensureEquipeUnica(dto.codigo.trim(), dto.nome.trim(), secretariaId);
 
     const equipe = await this.prisma.equipe.create({
       data: {
-        secretariaId: dto.secretariaId || null,
+        secretariaId,
         codigo: dto.codigo.trim().toUpperCase(),
         nome: dto.nome.trim(),
         descricao: dto.descricao?.trim(),
@@ -254,22 +257,27 @@ export class AdminService {
       include: this.equipeInclude(),
     });
 
-    await this.audit(user, AuditAction.CREATE, 'Equipe', equipe.id, null, equipe);
+    await this.audit(user, AuditAction.CREATE, 'Equipe', equipe.id, null, equipe, 'equipes');
     return equipe;
   }
 
   async updateEquipe(id: string, dto: EquipeDto, user: JwtPayload) {
     const before = await this.getEquipeOrThrow(id);
+    if (before.secretariaId) {
+      this.assertSecretariaNoEscopoAdmin(user, before.secretariaId);
+    }
+    const secretariaId =
+      this.resolveSecretariaIdForCreate(user, dto.secretariaId || null, { required: false }) || null;
     await this.ensureUsuariosExist(dto.usuarioIds);
-    await this.ensureEquipeMembrosCoerentes(dto.secretariaId, dto.usuarioIds);
-    await this.ensureEquipeUnica(dto.codigo.trim(), dto.nome.trim(), dto.secretariaId || null, id);
+    await this.ensureEquipeMembrosCoerentes(secretariaId, dto.usuarioIds);
+    await this.ensureEquipeUnica(dto.codigo.trim(), dto.nome.trim(), secretariaId, id);
 
     await this.prisma.$transaction(async (tx) => {
       await tx.equipeUsuario.deleteMany({ where: { equipeId: id } });
       await tx.equipe.update({
         where: { id },
         data: {
-          secretariaId: dto.secretariaId || null,
+          secretariaId,
           codigo: dto.codigo.trim().toUpperCase(),
           nome: dto.nome.trim(),
           descricao: dto.descricao?.trim() ?? null,
@@ -286,19 +294,22 @@ export class AdminService {
     });
 
     const equipe = await this.getEquipeOrThrow(id);
-    await this.audit(user, AuditAction.UPDATE, 'Equipe', id, before, equipe);
+    await this.audit(user, AuditAction.UPDATE, 'Equipe', id, before, equipe, 'equipes');
     return equipe;
   }
 
   async deleteEquipe(id: string, user: JwtPayload) {
     const before = await this.getEquipeOrThrow(id);
+    if (before.secretariaId) {
+      this.assertSecretariaNoEscopoAdmin(user, before.secretariaId);
+    }
     const equipe = await this.prisma.equipe.update({
       where: { id },
       data: { ativo: false },
       include: this.equipeInclude(),
     });
 
-    await this.audit(user, AuditAction.DELETE, 'Equipe', id, before, equipe);
+    await this.audit(user, AuditAction.DELETE, 'Equipe', id, before, equipe, 'equipes');
     return equipe;
   }
 
@@ -596,15 +607,25 @@ export class AdminService {
       throw new BadRequestException('CPF inválido.');
     }
 
+    const secretariaId =
+      this.resolveSecretariaIdForCreate(user, dto.secretariaId || null, { required: false }) || null;
+    const perfilIds = await this.resolvePerfilIdsForSave(dto.perfilIds, user);
     const cargoFields = await this.resolveUsuarioCargoFields(dto);
 
     const resolvedPassword = senha || 'Gestop@123';
     const equipeIds = dto.equipeIds ?? [];
+    const dtoScoped: UsuarioDto = {
+      ...dto,
+      secretariaId: secretariaId ?? '',
+      secretariaIds: this.constrainSecretariaIds(user, dto.secretariaIds, secretariaId),
+      perfilIds,
+    };
+
     const usuario = await this.prisma.usuario.create({
       data: {
-        secretariaId: dto.secretariaId || null,
-        secretariaAtivaId: dto.secretariaId || null,
-        perfilAtivoId: dto.perfilIds[0] ?? null,
+        secretariaId,
+        secretariaAtivaId: secretariaId,
+        perfilAtivoId: perfilIds[0] ?? null,
         nome: dto.nome.trim(),
         email: normalizeEmail(dto.email),
         cpf,
@@ -613,7 +634,7 @@ export class AdminService {
         senhaHash: hashPassword(resolvedPassword),
         ativo: dto.ativo ?? true,
         perfis: {
-          create: dto.perfilIds.map((perfilId) => ({
+          create: perfilIds.map((perfilId) => ({
             perfil: { connect: { id: perfilId } },
           })),
         },
@@ -626,14 +647,24 @@ export class AdminService {
       select: this.usuarioSelect(),
     });
 
-    await this.syncUsuarioSecretarias(usuario.id, dto);
+    await this.syncUsuarioSecretarias(usuario.id, dtoScoped);
     const created = await this.getUsuarioOrThrow(usuario.id);
-    await this.audit(user, AuditAction.CREATE, 'Usuario', created.id, null, this.maskUsuario(created));
+    await this.audit(user, AuditAction.CREATE, 'Usuario', created.id, null, this.maskUsuario(created), 'usuarios');
+    await this.auditPerfilChanges(user, created.id, [], perfilIds);
     return created;
   }
 
   async updateUsuario(id: string, dto: UsuarioDto, user: JwtPayload) {
     const before = await this.getUsuarioOrThrow(id);
+    if (before.secretariaId) {
+      this.assertSecretariaNoEscopoAdmin(user, before.secretariaId);
+    } else {
+      const linked = before.secretariasVinculos?.map((item) => item.secretaria.id) ?? [];
+      const scopeIds = resolveSecretariaScopeIds(user);
+      if (scopeIds && linked.length > 0 && !linked.some((sid) => scopeIds.includes(sid))) {
+        throw new ForbiddenException('Usuario fora da secretaria autorizada na sessao.');
+      }
+    }
 
     const cpf = normalizeCpf(dto.cpf);
     if (cpf && !isValidCpf(cpf)) {
@@ -647,7 +678,17 @@ export class AdminService {
       }
     }
 
+    const existingPerfilIds = before.perfis.map((item) => item.perfil.id);
+    const perfilIds = await this.resolvePerfilIdsForSave(dto.perfilIds, user, existingPerfilIds);
+    const secretariaId =
+      this.resolveSecretariaIdForCreate(user, dto.secretariaId || null, { required: false }) || null;
     const cargoFields = await this.resolveUsuarioCargoFields(dto);
+    const dtoScoped: UsuarioDto = {
+      ...dto,
+      secretariaId: secretariaId ?? '',
+      secretariaIds: this.constrainSecretariaIds(user, dto.secretariaIds, secretariaId),
+      perfilIds,
+    };
 
     await this.prisma.$transaction(async (tx) => {
       await tx.usuarioPerfil.deleteMany({ where: { usuarioId: id } });
@@ -655,7 +696,7 @@ export class AdminService {
       await tx.usuario.update({
         where: { id },
         data: {
-          secretariaId: dto.secretariaId || null,
+          secretariaId,
           nome: dto.nome.trim(),
           email: normalizeEmail(dto.email),
           cpf,
@@ -664,7 +705,7 @@ export class AdminService {
           ...(dto.senha ? { senhaHash: hashPassword(dto.senha) } : {}),
           ativo: dto.ativo ?? true,
           perfis: {
-            create: dto.perfilIds.map((perfilId) => ({
+            create: perfilIds.map((perfilId) => ({
               perfil: { connect: { id: perfilId } },
             })),
           },
@@ -677,21 +718,41 @@ export class AdminService {
       });
     });
 
-    await this.syncUsuarioSecretarias(id, dto);
+    await this.syncUsuarioSecretarias(id, dtoScoped);
     const usuario = await this.getUsuarioOrThrow(id);
-    await this.audit(user, AuditAction.UPDATE, 'Usuario', id, this.maskUsuario(before), this.maskUsuario(usuario));
+    await this.audit(
+      user,
+      AuditAction.UPDATE,
+      'Usuario',
+      id,
+      this.maskUsuario(before),
+      this.maskUsuario(usuario),
+      'usuarios',
+    );
+    await this.auditPerfilChanges(user, id, existingPerfilIds, perfilIds);
     return usuario;
   }
 
   async deleteUsuario(id: string, user: JwtPayload) {
     const before = await this.getUsuarioOrThrow(id);
+    if (before.secretariaId) {
+      this.assertSecretariaNoEscopoAdmin(user, before.secretariaId);
+    }
     const usuario = await this.prisma.usuario.update({
       where: { id },
       data: { ativo: false },
       select: this.usuarioSelect(),
     });
 
-    await this.audit(user, AuditAction.DELETE, 'Usuario', id, this.maskUsuario(before), this.maskUsuario(usuario));
+    await this.audit(
+      user,
+      AuditAction.DELETE,
+      'Usuario',
+      id,
+      this.maskUsuario(before),
+      this.maskUsuario(usuario),
+      'usuarios',
+    );
     return usuario;
   }
 
@@ -729,6 +790,157 @@ export class AdminService {
     return this.prisma.cargo.findUniqueOrThrow({ where: { id } }).catch(() => {
       throw new NotFoundException('Cargo nao encontrado');
     });
+  }
+
+  private assertPodeCriarSecretaria(user: JwtPayload) {
+    const scopeIds = resolveSecretariaScopeIds(user);
+    if (scopeIds) {
+      throw new ForbiddenException(
+        'Criação de secretarias só é permitida com “Todas as Secretarias” selecionado.',
+      );
+    }
+  }
+
+  private assertSecretariaNoEscopoAdmin(user: JwtPayload, secretariaId: string) {
+    assertSecretariaNoEscopo(user, secretariaId);
+  }
+
+  /**
+   * Com secretaria ativa específica, força o vínculo a ela.
+   * Com “Todas as Secretarias”, usa o valor informado no formulário.
+   */
+  private resolveSecretariaIdForCreate(
+    user: JwtPayload,
+    requestedId: string | null | undefined,
+    options?: { required?: boolean },
+  ): string {
+    const required = options?.required ?? true;
+    const scopeIds = resolveSecretariaScopeIds(user);
+    if (!scopeIds) {
+      const id = requestedId?.trim() || '';
+      if (!id && required) {
+        throw new BadRequestException('Selecione a secretaria do registro.');
+      }
+      return id;
+    }
+    if (scopeIds.length === 0) {
+      throw new ForbiddenException('Sem secretaria autorizada na sessão.');
+    }
+    if (scopeIds.length === 1) {
+      const forced = scopeIds[0];
+      if (requestedId?.trim() && requestedId.trim() !== forced) {
+        throw new ForbiddenException('Não é permitido cadastrar fora da secretaria ativa.');
+      }
+      return forced;
+    }
+    const id = requestedId?.trim() || '';
+    if (!id) {
+      if (required) throw new BadRequestException('Selecione a secretaria do registro.');
+      return '';
+    }
+    if (!scopeIds.includes(id)) {
+      throw new ForbiddenException('Secretaria fora do escopo autorizado na sessão.');
+    }
+    return id;
+  }
+
+  private isPerfilAtivoAdministrador(user: JwtPayload) {
+    return user.perfis.includes(ADMINISTRADOR_SISTEMA_NOME);
+  }
+
+  private constrainSecretariaIds(
+    user: JwtPayload,
+    requested: string[] | undefined,
+    principalId: string | null,
+  ) {
+    const scopeIds = resolveSecretariaScopeIds(user);
+    let ids = Array.from(
+      new Set([...(requested ?? []).map((id) => id.trim()).filter(Boolean), ...(principalId ? [principalId] : [])]),
+    );
+    if (!scopeIds) return ids;
+    if (scopeIds.length === 1) return [scopeIds[0]];
+    return ids.filter((id) => scopeIds.includes(id));
+  }
+
+  private async resolvePerfilIdsForSave(
+    requestedIds: string[],
+    user: JwtPayload,
+    existingIds: string[] = [],
+  ) {
+    const uniqueRequested = Array.from(new Set(requestedIds.map((id) => id.trim()).filter(Boolean)));
+    if (uniqueRequested.length === 0) {
+      throw new BadRequestException('Selecione ao menos um perfil.');
+    }
+
+    const adminPerfil = await this.prisma.perfil.findFirst({
+      where: { nome: ADMINISTRADOR_SISTEMA_NOME },
+      select: { id: true },
+    });
+    if (!adminPerfil) {
+      return uniqueRequested;
+    }
+
+    const canManageAdmin = this.isPerfilAtivoAdministrador(user);
+    const requestedHasAdmin = uniqueRequested.includes(adminPerfil.id);
+    const existingHasAdmin = existingIds.includes(adminPerfil.id);
+
+    if (!canManageAdmin) {
+      if (requestedHasAdmin && !existingHasAdmin) {
+        throw new ForbiddenException(
+          'Somente com o perfil ativo Administrador do Sistema é possível conceder esse perfil.',
+        );
+      }
+      if (!requestedHasAdmin && existingHasAdmin) {
+        throw new ForbiddenException(
+          'Somente com o perfil ativo Administrador do Sistema é possível remover esse perfil.',
+        );
+      }
+      // Mantém o vínculo existente oculto para operadores não-admin ativos
+      if (existingHasAdmin && !uniqueRequested.includes(adminPerfil.id)) {
+        uniqueRequested.push(adminPerfil.id);
+      }
+      return uniqueRequested.filter((id) => id !== adminPerfil.id || existingHasAdmin);
+    }
+
+    return uniqueRequested;
+  }
+
+  private async auditPerfilChanges(
+    user: JwtPayload,
+    usuarioId: string,
+    beforeIds: string[],
+    afterIds: string[],
+  ) {
+    const beforeSet = new Set(beforeIds);
+    const afterSet = new Set(afterIds);
+    const added = afterIds.filter((id) => !beforeSet.has(id));
+    const removed = beforeIds.filter((id) => !afterSet.has(id));
+    if (added.length === 0 && removed.length === 0) return;
+
+    const perfis = await this.prisma.perfil.findMany({
+      where: { id: { in: [...added, ...removed] } },
+      select: { id: true, nome: true },
+    });
+    const byId = new Map(perfis.map((item) => [item.id, item.nome]));
+
+    await this.audit(
+      user,
+      AuditAction.UPDATE,
+      'UsuarioPerfil',
+      usuarioId,
+      {
+        perfilIds: beforeIds,
+        perfis: beforeIds.map((id) => byId.get(id) ?? id),
+      },
+      {
+        perfilIds: afterIds,
+        perfis: afterIds.map((id) => byId.get(id) ?? id),
+        incluidos: added.map((id) => byId.get(id) ?? id),
+        removidos: removed.map((id) => byId.get(id) ?? id),
+        perfilAtivoOperador: user.perfis[0] ?? null,
+      },
+      'usuarios',
+    );
   }
 
   private async syncUsuarioSecretarias(usuarioId: string, dto: UsuarioDto) {
@@ -896,7 +1108,15 @@ export class AdminService {
     };
   }
 
-  private audit(user: JwtPayload, acao: AuditAction, entidadeTipo: string, entidadeId: string, valorAntigo: unknown, valorNovo: unknown) {
+  private audit(
+    user: JwtPayload,
+    acao: AuditAction,
+    entidadeTipo: string,
+    entidadeId: string,
+    valorAntigo: unknown,
+    valorNovo: unknown,
+    aba?: string,
+  ) {
     return this.prisma.logAuditoria.create({
       data: {
         usuarioId: user.sub,
@@ -904,7 +1124,15 @@ export class AdminService {
         entidadeTipo,
         entidadeId,
         valorAntigo: toJsonValue(valorAntigo),
-        valorNovo: toJsonValue(valorNovo),
+        valorNovo: toJsonValue({
+          dados: valorNovo ?? null,
+          _contexto: {
+            aba: aba ?? null,
+            secretariaAtivaId: user.secretariaId ?? null,
+            perfilAtivo: user.perfis[0] ?? null,
+            acao,
+          },
+        }),
       },
     });
   }

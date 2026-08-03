@@ -6,8 +6,10 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
+import { LoadingState } from '@/components/ui-states';
 import { useSnackbar } from '@/components/ui/snackbar';
-import { coletarAssinaturaDocumento } from '@/lib/api';
+import { coletarAssinaturaDocumento, fetchDocumentoPdfBlobUrl } from '@/lib/api';
+import { cn } from '@/lib/cn';
 import type { DocumentoDetalhe } from '@/lib/types';
 
 const QUALIFICACOES = [
@@ -26,17 +28,75 @@ type Props = {
   onDone: () => void;
 };
 
+function useIsPortraitMobile() {
+  const [state, setState] = useState({ mobile: false, portrait: false });
+
+  useEffect(() => {
+    function update() {
+      const mobile = window.matchMedia('(max-width: 767px)').matches;
+      const portrait = window.matchMedia('(orientation: portrait)').matches;
+      setState({ mobile, portrait });
+    }
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
+
+  return state;
+}
+
 export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Props) {
   const snackbar = useSnackbar();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const canvasWrapRef = useRef<HTMLDivElement | null>(null);
   const drawing = useRef(false);
   const [step, setStep] = useState<'conferencia' | 'dados' | 'assinatura'>('conferencia');
   const [busy, setBusy] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfVariante, setPdfVariante] = useState<'original' | 'assinado'>('original');
   const [nome, setNome] = useState('');
   const [cpf, setCpf] = useState('');
   const [email, setEmail] = useState('');
+  const [cpfNaoInformado, setCpfNaoInformado] = useState(false);
+  const [emailNaoInformado, setEmailNaoInformado] = useState(false);
+  const [justificativaIdentificacao, setJustificativaIdentificacao] = useState('');
   const [qualificacao, setQualificacao] = useState(QUALIFICACOES[0]);
   const [qualificacaoOutro, setQualificacaoOutro] = useState('');
+  const { mobile, portrait } = useIsPortraitMobile();
+
+  const temAssinaturaVigente = Boolean(documento.possuiPdfAssinado);
+
+  function prepareCanvas() {
+    const canvas = canvasRef.current;
+    const wrap = canvasWrapRef.current;
+    if (!canvas || !wrap) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const cssWidth = Math.max(320, Math.floor(wrap.clientWidth));
+    const cssHeight = Math.max(180, Math.floor(wrap.clientHeight));
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    canvas.width = Math.floor(cssWidth * dpr);
+    canvas.height = Math.floor(cssHeight * dpr);
+    canvas.style.width = `${cssWidth}px`;
+    canvas.style.height = `${cssHeight}px`;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, cssWidth, cssHeight);
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = Math.max(2, 2.5 * (cssWidth / 640));
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+  }
 
   useEffect(() => {
     if (!open) {
@@ -44,30 +104,83 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
       setNome('');
       setCpf('');
       setEmail('');
+      setCpfNaoInformado(false);
+      setEmailNaoInformado(false);
+      setJustificativaIdentificacao('');
       setQualificacao(QUALIFICACOES[0]);
       setQualificacaoOutro('');
+      setPdfError(null);
+      if (pdfUrl) {
+        URL.revokeObjectURL(pdfUrl);
+        setPdfUrl(null);
+      }
+      return;
     }
-  }, [open]);
+
+    const variante: 'original' | 'assinado' = temAssinaturaVigente ? 'assinado' : 'original';
+    setPdfVariante(variante);
+    setPdfLoading(true);
+    setPdfError(null);
+
+    let active = true;
+    let objectUrl: string | null = null;
+
+    fetchDocumentoPdfBlobUrl(documento.id, variante)
+      .then((url) => {
+        if (!active) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setPdfUrl(url);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setPdfUrl(null);
+        setPdfError(
+          err instanceof Error
+            ? err.message
+            : 'Documento em geração. Aguarde para coletar assinatura.',
+        );
+      })
+      .finally(() => {
+        if (active) setPdfLoading(false);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, documento.id, documento.possuiPdfAssinado, temAssinaturaVigente]);
 
   useEffect(() => {
-    if (step !== 'assinatura') return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.strokeStyle = '#111827';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-  }, [step]);
+    if (step !== 'assinatura' || !open) return;
+
+    prepareCanvas();
+    const wrap = canvasWrapRef.current;
+    if (!wrap || typeof ResizeObserver === 'undefined') {
+      const onResize = () => prepareCanvas();
+      window.addEventListener('resize', onResize);
+      window.addEventListener('orientationchange', onResize);
+      return () => {
+        window.removeEventListener('resize', onResize);
+        window.removeEventListener('orientationchange', onResize);
+      };
+    }
+
+    const observer = new ResizeObserver(() => prepareCanvas());
+    observer.observe(wrap);
+    return () => observer.disconnect();
+  }, [step, open, mobile, portrait]);
 
   function pointerPos(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
+    // Contexto já está escalado por DPR: desenhar em coordenadas CSS.
     return {
-      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
-      y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+      x: ((event.clientX - rect.left) / Math.max(1, rect.width)) * (canvas.clientWidth || rect.width),
+      y: ((event.clientY - rect.top) / Math.max(1, rect.height)) * (canvas.clientHeight || rect.height),
     };
   }
 
@@ -96,22 +209,42 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
   }
 
   function clearCanvas() {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    prepareCanvas();
+  }
+
+  function validarDadosAssinante(): string | null {
+    if (nome.trim().length < 2) return 'Informe o nome completo do assinante.';
+    if (!cpfNaoInformado && cpf.replace(/\D/g, '').length < 11) {
+      return 'Informe um CPF válido ou marque que o CPF não foi informado.';
+    }
+    if (!emailNaoInformado && !email.includes('@')) {
+      return 'Informe um e-mail válido ou marque que o e-mail não foi informado.';
+    }
+    if ((cpfNaoInformado || emailNaoInformado) && justificativaIdentificacao.trim().length < 5) {
+      return 'Informe a justificativa da ausência de CPF e/ou e-mail (mín. 5 caracteres).';
+    }
+    if (qualificacao === 'Outro' && !qualificacaoOutro.trim()) {
+      return 'Informe a qualificação.';
+    }
+    return null;
+  }
+
+  function irParaAssinatura() {
+    const erro = validarDadosAssinante();
+    if (erro) {
+      snackbar.show(erro, 'error');
+      return;
+    }
+    setStep('assinatura');
   }
 
   async function salvar() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (nome.trim().length < 2 || cpf.replace(/\D/g, '').length < 11 || !email.includes('@')) {
-      snackbar.show('Preencha nome, CPF e e-mail válidos.', 'error');
-      return;
-    }
-    if (qualificacao === 'Outro' && !qualificacaoOutro.trim()) {
-      snackbar.show('Informe a qualificação.', 'error');
+    const erro = validarDadosAssinante();
+    if (erro) {
+      snackbar.show(erro, 'error');
+      setStep('dados');
       return;
     }
 
@@ -119,8 +252,12 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
     try {
       await coletarAssinaturaDocumento(documento.id, {
         assinanteNome: nome.trim(),
-        assinanteDocumento: cpf.trim(),
-        assinanteEmail: email.trim(),
+        assinanteDocumento: cpfNaoInformado ? undefined : cpf.trim(),
+        assinanteEmail: emailNaoInformado ? undefined : email.trim(),
+        cpfNaoInformado: cpfNaoInformado || undefined,
+        emailNaoInformado: emailNaoInformado || undefined,
+        justificativaIdentificacao:
+          cpfNaoInformado || emailNaoInformado ? justificativaIdentificacao.trim() : undefined,
         qualificacao,
         qualificacaoOutro: qualificacao === 'Outro' ? qualificacaoOutro.trim() : undefined,
         assinaturaDataUrl: canvas.toDataURL('image/png'),
@@ -139,47 +276,164 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
     }
   }
 
+  const podeContinuar = Boolean(pdfUrl) && !pdfLoading && !pdfError;
+  const assinaturaStep = step === 'assinatura';
+
+  const sheetClassName = cn(
+    step === 'conferencia' || step === 'dados' ? 'md:max-w-3xl' : 'md:max-w-4xl',
+    assinaturaStep &&
+      mobile &&
+      'inset-0 max-h-[100dvh] rounded-none pb-[env(safe-area-inset-bottom)]',
+  );
+
+  const sheetTitle =
+    step === 'assinatura'
+      ? 'Desenhar assinatura'
+      : step === 'dados'
+        ? 'Dados do assinante'
+        : 'Conferir documento para assinatura';
+
+  const footerAssinatura = assinaturaStep ? (
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" variant="text" onClick={() => setStep('dados')}>
+        Voltar
+      </Button>
+      <Button type="button" variant="outlined" onClick={clearCanvas}>
+        Limpar assinatura
+      </Button>
+      <Button type="button" variant="ghost" onClick={onClose}>
+        Cancelar
+      </Button>
+      <Button type="button" variant="filled" disabled={busy} onClick={() => void salvar()}>
+        Salvar assinatura
+      </Button>
+    </div>
+  ) : undefined;
+
   return (
-    <Sheet open={open} onClose={onClose} title="Coletar assinatura externa">
-      <div className="max-h-[75vh] space-y-4 overflow-y-auto pr-1">
+    <Sheet open={open} onClose={onClose} title={sheetTitle} className={sheetClassName} footer={footerAssinatura}>
+      <div
+        className={cn(
+          'flex flex-col gap-4',
+          assinaturaStep
+            ? 'h-[min(88dvh,760px)] max-h-[min(88dvh,760px)] md:h-[min(78vh,640px)]'
+            : 'max-h-[min(85dvh,720px)]',
+          assinaturaStep && mobile && 'h-[calc(100dvh-7.5rem)] max-h-none',
+        )}
+      >
         {step === 'conferencia' ? (
           <>
-            <p className="text-[13px] text-[var(--ink-2)]">
-              Confira o documento que será assinado. A assinatura externa é opcional e destinada a terceiros (autuado,
-              notificado, responsável, etc.).
-            </p>
-            <div className="rounded-[12px] border border-[var(--line)] bg-[var(--canvas-2)] p-3 text-[13px]">
+            <div className="shrink-0 rounded-[12px] border border-[var(--line)] bg-[var(--canvas-2)] p-3 text-[12px] text-[var(--ink-2)]">
               <p className="font-semibold text-[var(--ink)]">{documento.titulo}</p>
               <p className="mono text-[12px] text-[var(--brand-hover)]">{documento.codigo}</p>
-              <p className="mt-2 text-[var(--ink-3)]">
-                {documento.secretaria ? `${documento.secretaria.sigla} · ${documento.secretaria.nome}` : '—'}
-              </p>
-              <p className="text-[var(--ink-3)]">
-                Checklist: {documento.checklist?.nome ?? '—'}
-                {documento.checklist ? ` (v${documento.checklist.versao})` : ''}
-              </p>
-              <p className="mt-2 text-[var(--ink-2)]">
-                Respostas: {(documento as { respostas?: unknown[] }).respostas?.length ?? 0} item(ns) · PDF original:{' '}
-                {documento.possuiPdfOriginal ? 'disponível' : 'pendente'}
+              <p className="mt-1 text-[var(--ink-3)]">
+                Visualizando o PDF {pdfVariante === 'assinado' ? 'assinado vigente' : 'original'} que receberá a
+                assinatura.
               </p>
             </div>
-            <Button type="button" variant="filled" onClick={() => setStep('dados')} disabled={!documento.possuiPdfOriginal}>
-              Continuar para dados do assinante
-            </Button>
+
+            <div className="min-h-0 flex-1 overflow-hidden rounded-[12px] border border-[var(--line)] bg-[var(--canvas-2)]">
+              {pdfLoading ? (
+                <div className="flex h-[50vh] items-center justify-center p-4">
+                  <LoadingState label="Carregando documento..." />
+                </div>
+              ) : null}
+              {pdfError ? (
+                <div className="flex h-[40vh] items-center justify-center p-4 text-center text-[13px] text-[var(--danger)]">
+                  {pdfError.includes('não disponível') || pdfError.includes('Falha')
+                    ? 'Documento em geração. Aguarde para coletar assinatura.'
+                    : pdfError}
+                </div>
+              ) : null}
+              {pdfUrl ? (
+                <iframe
+                  title="Documento para conferência"
+                  src={pdfUrl}
+                  className="h-[min(55vh,520px)] w-full bg-white"
+                />
+              ) : null}
+            </div>
+
+            <div className="shrink-0">
+              <Button
+                type="button"
+                variant="filled"
+                className="w-full"
+                disabled={!podeContinuar}
+                onClick={() => setStep('dados')}
+              >
+                Continuar para dados do assinante
+              </Button>
+            </div>
           </>
         ) : null}
 
         {step === 'dados' ? (
-          <>
+          <div className="space-y-3 overflow-y-auto">
+            <p className="rounded-[10px] border border-[var(--line)] bg-[var(--canvas-2)] px-3 py-2 text-[12px] text-[var(--ink-3)]">
+              CPF e e-mail são recomendados para reforçar a identificação da assinatura externa. A assinatura
+              pode ser registrada sem esses dados quando a pessoa não informar ou não possuir a informação.
+            </p>
             <Field label="Nome completo">
               <Input value={nome} onChange={(event) => setNome(event.target.value)} />
             </Field>
             <Field label="CPF">
-              <Input value={cpf} onChange={(event) => setCpf(event.target.value)} placeholder="000.000.000-00" />
+              <Input
+                value={cpf}
+                onChange={(event) => setCpf(event.target.value)}
+                placeholder="000.000.000-00"
+                disabled={cpfNaoInformado}
+              />
             </Field>
+            <label className="flex items-center gap-2 text-[12px] text-[var(--ink-2)]">
+              <input
+                type="checkbox"
+                checked={cpfNaoInformado}
+                onChange={(event) => {
+                  setCpfNaoInformado(event.target.checked);
+                  if (event.target.checked) setCpf('');
+                }}
+              />
+              CPF não informado pelo assinante
+            </label>
             <Field label="E-mail">
-              <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+              <Input
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                disabled={emailNaoInformado}
+              />
             </Field>
+            <label className="flex items-center gap-2 text-[12px] text-[var(--ink-2)]">
+              <input
+                type="checkbox"
+                checked={emailNaoInformado}
+                onChange={(event) => {
+                  setEmailNaoInformado(event.target.checked);
+                  if (event.target.checked) setEmail('');
+                }}
+              />
+              E-mail não informado pelo assinante
+            </label>
+            {cpfNaoInformado || emailNaoInformado ? (
+              <Field
+                label="Justificativa da identificação"
+                hint="Obrigatória quando CPF e/ou e-mail não forem informados"
+              >
+                <Input
+                  value={justificativaIdentificacao}
+                  onChange={(event) => setJustificativaIdentificacao(event.target.value)}
+                  placeholder="Ex.: Assinante recusou informar CPF"
+                  list="justificativas-identificacao"
+                />
+                <datalist id="justificativas-identificacao">
+                  <option value="Assinante recusou informar CPF" />
+                  <option value="Assinante não possui e-mail" />
+                  <option value="Assinante não soube informar" />
+                  <option value="Coleta realizada em campo sem disponibilidade da informação" />
+                </datalist>
+              </Field>
+            ) : null}
             <Field label="Qualificação">
               <Select value={qualificacao} onChange={(event) => setQualificacao(event.target.value)}>
                 {QUALIFICACOES.map((item) => (
@@ -198,43 +452,42 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
               <Button type="button" variant="text" onClick={() => setStep('conferencia')}>
                 Voltar
               </Button>
-              <Button type="button" variant="filled" onClick={() => setStep('assinatura')}>
+              <Button type="button" variant="filled" onClick={irParaAssinatura}>
                 Ir para assinatura
               </Button>
             </div>
-          </>
+          </div>
         ) : null}
 
         {step === 'assinatura' ? (
-          <>
-            <p className="text-[13px] text-[var(--ink-2)]">
+          <div className="flex min-h-0 flex-1 flex-col gap-3">
+            <p className="shrink-0 text-[13px] text-[var(--ink-2)]">
               Assine com o dedo, caneta touch ou mouse. A imagem será incorporada ao PDF assinado vigente.
             </p>
-            <canvas
-              ref={canvasRef}
-              width={640}
-              height={220}
-              className="w-full touch-none rounded-[12px] border border-[var(--line)] bg-white"
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onPointerLeave={onPointerUp}
-            />
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="text" onClick={() => setStep('dados')}>
-                Voltar
-              </Button>
-              <Button type="button" variant="outlined" onClick={clearCanvas}>
-                Limpar assinatura
-              </Button>
-              <Button type="button" variant="ghost" onClick={onClose}>
-                Cancelar
-              </Button>
-              <Button type="button" variant="filled" disabled={busy} onClick={() => void salvar()}>
-                Salvar assinatura
-              </Button>
+            {mobile && portrait ? (
+              <p className="shrink-0 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+                Para assinar com mais conforto, vire o celular na horizontal.
+              </p>
+            ) : null}
+            <div
+              ref={canvasWrapRef}
+              className={cn(
+                'min-h-0 flex-1 overflow-hidden rounded-[12px] border border-[var(--line)] bg-white shadow-[inset_0_0_0_1px_rgba(0,0,0,0.02)]',
+                'h-[min(52vh,420px)] md:h-[min(48vh,380px)]',
+                mobile && 'h-auto min-h-[42dvh]',
+                mobile && !portrait && 'min-h-[58dvh]',
+              )}
+            >
+              <canvas
+                ref={canvasRef}
+                className="h-full w-full touch-none cursor-crosshair"
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onPointerLeave={onPointerUp}
+              />
             </div>
-          </>
+          </div>
         ) : null}
       </div>
     </Sheet>

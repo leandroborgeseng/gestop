@@ -4,7 +4,8 @@ import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
-import { RequirePermissions } from '../auth/permissions';
+import { RequireAnyPermissions } from '../auth/permissions';
+import { adminTabPermissionKeys } from '../domain/admin-permissions';
 import { AdminImportService } from './admin-import.service';
 
 type WebmapSyncBody = {
@@ -29,37 +30,37 @@ type WebmapSyncAllBody = {
 export class AdminImportController {
   constructor(private readonly adminImportService: AdminImportService) {}
 
-  @RequirePermissions('unidades.gerenciar')
+  @RequireAnyPermissions(...adminTabPermissionKeys('importacao', 'visualizar'))
   @Get('webmap/status')
   getWebmapStatus() {
     return this.adminImportService.getWebmapStatus();
   }
 
-  @RequirePermissions('unidades.gerenciar')
+  @RequireAnyPermissions(...adminTabPermissionKeys('importacao', 'executar'))
   @Post('webmap/preview')
   previewWebmap() {
     return this.adminImportService.previewWebmap();
   }
 
-  @RequirePermissions('unidades.gerenciar')
+  @RequireAnyPermissions(...adminTabPermissionKeys('importacao', 'executar'))
   @Post('webmap/apply')
   applyWebmap(@Body() body: WebmapApplyBody, @CurrentUser() user: JwtPayload) {
     return this.adminImportService.applyWebmap(user, body);
   }
 
-  @RequirePermissions('unidades.gerenciar')
+  @RequireAnyPermissions(...adminTabPermissionKeys('importacao', 'executar'))
   @Post('webmap/sync')
   syncWebmap(@Body() body: WebmapSyncBody, @CurrentUser() user: JwtPayload) {
     return this.adminImportService.syncWebmap(user, Boolean(body.dryRun));
   }
 
-  @RequirePermissions('unidades.gerenciar')
+  @RequireAnyPermissions(...adminTabPermissionKeys('importacao', 'executar'))
   @Post('webmap/sync-all')
   syncAll(@Body() body: WebmapSyncAllBody, @CurrentUser() user: JwtPayload) {
     return this.adminImportService.syncAll(user, Boolean(body.dryRun));
   }
 
-  @RequirePermissions('unidades.gerenciar')
+  @RequireAnyPermissions(...adminTabPermissionKeys('importacao', 'executar'))
   @Post('secretarias/sync')
   syncSecretarias(@Body() body: WebmapSyncBody) {
     return this.adminImportService.importSecretarias(Boolean(body.dryRun));

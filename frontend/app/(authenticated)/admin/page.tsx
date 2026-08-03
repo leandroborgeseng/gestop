@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Building2, Briefcase, ClipboardList, DatabaseBackup, Download, Layers3, MapPin, Shield, Tags, UserRound, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
+import { useSessionUser } from '@/components/auth/session-context';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
 import { BackupPanel } from '@/components/admin/backup-panel';
 import { PageShell } from '@/components/layout/page-shell';
@@ -87,6 +88,11 @@ import {
   PASSWORD_POLICY_HINT,
   validatePasswordPolicy,
 } from '@/lib/password-policy';
+import {
+  ADMINISTRADOR_SISTEMA_NOME,
+  AdminTabPermissionId,
+  hasAdminTabAccess,
+} from '@/lib/permissions-matrix';
 
 type Tab =
   | 'secretarias'
@@ -101,12 +107,52 @@ type Tab =
   | 'backup'
   | 'importacao';
 
+const TAB_TO_PERM: Record<Tab, AdminTabPermissionId> = {
+  secretarias: 'secretarias',
+  unidades: 'proprios',
+  usuarios: 'usuarios',
+  equipes: 'equipes',
+  cargos: 'cargos',
+  'tipos-chamado': 'tipos_chamado',
+  'tipos-proprio': 'tipos_proprio',
+  'categorias-vistoria': 'categorias_vistoria',
+  permissoes: 'permissoes',
+  backup: 'backup',
+  importacao: 'importacao',
+};
+
 const regioes: RegiaoUnidade[] = ['NORTE', 'SUL', 'LESTE', 'OESTE', 'CENTRO'];
+
+function useAdminCaps(tab: AdminTabPermissionId) {
+  const user = useSessionUser();
+  const permissoes = user?.permissoes ?? [];
+  return {
+    canView: hasAdminTabAccess(tab, 'visualizar', permissoes),
+    canInsert: hasAdminTabAccess(tab, 'inserir', permissoes),
+    canAlter: hasAdminTabAccess(tab, 'alterar', permissoes),
+    canDelete: hasAdminTabAccess(tab, 'excluir', permissoes),
+    canExec: hasAdminTabAccess(tab, 'executar', permissoes),
+    secretariaAtivaId: user?.secretariaAtiva?.id ?? user?.secretaria?.id ?? null,
+    escopoTodas: Boolean(user?.secretariaEscopoTodas),
+    perfilAtivoNome: user?.perfilAtivo?.nome ?? user?.perfis[0] ?? null,
+    isAdminAtivo: (user?.perfilAtivo?.nome ?? user?.perfis[0]) === ADMINISTRADOR_SISTEMA_NOME,
+  };
+}
+
+async function safeList<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await fn();
+  } catch {
+    return fallback;
+  }
+}
 
 export default function AdminPage() {
   const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
-  const [tab, setTab] = useState<Tab>('secretarias');
+  const user = useSessionUser();
+  const permissoes = user?.permissoes ?? [];
+  const [tab, setTab] = useState<Tab | null>(null);
   const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
   const [unidades, setUnidades] = useState<AdminUnidade[]>([]);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
@@ -120,10 +166,45 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const visibleTabs = useMemo(() => {
+    const all: Array<{ id: Tab; label: string; icon: React.ReactNode; count?: number }> = [
+      { id: 'secretarias', label: 'Secretarias', icon: <Building2 className="h-4 w-4" />, count: secretarias.length },
+      { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" />, count: unidades.length },
+      { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" />, count: usuarios.length },
+      { id: 'equipes', label: 'Equipes', icon: <UsersRound className="h-4 w-4" />, count: equipes.length },
+      { id: 'cargos', label: 'Cargos', icon: <Briefcase className="h-4 w-4" />, count: cargos.length },
+      { id: 'tipos-chamado', label: 'Tipos de chamado', icon: <ClipboardList className="h-4 w-4" />, count: tiposChamado.length },
+      { id: 'tipos-proprio', label: 'Tipos de próprio', icon: <Tags className="h-4 w-4" />, count: tiposProprio.length },
+      { id: 'categorias-vistoria', label: 'Categorias vistoria', icon: <Layers3 className="h-4 w-4" />, count: categoriasVistoria.length },
+      { id: 'permissoes', label: 'Permissões', icon: <Shield className="h-4 w-4" /> },
+      { id: 'backup', label: 'Backup S3', icon: <DatabaseBackup className="h-4 w-4" /> },
+      { id: 'importacao', label: 'Importação', icon: <Download className="h-4 w-4" /> },
+    ];
+    return all.filter((item) => hasAdminTabAccess(TAB_TO_PERM[item.id], 'visualizar', permissoes));
+  }, [
+    permissoes,
+    secretarias.length,
+    unidades.length,
+    usuarios.length,
+    equipes.length,
+    cargos.length,
+    tiposChamado.length,
+    tiposProprio.length,
+    categoriasVistoria.length,
+  ]);
+
+  useEffect(() => {
+    if (visibleTabs.length === 0) return;
+    if (!tab || !visibleTabs.some((item) => item.id === tab)) {
+      setTab(visibleTabs[0].id);
+    }
+  }, [visibleTabs, tab]);
+
   async function load() {
     setLoading(true);
     setError(null);
     try {
+      const can = (t: AdminTabPermissionId) => hasAdminTabAccess(t, 'visualizar', permissoes);
       const [
         nextSecretarias,
         nextUnidades,
@@ -135,15 +216,19 @@ export default function AdminPage() {
         nextCategorias,
         nextCargos,
       ] = await Promise.all([
-        listAdminSecretarias(),
-        listAdminUnidades(),
-        listAdminUsuarios(),
-        listAdminEquipes(),
-        listAdminPerfis(),
-        listAdminTiposChamado(),
-        listAdminTiposProprio(),
-        listAdminCategoriasVistoria(),
-        listAdminCargos(),
+        can('secretarias') || can('usuarios') || can('equipes') || can('proprios')
+          ? safeList(listAdminSecretarias, [])
+          : Promise.resolve([]),
+        can('proprios') ? safeList(listAdminUnidades, []) : Promise.resolve([]),
+        can('usuarios') || can('permissoes') || can('equipes')
+          ? safeList(listAdminUsuarios, [])
+          : Promise.resolve([]),
+        can('equipes') || can('usuarios') ? safeList(listAdminEquipes, []) : Promise.resolve([]),
+        can('usuarios') ? safeList(listAdminPerfis, []) : Promise.resolve([]),
+        can('tipos_chamado') ? safeList(listAdminTiposChamado, []) : Promise.resolve([]),
+        can('tipos_proprio') || can('proprios') ? safeList(listAdminTiposProprio, []) : Promise.resolve([]),
+        can('categorias_vistoria') ? safeList(listAdminCategoriasVistoria, []) : Promise.resolve([]),
+        can('cargos') || can('usuarios') ? safeList(listAdminCargos, []) : Promise.resolve([]),
       ]);
       setSecretarias(nextSecretarias);
       setUnidades(nextUnidades);
@@ -163,7 +248,8 @@ export default function AdminPage() {
 
   useEffect(() => {
     void load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega ao mudar permissões/secretaria da sessão
+  }, [permissoes.join('|'), user?.secretariaAtiva?.id, user?.secretariaEscopoTodas]);
 
   async function mutate(action: () => Promise<unknown>, message: string) {
     setError(null);
@@ -182,8 +268,10 @@ export default function AdminPage() {
     }
   }
 
+  const canLgpd = hasAdminTabAccess('usuarios', 'excluir', permissoes);
+
   return (
-    <RequirePermissions permissions={['usuarios.gerenciar']}>
+    <RequirePermissions permissions={['admin.visualizar']}>
       <PageShell
         kicker="Administração"
         icon={Building2}
@@ -193,30 +281,17 @@ export default function AdminPage() {
       >
         <TipBanner id="admin-cadastros">
           Alterações em secretarias, próprios e usuários são registradas na trilha de auditoria. Use a aba Importação para sincronizar o webmap QGIS.
+          A Secretaria ativa define o escopo dos cadastros vinculados a secretaria.
         </TipBanner>
 
         {error ? <div className="mb-4"><ErrorState message={error} onRetry={() => void load()} /></div> : null}
         {success ? <Alert variant="success" className="mb-4">{success}</Alert> : null}
 
-        <div className="mb-6 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] px-4 shadow-[var(--sh-sm)]">
-          <Tabs
-            value={tab}
-            onChange={(value) => setTab(value as Tab)}
-            items={[
-              { id: 'secretarias', label: 'Secretarias', icon: <Building2 className="h-4 w-4" />, count: secretarias.length },
-              { id: 'unidades', label: 'Próprios', icon: <MapPin className="h-4 w-4" />, count: unidades.length },
-              { id: 'usuarios', label: 'Usuários', icon: <UserRound className="h-4 w-4" />, count: usuarios.length },
-              { id: 'equipes', label: 'Equipes', icon: <UsersRound className="h-4 w-4" />, count: equipes.length },
-              { id: 'cargos', label: 'Cargos', icon: <Briefcase className="h-4 w-4" />, count: cargos.length },
-              { id: 'tipos-chamado', label: 'Tipos de chamado', icon: <ClipboardList className="h-4 w-4" />, count: tiposChamado.length },
-              { id: 'tipos-proprio', label: 'Tipos de próprio', icon: <Tags className="h-4 w-4" />, count: tiposProprio.length },
-              { id: 'categorias-vistoria', label: 'Categorias vistoria', icon: <Layers3 className="h-4 w-4" />, count: categoriasVistoria.length },
-              { id: 'permissoes', label: 'Permissões', icon: <Shield className="h-4 w-4" /> },
-              { id: 'backup', label: 'Backup S3', icon: <DatabaseBackup className="h-4 w-4" /> },
-              { id: 'importacao', label: 'Importação', icon: <Download className="h-4 w-4" /> },
-            ]}
-          />
-        </div>
+        {visibleTabs.length > 0 && tab ? (
+          <div className="mb-6 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] px-4 shadow-[var(--sh-sm)]">
+            <Tabs value={tab} onChange={(value) => setTab(value as Tab)} items={visibleTabs} />
+          </div>
+        ) : null}
 
         {loading && tab !== 'backup' ? <LoadingState label="Carregando cadastros..." /> : null}
 
@@ -252,7 +327,7 @@ export default function AdminPage() {
           <ImportacaoPanel onSynced={() => void load()} />
         ) : null}
 
-        {!loading && tab !== 'importacao' && tab !== 'backup' ? (
+        {!loading && canLgpd && tab !== 'importacao' && tab !== 'backup' ? (
           <section className="mt-8 rounded-[var(--r-card)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-5">
             <div className="flex items-start gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface)] text-[var(--warn)] shadow-[var(--sh-sm)]">
@@ -299,6 +374,7 @@ const STATUS_FILTER_OPTIONS = [
 ];
 
 function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretaria[]; mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean> }) {
+  const caps = useAdminCaps('secretarias');
   const [editing, setEditing] = useState<AdminSecretaria | null>(null);
   const [filterSigla, setFilterSigla] = useState('');
   const [filterNome, setFilterNome] = useState('');
@@ -306,6 +382,7 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
   const [filterStatus, setFilterStatus] = useState('');
 
   const filtersActive = Boolean(filterSigla || filterNome || filterResponsavel || filterStatus);
+  const canShowForm = (editing && caps.canAlter) || (!editing && caps.canInsert && caps.escopoTodas);
 
   const filtered = useMemo(
     () =>
@@ -353,6 +430,7 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
 
   return (
     <div className="space-y-6">
+      {canShowForm ? (
       <FormSection title={editing ? 'Editar secretaria' : 'Nova secretaria'}>
         <form key={editing?.id ?? 'new-secretaria'} onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -372,6 +450,12 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
           </div>
         </form>
       </FormSection>
+      ) : null}
+      {!caps.escopoTodas && caps.canInsert ? (
+        <p className="text-[12px] text-[var(--ink-3)]">
+          Para cadastrar novas secretarias, selecione “Todas as Secretarias” na sessão.
+        </p>
+      ) : null}
 
       <div>
         <DataTableFiltersBar
@@ -423,10 +507,12 @@ function SecretariasPanel({ secretarias, mutate }: { secretarias: AdminSecretari
                   </DataTableCell>
                   <DataTableCell>
                     <div className="flex flex-wrap gap-1">
-                      <Button variant="text" size="sm" onClick={() => setEditing(secretaria)}>
-                        Editar
-                      </Button>
-                      {secretaria.ativo ? (
+                      {caps.canAlter ? (
+                        <Button variant="text" size="sm" onClick={() => setEditing(secretaria)}>
+                          Editar
+                        </Button>
+                      ) : null}
+                      {caps.canDelete && secretaria.ativo ? (
                         <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminSecretaria(secretaria.id), 'Secretaria inativada.')}>
                           Inativar
                         </Button>
@@ -454,6 +540,11 @@ function UnidadesPanel({
   tiposProprio: AdminTipoProprio[];
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
+  const caps = useAdminCaps('proprios');
+  const secretariasForm = useMemo(() => {
+    if (caps.escopoTodas || !caps.secretariaAtivaId) return secretarias;
+    return secretarias.filter((s) => s.id === caps.secretariaAtivaId);
+  }, [secretarias, caps.escopoTodas, caps.secretariaAtivaId]);
   const [editing, setEditing] = useState<AdminUnidade | null>(null);
   const [filterCodigo, setFilterCodigo] = useState('');
   const [filterNome, setFilterNome] = useState('');
@@ -586,12 +677,18 @@ function UnidadesPanel({
 
   return (
     <div className="space-y-6">
+      {caps.canInsert ? (
       <FormSection title="Novo próprio">
         <form onSubmit={submitCreate} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Secretaria">
-              <Select name="secretariaId" required>
-                {secretarias.map((s) => (
+              <Select
+                name="secretariaId"
+                required
+                defaultValue={caps.secretariaAtivaId ?? ''}
+                disabled={!caps.escopoTodas && Boolean(caps.secretariaAtivaId)}
+              >
+                {secretariasForm.map((s) => (
                   <option key={s.id} value={s.id}>{s.sigla} — {s.nome}</option>
                 ))}
               </Select>
@@ -627,6 +724,7 @@ function UnidadesPanel({
           <Button type="submit" variant="filled">Cadastrar próprio</Button>
         </form>
       </FormSection>
+      ) : null}
 
       <div>
         <DataTableFiltersBar
@@ -697,10 +795,12 @@ function UnidadesPanel({
                   </DataTableCell>
                   <DataTableCell>
                     <div className="flex flex-wrap gap-1">
-                      <Button variant="text" size="sm" onClick={() => setEditing(unidade)}>
-                        Editar
-                      </Button>
-                      {unidade.ativo ? (
+                      {caps.canAlter ? (
+                        <Button variant="text" size="sm" onClick={() => setEditing(unidade)}>
+                          Editar
+                        </Button>
+                      ) : null}
+                      {caps.canDelete && unidade.ativo ? (
                         <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
                           Inativar
                         </Button>
@@ -715,11 +815,11 @@ function UnidadesPanel({
       </div>
 
       <Sheet
-        open={Boolean(editing)}
+        open={Boolean(editing) && caps.canAlter}
         onClose={() => setEditing(null)}
         title={editing ? `Editar — ${editing.nome}` : 'Editar próprio'}
         footer={
-          editing ? (
+          editing && caps.canAlter ? (
             <div className="flex gap-2">
               <Button type="submit" form="edit-unidade-form" variant="filled" className="flex-1">
                 Salvar alterações
@@ -731,7 +831,7 @@ function UnidadesPanel({
           ) : null
         }
       >
-        {editing ? (
+        {editing && caps.canAlter ? (
           <form id="edit-unidade-form" onSubmit={submitEdit} className="space-y-4">
             {isQgisImported(editing) ? (
               <Alert variant="info">
@@ -751,8 +851,17 @@ function UnidadesPanel({
             ) : null}
 
             <Field label="Secretaria">
-              <Select name="secretariaId" defaultValue={editing.secretariaId} required>
-                {secretarias.map((s) => (
+              <Select
+                name="secretariaId"
+                defaultValue={
+                  !caps.escopoTodas && caps.secretariaAtivaId
+                    ? caps.secretariaAtivaId
+                    : editing.secretariaId
+                }
+                required
+                disabled={!caps.escopoTodas && Boolean(caps.secretariaAtivaId)}
+              >
+                {secretariasForm.map((s) => (
                   <option key={s.id} value={s.id}>{s.sigla} — {s.nome}</option>
                 ))}
               </Select>
@@ -811,7 +920,6 @@ function UnidadesPanel({
 
 function usuarioPayloadFromForm(
   form: FormData,
-  defaultPerfil: string,
   ativo: boolean,
   equipeIds: string[],
   editingId?: string,
@@ -819,6 +927,10 @@ function usuarioPayloadFromForm(
   telefoneValue?: string,
 ) {
   const senha = String(form.get('senha') || '').trim();
+  const perfilIds = form.getAll('perfilIds').map(String).filter(Boolean);
+  if (perfilIds.length === 0) {
+    throw new Error('Selecione ao menos um perfil.');
+  }
   const payload: Record<string, unknown> = {
     secretariaId: String(form.get('secretariaId') || ''),
     secretariaIds: form.getAll('secretariaIds').map(String).filter(Boolean),
@@ -828,9 +940,7 @@ function usuarioPayloadFromForm(
     cpf: normalizeCpfForApi(cpfValue ?? String(form.get('cpf') || '')) ?? '',
     telefone: normalizePhoneForApi(telefoneValue ?? String(form.get('telefone') || '')) ?? '',
     cargoId: String(form.get('cargoId') || ''),
-    perfilIds: form.getAll('perfilIds').map(String).filter(Boolean).length
-      ? form.getAll('perfilIds').map(String)
-      : [String(form.get('perfilId') || defaultPerfil)].filter(Boolean),
+    perfilIds,
     equipeIds,
     ativo,
   };
@@ -911,7 +1021,7 @@ function UsuariosPanel({
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
   const snackbar = useSnackbar();
-  const defaultPerfil = useMemo(() => perfis[0]?.id ?? '', [perfis]);
+  const caps = useAdminCaps('usuarios');
   const [editing, setEditing] = useState<AdminUsuario | null>(null);
   const [selectedEquipeIds, setSelectedEquipeIds] = useState<string[]>([]);
   const [cpfValue, setCpfValue] = useState('');
@@ -959,6 +1069,21 @@ function UsuariosPanel({
     [usuarios, filterUsuario, filterPerfil, filterEquipe, filterSecretaria, filterStatus],
   );
 
+  const perfisVisiveis = useMemo(() => {
+    const ativos = perfis.filter((p) => p.ativo !== false);
+    if (caps.isAdminAtivo) return ativos;
+    return ativos.filter((p) => p.nome !== ADMINISTRADOR_SISTEMA_NOME);
+  }, [perfis, caps.isAdminAtivo]);
+
+  const secretariasForm = useMemo(() => {
+    if (caps.escopoTodas || !caps.secretariaAtivaId) return secretarias;
+    return secretarias.filter((s) => s.id === caps.secretariaAtivaId);
+  }, [secretarias, caps.escopoTodas, caps.secretariaAtivaId]);
+
+  const defaultSecretariaId = caps.escopoTodas
+    ? editing?.secretariaId ?? ''
+    : caps.secretariaAtivaId ?? editing?.secretariaId ?? '';
+
   function clearFilters() {
     setFilterUsuario('');
     setFilterPerfil('');
@@ -986,7 +1111,6 @@ function UsuariosPanel({
       () => {
         const payload = usuarioPayloadFromForm(
           form,
-          defaultPerfil,
           editing?.ativo ?? true,
           selectedEquipeIds,
           editing?.id,
@@ -994,6 +1118,14 @@ function UsuariosPanel({
           telefoneValue,
         );
         payload.email = email;
+        if (!caps.isAdminAtivo && editing) {
+          const adminPerfil = editing.perfis.find((item) => item.perfil.nome === ADMINISTRADOR_SISTEMA_NOME);
+          if (adminPerfil) {
+            const ids = new Set((payload.perfilIds as string[]) ?? []);
+            ids.add(adminPerfil.perfil.id);
+            payload.perfilIds = [...ids];
+          }
+        }
         return saveAdminUsuario(payload, editing?.id);
       },
       isEdit ? 'Usuário atualizado.' : 'Usuário cadastrado.',
@@ -1019,8 +1151,11 @@ function UsuariosPanel({
     }
   }
 
+  const canShowForm = (editing && caps.canAlter) || (!editing && caps.canInsert);
+
   return (
     <div className="space-y-6">
+      {canShowForm ? (
       <FormSection title={editing ? 'Editar usuário' : 'Novo usuário'}>
         <form key={editing?.id ?? 'new'} onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1077,9 +1212,13 @@ function UsuariosPanel({
               />
             </Field>
             <Field label="Secretaria principal" tooltip="Secretaria padrão inicial da sessão do usuário.">
-              <Select name="secretariaId" defaultValue={editing?.secretariaId ?? ''}>
-                <option value="">Sem secretaria</option>
-                {secretarias.map((s) => (
+              <Select
+                name="secretariaId"
+                defaultValue={defaultSecretariaId}
+                disabled={!caps.escopoTodas && Boolean(caps.secretariaAtivaId)}
+              >
+                {caps.escopoTodas ? <option value="">Sem secretaria</option> : null}
+                {secretariasForm.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.sigla} — {s.nome}
                   </option>
@@ -1092,20 +1231,22 @@ function UsuariosPanel({
             tooltip="Secretarias em que o usuário pode atuar (alternáveis na sessão)."
           >
             <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
-              {secretarias.length === 0 ? (
+              {secretariasForm.length === 0 ? (
                 <p className="text-[12px] text-[var(--ink-3)]">Nenhuma secretaria cadastrada.</p>
               ) : (
-                secretarias.map((s) => {
+                secretariasForm.map((s) => {
                   const linkedIds =
                     editing?.secretariasVinculos?.map((item) => item.secretaria.id) ??
                     (editing?.secretariaId ? [editing.secretariaId] : []);
+                  const forced = !caps.escopoTodas && caps.secretariaAtivaId === s.id;
                   return (
                     <label key={s.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
                       <input
                         type="checkbox"
                         name="secretariaIds"
                         value={s.id}
-                        defaultChecked={linkedIds.includes(s.id)}
+                        defaultChecked={forced || linkedIds.includes(s.id)}
+                        disabled={forced}
                       />
                       <span>
                         {s.sigla} — {s.nome}
@@ -1116,28 +1257,35 @@ function UsuariosPanel({
               )}
             </div>
           </Field>
-          <label className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
-            <input
-              type="checkbox"
-              name="acessoTodasSecretarias"
-              defaultChecked={Boolean(editing?.acessoTodasSecretarias)}
-            />
-            <span>Permitir atuação em “Todas as Secretarias”</span>
-          </label>
+          {caps.escopoTodas ? (
+            <label className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+              <input
+                type="checkbox"
+                name="acessoTodasSecretarias"
+                defaultChecked={Boolean(editing?.acessoTodasSecretarias)}
+              />
+              <span>Permitir atuação em “Todas as Secretarias”</span>
+            </label>
+          ) : null}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Perfis">
               <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
-                {perfis.filter((p) => p.ativo !== false).map((p) => (
+                {perfisVisiveis.map((p) => (
                   <label key={p.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
                     <input
                       type="checkbox"
                       name="perfilIds"
                       value={p.id}
-                      defaultChecked={editing?.perfis.some((item) => item.perfil.id === p.id) ?? p.id === defaultPerfil}
+                      defaultChecked={Boolean(editing?.perfis.some((item) => item.perfil.id === p.id))}
                     />
                     <span>{p.nome}</span>
                   </label>
                 ))}
+                {!caps.isAdminAtivo && editing?.perfis.some((item) => item.perfil.nome === ADMINISTRADOR_SISTEMA_NOME) ? (
+                  <p className="text-[12px] text-[var(--ink-3)]">
+                    Perfil Administrador do Sistema permanece vinculado e só pode ser alterado com esse perfil ativo.
+                  </p>
+                ) : null}
               </div>
             </Field>
             <Field label="Equipes">
@@ -1182,6 +1330,7 @@ function UsuariosPanel({
           </div>
         </form>
       </FormSection>
+      ) : null}
 
       <div>
         <p className="mb-2 text-[12px] text-[var(--ink-3)]">
@@ -1246,33 +1395,36 @@ function UsuariosPanel({
                   </DataTableCell>
                   <DataTableCell>
                     <div className="flex flex-wrap items-center gap-1">
-                      <Button variant="text" size="sm" onClick={() => setEditing(usuario)}>
-                        Editar
-                      </Button>
-                      {usuario.ativo ? (
+                      {caps.canAlter ? (
+                        <Button variant="text" size="sm" onClick={() => setEditing(usuario)}>
+                          Editar
+                        </Button>
+                      ) : null}
+                      {caps.canDelete && usuario.ativo ? (
                         <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(usuario)}>
                           Inativar
                         </Button>
-                      ) : (
-                        <>
-                          <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(usuario)}>
-                            Reativar
-                          </Button>
-                          <Button
-                            variant="text"
-                            size="sm"
-                            className="text-red-700"
-                            onClick={() =>
-                              void mutate(
-                                () => anonymizeUsuarioLgpd(usuario.id),
-                                `Usuário ${usuario.nome} anonimizado.`,
-                              )
-                            }
-                          >
-                            Anonimizar
-                          </Button>
-                        </>
-                      )}
+                      ) : null}
+                      {caps.canAlter && !usuario.ativo ? (
+                        <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(usuario)}>
+                          Reativar
+                        </Button>
+                      ) : null}
+                      {caps.canDelete && !usuario.ativo ? (
+                        <Button
+                          variant="text"
+                          size="sm"
+                          className="text-red-700"
+                          onClick={() =>
+                            void mutate(
+                              () => anonymizeUsuarioLgpd(usuario.id),
+                              `Usuário ${usuario.nome} anonimizado.`,
+                            )
+                          }
+                        >
+                          Anonimizar
+                        </Button>
+                      ) : null}
                     </div>
                   </DataTableCell>
                 </DataTableRow>
@@ -1296,6 +1448,11 @@ function EquipesPanel({
   equipes: AdminEquipe[];
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
+  const caps = useAdminCaps('equipes');
+  const secretariasForm = useMemo(() => {
+    if (caps.escopoTodas || !caps.secretariaAtivaId) return secretarias;
+    return secretarias.filter((s) => s.id === caps.secretariaAtivaId);
+  }, [secretarias, caps.escopoTodas, caps.secretariaAtivaId]);
   const [editing, setEditing] = useState<AdminEquipe | null>(null);
   const [selectedUsuarioIds, setSelectedUsuarioIds] = useState<string[]>([]);
   const [filterEquipe, setFilterEquipe] = useState('');
@@ -1359,8 +1516,11 @@ function EquipesPanel({
     }
   }
 
+  const canShowForm = (editing && caps.canAlter) || (!editing && caps.canInsert);
+
   return (
     <div className="space-y-6">
+      {canShowForm ? (
       <FormSection title={editing ? 'Editar equipe' : 'Nova equipe'}>
         <form key={editing?.id ?? 'new-equipe'} onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1389,9 +1549,17 @@ function EquipesPanel({
               <Input name="emailEquipe" type="email" required defaultValue={editing?.emailEquipe ?? ''} placeholder="equipe@franca.sp.gov.br" />
             </Field>
             <Field label="Secretaria">
-              <Select name="secretariaId" defaultValue={editing?.secretariaId ?? ''}>
-                <option value="">Sem secretaria</option>
-                {secretarias.map((s) => (
+              <Select
+                name="secretariaId"
+                defaultValue={
+                  caps.escopoTodas
+                    ? editing?.secretariaId ?? ''
+                    : caps.secretariaAtivaId ?? editing?.secretariaId ?? ''
+                }
+                disabled={!caps.escopoTodas && Boolean(caps.secretariaAtivaId)}
+              >
+                {caps.escopoTodas ? <option value="">Sem secretaria</option> : null}
+                {secretariasForm.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.sigla} — {s.nome}
                   </option>
@@ -1439,6 +1607,7 @@ function EquipesPanel({
           </div>
         </form>
       </FormSection>
+      ) : null}
 
       <div>
         <DataTableFiltersBar
@@ -1497,18 +1666,21 @@ function EquipesPanel({
                   </DataTableCell>
                   <DataTableCell>
                     <div className="flex flex-wrap items-center gap-1">
-                      <Button variant="text" size="sm" onClick={() => setEditing(equipe)}>
-                        Editar
-                      </Button>
-                      {equipe.ativo ? (
+                      {caps.canAlter ? (
+                        <Button variant="text" size="sm" onClick={() => setEditing(equipe)}>
+                          Editar
+                        </Button>
+                      ) : null}
+                      {caps.canDelete && equipe.ativo ? (
                         <Button variant="text" size="sm" className="text-red-700" onClick={() => void toggleAtivo(equipe)}>
                           Inativar
                         </Button>
-                      ) : (
+                      ) : null}
+                      {caps.canAlter && !equipe.ativo ? (
                         <Button variant="text" size="sm" className="text-emerald-700" onClick={() => void toggleAtivo(equipe)}>
                           Reativar
                         </Button>
-                      )}
+                      ) : null}
                     </div>
                   </DataTableCell>
                 </DataTableRow>
@@ -1528,6 +1700,7 @@ function TiposProprioPanel({
   tipos: AdminTipoProprio[];
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
+  const caps = useAdminCaps('tipos_proprio');
   const [editing, setEditing] = useState<AdminTipoProprio | null>(null);
   const [filterNome, setFilterNome] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -1587,6 +1760,7 @@ function TiposProprioPanel({
         podem ser editados ou inativados, mas não excluídos.
       </TipBanner>
 
+      {(editing ? caps.canAlter : caps.canInsert) ? (
       <FormSection title={editing ? 'Editar tipo de próprio' : 'Novo tipo de próprio'}>
         <form key={editing?.id ?? 'new-tipo-proprio'} onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -1612,6 +1786,7 @@ function TiposProprioPanel({
           </div>
         </form>
       </FormSection>
+      ) : null}
 
       <div>
         <DataTableFiltersBar
@@ -1711,6 +1886,7 @@ function TiposChamadoPanel({
   tipos: AdminTipoChamado[];
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
+  const caps = useAdminCaps('tipos_chamado');
   const [editing, setEditing] = useState<AdminTipoChamado | null>(null);
   const [filterNome, setFilterNome] = useState('');
   const [filterVistoria, setFilterVistoria] = useState('');
@@ -1761,6 +1937,7 @@ function TiposChamadoPanel({
 
   return (
     <div className="space-y-6">
+      {(editing ? caps.canAlter : caps.canInsert) ? (
       <FormSection title={editing ? 'Editar tipo de chamado' : 'Novo tipo de chamado'}>
         <form key={editing?.id ?? 'new-tipo'} onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -1790,6 +1967,7 @@ function TiposChamadoPanel({
           </div>
         </form>
       </FormSection>
+      ) : null}
 
       <div>
         <DataTableFiltersBar
@@ -1870,6 +2048,7 @@ function CargosPanel({
   cargos: AdminCargo[];
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
+  const caps = useAdminCaps('cargos');
   const [editing, setEditing] = useState<AdminCargo | null>(null);
   const [filterNome, setFilterNome] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -1917,6 +2096,7 @@ function CargosPanel({
         Cadastre os cargos dos usuários (ex.: Agente, Encarregado). Eles aparecem no cadastro de usuários para relatórios futuros por função.
       </TipBanner>
 
+      {(editing ? caps.canAlter : caps.canInsert) ? (
       <FormSection title={editing ? 'Editar cargo' : 'Novo cargo'}>
         <form key={editing?.id ?? 'new-cargo'} onSubmit={submit} className="space-y-4">
           <div className="max-w-md">
@@ -1936,6 +2116,7 @@ function CargosPanel({
           </div>
         </form>
       </FormSection>
+      ) : null}
 
       <div>
         <DataTableFiltersBar
@@ -2008,6 +2189,7 @@ function CategoriasVistoriaPanel({
   categorias: AdminCategoriaVistoria[];
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
+  const caps = useAdminCaps('categorias_vistoria');
   const [editing, setEditing] = useState<AdminCategoriaVistoria | null>(null);
   const [filterNome, setFilterNome] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -2047,6 +2229,7 @@ function CategoriasVistoriaPanel({
         Categorias usadas nos itens Likert dos checklists e no mapa de notas da CCO (Pintura, Piso, Móveis, etc.).
       </TipBanner>
 
+      {(editing ? caps.canAlter : caps.canInsert) ? (
       <FormSection title={editing ? 'Editar categoria' : 'Nova categoria'}>
         <form key={editing?.id ?? 'new-categoria'} onSubmit={submit} className="space-y-4">
           <div className="max-w-md">
@@ -2060,6 +2243,7 @@ function CategoriasVistoriaPanel({
           </div>
         </form>
       </FormSection>
+      ) : null}
 
       <div>
         <DataTableFiltersBar

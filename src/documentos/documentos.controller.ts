@@ -186,8 +186,8 @@ export class DocumentosController {
 
   @Post(':id/assinatura-pendente')
   @RequireAnyPermissions('documentos.coletar_assinatura', 'documentos.administrar')
-  marcarPendente(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
-    return this.documentosService.marcarAssinaturaPendente(id, user);
+  togglePendente(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.documentosService.toggleAssinaturaPendente(id, user);
   }
 
   @Post(':id/cancelar-assinado')

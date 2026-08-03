@@ -20,6 +20,21 @@ function isManagedDeploy() {
   );
 }
 
+/**
+ * URL pública do frontend (sem barra final), usada em links externos (QR, e-mail, validação).
+ * Preferir FRONTEND_PUBLIC_URL; demais variáveis são fallbacks de deploy.
+ */
+export function resolvePublicFrontendUrl(): string {
+  const explicit =
+    process.env.FRONTEND_PUBLIC_URL?.trim() ||
+    process.env.PUBLIC_APP_URL?.trim() ||
+    process.env.APP_PUBLIC_URL?.trim() ||
+    process.env.SERVICE_URL_WEB?.trim() ||
+    process.env.CORS_ORIGINS?.split(',')[0]?.trim() ||
+    '';
+  return explicit.replace(/\/$/, '');
+}
+
 /** Preenche STORAGE_PUBLIC_URL_BASE a partir de URLs publicas do Coolify/Railway quando ausente. */
 export function resolveStoragePublicUrlBase(): string | undefined {
   const explicit = process.env.STORAGE_PUBLIC_URL_BASE?.trim();
@@ -27,18 +42,13 @@ export function resolveStoragePublicUrlBase(): string | undefined {
     return explicit;
   }
 
-  const frontend =
-    process.env.FRONTEND_PUBLIC_URL?.trim() ||
-    process.env.APP_PUBLIC_URL?.trim() ||
-    process.env.SERVICE_URL_WEB?.trim() ||
-    process.env.CORS_ORIGINS?.split(',')[0]?.trim();
+  const frontend = resolvePublicFrontendUrl();
 
   if (!frontend) {
     return undefined;
   }
 
-  const base = frontend.replace(/\/$/, '');
-  const resolved = `${base}/api-gestop`;
+  const resolved = `${frontend}/api-gestop`;
   process.env.STORAGE_PUBLIC_URL_BASE = resolved;
   return resolved;
 }

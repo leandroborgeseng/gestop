@@ -4,7 +4,7 @@ import { AuditAction } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { resolveJwtSecret } from '../config/env';
+import { resolveJwtSecret, resolvePublicFrontendUrl } from '../config/env';
 import { hashPassword, verifyPassword } from './password';
 import { PASSWORD_MAX_LENGTH, validatePasswordPolicy } from './password-policy';
 import { JwtPayload, signJwt } from './jwt';
@@ -463,7 +463,8 @@ export class AuthService {
       }),
     ]);
 
-    const resetUrl = `${process.env.FRONTEND_PUBLIC_URL ?? 'http://localhost:3000'}/redefinir-senha?token=${rawToken}`;
+    const publicBase = resolvePublicFrontendUrl() || 'http://localhost:3000';
+    const resetUrl = `${publicBase}/redefinir-senha?token=${rawToken}`;
     await this.dispatchPasswordResetEmail(usuario.email, usuario.nome, resetUrl);
 
     const isDev = process.env.NODE_ENV !== 'production';

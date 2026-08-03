@@ -79,4 +79,21 @@ describe('permissions-matrix', () => {
     expect(legacy.has('documentos.coletar_assinatura')).toBe(true);
     expect(legacy.has('documentos.administrar')).toBe(true);
   });
+
+  it('não concede usuarios.gerenciar só com visualizar de aba da Administração', () => {
+    const matrix = new Set([
+      permissionMatrixKey('admin', 'usuarios', 'visualizar'),
+      permissionMatrixKey('admin', 'proprios', 'visualizar'),
+    ]);
+    const legacy = deriveLegacyPermissionKeys(matrix);
+    expect(legacy.has('usuarios.gerenciar')).toBe(false);
+    expect(legacy.has('unidades.gerenciar')).toBe(false);
+  });
+
+  it('expande usuarios.gerenciar para todas as abas da Administração', () => {
+    const matrix = expandLegacyToMatrixKeys(new Set(['usuarios.gerenciar']));
+    expect(matrix.has(permissionMatrixKey('admin', 'secretarias', 'visualizar'))).toBe(true);
+    expect(matrix.has(permissionMatrixKey('admin', 'usuarios', 'inserir'))).toBe(true);
+    expect(matrix.has(permissionMatrixKey('admin', 'importacao', 'executar'))).toBe(true);
+  });
 });

@@ -1553,8 +1553,11 @@ export function coletarAssinaturaDocumento(
   id: string,
   payload: {
     assinanteNome: string;
-    assinanteDocumento: string;
-    assinanteEmail: string;
+    assinanteDocumento?: string;
+    assinanteEmail?: string;
+    cpfNaoInformado?: boolean;
+    emailNaoInformado?: boolean;
+    justificativaIdentificacao?: string;
     qualificacao: string;
     qualificacaoOutro?: string;
     assinaturaDataUrl: string;
@@ -1575,8 +1578,13 @@ export function coletarAssinaturaDocumento(
   });
 }
 
-export function marcarAssinaturaPendenteDocumento(id: string) {
+export function toggleAssinaturaPendenteDocumento(id: string) {
   return request<DocumentoResumo>(`/documentos/${id}/assinatura-pendente`, { method: 'POST' });
+}
+
+/** @deprecated use toggleAssinaturaPendenteDocumento */
+export function marcarAssinaturaPendenteDocumento(id: string) {
+  return toggleAssinaturaPendenteDocumento(id);
 }
 
 export function cancelarDocumentoAssinado(id: string, motivo: string) {
@@ -1604,21 +1612,32 @@ export function updateDocumentoVinculos(
   });
 }
 
-async function downloadDocumentoPdfVariante(id: string, variante: 'original' | 'assinado', codigo: string) {
+export async function fetchDocumentoPdfBlobUrl(id: string, variante: 'original' | 'assinado') {
   const token = getStoredAuth()?.accessToken;
   const response = await fetch(`${API_BASE_URL}/documentos/${id}/pdf/${variante}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!response.ok) {
-    throw new Error(`Falha ao baixar PDF ${variante} do documento.`);
+    throw new Error(
+      variante === 'original'
+        ? 'PDF original não disponível para este documento.'
+        : 'PDF assinado não disponível para este documento.',
+    );
   }
   const blob = await response.blob();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `${codigo.replace(/[^a-zA-Z0-9-]/g, '')}-${variante}.pdf`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  return URL.createObjectURL(blob);
+}
+
+async function downloadDocumentoPdfVariante(id: string, variante: 'original' | 'assinado', codigo: string) {
+  const url = await fetchDocumentoPdfBlobUrl(id, variante);
+  const opened = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!opened) {
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${codigo.replace(/[^a-zA-Z0-9-]/g, '')}-${variante}.pdf`;
+    anchor.click();
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export function downloadDocumentoPdfOriginal(id: string, codigo: string) {
@@ -1635,5 +1654,15 @@ export function getPublicDocumentoValidacao(codigo: string, verificador?: string
   const qs = query.toString();
   return publicRequest<DocumentoValidacaoPublica>(
     `/public/documentos/validar/${encodeURIComponent(codigo.trim().toUpperCase())}${qs ? `?${qs}` : ''}`,
+  );
+}
+
+export function getPublicDocumentoValidacaoPorDocumento(codigoDocumento: string, verificador: string) {
+  const query = new URLSearchParams({
+    codigo: codigoDocumento.trim().toUpperCase(),
+    v: verificador.trim().toUpperCase(),
+  });
+  return publicRequest<DocumentoValidacaoPublica>(
+    `/public/documentos/validar-por-documento?${query.toString()}`,
   );
 }

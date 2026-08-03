@@ -135,8 +135,19 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
     label: 'Administração',
     functions: [
       { id: '_tela', label: 'Administração', actions: [...PERMISSION_ACTIONS] },
-      { id: 'cadastros', label: 'Cadastros (secretarias, próprios, usuários)', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
-      { id: 'importacao', label: 'Importação webmap', actions: ['executar', 'visualizar'] },
+      { id: 'secretarias', label: 'Secretarias', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
+      { id: 'proprios', label: 'Próprios', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
+      { id: 'usuarios', label: 'Usuários', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
+      { id: 'equipes', label: 'Equipes', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
+      { id: 'cargos', label: 'Cargos', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
+      { id: 'tipos_chamado', label: 'Tipos de chamado', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
+      { id: 'tipos_proprio', label: 'Tipos de próprio', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
+      { id: 'categorias_vistoria', label: 'Categorias vistoria', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
+      { id: 'permissoes', label: 'Permissões', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
+      { id: 'backup', label: 'Backup S3', actions: ['visualizar', 'alterar', 'executar'] },
+      { id: 'importacao', label: 'Importação', actions: ['visualizar', 'executar'] },
+      // Legado: mantido para compatibilidade com matrizes antigas
+      { id: 'cadastros', label: 'Cadastros (legado)', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
     ],
   },
   {
