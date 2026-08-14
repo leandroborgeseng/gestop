@@ -4,12 +4,13 @@ import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
-import { RequireAnyPermissions, RequirePermissions } from '../auth/permissions';
+import { RequireAnyPermissions } from '../auth/permissions';
 import { ParseUuidPipe } from '../common/parse-uuid.pipe';
 import {
   BaixarNaoConformidadeDto,
   VincularChamadoNcDto,
 } from './operacional.dto';
+import { OPERACIONAL_READ_KEYS } from './operacional.permissions';
 import { OperacionalService } from './operacional.service';
 import {
   ChamadosMapaQuery,
@@ -20,7 +21,7 @@ import {
 } from './operacional.types';
 
 @UseGuards(AuthGuard, PermissionsGuard)
-@RequirePermissions('dashboard.visualizar')
+@RequireAnyPermissions(...OPERACIONAL_READ_KEYS)
 @Controller('operacional')
 export class OperacionalController {
   constructor(private readonly operacionalService: OperacionalService) {}

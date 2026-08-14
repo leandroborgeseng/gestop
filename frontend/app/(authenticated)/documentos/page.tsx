@@ -152,16 +152,7 @@ function DocumentosPageContent() {
   }
 
   return (
-    <RequirePermissions
-      permissions={[
-        'documentos.visualizar',
-        'documentos.administrar',
-        'dashboard.visualizar',
-        'chamados.gerenciar',
-        'fiscalizacoes.executar',
-      ]}
-      match="any"
-    >
+    <RequirePermissions permissions={['documentos.visualizar']} match="any">
       <PageShell
         kicker="Gestão documental"
         icon={FileText}

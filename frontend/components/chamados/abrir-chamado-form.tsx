@@ -21,7 +21,7 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
-import { createChamado, getSecretarias, getStoredAuth, getUnidades, listTiposChamadoOpcoes, listUsuariosObservador } from '@/lib/api';
+import { createChamado, getSecretariasExecucao, getStoredAuth, getUnidades, listTiposChamadoOpcoes, listUsuariosObservador } from '@/lib/api';
 import { formatPhoneInput, normalizePhoneForApi } from '@/lib/br-input-masks';
 import { captureCurrentPosition } from '@/lib/geolocation';
 import {
@@ -32,6 +32,7 @@ import {
 } from '@/lib/geocoding';
 import { isWithinFrancaMunicipio } from '@/lib/franca-geo';
 import { hasChamadosGerenciar } from '@/lib/navigation';
+import { useSessionUser } from '@/components/auth/session-context';
 import { TipoChamadoOpcao, UnidadeOperacional } from '@/lib/types';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Badge } from '@/components/ui/badge';
@@ -61,6 +62,8 @@ export function AbrirChamadoForm({
 }) {
   const router = useRouter();
   const snackbar = useSnackbar();
+  const sessionUser = useSessionUser();
+  const perfilExterno = sessionUser?.perfilAtivo?.natureza === 'EXTERNO';
 
   const [modo, setModo] = useState<ModoLocalizacao>(initialUnidadeId ? 'UNIDADE' : 'ENDERECO');
   const [descricao, setDescricao] = useState('');
@@ -127,7 +130,7 @@ export function AbrirChamadoForm({
   );
 
   useEffect(() => {
-    getSecretarias()
+    getSecretariasExecucao()
       .then((items) => setSecretarias(items))
       .catch(() => undefined);
     listTiposChamadoOpcoes()
@@ -148,6 +151,32 @@ export function AbrirChamadoForm({
         label: `${usuario.nome}${usuario.secretaria?.sigla ? ` · ${usuario.secretaria.sigla}` : ''}`,
       }));
   }, [usuariosObservador, observadorIds]);
+
+  const selectedTipo = useMemo(
+    () => tiposChamado.find((item) => item.id === tipoChamadoId) ?? null,
+    [tiposChamado, tipoChamadoId],
+  );
+
+  const secretariasDisponiveis = useMemo(() => {
+    if (perfilExterno) {
+      return selectedTipo?.secretarias ?? [];
+    }
+    return secretarias;
+  }, [perfilExterno, selectedTipo, secretarias]);
+
+  useEffect(() => {
+    if (!tipoChamadoId) return;
+    const vinculadas = selectedTipo?.secretarias ?? [];
+    const suggested = vinculadas[0]?.id;
+    if (!suggested) return;
+    setSecretariaId((current) => {
+      if (perfilExterno) {
+        if (vinculadas.some((item) => item.id === current)) return current;
+        return suggested;
+      }
+      return current || suggested;
+    });
+  }, [tipoChamadoId, selectedTipo, perfilExterno]);
 
   useEffect(() => {
     if (!initialUnidadeId || pickedUnidade?.secretaria) return;
@@ -813,22 +842,6 @@ export function AbrirChamadoForm({
         </div>
       ) : null}
 
-      {(modo === 'ENDERECO' || (modo === 'UNIDADE' && pickedUnidade)) ? (
-        <Field
-          label="Secretaria responsável pela execução"
-          hint="Secretaria que irá tratar e executar o chamado (obrigatório)."
-        >
-          <Select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} disabled={busy} required>
-            <option value="">Selecione...</option>
-            {secretarias.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.sigla} — {item.nome}
-              </option>
-            ))}
-          </Select>
-        </Field>
-      ) : null}
-
       {(modo === 'UNIDADE' ? pickedUnidade : true) ? (
         <>
           <Field label="Tipo de chamado" hint="Obrigatório. Será usado como título principal do chamado.">
@@ -840,6 +853,30 @@ export function AbrirChamadoForm({
               required
             />
           </Field>
+          {(modo === 'ENDERECO' || (modo === 'UNIDADE' && pickedUnidade)) ? (
+            <Field
+              label="Secretaria responsável pela execução"
+              hint={
+                perfilExterno
+                  ? 'Opções definidas pelo tipo de chamado selecionado.'
+                  : 'Sugestão pelo tipo de chamado; usuários internos podem alterar para qualquer Secretaria ativa.'
+              }
+            >
+              <Select
+                value={secretariaId}
+                onChange={(event) => setSecretariaId(event.target.value)}
+                disabled={busy || (perfilExterno && secretariasDisponiveis.length <= 1)}
+                required
+              >
+                <option value="">Selecione...</option>
+                {secretariasDisponiveis.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.sigla} — {item.nome}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
           <Field label="Descrição" hint="Mínimo 10 caracteres. Detalha a ocorrência (não é o título).">
             <textarea
               className={textareaClass}

@@ -44,6 +44,19 @@ export class MobileService {
     private readonly fiscalizacoesService: FiscalizacoesService,
   ) {}
 
+  async listVistoriasProgramadas(
+    query: {
+      from?: string;
+      to?: string;
+      atribuidoAMim?: boolean;
+      tipo?: string;
+      unidadeId?: string;
+    },
+    user: JwtPayload,
+  ) {
+    return this.cronogramaService.listVistoriasProgramadas(query, user);
+  }
+
   async getFieldPackage(user: JwtPayload) {
     const scopeIds = resolveSecretariaScopeIds(user);
     const activeSecretariaId = resolveSecretariaScopeId(user) ?? null;
@@ -228,6 +241,8 @@ export class MobileService {
           checkinPrecisaoMetros: dto.checkin.precisaoMetros,
           distanciaCheckinMetros: checkinValidation.result.distanceMeters,
           dentroRaioPermitido: true,
+          cronogramaId: dto.cronogramaId?.trim() || null,
+          dataProgramada: dto.dataProgramada ? new Date(dto.dataProgramada) : null,
         },
       });
 

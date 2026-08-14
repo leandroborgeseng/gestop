@@ -35,6 +35,7 @@ export class AdminPermissionsService {
         descricao: true,
         sistema: true,
         ativo: true,
+        natureza: true,
         _count: {
           select: { usuarios: true },
         },
@@ -46,6 +47,7 @@ export class AdminPermissionsService {
       descricao: perfil.descricao,
       sistema: perfil.sistema,
       ativo: perfil.ativo,
+      natureza: perfil.natureza,
       usuariosVinculados: perfil._count.usuarios,
     }));
   }
@@ -66,6 +68,7 @@ export class AdminPermissionsService {
         descricao: perfil.descricao,
         sistema: perfil.sistema,
         ativo: perfil.ativo,
+        natureza: perfil.natureza,
       },
       catalogo: serializeCatalog(),
       chaves: [...effective].sort(),
@@ -250,6 +253,7 @@ export class AdminPermissionsService {
         data: {
           nome,
           descricao: dto.descricao?.trim() || null,
+          natureza: dto.natureza === 'EXTERNO' ? 'EXTERNO' : 'INTERNO',
           ativo: dto.ativo ?? true,
           sistema: false,
         },
@@ -259,6 +263,7 @@ export class AdminPermissionsService {
           descricao: true,
           sistema: true,
           ativo: true,
+          natureza: true,
         },
       });
 
@@ -272,6 +277,7 @@ export class AdminPermissionsService {
           valorNovo: {
             nome: created.nome,
             descricao: created.descricao,
+            natureza: created.natureza,
             ativo: created.ativo,
           },
         },
@@ -289,6 +295,7 @@ export class AdminPermissionsService {
     const nextNome = dto.nome !== undefined ? dto.nome.trim() : perfil.nome;
     const nextDescricao =
       dto.descricao !== undefined ? (dto.descricao?.trim() || null) : perfil.descricao;
+    const nextNatureza = dto.natureza === 'EXTERNO' || dto.natureza === 'INTERNO' ? dto.natureza : perfil.natureza;
 
     if (!nextNome || nextNome.length < 2) {
       throw new BadRequestException('Informe um nome válido para o perfil.');
@@ -304,7 +311,7 @@ export class AdminPermissionsService {
       }
     }
 
-    if (nextNome === perfil.nome && nextDescricao === perfil.descricao) {
+    if (nextNome === perfil.nome && nextDescricao === perfil.descricao && nextNatureza === perfil.natureza) {
       const count = await this.prisma.usuarioPerfil.count({ where: { perfilId } });
       return {
         id: perfil.id,
@@ -312,6 +319,7 @@ export class AdminPermissionsService {
         descricao: perfil.descricao,
         sistema: perfil.sistema,
         ativo: perfil.ativo,
+        natureza: perfil.natureza,
         usuariosVinculados: count,
       };
     }
@@ -324,6 +332,7 @@ export class AdminPermissionsService {
         data: {
           nome: nextNome,
           descricao: nextDescricao,
+          natureza: nextNatureza,
         },
         select: {
           id: true,
@@ -331,6 +340,7 @@ export class AdminPermissionsService {
           descricao: true,
           sistema: true,
           ativo: true,
+          natureza: true,
           _count: { select: { usuarios: true } },
         },
       });
@@ -344,10 +354,12 @@ export class AdminPermissionsService {
           valorAntigo: {
             nome: perfil.nome,
             descricao: perfil.descricao,
+            natureza: perfil.natureza,
           },
           valorNovo: {
             nome: result.nome,
             descricao: result.descricao,
+            natureza: result.natureza,
           },
         },
       });
@@ -361,6 +373,7 @@ export class AdminPermissionsService {
       descricao: updated.descricao,
       sistema: updated.sistema,
       ativo: updated.ativo,
+      natureza: updated.natureza,
       usuariosVinculados: updated._count.usuarios,
     };
   }

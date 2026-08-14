@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CalendarClock, CheckCircle2, Clock, Plus } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
+import { useSessionUser } from '@/components/auth/session-context';
 import { ChecagemCalendario, EventoChecagemCard } from '@/components/cronograma/checagem-calendario';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
@@ -18,8 +19,19 @@ import { Sheet } from '@/components/ui/sheet';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { UsuarioMultiPicker } from '@/components/usuarios/usuario-multi-picker';
 import { checklistAppliesToUnidade } from '@/lib/checklist-matching';
-import { getStoredAuth, deactivateCronograma, downloadRelatorioPdf, downloadRelatorioXlsx, getCalendarioChecagens, getSecretarias, getUnidades, listChecklists, listCronogramas, saveCronograma } from '@/lib/api';
+import {
+  deactivateCronograma,
+  downloadRelatorioPdf,
+  downloadRelatorioXlsx,
+  getCalendarioChecagens,
+  getSecretarias,
+  getUnidades,
+  listCronogramaChecklists,
+  listCronogramas,
+  saveCronograma,
+} from '@/lib/api';
 import { CRONOGRAMA_FREQUENCIAS, CRONOGRAMA_FREQUENCIA_LABELS, monthBounds, toInputDate } from '@/lib/cronograma';
+import { hasCronogramaAccess } from '@/lib/permissions-matrix';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import {
@@ -34,8 +46,21 @@ import {
 
 export default function CronogramaPage() {
   const backHref = useSafeBackHref('/cco');
+  const sessionUser = useSessionUser();
+  const permissoes = sessionUser?.permissoes ?? [];
+  const canVisualizar = hasCronogramaAccess(permissoes, 'visualizar');
+  const canInserir = hasCronogramaAccess(permissoes, 'inserir');
+  const canAlterar = hasCronogramaAccess(permissoes, 'alterar');
+  const canExcluir = hasCronogramaAccess(permissoes, 'excluir');
+  const canCobertura = hasCronogramaAccess(permissoes, 'executar') || hasCronogramaAccess(permissoes, 'visualizar');
+  const canManageForm = canInserir || canAlterar;
+
+  const lockedSecretariaId = sessionUser?.secretariaEscopoTodas
+    ? null
+    : (sessionUser?.secretariaAtiva?.id ?? sessionUser?.secretaria?.id ?? null);
+
   const [month, setMonth] = useState(() => new Date());
-  const [secretariaId, setSecretariaId] = useState('');
+  const [secretariaId, setSecretariaId] = useState(lockedSecretariaId ?? '');
   const [unidadeId, setUnidadeId] = useState('');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
@@ -54,17 +79,24 @@ export default function CronogramaPage() {
   const [coberturaOpen, setCoberturaOpen] = useState(false);
   const [coberturaFormato, setCoberturaFormato] = useState<'pdf' | 'xlsx'>('pdf');
   const [coberturaLoading, setCoberturaLoading] = useState(false);
-  const canManage = useMemo(
-    () => getStoredAuth()?.user.permissoes.includes('checklists.gerenciar') ?? false,
-    [],
-  );
 
   const bounds = useMemo(() => monthBounds(month), [month]);
+  const effectiveSecretariaId = lockedSecretariaId ?? secretariaId;
+
+  useEffect(() => {
+    if (lockedSecretariaId) {
+      setSecretariaId(lockedSecretariaId);
+      setUnidadeId('');
+    }
+  }, [lockedSecretariaId]);
 
   async function loadStatic() {
-    const [nextSecretarias, nextChecklists] = await Promise.all([getSecretarias(), listChecklists()]);
+    const nextSecretarias = await getSecretarias();
     setSecretarias(nextSecretarias);
-    setChecklists(nextChecklists.filter((item) => item.ativo));
+    if (canManageForm) {
+      const nextChecklists = await listCronogramaChecklists();
+      setChecklists(nextChecklists.filter((item) => item.ativo));
+    }
   }
 
   async function loadData() {
@@ -72,7 +104,7 @@ export default function CronogramaPage() {
     setError(null);
     try {
       const filters = {
-        secretariaId: secretariaId || undefined,
+        secretariaId: effectiveSecretariaId || undefined,
         unidadeId: unidadeId || undefined,
       };
 
@@ -97,14 +129,16 @@ export default function CronogramaPage() {
   }
 
   useEffect(() => {
+    if (!canVisualizar) return;
     void loadStatic().catch((err) => {
       setError(err instanceof Error ? err.message : 'Falha ao carregar dados base.');
     });
-  }, []);
+  }, [canVisualizar, canManageForm]);
 
   useEffect(() => {
+    if (!canVisualizar) return;
     void loadData();
-  }, [month, secretariaId, unidadeId]);
+  }, [month, effectiveSecretariaId, unidadeId, canVisualizar]);
 
   const eventosPorDia = useMemo(() => {
     const map = new Map<string, CalendarioChecagemResponse['eventos']>();
@@ -138,6 +172,11 @@ export default function CronogramaPage() {
     event.preventDefault();
     setError(null);
     setSuccess(null);
+
+    if (editing ? !canAlterar : !canInserir) {
+      setError('Seu perfil não tem permissão para esta ação no Cronograma.');
+      return;
+    }
 
     if (!formUnidadeId) {
       setError('Selecione o próprio público.');
@@ -188,7 +227,7 @@ export default function CronogramaPage() {
   }
 
   return (
-    <RequirePermissions permissions={['dashboard.visualizar']}>
+    <RequirePermissions permissions={['cronograma.visualizar']} match="any">
       <PageShell
         kicker="Vistoria programada"
         icon={CalendarDays}
@@ -198,16 +237,18 @@ export default function CronogramaPage() {
         className="overflow-y-auto"
         action={
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outlined"
-              onClick={() => {
-                setCoberturaOpen(true);
-              }}
-            >
-              Cobertura de vistorias
-            </Button>
-            {canManage ? (
+            {canCobertura ? (
+              <Button
+                type="button"
+                variant="outlined"
+                onClick={() => {
+                  setCoberturaOpen(true);
+                }}
+              >
+                Cobertura de vistorias
+              </Button>
+            ) : null}
+            {canInserir ? (
               <Button type="button" onClick={openCreate}>
                 <Plus className="h-4 w-4" />
                 Novo cronograma
@@ -238,8 +279,15 @@ export default function CronogramaPage() {
           </CardHeader>
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <Field label="Secretaria">
-              <Select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)}>
-                <option value="">Todas</option>
+              <Select
+                value={effectiveSecretariaId}
+                disabled={Boolean(lockedSecretariaId)}
+                onChange={(event) => {
+                  setSecretariaId(event.target.value);
+                  setUnidadeId('');
+                }}
+              >
+                {!lockedSecretariaId ? <option value="">Todas</option> : null}
                 {secretarias.map((secretaria) => (
                   <option key={secretaria.id} value={secretaria.id}>
                     {secretaria.sigla} — {secretaria.nome}
@@ -320,30 +368,36 @@ export default function CronogramaPage() {
                             : item.responsavel?.nome ?? 'Sem responsável definido'}
                         </p>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <Button variant="tonal" size="sm" onClick={() => openEdit(item)}>
-                          Editar
-                        </Button>
-                        {item.ativo ? (
-                          <Button
-                            variant="text"
-                            size="sm"
-                            className="text-red-700"
-                            onClick={() =>
-                              void deactivateCronograma(item.id)
-                                .then(() => {
-                                  setSuccess('Cronograma inativado.');
-                                  return loadData();
-                                })
-                                .catch((err) =>
-                                  setError(err instanceof Error ? err.message : 'Falha ao inativar cronograma.'),
-                                )
-                            }
-                          >
-                            Inativar
-                          </Button>
-                        ) : null}
-                      </div>
+                      {canAlterar || canExcluir ? (
+                        <div className="flex flex-wrap gap-2">
+                          {canAlterar ? (
+                            <Button variant="tonal" size="sm" onClick={() => openEdit(item)}>
+                              Editar
+                            </Button>
+                          ) : null}
+                          {canExcluir && item.ativo ? (
+                            <Button
+                              variant="text"
+                              size="sm"
+                              className="text-red-700"
+                              onClick={() =>
+                                void deactivateCronograma(item.id)
+                                  .then(() => {
+                                    setSuccess('Cronograma inativado.');
+                                    return loadData();
+                                  })
+                                  .catch((err) =>
+                                    setError(
+                                      err instanceof Error ? err.message : 'Falha ao inativar cronograma.',
+                                    ),
+                                  )
+                              }
+                            >
+                              Inativar
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
                 </CardContent>
@@ -373,7 +427,7 @@ export default function CronogramaPage() {
           </div>
         ) : null}
 
-        {canManage ? (
+        {canManageForm ? (
           <>
             <Sheet
               open={formOpen}
@@ -451,60 +505,66 @@ export default function CronogramaPage() {
           </>
         ) : null}
 
-        <Sheet
-          open={coberturaOpen}
-          onClose={() => setCoberturaOpen(false)}
-          title="Cobertura de vistorias"
-        >
-          <div className="space-y-4">
-            <p className="text-[13px] text-[var(--ink-3)]">
-              Lista todos os próprios ativos e indica se possuem cronograma vinculado. Responsáveis previstos são de
-              acompanhamento e não restringem a execução da vistoria.
-            </p>
-            <Field label="Secretaria">
-              <Select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)}>
-                <option value="">Todas</option>
-                {secretarias.map((secretaria) => (
-                  <option key={secretaria.id} value={secretaria.id}>
-                    {secretaria.sigla} — {secretaria.nome}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Formato">
-              <Select
-                value={coberturaFormato}
-                onChange={(event) => setCoberturaFormato(event.target.value as 'pdf' | 'xlsx')}
+        {canCobertura ? (
+          <Sheet
+            open={coberturaOpen}
+            onClose={() => setCoberturaOpen(false)}
+            title="Cobertura de vistorias"
+          >
+            <div className="space-y-4">
+              <p className="text-[13px] text-[var(--ink-3)]">
+                Lista todos os próprios ativos e indica se possuem cronograma vinculado. Responsáveis previstos são de
+                acompanhamento e não restringem a execução da vistoria.
+              </p>
+              <Field label="Secretaria">
+                <Select
+                  value={effectiveSecretariaId}
+                  disabled={Boolean(lockedSecretariaId)}
+                  onChange={(event) => setSecretariaId(event.target.value)}
+                >
+                  {!lockedSecretariaId ? <option value="">Todas</option> : null}
+                  {secretarias.map((secretaria) => (
+                    <option key={secretaria.id} value={secretaria.id}>
+                      {secretaria.sigla} — {secretaria.nome}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+              <Field label="Formato">
+                <Select
+                  value={coberturaFormato}
+                  onChange={(event) => setCoberturaFormato(event.target.value as 'pdf' | 'xlsx')}
+                >
+                  <option value="pdf">PDF</option>
+                  <option value="xlsx">Excel</option>
+                </Select>
+              </Field>
+              <Button
+                type="button"
+                variant="filled"
+                className="w-full"
+                disabled={coberturaLoading}
+                onClick={() => {
+                  setCoberturaLoading(true);
+                  const params: Record<string, string> = {};
+                  if (effectiveSecretariaId) params.secretariaId = effectiveSecretariaId;
+                  const request =
+                    coberturaFormato === 'pdf'
+                      ? downloadRelatorioPdf('cronograma-cobertura', params)
+                      : downloadRelatorioXlsx('cronograma-cobertura', params);
+                  void request
+                    .then(() => setCoberturaOpen(false))
+                    .catch((err) =>
+                      setError(err instanceof Error ? err.message : 'Falha ao gerar relatório de cobertura.'),
+                    )
+                    .finally(() => setCoberturaLoading(false));
+                }}
               >
-                <option value="pdf">PDF</option>
-                <option value="xlsx">Excel</option>
-              </Select>
-            </Field>
-            <Button
-              type="button"
-              variant="filled"
-              className="w-full"
-              disabled={coberturaLoading}
-              onClick={() => {
-                setCoberturaLoading(true);
-                const params: Record<string, string> = {};
-                if (secretariaId) params.secretariaId = secretariaId;
-                const request =
-                  coberturaFormato === 'pdf'
-                    ? downloadRelatorioPdf('cronograma-cobertura', params)
-                    : downloadRelatorioXlsx('cronograma-cobertura', params);
-                void request
-                  .then(() => setCoberturaOpen(false))
-                  .catch((err) =>
-                    setError(err instanceof Error ? err.message : 'Falha ao gerar relatório de cobertura.'),
-                  )
-                  .finally(() => setCoberturaLoading(false));
-              }}
-            >
-              {coberturaLoading ? 'Gerando...' : 'Emitir relatório'}
-            </Button>
-          </div>
-        </Sheet>
+                {coberturaLoading ? 'Gerando...' : 'Emitir relatório'}
+              </Button>
+            </div>
+          </Sheet>
+        ) : null}
       </PageShell>
     </RequirePermissions>
   );

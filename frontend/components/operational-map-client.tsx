@@ -22,6 +22,7 @@ import { ChamadoMapaItem, UnidadeOperacional, UnidadeSituacao, UnidadeSlaMapa } 
 import { chamadoTitulo } from '@/lib/chamado-geo';
 import { formatNotaBr, notaCorHex, resolveNotaExibicao } from '@/lib/vistoria-nota';
 import { MapViewControls } from '@/components/map/map-view-controls';
+import { runMapPopupAction, subscribeMapFullscreenExit, type MapPopupActionKind } from '@/lib/map-popup-action';
 import { situacaoRailColor } from '@/components/status-badge';
 import type { CcoMapMode, CcoMapView } from '@/components/operational-map';
 import { chamadoStatusLabel } from '@/lib/chamado-status';
@@ -248,6 +249,7 @@ export function OperationalMapClient({
   categoriaFiltroId = null,
   onSelect,
   onHover,
+  popupActionKind = 'modal',
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -258,6 +260,7 @@ export function OperationalMapClient({
   categoriaFiltroId?: string | null;
   onSelect?: (id: string) => void;
   onHover?: (id: string | null) => void;
+  popupActionKind?: MapPopupActionKind;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -272,6 +275,7 @@ export function OperationalMapClient({
   const referenceMarkerRef = useRef<L.Marker | null>(null);
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
+  const popupActionKindRef = useRef(popupActionKind);
   const lastFitKeyRef = useRef('');
   const lastContainerSizeRef = useRef({ width: 0, height: 0 });
   const refitTimerRef = useRef<number | null>(null);
@@ -314,8 +318,9 @@ export function OperationalMapClient({
   useEffect(() => {
     onSelectRef.current = onSelect;
     onHoverRef.current = onHover;
+    popupActionKindRef.current = popupActionKind;
     locatedRef.current = located.map(({ id, latLng }) => ({ id, latLng }));
-  }, [onSelect, onHover, located]);
+  }, [onSelect, onHover, popupActionKind, located]);
 
   const scheduleRefit = useCallback((map: L.Map, reason: 'data' | 'layout') => {
     if (refitTimerRef.current) {
@@ -458,9 +463,14 @@ export function OperationalMapClient({
 
     document.addEventListener('fullscreenchange', onFullscreenChange);
     window.addEventListener('keydown', onKeyDown);
+    const unsubscribeExit = subscribeMapFullscreenExit(() => {
+      setFullscreenMode('off');
+      if (mapRef.current) refreshMapSize(mapRef.current);
+    });
     return () => {
       document.removeEventListener('fullscreenchange', onFullscreenChange);
       window.removeEventListener('keydown', onKeyDown);
+      unsubscribeExit();
     };
   }, [fullscreenMode]);
 
@@ -509,7 +519,8 @@ export function OperationalMapClient({
       if (!button) return;
       button.onclick = () => {
         const id = button.dataset.markerId;
-        if (id) onSelectRef.current?.(id);
+        if (!id) return;
+        void runMapPopupAction(popupActionKindRef.current, () => onSelectRef.current?.(id), shellRef.current);
       };
     });
 
@@ -657,7 +668,7 @@ export function OperationalMapClient({
         ref={shellRef}
         className={[
           'sigma-map-shell relative min-h-0 w-full flex-1 overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
-          fullscreenMode === 'fallback' ? 'sigma-map-fullscreen fixed inset-0 z-[9999]' : '',
+          fullscreenMode === 'fallback' ? 'sigma-map-fullscreen fixed inset-0 z-[70]' : '',
         ].join(' ')}
       >
         <div ref={containerRef} className="sigma-map-canvas" />

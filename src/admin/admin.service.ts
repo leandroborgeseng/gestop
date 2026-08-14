@@ -404,10 +404,16 @@ export class AdminService {
   listTiposChamado() {
     return this.prisma.tipoChamado.findMany({
       orderBy: { nome: 'asc' },
+      include: {
+        secretarias: {
+          include: { secretaria: { select: { id: true, nome: true, sigla: true } } },
+        },
+      },
     });
   }
 
   async createTipoChamado(dto: TipoChamadoDto, user: JwtPayload) {
+    const secretariaIds = await this.resolveTipoChamadoSecretariaIds(dto.secretariaIds);
     const tipo = await this.prisma.tipoChamado.create({
       data: {
         nome: dto.nome.trim(),
@@ -418,6 +424,14 @@ export class AdminService {
         slaUrgenteDias: dto.slaUrgenteDias,
         exigeVistoriaPrevia: dto.exigeVistoriaPrevia ?? false,
         ativo: dto.ativo ?? true,
+        secretarias: secretariaIds.length
+          ? { create: secretariaIds.map((secretariaId) => ({ secretariaId })) }
+          : undefined,
+      },
+      include: {
+        secretarias: {
+          include: { secretaria: { select: { id: true, nome: true, sigla: true } } },
+        },
       },
     });
 
@@ -427,18 +441,30 @@ export class AdminService {
 
   async updateTipoChamado(id: string, dto: TipoChamadoDto, user: JwtPayload) {
     const before = await this.getTipoChamadoOrThrow(id);
-    const tipo = await this.prisma.tipoChamado.update({
-      where: { id },
-      data: {
-        nome: dto.nome.trim(),
-        descricao: dto.descricao?.trim() ?? null,
-        slaBaixaDias: dto.slaBaixaDias,
-        slaMediaDias: dto.slaMediaDias,
-        slaAltaDias: dto.slaAltaDias,
-        slaUrgenteDias: dto.slaUrgenteDias,
-        exigeVistoriaPrevia: dto.exigeVistoriaPrevia ?? false,
-        ativo: dto.ativo ?? true,
-      },
+    const secretariaIds = await this.resolveTipoChamadoSecretariaIds(dto.secretariaIds);
+    const tipo = await this.prisma.$transaction(async (tx) => {
+      await tx.tipoChamadoSecretaria.deleteMany({ where: { tipoChamadoId: id } });
+      return tx.tipoChamado.update({
+        where: { id },
+        data: {
+          nome: dto.nome.trim(),
+          descricao: dto.descricao?.trim() ?? null,
+          slaBaixaDias: dto.slaBaixaDias,
+          slaMediaDias: dto.slaMediaDias,
+          slaAltaDias: dto.slaAltaDias,
+          slaUrgenteDias: dto.slaUrgenteDias,
+          exigeVistoriaPrevia: dto.exigeVistoriaPrevia ?? false,
+          ativo: dto.ativo ?? true,
+          secretarias: secretariaIds.length
+            ? { create: secretariaIds.map((secretariaId) => ({ secretariaId })) }
+            : undefined,
+        },
+        include: {
+          secretarias: {
+            include: { secretaria: { select: { id: true, nome: true, sigla: true } } },
+          },
+        },
+      });
     });
 
     await this.audit(user, AuditAction.UPDATE, 'TipoChamado', id, before, tipo);
@@ -775,9 +801,31 @@ export class AdminService {
   }
 
   private getTipoChamadoOrThrow(id: string) {
-    return this.prisma.tipoChamado.findUniqueOrThrow({ where: { id } }).catch(() => {
-      throw new NotFoundException('Tipo de chamado nao encontrado');
+    return this.prisma.tipoChamado
+      .findUniqueOrThrow({
+        where: { id },
+        include: {
+          secretarias: {
+            include: { secretaria: { select: { id: true, nome: true, sigla: true } } },
+          },
+        },
+      })
+      .catch(() => {
+        throw new NotFoundException('Tipo de chamado nao encontrado');
+      });
+  }
+
+  private async resolveTipoChamadoSecretariaIds(secretariaIds?: string[]) {
+    const unique = [...new Set((secretariaIds ?? []).map((id) => id.trim()).filter(Boolean))];
+    if (unique.length === 0) return [];
+    const found = await this.prisma.secretaria.findMany({
+      where: { id: { in: unique }, ativo: true },
+      select: { id: true },
     });
+    if (found.length !== unique.length) {
+      throw new BadRequestException('Uma ou mais secretarias vinculadas ao tipo de chamado são inválidas ou inativas.');
+    }
+    return unique;
   }
 
   private getCategoriaVistoriaOrThrow(id: string) {

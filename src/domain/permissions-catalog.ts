@@ -71,6 +71,19 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
     functions: [
       { id: '_tela', label: 'Meus chamados', actions: ['visualizar'] },
       { id: 'consultar', label: 'Consultar meus chamados', actions: ['visualizar'] },
+      { id: 'fotos_abertura', label: 'Fotos de abertura', actions: ['visualizar'] },
+      { id: 'evidencias_execucao', label: 'Evidências de execução', actions: ['visualizar'] },
+      { id: 'participantes_execucao', label: 'Participantes da execução', actions: ['visualizar'] },
+      { id: 'equipe_executora', label: 'Equipe executora', actions: ['visualizar'] },
+      { id: 'evidencias_registradas', label: 'Evidências registradas', actions: ['visualizar'] },
+      { id: 'relatorio_execucao', label: 'Relatório da execução', actions: ['visualizar'] },
+      { id: 'mudanca_status', label: 'Mudança de status', actions: ['visualizar'] },
+      { id: 'mudanca_atribuicao', label: 'Mudança de atribuição', actions: ['visualizar'] },
+      { id: 'atualizacao_programacao', label: 'Atualização de programação', actions: ['visualizar'] },
+      { id: 'atualizacao_atribuicao', label: 'Atualização de atribuição', actions: ['visualizar'] },
+      { id: 'historicos_avulsos', label: 'Registros de históricos avulsos', actions: ['visualizar'] },
+      { id: 'cadastrar_observadores', label: 'Cadastrar observadores', actions: ['inserir'] },
+      { id: 'consultar_documentos', label: 'Consultar documentos relacionados', actions: ['visualizar'] },
     ],
   },
   {
@@ -98,6 +111,7 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
     functions: [
       { id: '_tela', label: 'Cronograma', actions: [...PERMISSION_ACTIONS] },
       { id: 'gerenciar', label: 'Gerenciar cronograma', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
+      { id: 'cobertura', label: 'Cobertura de vistorias', actions: ['visualizar', 'executar'] },
     ],
   },
   {

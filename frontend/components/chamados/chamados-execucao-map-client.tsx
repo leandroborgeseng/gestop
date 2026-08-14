@@ -19,6 +19,7 @@ import { escapeHtml } from '@/lib/security';
 import { ChamadoMapPoint } from '@/lib/types';
 import { chamadoPinColor, chamadoPinIcon } from '@/lib/chamado-map-pin';
 import { MapViewControls } from '@/components/map/map-view-controls';
+import { runMapPopupAction, type MapPopupActionKind } from '@/lib/map-popup-action';
 
 function formatDateBr(value?: string | null) {
   if (!value) return '—';
@@ -81,6 +82,7 @@ export function ChamadosExecucaoMapClient({
   onSelect,
   onHover,
   popupActionLabel = 'Executar chamado →',
+  popupActionKind = 'navigation',
 }: {
   pontos: ChamadoMapPoint[];
   selectedId?: string | null;
@@ -88,6 +90,7 @@ export function ChamadosExecucaoMapClient({
   onSelect?: (id: string) => void;
   onHover?: (id: string | null) => void;
   popupActionLabel?: string;
+  popupActionKind?: MapPopupActionKind;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -101,6 +104,7 @@ export function ChamadosExecucaoMapClient({
   const onSelectRef = useRef(onSelect);
   const onHoverRef = useRef(onHover);
   const popupActionLabelRef = useRef(popupActionLabel);
+  const popupActionKindRef = useRef(popupActionKind);
   const [containerReady, setContainerReady] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [basemap, setBasemap] = useState<MapBasemap>('street');
@@ -111,6 +115,7 @@ export function ChamadosExecucaoMapClient({
   onSelectRef.current = onSelect;
   onHoverRef.current = onHover;
   popupActionLabelRef.current = popupActionLabel;
+  popupActionKindRef.current = popupActionKind;
 
   useEffect(() => {
     const node = containerRef.current;
@@ -158,7 +163,8 @@ export function ChamadosExecucaoMapClient({
       if (!button) return;
       button.onclick = () => {
         const id = button.dataset.chamadoId;
-        if (id) onSelectRef.current?.(id);
+        if (!id) return;
+        void runMapPopupAction(popupActionKindRef.current, () => onSelectRef.current?.(id), shellRef.current);
       };
     });
 

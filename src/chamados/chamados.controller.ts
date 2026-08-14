@@ -168,6 +168,12 @@ export class ChamadosController {
     });
   }
 
+  @RequireAnyPermissions('chamados.gerenciar', 'chamados.abrir')
+  @Get('secretarias/execucao')
+  listSecretariasExecucao(@CurrentUser() user: JwtPayload) {
+    return this.chamadosService.listSecretariasParaAbertura(user);
+  }
+
   @RequirePermissions('chamados.gerenciar')
   @Get(':id')
   get(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {

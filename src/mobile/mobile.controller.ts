@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -17,6 +17,28 @@ export class MobileController {
   @Get('field-package')
   getFieldPackage(@CurrentUser() user: JwtPayload) {
     return this.mobileService.getFieldPackage(user);
+  }
+
+  @RequirePermissions('fiscalizacoes.executar')
+  @Get('vistorias-programadas')
+  listVistoriasProgramadas(
+    @CurrentUser() user: JwtPayload,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('atribuidoAMim') atribuidoAMim?: string,
+    @Query('tipo') tipo?: string,
+    @Query('unidadeId') unidadeId?: string,
+  ) {
+    return this.mobileService.listVistoriasProgramadas(
+      {
+        from,
+        to,
+        atribuidoAMim: atribuidoAMim === 'true' || atribuidoAMim === '1',
+        tipo,
+        unidadeId,
+      },
+      user,
+    );
   }
 
   @RequirePermissions('fiscalizacoes.executar')

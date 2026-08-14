@@ -24,6 +24,7 @@ import {
   UpdateDocumentoVinculosDto,
 } from './documentos.dto';
 import { DocumentosService } from './documentos.service';
+import { DOCUMENTOS_MODULO_KEYS, DOCUMENTOS_RELACIONADOS_KEYS } from './documentos.permissions';
 
 @Controller('documentos')
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -31,13 +32,7 @@ export class DocumentosController {
   constructor(private readonly documentosService: DocumentosService) {}
 
   @Get()
-  @RequireAnyPermissions(
-    'documentos.visualizar',
-    'documentos.administrar',
-    'dashboard.visualizar',
-    'chamados.gerenciar',
-    'fiscalizacoes.executar',
-  )
+  @RequireAnyPermissions(...DOCUMENTOS_MODULO_KEYS)
   list(@Query() query: ListDocumentosQueryDto, @CurrentUser() user: JwtPayload) {
     return this.documentosService.list(query, user);
   }
@@ -54,25 +49,13 @@ export class DocumentosController {
   }
 
   @Get('por-chamado/:chamadoId')
-  @RequireAnyPermissions(
-    'documentos.visualizar',
-    'documentos.administrar',
-    'dashboard.visualizar',
-    'chamados.gerenciar',
-    'fiscalizacoes.executar',
-  )
+  @RequireAnyPermissions(...DOCUMENTOS_RELACIONADOS_KEYS)
   listByChamado(@Param('chamadoId') chamadoId: string, @CurrentUser() user: JwtPayload) {
     return this.documentosService.listByChamado(chamadoId, user);
   }
 
   @Get('por-fiscalizacao/:fiscalizacaoId')
-  @RequireAnyPermissions(
-    'documentos.visualizar',
-    'documentos.administrar',
-    'dashboard.visualizar',
-    'chamados.gerenciar',
-    'fiscalizacoes.executar',
-  )
+  @RequireAnyPermissions(...DOCUMENTOS_RELACIONADOS_KEYS)
   listByFiscalizacao(
     @Param('fiscalizacaoId') fiscalizacaoId: string,
     @CurrentUser() user: JwtPayload,
@@ -81,26 +64,13 @@ export class DocumentosController {
   }
 
   @Get(':id')
-  @RequireAnyPermissions(
-    'documentos.visualizar',
-    'documentos.administrar',
-    'dashboard.visualizar',
-    'chamados.gerenciar',
-    'fiscalizacoes.executar',
-  )
+  @RequireAnyPermissions(...DOCUMENTOS_MODULO_KEYS)
   getById(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.documentosService.getById(id, user);
   }
 
   @Get(':id/pdf/original')
-  @RequireAnyPermissions(
-    'documentos.visualizar',
-    'documentos.gerar_pdf',
-    'documentos.administrar',
-    'dashboard.visualizar',
-    'chamados.gerenciar',
-    'fiscalizacoes.executar',
-  )
+  @RequireAnyPermissions(...DOCUMENTOS_RELACIONADOS_KEYS)
   @Header('Content-Type', 'application/pdf')
   async pdfOriginal(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     const { buffer, codigo } = await this.documentosService.getPdfBuffer(id, 'original', user);
@@ -111,14 +81,7 @@ export class DocumentosController {
   }
 
   @Get(':id/pdf/assinado')
-  @RequireAnyPermissions(
-    'documentos.visualizar',
-    'documentos.gerar_pdf',
-    'documentos.administrar',
-    'dashboard.visualizar',
-    'chamados.gerenciar',
-    'fiscalizacoes.executar',
-  )
+  @RequireAnyPermissions(...DOCUMENTOS_RELACIONADOS_KEYS)
   @Header('Content-Type', 'application/pdf')
   async pdfAssinado(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     const { buffer, codigo } = await this.documentosService.getPdfBuffer(id, 'assinado', user);

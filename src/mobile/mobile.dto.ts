@@ -106,4 +106,12 @@ export class MobileSyncFiscalizacaoDto {
   @ValidateNested({ each: true })
   @Type(() => MobileRespostaDto)
   respostas!: MobileRespostaDto[];
+
+  @IsOptional()
+  @IsString()
+  cronogramaId?: string;
+
+  @IsOptional()
+  @IsDateString()
+  dataProgramada?: string;
 }

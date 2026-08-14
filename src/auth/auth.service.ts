@@ -19,6 +19,7 @@ const PERFIL_SESSION_SELECT = {
   id: true,
   nome: true,
   ativo: true,
+  natureza: true,
   permissoes: {
     select: {
       permissao: {
@@ -62,6 +63,7 @@ export class AuthService {
         permissoes: session.permissoes,
         secretariaId: session.secretariaId,
         perfilAtivoId: session.perfilAtivo?.id ?? null,
+        perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
         acessoTodasSecretarias: session.acessoTodasSecretarias,
         secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
       },
@@ -87,6 +89,7 @@ export class AuthService {
     permissoes: string[];
     secretariaId: string | null;
     perfilAtivoId: string | null;
+    perfilNatureza: 'INTERNO' | 'EXTERNO';
     acessoTodasSecretarias: boolean;
     secretariasIds: string[];
   }> {
@@ -105,6 +108,7 @@ export class AuthService {
       permissoes: session.permissoes,
       secretariaId: session.secretariaId,
       perfilAtivoId: session.perfilAtivo?.id ?? null,
+      perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
       acessoTodasSecretarias: session.acessoTodasSecretarias,
       secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
     };
@@ -266,7 +270,7 @@ export class AuthService {
       acessoTodasSecretarias: true,
       secretaria: { select: SECRETARIA_SELECT },
       secretariaAtiva: { select: SECRETARIA_SELECT },
-      perfilAtivo: { select: { id: true, nome: true, ativo: true } },
+      perfilAtivo: { select: { id: true, nome: true, ativo: true, natureza: true } },
       perfis: {
         select: {
           perfilId: true,
@@ -298,13 +302,14 @@ export class AuthService {
     acessoTodasSecretarias: boolean;
     secretaria: { id: string; nome: string; sigla: string } | null;
     secretariaAtiva: { id: string; nome: string; sigla: string } | null;
-    perfilAtivo: { id: string; nome: string; ativo: boolean } | null;
+    perfilAtivo: { id: string; nome: string; ativo: boolean; natureza?: 'INTERNO' | 'EXTERNO' } | null;
     perfis: Array<{
       perfilId: string;
       perfil: {
         id: string;
         nome: string;
         ativo: boolean;
+        natureza?: 'INTERNO' | 'EXTERNO';
         permissoes: Array<{ permissao: { chave: string } }>;
       };
     }>;
@@ -391,7 +396,9 @@ export class AuthService {
       secretaria: secretariaAtiva,
       perfis: perfilAtivo ? [perfilAtivo.nome] : [],
       permissoes,
-      perfilAtivo: perfilAtivo ? { id: perfilAtivo.id, nome: perfilAtivo.nome } : null,
+      perfilAtivo: perfilAtivo
+        ? { id: perfilAtivo.id, nome: perfilAtivo.nome, natureza: perfilAtivo.natureza ?? 'INTERNO' }
+        : null,
       perfisDisponiveis,
       secretariaAtiva,
       secretariasDisponiveis,

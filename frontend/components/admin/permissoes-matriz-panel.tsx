@@ -40,6 +40,7 @@ type ConfigurablePerfil = {
   descricao?: string | null;
   sistema: boolean;
   ativo: boolean;
+  natureza?: 'INTERNO' | 'EXTERNO';
   usuariosVinculados?: number;
 };
 
@@ -66,6 +67,7 @@ export function PermissoesMatrizPanel({
   const [error, setError] = useState<string | null>(null);
   const [editNome, setEditNome] = useState('');
   const [editDescricao, setEditDescricao] = useState('');
+  const [editNatureza, setEditNatureza] = useState<'INTERNO' | 'EXTERNO'>('INTERNO');
   const [savingPerfilMeta, setSavingPerfilMeta] = useState(false);
   const initialKeysRef = useRef<Set<string>>(new Set());
 
@@ -125,6 +127,7 @@ export function PermissoesMatrizPanel({
         setPerfisVinculados([]);
         setEditNome(data.perfil.nome);
         setEditDescricao(data.perfil.descricao ?? '');
+        setEditNatureza(data.perfil.natureza === 'EXTERNO' ? 'EXTERNO' : 'INTERNO');
         const expandedDefaults: Record<string, boolean> = {};
         for (const tela of data.catalogo) {
           expandedDefaults[tela.id] = false;
@@ -166,7 +169,9 @@ export function PermissoesMatrizPanel({
   const hasSelection = mode === 'perfil' ? Boolean(selectedPerfilId) : Boolean(selectedUsuarioId);
   const perfilMetaDirty =
     Boolean(selectedPerfil) &&
-    (editNome.trim() !== selectedPerfil!.nome || editDescricao.trim() !== (selectedPerfil!.descricao ?? ''));
+    (editNome.trim() !== selectedPerfil!.nome ||
+      editDescricao.trim() !== (selectedPerfil!.descricao ?? '') ||
+      editNatureza !== (selectedPerfil!.natureza ?? 'INTERNO'));
 
   const screenRows = useMemo(
     () =>
@@ -241,10 +246,11 @@ export function PermissoesMatrizPanel({
     const form = new FormData(event.currentTarget);
     const nome = String(form.get('nomePerfil') || '').trim();
     const descricao = String(form.get('descricaoPerfil') || '').trim();
+    const natureza = String(form.get('naturezaPerfil') || 'INTERNO') === 'EXTERNO' ? 'EXTERNO' : 'INTERNO';
     if (!nome) return;
 
     const ok = await mutate(
-      () => createAdminPerfil({ nome, descricao: descricao || undefined, ativo: true }),
+      () => createAdminPerfil({ nome, descricao: descricao || undefined, ativo: true, natureza }),
       'Perfil criado. Configure as permissões abaixo.',
     );
     if (ok) {
@@ -267,6 +273,7 @@ export function PermissoesMatrizPanel({
           updateAdminPerfil(selectedPerfilId, {
             nome: editNome.trim(),
             descricao: editDescricao.trim() || null,
+            natureza: editNatureza,
           }),
         'Dados do perfil atualizados.',
       );
@@ -364,6 +371,12 @@ export function PermissoesMatrizPanel({
               <Field label="Descrição">
                 <Input name="descricaoPerfil" placeholder="Opcional" />
               </Field>
+              <Field label="Tipo de usuário do perfil">
+                <Select name="naturezaPerfil" defaultValue="INTERNO">
+                  <option value="INTERNO">Interno</option>
+                  <option value="EXTERNO">Externo</option>
+                </Select>
+              </Field>
               <Button type="submit" variant="outlined" className="w-full">
                 <Plus className="h-4 w-4" />
                 Criar perfil
@@ -443,6 +456,16 @@ export function PermissoesMatrizPanel({
                     onChange={(event) => setEditDescricao(event.target.value)}
                     disabled={savingPerfilMeta}
                   />
+                </Field>
+                <Field label="Tipo de usuário do perfil">
+                  <Select
+                    value={editNatureza}
+                    onChange={(event) => setEditNatureza(event.target.value === 'EXTERNO' ? 'EXTERNO' : 'INTERNO')}
+                    disabled={savingPerfilMeta}
+                  >
+                    <option value="INTERNO">Interno</option>
+                    <option value="EXTERNO">Externo</option>
+                  </Select>
                 </Field>
               </div>
               <div className="flex flex-wrap items-center gap-2">

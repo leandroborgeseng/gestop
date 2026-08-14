@@ -311,7 +311,7 @@ export default function AdminPage() {
           <CargosPanel cargos={cargos} mutate={mutate} />
         ) : null}
         {!loading && tab === 'tipos-chamado' ? (
-          <TiposChamadoPanel tipos={tiposChamado} mutate={mutate} />
+          <TiposChamadoPanel tipos={tiposChamado} secretarias={secretarias} mutate={mutate} />
         ) : null}
         {!loading && tab === 'tipos-proprio' ? (
           <TiposProprioPanel tipos={tiposProprio} mutate={mutate} />
@@ -1881,9 +1881,11 @@ function TiposProprioPanel({
 
 function TiposChamadoPanel({
   tipos,
+  secretarias,
   mutate,
 }: {
   tipos: AdminTipoChamado[];
+  secretarias: AdminSecretaria[];
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
   const caps = useAdminCaps('tipos_chamado');
@@ -1924,6 +1926,7 @@ function TiposChamadoPanel({
       slaUrgenteDias: Number(form.get('slaUrgenteDias')),
       exigeVistoriaPrevia: form.get('exigeVistoriaPrevia') === 'on',
       ativo: editing?.ativo ?? true,
+      secretariaIds: form.getAll('secretariaIds').map(String).filter(Boolean),
     };
     const ok = await mutate(
       () => saveAdminTipoChamado(payload, editing?.id),
@@ -1959,6 +1962,36 @@ function TiposChamadoPanel({
             />
             Exige Análise Técnica Prévia
           </label>
+          <Field
+            label="Secretarias responsáveis pela execução"
+            tooltip="Secretarias que normalmente atendem este tipo. Na abertura, preenche a primeira como sugestão."
+          >
+            <div className="max-h-40 space-y-2 overflow-y-auto rounded-[var(--r-md)] border border-[var(--line)] p-3">
+              {secretarias.filter((item) => item.ativo || editing?.secretarias?.some((vinculo) => vinculo.secretaria.id === item.id)).length === 0 ? (
+                <p className="text-[12px] text-[var(--ink-3)]">Nenhuma secretaria cadastrada.</p>
+              ) : (
+                secretarias
+                  .filter((item) => item.ativo || editing?.secretarias?.some((vinculo) => vinculo.secretaria.id === item.id))
+                  .map((secretaria) => {
+                    const linkedIds = editing?.secretarias?.map((item) => item.secretaria.id) ?? [];
+                    return (
+                      <label key={secretaria.id} className="flex items-center gap-2 text-[13px] text-[var(--ink-2)]">
+                        <input
+                          type="checkbox"
+                          name="secretariaIds"
+                          value={secretaria.id}
+                          defaultChecked={linkedIds.includes(secretaria.id)}
+                        />
+                        <span>
+                          {secretaria.sigla} — {secretaria.nome}
+                          {!secretaria.ativo ? ' (inativa)' : ''}
+                        </span>
+                      </label>
+                    );
+                  })
+              )}
+            </div>
+          </Field>
           <div className="flex gap-2">
             <Button type="submit" variant="filled">{editing ? 'Salvar' : 'Cadastrar'}</Button>
             {editing ? (
@@ -1981,6 +2014,7 @@ function TiposChamadoPanel({
             <tr>
               <DataTableHeaderCell>Nome</DataTableHeaderCell>
               <DataTableHeaderCell>SLA Baixa/Média/Alta</DataTableHeaderCell>
+              <DataTableHeaderCell>Secretarias</DataTableHeaderCell>
               <DataTableHeaderCell>Vist. prévia</DataTableHeaderCell>
               <DataTableHeaderCell>Status</DataTableHeaderCell>
               <DataTableHeaderCell>Ações</DataTableHeaderCell>
@@ -1989,6 +2023,7 @@ function TiposChamadoPanel({
               <DataTableFilterCell>
                 <DataTableTextFilter value={filterNome} onChange={setFilterNome} placeholder="Nome" aria-label="Filtrar nome" />
               </DataTableFilterCell>
+              <DataTableFilterCell />
               <DataTableFilterCell />
               <DataTableFilterCell>
                 <DataTableSelectFilter
@@ -2010,7 +2045,7 @@ function TiposChamadoPanel({
           <DataTableBody>
             {filtered.length === 0 ? (
               <DataTableRow>
-                <DataTableCell colSpan={5} className="py-6 text-center text-[var(--ink-3)]">
+                <DataTableCell colSpan={6} className="py-6 text-center text-[var(--ink-3)]">
                   {tipos.length === 0 ? 'Nenhum tipo cadastrado.' : 'Nenhum registro corresponde aos filtros.'}
                 </DataTableCell>
               </DataTableRow>
@@ -2019,6 +2054,11 @@ function TiposChamadoPanel({
                 <DataTableRow key={tipo.id}>
                   <DataTableCell>{tipo.nome}</DataTableCell>
                   <DataTableCell mono>{tipo.slaBaixaDias}/{tipo.slaMediaDias}/{tipo.slaAltaDias}d</DataTableCell>
+                  <DataTableCell>
+                    {tipo.secretarias?.length
+                      ? tipo.secretarias.map((item) => item.secretaria.sigla).join(', ')
+                      : '—'}
+                  </DataTableCell>
                   <DataTableCell>{tipo.exigeVistoriaPrevia ? 'Sim' : 'Não'}</DataTableCell>
                   <DataTableCell>
                     <Badge variant={tipo.ativo ? 'success' : 'muted'}>{tipo.ativo ? 'Ativo' : 'Inativo'}</Badge>

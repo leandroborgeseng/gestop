@@ -80,6 +80,22 @@ describe('permissions-matrix', () => {
     expect(legacy.has('documentos.administrar')).toBe(true);
   });
 
+  it('deriva permissões legadas do módulo Cronograma (sem exigir checklists.gerenciar)', () => {
+    const matrix = new Set([
+      permissionMatrixKey('cronograma', '_tela', 'visualizar'),
+      permissionMatrixKey('cronograma', 'gerenciar', 'inserir'),
+      permissionMatrixKey('cronograma', 'gerenciar', 'alterar'),
+      permissionMatrixKey('cronograma', 'cobertura', 'executar'),
+    ]);
+    const legacy = deriveLegacyPermissionKeys(matrix);
+    expect(legacy.has('cronograma.visualizar')).toBe(true);
+    expect(legacy.has('cronograma.inserir')).toBe(true);
+    expect(legacy.has('cronograma.alterar')).toBe(true);
+    expect(legacy.has('cronograma.executar')).toBe(true);
+    expect(legacy.has('dashboard.visualizar')).toBe(true);
+    expect(legacy.has('checklists.gerenciar')).toBe(false);
+  });
+
   it('não concede usuarios.gerenciar só com visualizar de aba da Administração', () => {
     const matrix = new Set([
       permissionMatrixKey('admin', 'usuarios', 'visualizar'),

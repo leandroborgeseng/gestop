@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FileText } from 'lucide-react';
+import { useSessionUser } from '@/components/auth/session-context';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
@@ -13,6 +14,7 @@ import {
   listDocumentosPorFiscalizacao,
 } from '@/lib/api';
 import { DOCUMENTO_SITUACAO_META, DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
+import { hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
 import { DocumentoResumo } from '@/lib/types';
 
 type Props = {
@@ -22,6 +24,8 @@ type Props = {
 };
 
 export function DocumentosRelacionadosPanel({ chamadoId, fiscalizacaoId, onClose }: Props) {
+  const sessionUser = useSessionUser();
+  const canAbrirCadastro = hasDocumentosModuloAccess(sessionUser?.permissoes ?? []);
   const [items, setItems] = useState<DocumentoResumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,11 +95,23 @@ export function DocumentosRelacionadosPanel({ chamadoId, fiscalizacaoId, onClose
                 <Badge variant={situacao.badge}>{situacao.label}</Badge>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <Link href={`/documentos?id=${item.id}`}>
-                  <Button type="button" size="sm" variant="outlined">
+                {canAbrirCadastro ? (
+                  <Link href={`/documentos?id=${item.id}`}>
+                    <Button type="button" size="sm" variant="outlined">
+                      Abrir
+                    </Button>
+                  </Link>
+                ) : (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outlined"
+                    disabled
+                    title="Sem permissão para abrir o cadastro do documento"
+                  >
                     Abrir
                   </Button>
-                </Link>
+                )}
                 {item.possuiPdfOriginal ? (
                   <Button
                     type="button"
@@ -117,6 +133,11 @@ export function DocumentosRelacionadosPanel({ chamadoId, fiscalizacaoId, onClose
                   </Button>
                 ) : null}
               </div>
+              {!canAbrirCadastro ? (
+                <p className="mt-1.5 text-[11px] text-[var(--ink-3)]">
+                  Sem permissão para abrir o cadastro do documento
+                </p>
+              ) : null}
             </li>
           );
         })}

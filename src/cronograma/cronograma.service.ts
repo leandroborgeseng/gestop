@@ -1,6 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditAction, CronogramaFrequencia, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
+import {
+  assertSecretariaNoEscopo,
+  resolveSecretariaScopeIds,
+  resolveUnidadeSecretariaFilter,
+} from '../auth/secretaria-scope';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 import { PrismaService } from '../prisma/prisma.service';
 import { CalendarioQueryDto, CronogramaDto } from './cronograma.dto';
@@ -75,11 +80,43 @@ function responsaveisLabel(
 export class CronogramaService {
   constructor(private readonly prisma: PrismaService) {}
 
-  listCronogramas(filters?: { secretariaId?: string; unidadeId?: string }) {
+  listChecklistsParaCronograma(user: JwtPayload) {
+    const scopeIds = resolveSecretariaScopeIds(user);
+    return this.prisma.checklist.findMany({
+      where: {
+        ativo: true,
+        ...(scopeIds
+          ? scopeIds.length === 0
+            ? { id: { in: [] } }
+            : {
+                OR: [{ secretariaId: null }, { secretariaId: { in: scopeIds } }],
+              }
+          : {}),
+      },
+      orderBy: [{ nome: 'asc' }],
+      include: {
+        secretaria: { select: { id: true, nome: true, sigla: true } },
+        tiposChamado: {
+          include: { tipoChamado: { select: { id: true, nome: true, ativo: true } } },
+        },
+        versoes: {
+          orderBy: { versao: 'desc' as const },
+          take: 1,
+          select: { id: true, versao: true, status: true },
+        },
+      },
+    });
+  }
+
+  listCronogramas(filters: { secretariaId?: string; unidadeId?: string } | undefined, user: JwtPayload) {
+    const secretariaId = this.resolveFiltroSecretaria(user, filters?.secretariaId);
     return this.prisma.cronogramaChecagem.findMany({
       where: {
+        unidade: {
+          ...resolveUnidadeSecretariaFilter(user),
+          ...(secretariaId ? { secretariaId } : {}),
+        },
         ...(filters?.unidadeId ? { unidadeId: filters.unidadeId } : {}),
-        ...(filters?.secretariaId ? { unidade: { secretariaId: filters.secretariaId } } : {}),
       },
       orderBy: [{ ativo: 'desc' }, { proximaChecagemEm: 'asc' }],
       include: cronogramaInclude,
@@ -87,7 +124,7 @@ export class CronogramaService {
   }
 
   async createCronograma(dto: CronogramaDto, user: JwtPayload) {
-    await this.assertVinculoValido(dto.unidadeId, dto.checklistId);
+    await this.assertVinculoValido(dto.unidadeId, dto.checklistId, user);
     const responsavelIds = await this.resolveResponsavelIds(dto);
 
     const proximaChecagemEm = startOfDay(new Date(dto.proximaChecagemEm));
@@ -120,13 +157,13 @@ export class CronogramaService {
       });
     });
 
-    await this.audit(user, AuditAction.CREATE, cronograma.id, null, this.auditSnapshot(cronograma));
+    await this.audit(user, AuditAction.CREATE, cronograma.id, null, this.auditSnapshot(cronograma, user));
     return cronograma;
   }
 
   async updateCronograma(id: string, dto: CronogramaDto, user: JwtPayload) {
-    const before = await this.getCronogramaOrThrow(id);
-    await this.assertVinculoValido(dto.unidadeId, dto.checklistId);
+    const before = await this.getCronogramaOrThrow(id, user);
+    await this.assertVinculoValido(dto.unidadeId, dto.checklistId, user);
     const responsavelIds = await this.resolveResponsavelIds(dto);
 
     const cronograma = await this.prisma.$transaction(async (tx) => {
@@ -164,14 +201,14 @@ export class CronogramaService {
       user,
       AuditAction.UPDATE,
       id,
-      this.auditSnapshot(before),
-      this.auditSnapshot(cronograma),
+      this.auditSnapshot(before, user),
+      this.auditSnapshot(cronograma, user),
     );
     return cronograma;
   }
 
   async deactivateCronograma(id: string, user: JwtPayload) {
-    const before = await this.getCronogramaOrThrow(id);
+    const before = await this.getCronogramaOrThrow(id, user);
     const cronograma = await this.prisma.cronogramaChecagem.update({
       where: { id },
       data: { ativo: false },
@@ -182,13 +219,13 @@ export class CronogramaService {
       user,
       AuditAction.DELETE,
       id,
-      this.auditSnapshot(before),
-      this.auditSnapshot(cronograma),
+      this.auditSnapshot(before, user),
+      this.auditSnapshot(cronograma, user),
     );
     return cronograma;
   }
 
-  async getCalendario(query: CalendarioQueryDto) {
+  async getCalendario(query: CalendarioQueryDto, user: JwtPayload) {
     const from = startOfDay(new Date(query.from));
     const to = startOfDay(new Date(query.to));
 
@@ -198,12 +235,17 @@ export class CronogramaService {
 
     const hoje = startOfDay(new Date());
     const realizedKeys = new Set<string>();
+    const secretariaId = this.resolveFiltroSecretaria(user, query.secretariaId);
+    const unidadeScope = resolveUnidadeSecretariaFilter(user);
 
     const cronogramas = await this.prisma.cronogramaChecagem.findMany({
       where: {
         ativo: true,
         ...(query.unidadeId ? { unidadeId: query.unidadeId } : {}),
-        ...(query.secretariaId ? { unidade: { secretariaId: query.secretariaId } } : {}),
+        unidade: {
+          ...unidadeScope,
+          ...(secretariaId ? { secretariaId } : {}),
+        },
       },
       include: cronogramaInclude,
     });
@@ -213,7 +255,14 @@ export class CronogramaService {
         status: 'CONCLUIDA',
         concluidaEm: { gte: from, lte: new Date(to.getTime() + 86_399_999) },
         ...(query.unidadeId ? { unidadeId: query.unidadeId } : {}),
-        ...(query.secretariaId ? { secretariaId: query.secretariaId } : {}),
+        ...(secretariaId
+          ? { secretariaId }
+          : (() => {
+              const ids = resolveSecretariaScopeIds(user);
+              if (!ids) return {};
+              if (ids.length === 0) return { id: { in: [] as string[] } };
+              return ids.length === 1 ? { secretariaId: ids[0] } : { secretariaId: { in: ids } };
+            })()),
       },
       select: {
         id: true,
@@ -304,6 +353,124 @@ export class CronogramaService {
     return { from: toDateKey(from), to: toDateKey(to), resumo, eventos };
   }
 
+  async listVistoriasProgramadas(
+    query: {
+      from?: string;
+      to?: string;
+      atribuidoAMim?: boolean;
+      tipo?: string;
+      unidadeId?: string;
+      incluirRealizadas?: boolean;
+    },
+    user: JwtPayload,
+  ) {
+    const hoje = startOfDay(new Date());
+    const hasPeriod = Boolean(query.from?.trim() && query.to?.trim());
+    const from = hasPeriod ? startOfDay(new Date(query.from!)) : new Date(hoje.getTime() - 365 * 86_400_000);
+    const to = hasPeriod ? startOfDay(new Date(query.to!)) : new Date(hoje.getTime() + 365 * 86_400_000);
+    if (from > to) {
+      throw new BadRequestException('Periodo invalido: data inicial posterior a final.');
+    }
+
+    const unidadeScope = resolveUnidadeSecretariaFilter(user);
+    const cronogramas = await this.prisma.cronogramaChecagem.findMany({
+      where: {
+        ativo: true,
+        ...(query.unidadeId ? { unidadeId: query.unidadeId } : {}),
+        ...(query.tipo ? { unidade: { ...unidadeScope, tipo: query.tipo } } : { unidade: unidadeScope }),
+        ...(query.atribuidoAMim
+          ? {
+              OR: [{ responsavelId: user.sub }, { responsaveis: { some: { usuarioId: user.sub } } }],
+            }
+          : {}),
+      },
+      include: {
+        unidade: {
+          select: {
+            id: true,
+            nome: true,
+            tipo: true,
+            endereco: true,
+            bairro: true,
+            latitude: true,
+            longitude: true,
+            secretariaId: true,
+            secretaria: { select: { id: true, nome: true, sigla: true } },
+          },
+        },
+        checklist: { select: { id: true, nome: true } },
+        responsavel: { select: { id: true, nome: true, email: true } },
+        responsaveis: {
+          include: { usuario: { select: { id: true, nome: true, email: true, ativo: true } } },
+        },
+      },
+    });
+
+    const realizedKeys = new Set<string>();
+    if (!query.incluirRealizadas) {
+      const fiscalizacoes = await this.prisma.fiscalizacao.findMany({
+        where: {
+          status: 'CONCLUIDA',
+          concluidaEm: { gte: from, lte: new Date(to.getTime() + 86_399_999) },
+          unidadeId: { in: cronogramas.map((item) => item.unidadeId) },
+        },
+        select: {
+          unidadeId: true,
+          concluidaEm: true,
+          checklistVersao: { select: { checklistId: true } },
+        },
+      });
+      for (const item of fiscalizacoes) {
+        if (!item.concluidaEm) continue;
+        realizedKeys.add(
+          `${item.checklistVersao.checklistId}:${item.unidadeId}:${toDateKey(startOfDay(item.concluidaEm))}`,
+        );
+      }
+    }
+
+    const items = [];
+    for (const cronograma of cronogramas) {
+      const dates = projectChecagensNoPeriodo({
+        proximaChecagemEm: cronograma.proximaChecagemEm,
+        frequencia: cronograma.frequencia,
+        from,
+        to,
+      });
+
+      for (const date of dates) {
+        const dataKey = toDateKey(date);
+        if (realizedKeys.has(`${cronograma.checklistId}:${cronograma.unidadeId}:${dataKey}`)) {
+          continue;
+        }
+        const tipo = resolveEventoTipo(date, hoje);
+        if (!query.incluirRealizadas && tipo === 'REALIZADA') continue;
+        const responsaveis = formatResponsaveis(cronograma.responsaveis, cronograma.responsavel);
+        items.push({
+          id: `${cronograma.id}:${dataKey}`,
+          cronogramaId: cronograma.id,
+          data: dataKey,
+          tipo,
+          frequencia: cronograma.frequencia,
+          checklist: cronograma.checklist,
+          unidade: {
+            id: cronograma.unidade.id,
+            nome: cronograma.unidade.nome,
+            tipo: cronograma.unidade.tipo,
+            endereco: cronograma.unidade.endereco,
+            bairro: cronograma.unidade.bairro,
+            latitude: cronograma.unidade.latitude != null ? Number(cronograma.unidade.latitude) : null,
+            longitude: cronograma.unidade.longitude != null ? Number(cronograma.unidade.longitude) : null,
+            secretaria: cronograma.unidade.secretaria,
+          },
+          responsaveis: responsaveis.map((item) => ({ id: item.id, nome: item.nome })),
+        });
+      }
+    }
+
+    items.sort((a, b) => a.data.localeCompare(b.data) || a.unidade.nome.localeCompare(b.unidade.nome));
+    return { items };
+  }
+
   async registrarChecagemRealizada(input: {
     unidadeId: string;
     checklistId: string;
@@ -352,24 +519,34 @@ export class CronogramaService {
 
   private auditSnapshot(
     cronograma: Prisma.CronogramaChecagemGetPayload<{ include: typeof cronogramaInclude }>,
+    user: JwtPayload,
   ) {
     const responsaveis = formatResponsaveis(cronograma.responsaveis, cronograma.responsavel);
     return {
       id: cronograma.id,
       unidadeId: cronograma.unidadeId,
+      unidadeNome: cronograma.unidade.nome,
+      secretariaId: cronograma.unidade.secretariaId,
+      secretariaSigla: cronograma.unidade.secretaria.sigla,
       checklistId: cronograma.checklistId,
+      checklistNome: cronograma.checklist.nome,
       frequencia: cronograma.frequencia,
       proximaChecagemEm: cronograma.proximaChecagemEm,
       ativo: cronograma.ativo,
       observacoes: cronograma.observacoes,
       responsavelIds: responsaveis.map((item) => item.id),
       responsaveisNomes: responsaveis.map((item) => item.nome),
+      secretariaAtivaId: user.secretariaId ?? null,
+      secretariaEscopoTodas: !user.secretariaId?.trim() && Boolean(user.acessoTodasSecretarias),
     };
   }
 
-  private async getCronogramaOrThrow(id: string) {
-    const cronograma = await this.prisma.cronogramaChecagem.findUnique({
-      where: { id },
+  private async getCronogramaOrThrow(id: string, user: JwtPayload) {
+    const cronograma = await this.prisma.cronogramaChecagem.findFirst({
+      where: {
+        id,
+        unidade: resolveUnidadeSecretariaFilter(user),
+      },
       include: cronogramaInclude,
     });
 
@@ -380,7 +557,18 @@ export class CronogramaService {
     return cronograma;
   }
 
-  private async assertVinculoValido(unidadeId: string, checklistId: string) {
+  private resolveFiltroSecretaria(user: JwtPayload, secretariaId?: string) {
+    const requested = secretariaId?.trim();
+    if (requested) {
+      assertSecretariaNoEscopo(user, requested);
+      return requested;
+    }
+    const scopeIds = resolveSecretariaScopeIds(user);
+    if (scopeIds?.length === 1) return scopeIds[0];
+    return undefined;
+  }
+
+  private async assertVinculoValido(unidadeId: string, checklistId: string, user: JwtPayload) {
     const [unidade, checklist] = await Promise.all([
       this.prisma.unidadePublica.findUnique({
         where: { id: unidadeId },
@@ -395,6 +583,8 @@ export class CronogramaService {
     if (!unidade || !unidade.ativo) {
       throw new BadRequestException('Proprio publico invalido ou inativo.');
     }
+
+    assertSecretariaNoEscopo(user, unidade.secretariaId);
 
     if (!checklist || !checklist.ativo) {
       throw new BadRequestException('Checklist invalido ou inativo.');

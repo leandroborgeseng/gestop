@@ -1,4 +1,4 @@
-import { IsArray, IsBoolean, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 export class PerfilCreateDto {
   @IsString()
@@ -12,6 +12,10 @@ export class PerfilCreateDto {
   @IsOptional()
   @IsBoolean()
   ativo?: boolean;
+
+  @IsOptional()
+  @IsIn(['INTERNO', 'EXTERNO'])
+  natureza?: 'INTERNO' | 'EXTERNO';
 }
 
 export class PerfilUpdateDto {
@@ -23,6 +27,10 @@ export class PerfilUpdateDto {
   @IsOptional()
   @IsString()
   descricao?: string | null;
+
+  @IsOptional()
+  @IsIn(['INTERNO', 'EXTERNO'])
+  natureza?: 'INTERNO' | 'EXTERNO';
 }
 
 export class PerfilAtivoDto {

@@ -41,6 +41,7 @@ export class AuthGuard implements CanActivate {
         permissoes: session.permissoes,
         secretariaId: session.secretariaId,
         perfilAtivoId: session.perfilAtivoId,
+        perfilNatureza: session.perfilNatureza,
         acessoTodasSecretarias: session.acessoTodasSecretarias,
         secretariasIds: session.secretariasIds,
       };

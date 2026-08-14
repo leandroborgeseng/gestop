@@ -246,6 +246,10 @@ export function getSecretarias() {
   return request<SecretariaOption[]>('/operacional/secretarias');
 }
 
+export function getSecretariasExecucao() {
+  return request<SecretariaOption[]>('/chamados/secretarias/execucao');
+}
+
 export function getBairros() {
   return request<string[]>('/operacional/bairros');
 }
@@ -393,6 +397,7 @@ export type AdminPerfilConfiguravel = {
   descricao?: string | null;
   sistema: boolean;
   ativo: boolean;
+  natureza?: 'INTERNO' | 'EXTERNO';
   usuariosVinculados?: number;
 };
 
@@ -437,7 +442,12 @@ export function saveAdminUsuarioMatriz(id: string, chaves: string[]) {
   });
 }
 
-export function createAdminPerfil(payload: { nome: string; descricao?: string; ativo?: boolean }) {
+export function createAdminPerfil(payload: {
+  nome: string;
+  descricao?: string;
+  ativo?: boolean;
+  natureza?: 'INTERNO' | 'EXTERNO';
+}) {
   return request<AdminPerfilConfiguravel>('/admin/perfis', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -445,7 +455,10 @@ export function createAdminPerfil(payload: { nome: string; descricao?: string; a
   });
 }
 
-export function updateAdminPerfil(id: string, payload: { nome?: string; descricao?: string | null }) {
+export function updateAdminPerfil(
+  id: string,
+  payload: { nome?: string; descricao?: string | null; natureza?: 'INTERNO' | 'EXTERNO' },
+) {
   return request<AdminPerfilConfiguravel>(`/admin/perfis/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -599,6 +612,11 @@ export function listChecklists() {
   return request<ChecklistModel[]>('/checklists');
 }
 
+/** Checklists ativos para o formulário de Cronograma (não exige checklists.gerenciar). */
+export function listCronogramaChecklists() {
+  return request<ChecklistModel[]>('/cronograma/checklists');
+}
+
 export function saveChecklist(payload: Record<string, unknown>, id?: string) {
   return request<ChecklistModel>(`/checklists${id ? `/${id}` : ''}`, {
     method: id ? 'PUT' : 'POST',
@@ -661,6 +679,25 @@ export function publishChecklistVersion(versionId: string) {
 
 export function getMobileFieldPackage() {
   return request<MobileFieldPackage>('/mobile/field-package');
+}
+
+export function listVistoriasProgramadas(filters?: {
+  from?: string;
+  to?: string;
+  atribuidoAMim?: boolean;
+  tipo?: string;
+  unidadeId?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters?.from) params.set('from', filters.from);
+  if (filters?.to) params.set('to', filters.to);
+  if (filters?.atribuidoAMim) params.set('atribuidoAMim', 'true');
+  if (filters?.tipo) params.set('tipo', filters.tipo);
+  if (filters?.unidadeId) params.set('unidadeId', filters.unidadeId);
+  const query = params.toString();
+  return request<{ items: import('@/lib/types').VistoriaProgramadaItem[] }>(
+    `/mobile/vistorias-programadas${query ? `?${query}` : ''}`,
+  );
 }
 
 export function listMobileChamadosPendentes(unidadeId: string) {

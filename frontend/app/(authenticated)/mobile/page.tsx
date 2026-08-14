@@ -13,6 +13,7 @@ import {
   validateItemResponse,
 } from '@/components/mobile/checklist-item-card';
 import { ChamadosPendentesUnidadeSheet } from '@/components/mobile/chamados-pendentes-unidade-sheet';
+import { VistoriasProgramadasPanel } from '@/components/mobile/vistorias-programadas-panel';
 import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
 import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
 import { getPublishedVersion } from '@/components/checklists/checklist-shared';
@@ -39,7 +40,7 @@ import { useEffectiveOnline } from '@/lib/use-effective-online';
 import { prepareOfflineShell, registerServiceWorker, requestNotificationPermission, showLocalNotification } from '@/lib/pwa';
 import { PwaInstallBanner } from '@/components/mobile/pwa-install-banner';
 import { useSessionUser } from '@/components/auth/session-context';
-import { MobileFieldPackage, MobileQueuedInspection } from '@/lib/types';
+import { MobileFieldPackage, MobileQueuedInspection, VistoriaProgramadaItem } from '@/lib/types';
 import { cn } from '@/lib/cn';
 
 const DEVICE_KEY = 'gestop.mobile.device';
@@ -65,6 +66,12 @@ export default function MobilePage() {
   const [chamadosPendentesOpen, setChamadosPendentesOpen] = useState(false);
   const [imprimirOpen, setImprimirOpen] = useState(false);
   const [lancarOpen, setLancarOpen] = useState(false);
+  const [vistoriaTab, setVistoriaTab] = useState<'programadas' | 'avulsa'>('programadas');
+  const [programadaCtx, setProgramadaCtx] = useState<{
+    cronogramaId: string;
+    dataProgramada: string;
+    checklistNome: string;
+  } | null>(null);
   const queueRef = useRef<MobileQueuedInspection[]>([]);
 
   useEffect(() => {
@@ -211,11 +218,12 @@ export default function MobilePage() {
 
   useEffect(() => {
     if (!checklistId) return;
+    if (programadaCtx) return;
     if (!availableChecklists.some((checklist) => checklist.id === checklistId)) {
       setChecklistId('');
       setResponses({});
     }
-  }, [availableChecklists, checklistId]);
+  }, [availableChecklists, checklistId, programadaCtx]);
 
   function updateResponse(itemId: string, patch: Partial<ResponseDraft>) {
     setResponses((current) => ({
@@ -307,6 +315,9 @@ export default function MobilePage() {
       checklistVersaoId: selectedVersion.id,
       iniciadaEm: now,
       concluidaEm: now,
+      ...(programadaCtx
+        ? { cronogramaId: programadaCtx.cronogramaId, dataProgramada: programadaCtx.dataProgramada }
+        : {}),
       checkin: geo,
       respostas: selectedVersion.itens.map((item) =>
         buildRespostaPayload(item, responses[item.id] ?? { conformidade: 'CONFORME', comentario: '' }, geo, now),
@@ -326,6 +337,9 @@ export default function MobilePage() {
         await syncMobileInspection(inspection);
         setResponses({});
         setChecklistId('');
+        const wasProgramada = Boolean(programadaCtx);
+        setProgramadaCtx(null);
+        if (wasProgramada) setVistoriaTab('programadas');
         snackbar.show('Vistoria registrada com sucesso.', 'success');
         showLocalNotification('SIGMA Vistoria', 'Vistoria enviada e registrada no sistema.');
         return;
@@ -336,6 +350,9 @@ export default function MobilePage() {
       await writeMobileQueue(nextQueue);
       setResponses({});
       setChecklistId('');
+      const wasProgramada = Boolean(programadaCtx);
+      setProgramadaCtx(null);
+      if (wasProgramada) setVistoriaTab('programadas');
       snackbar.show('Vistoria salva na fila offline.', 'success');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Falha ao salvar vistoria.';
@@ -345,6 +362,42 @@ export default function MobilePage() {
       setSaving(false);
     }
   }
+
+  function resetPreenchimento() {
+    setProgramadaCtx(null);
+    setUnidadeId('');
+    setChecklistId('');
+    setResponses({});
+  }
+
+  function startProgramada(item: VistoriaProgramadaItem) {
+    if (!fieldPackage) {
+      snackbar.show('Baixe o pacote de vistoria antes de iniciar.', 'error');
+      return;
+    }
+    const unidade = fieldPackage.unidades.find((entry) => entry.id === item.unidade.id);
+    if (!unidade) {
+      snackbar.show('Este próprio não está no pacote de vistoria. Baixe os dados offline novamente.', 'error');
+      return;
+    }
+    const checklist = fieldPackage.checklists.find((entry) => entry.id === item.checklist.id);
+    if (!checklist || !getPublishedVersion(checklist.versoes)) {
+      snackbar.show('Checklist programado indisponível no pacote. Baixe os dados offline novamente.', 'error');
+      return;
+    }
+    setUnidadeId(item.unidade.id);
+    setChecklistId(item.checklist.id);
+    setResponses({});
+    setProgramadaCtx({
+      cronogramaId: item.cronogramaId,
+      dataProgramada: item.data,
+      checklistNome: item.checklist.nome,
+    });
+    setVistoriaTab('avulsa');
+  }
+
+  const fillingFromProgramada = Boolean(programadaCtx);
+  const showProgramadas = vistoriaTab === 'programadas' && !fillingFromProgramada;
 
   return (
     <RequirePermissions permissions={['fiscalizacoes.executar']}>
@@ -379,7 +432,7 @@ export default function MobilePage() {
           </div>
         }
       >
-        <div className="mx-auto max-w-2xl space-y-4 pb-32">
+        <div className={cn(showProgramadas ? 'space-y-4 pb-32' : 'mx-auto max-w-2xl space-y-4 pb-32')}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1">
               <PwaInstallBanner />
@@ -420,15 +473,65 @@ export default function MobilePage() {
                   <HeroStat label="Conexão" value={online ? 'Online' : 'Offline'} />
                 </div>
               </section>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <Chip
+                  active={showProgramadas}
+                  onClick={() => {
+                    resetPreenchimento();
+                    setVistoriaTab('programadas');
+                  }}
+                >
+                  Vistorias programadas
+                </Chip>
+                <Chip
+                  active={!showProgramadas}
+                  onClick={() => {
+                    if (fillingFromProgramada) {
+                      resetPreenchimento();
+                    }
+                    setVistoriaTab('avulsa');
+                  }}
+                >
+                  Vistoria avulsa
+                </Chip>
+              </div>
+
+              {fillingFromProgramada ? (
+                <Alert variant="info">
+                  Vistoria programada em andamento
+                  {programadaCtx?.checklistNome ? ` · ${programadaCtx.checklistNome}` : ''}
+                  {programadaCtx?.dataProgramada
+                    ? ` · ${new Date(`${programadaCtx.dataProgramada}T12:00:00`).toLocaleDateString('pt-BR')}`
+                    : ''}
+                  .{' '}
+                  <button
+                    type="button"
+                    className="font-semibold underline"
+                    onClick={() => {
+                      resetPreenchimento();
+                      setVistoriaTab('programadas');
+                    }}
+                  >
+                    Voltar às programadas
+                  </button>
+                </Alert>
+              ) : null}
+
+              {showProgramadas ? (
+                <VistoriasProgramadasPanel fieldPackage={fieldPackage} onIniciar={startProgramada} />
+              ) : (
+                <>
               <Card elevation={1}>
                 <CardHeader>
-                  <CardTitle>Configurar vistoria</CardTitle>
+                  <CardTitle>{fillingFromProgramada ? 'Vistoria programada' : 'Configurar vistoria'}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-0">
                   <Field label="Próprio público">
                     <SearchableSelect
                       value={unidadeId}
                       placeholder="Selecione"
+                      disabled={fillingFromProgramada}
                       onChange={(next) => {
                         setUnidadeId(next);
                         setChecklistId('');
@@ -449,7 +552,7 @@ export default function MobilePage() {
                         setChecklistId(e.target.value);
                         setResponses({});
                       }}
-                      disabled={!selectedUnit}
+                      disabled={!selectedUnit || fillingFromProgramada}
                     >
                       <option value="">
                         {selectedUnit ? 'Selecione' : 'Selecione um próprio primeiro'}
@@ -515,6 +618,8 @@ export default function MobilePage() {
                   ))}
                 </section>
               ) : null}
+                </>
+              )}
 
               <Card elevation={1}>
                 <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">

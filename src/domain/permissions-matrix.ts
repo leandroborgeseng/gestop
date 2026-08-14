@@ -34,6 +34,11 @@ function hasChamadosBeyondAbrir(matrixKeys: Set<string>) {
 }
 const LEGACY_FISCALIZACOES_EXECUTAR = 'fiscalizacoes.executar';
 const LEGACY_DASHBOARD_VISUALIZAR = 'dashboard.visualizar';
+const LEGACY_CRONOGRAMA_VISUALIZAR = 'cronograma.visualizar';
+const LEGACY_CRONOGRAMA_INSERIR = 'cronograma.inserir';
+const LEGACY_CRONOGRAMA_ALTERAR = 'cronograma.alterar';
+const LEGACY_CRONOGRAMA_EXCLUIR = 'cronograma.excluir';
+const LEGACY_CRONOGRAMA_EXECUTAR = 'cronograma.executar';
 const LEGACY_USUARIOS_GERENCIAR = 'usuarios.gerenciar';
 const LEGACY_SECRETARIAS_GERENCIAR = 'secretarias.gerenciar';
 const LEGACY_SECRETARIAS_TODAS = 'secretarias.todas';
@@ -98,8 +103,37 @@ export function deriveLegacyPermissionKeys(matrixKeys: Set<string>): Set<string>
   if (hasPrefix('vistoria_campo')) {
     legacy.add(LEGACY_FISCALIZACOES_EXECUTAR);
   }
-  if (hasPrefix('cco') || hasPrefix('dashboard') || hasPrefix('cronograma') || hasPrefix('relatorios') || hasPrefix('vistorias')) {
+  if (hasPrefix('cco') || hasPrefix('dashboard') || hasPrefix('relatorios') || hasPrefix('vistorias')) {
     legacy.add(LEGACY_DASHBOARD_VISUALIZAR);
+  }
+  if (hasPrefix('cronograma')) {
+    // Operacional (secretarias/unidades) ainda usa dashboard.visualizar em vários endpoints.
+    legacy.add(LEGACY_DASHBOARD_VISUALIZAR);
+    legacy.add(LEGACY_CRONOGRAMA_VISUALIZAR);
+    if (
+      matrixKeys.has(permissionMatrixKey('cronograma', '_tela', 'inserir')) ||
+      matrixKeys.has(permissionMatrixKey('cronograma', 'gerenciar', 'inserir'))
+    ) {
+      legacy.add(LEGACY_CRONOGRAMA_INSERIR);
+    }
+    if (
+      matrixKeys.has(permissionMatrixKey('cronograma', '_tela', 'alterar')) ||
+      matrixKeys.has(permissionMatrixKey('cronograma', 'gerenciar', 'alterar'))
+    ) {
+      legacy.add(LEGACY_CRONOGRAMA_ALTERAR);
+    }
+    if (
+      matrixKeys.has(permissionMatrixKey('cronograma', '_tela', 'excluir')) ||
+      matrixKeys.has(permissionMatrixKey('cronograma', 'gerenciar', 'excluir'))
+    ) {
+      legacy.add(LEGACY_CRONOGRAMA_EXCLUIR);
+    }
+    if (
+      matrixKeys.has(permissionMatrixKey('cronograma', '_tela', 'executar')) ||
+      matrixKeys.has(permissionMatrixKey('cronograma', 'cobertura', 'executar'))
+    ) {
+      legacy.add(LEGACY_CRONOGRAMA_EXECUTAR);
+    }
   }
   if (hasPrefix('documentos')) {
     legacy.add(LEGACY_DOCUMENTOS_VISUALIZAR);
@@ -227,11 +261,30 @@ export function expandLegacyToMatrixKeys(legacyKeys: Set<string>): Set<string> {
   if (legacyKeys.has(LEGACY_DASHBOARD_VISUALIZAR)) {
     grantScreen('cco', ['visualizar']);
     grantScreen('dashboard', ['visualizar']);
-    grantScreen('cronograma', ['visualizar', 'inserir', 'alterar']);
+    grantScreen('cronograma', ['visualizar', 'inserir', 'alterar', 'excluir', 'executar']);
     grantScreen('relatorios', ['visualizar', 'executar']);
     grantScreen('vistorias', ['visualizar']);
     grantScreen('integracoes', ['visualizar']);
     grantScreen('documentos', ['visualizar']);
+  }
+  if (legacyKeys.has(LEGACY_CRONOGRAMA_VISUALIZAR)) {
+    grantScreen('cronograma', ['visualizar']);
+  }
+  if (legacyKeys.has(LEGACY_CRONOGRAMA_INSERIR)) {
+    matrix.add(permissionMatrixKey('cronograma', '_tela', 'inserir'));
+    matrix.add(permissionMatrixKey('cronograma', 'gerenciar', 'inserir'));
+  }
+  if (legacyKeys.has(LEGACY_CRONOGRAMA_ALTERAR)) {
+    matrix.add(permissionMatrixKey('cronograma', '_tela', 'alterar'));
+    matrix.add(permissionMatrixKey('cronograma', 'gerenciar', 'alterar'));
+  }
+  if (legacyKeys.has(LEGACY_CRONOGRAMA_EXCLUIR)) {
+    matrix.add(permissionMatrixKey('cronograma', '_tela', 'excluir'));
+    matrix.add(permissionMatrixKey('cronograma', 'gerenciar', 'excluir'));
+  }
+  if (legacyKeys.has(LEGACY_CRONOGRAMA_EXECUTAR)) {
+    matrix.add(permissionMatrixKey('cronograma', '_tela', 'executar'));
+    matrix.add(permissionMatrixKey('cronograma', 'cobertura', 'executar'));
   }
   if (legacyKeys.has(LEGACY_DOCUMENTOS_VISUALIZAR)) {
     grantScreen('documentos', ['visualizar']);

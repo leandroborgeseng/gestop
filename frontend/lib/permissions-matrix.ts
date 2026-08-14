@@ -137,6 +137,65 @@ export function hasMeusChamadosAccess(permissoes: string[]) {
   );
 }
 
+export type CronogramaPermissionAction = PermissionAction;
+
+/** Verifica ação do Cronograma (matriz + legado). */
+export function hasCronogramaAccess(
+  permissoes: string[],
+  action: CronogramaPermissionAction = 'visualizar',
+) {
+  if (permissoes.includes(`cronograma.${action}`)) return true;
+
+  if (permissoes.includes(buildMatrixKey('cronograma', '_tela', action))) return true;
+  if (
+    (action === 'visualizar' ||
+      action === 'inserir' ||
+      action === 'alterar' ||
+      action === 'excluir') &&
+    permissoes.includes(buildMatrixKey('cronograma', 'gerenciar', action))
+  ) {
+    return true;
+  }
+  if (
+    (action === 'visualizar' || action === 'executar') &&
+    permissoes.includes(buildMatrixKey('cronograma', 'cobertura', action))
+  ) {
+    return true;
+  }
+
+  // Legado: dashboard.visualizar liberava o módulo antes das chaves cronograma.*.
+  if (action === 'visualizar' && permissoes.includes('dashboard.visualizar')) {
+    return true;
+  }
+  if (
+    (action === 'inserir' || action === 'alterar' || action === 'excluir' || action === 'executar') &&
+    permissoes.includes('dashboard.visualizar') &&
+    !permissoes.some(isMatrixPermissionKey)
+  ) {
+    return true;
+  }
+  // Legado operacional: criar/editar cronograma usava checklists.gerenciar.
+  if (
+    (action === 'inserir' || action === 'alterar' || action === 'excluir') &&
+    permissoes.includes('checklists.gerenciar')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+export function hasDocumentosModuloAccess(permissoes: string[]) {
+  if (permissoes.includes('usuarios.gerenciar')) return true;
+  if (permissoes.includes('documentos.visualizar') || permissoes.includes('documentos.administrar')) {
+    return true;
+  }
+  return (
+    permissoes.includes('matriz.documentos._tela.visualizar') ||
+    permissoes.includes('matriz.documentos.consultar.visualizar')
+  );
+}
+
 export function navItemAllowedByMatrix(itemId: string, permissoes: string[]) {
   const hasMatrix = permissoes.some(isMatrixPermissionKey);
   if (!hasMatrix) return null;

@@ -17,8 +17,10 @@ import {
   type DocumentoResposta,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
+import { hasAnyPermission } from '../auth/permissions';
 import { resolveDirectSecretariaFilter } from '../auth/secretaria-scope';
 import { validateChecklistResponses } from '../domain/checklist-response.rules';
+import { resolveMeusChamadosTimelineCaps } from '../chamados/meus-chamados-timeline.permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import {
@@ -48,6 +50,10 @@ import {
   SalvarDocumentoRespostasDto,
   UpdateDocumentoVinculosDto,
 } from './documentos.dto';
+import {
+  hasDocumentosModuloAccess,
+  hasDocumentosRelacionadosAccess,
+} from './documentos.permissions';
 
 const DOCUMENTO_INCLUDE = {
   secretaria: { select: { id: true, nome: true, sigla: true } },
@@ -147,7 +153,7 @@ export class DocumentosService {
   ) {}
 
   async list(query: ListDocumentosQueryDto, user: JwtPayload) {
-    this.assertCanVisualizar(user);
+    this.assertCanVisualizarModulo(user);
     const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200);
     const offset = Math.max(Number(query.offset) || 0, 0);
     const where = this.buildWhere(query, user);
@@ -170,7 +176,7 @@ export class DocumentosService {
   }
 
   async getById(id: string, user: JwtPayload) {
-    this.assertCanVisualizar(user);
+    this.assertCanVisualizarModulo(user);
     const documento = await this.prisma.documento.findFirst({
       where: { id, ...this.scopeFilter(user) },
       include: DOCUMENTO_INCLUDE,
@@ -211,11 +217,13 @@ export class DocumentosService {
   }
 
   async listByChamado(chamadoId: string, user: JwtPayload) {
-    return this.list({ chamadoId, limit: '100' }, user);
+    this.assertCanVisualizarRelacionado(user);
+    return this.listRelated({ chamadoId, limit: '100' }, user);
   }
 
   async listByFiscalizacao(fiscalizacaoId: string, user: JwtPayload) {
-    return this.list({ fiscalizacaoId, limit: '100' }, user);
+    this.assertCanVisualizarRelacionado(user);
+    return this.listRelated({ fiscalizacaoId, limit: '100' }, user);
   }
 
   async listChecklistsAvulso(user: JwtPayload) {
@@ -611,7 +619,7 @@ export class DocumentosService {
   }
 
   async getPdfBuffer(id: string, variante: 'original' | 'assinado', user: JwtPayload) {
-    this.assertCanVisualizar(user);
+    this.assertCanVisualizarRelacionado(user);
     const documento = await this.requireDocumento(id, user);
     const key =
       variante === 'assinado' ? documento.pdfAssinadoStorageKey : documento.pdfOriginalStorageKey;
@@ -2098,22 +2106,59 @@ export class DocumentosService {
     return `DOC-${ano}-${String(seq).padStart(6, '0')}`;
   }
 
+  private async listRelated(query: ListDocumentosQueryDto, user: JwtPayload) {
+    const limit = Math.min(Math.max(Number(query.limit) || 50, 1), 200);
+    const offset = Math.max(Number(query.offset) || 0, 0);
+    const where = this.buildWhere(query, user);
+
+    const [total, items] = await Promise.all([
+      this.prisma.documento.count({ where }),
+      this.prisma.documento.findMany({
+        where,
+        include: DOCUMENTO_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+    ]);
+
+    return {
+      total,
+      items: items.map((item) => this.serialize(item)),
+    };
+  }
+
   private nextCodigoValidacao() {
     return generateCodigoValidacao();
   }
 
-  private assertCanVisualizar(user: JwtPayload) {
-    if (
-      user.permissoes.includes('documentos.visualizar') ||
-      user.permissoes.includes('documentos.administrar') ||
-      user.permissoes.includes('usuarios.gerenciar') ||
-      user.permissoes.includes('dashboard.visualizar') ||
-      user.permissoes.includes('chamados.gerenciar') ||
-      user.permissoes.includes('fiscalizacoes.executar')
-    ) {
-      return;
+  private assertCanVisualizarModulo(user: JwtPayload) {
+    if (hasDocumentosModuloAccess(user.permissoes)) return;
+    throw new ForbiddenException('Sem permissão para abrir o cadastro do documento.');
+  }
+
+  private assertCanVisualizarRelacionado(user: JwtPayload) {
+    if (!hasDocumentosRelacionadosAccess(user.permissoes)) {
+      throw new ForbiddenException('Sem permissão para visualizar documentos relacionados.');
     }
-    throw new ForbiddenException('Sem permissão para visualizar documentos.');
+    const operacional = hasAnyPermission(user, [
+      'chamados.gerenciar',
+      'chamados.executar',
+      'fiscalizacoes.executar',
+      'usuarios.gerenciar',
+      'documentos.visualizar',
+      'documentos.administrar',
+    ]);
+    if (!operacional && !hasDocumentosModuloAccess(user.permissoes)) {
+      const caps = resolveMeusChamadosTimelineCaps(user.permissoes);
+      if (!caps.consultarDocumentos) {
+        throw new ForbiddenException('Sem permissão para consultar documentos relacionados.');
+      }
+    }
+  }
+
+  private assertCanVisualizar(user: JwtPayload) {
+    this.assertCanVisualizarRelacionado(user);
   }
 
   private assertPermission(user: JwtPayload, keys: string[]) {

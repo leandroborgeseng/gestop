@@ -10,13 +10,14 @@ import {
   Prisma,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
+import { isPerfilExterno } from '../auth/perfil-natureza';
 import {
   assertChamadoExecucaoAccess,
   assertChamadoSecretariaAccess,
-  assertSecretariaNoEscopo,
   resolveChamadoSecretariaFilter,
   resolveEquipeSecretariaFilter,
 } from '../auth/secretaria-scope';
+import { resolveMeusChamadosTimelineCaps } from './meus-chamados-timeline.permissions';
 import { DocumentosService } from '../documentos/documentos.service';
 import { buildRelatorioExecucaoPdf } from '../documentos/relatorio-execucao-pdf';
 import { IntegracoesService } from '../integracoes/integracoes.service';
@@ -158,6 +159,7 @@ export class ChamadosService {
   async getMeuChamado(id: string, user: JwtPayload) {
     const chamado = await this.getChamadoOrThrow(id);
     this.assertMeuChamadoAccess(chamado, user);
+    const caps = resolveMeusChamadosTimelineCaps(user.permissoes);
 
     const historico = await this.prisma.historicoStatus.findMany({
       where: { entidadeTipo: 'Chamado', entidadeId: id },
@@ -166,12 +168,18 @@ export class ChamadosService {
     });
 
     const enriched = await this.enrichHistorico(historico, id);
-    const timeline = enriched.map((entry) => this.simplifyHistoricoEntry(entry));
+    const timeline = enriched
+      .map((entry) => this.filterHistoricoForMeusChamados(entry, caps))
+      .filter((entry): entry is NonNullable<typeof entry> => entry != null);
 
+    const serialized = this.serializeChamado(chamado, user.sub);
     return {
-      ...this.serializeChamado(chamado, user.sub),
+      ...serialized,
+      fotoUrl: caps.fotosAbertura ? serialized.fotoUrl : null,
+      equipe: caps.equipeExecutora ? serialized.equipe : null,
       historico: timeline,
-      podeGerenciarObservadores: chamado.registradoPorId === user.sub,
+      podeGerenciarObservadores: caps.cadastrarObservadores && chamado.registradoPorId === user.sub,
+      permissoesTimeline: caps,
     };
   }
 
@@ -207,18 +215,14 @@ export class ChamadosService {
   async updateObservadoresMeuChamado(id: string, dto: UpdateChamadoObservadoresDto, user: JwtPayload) {
     const chamado = await this.getChamadoOrThrow(id);
     this.assertMeuChamadoAccess(chamado, user);
-    if (chamado.registradoPorId !== user.sub) {
-      throw new ForbiddenException('Somente quem abriu o chamado pode gerenciar observadores.');
-    }
+    this.assertPodeCadastrarObservadoresMeuChamado(chamado, user);
     return this.syncObservadores(id, dto.observadorIds ?? [], user, 'meus_chamados');
   }
 
   async addObservadorMeuChamado(id: string, usuarioId: string, user: JwtPayload) {
     const chamado = await this.getChamadoOrThrow(id);
     this.assertMeuChamadoAccess(chamado, user);
-    if (chamado.registradoPorId !== user.sub) {
-      throw new ForbiddenException('Somente quem abriu o chamado pode gerenciar observadores.');
-    }
+    this.assertPodeCadastrarObservadoresMeuChamado(chamado, user);
 
     const currentIds = (chamado.observadores ?? []).map((item) => item.usuarioId);
     if (currentIds.includes(usuarioId)) {
@@ -230,9 +234,7 @@ export class ChamadosService {
   async removeObservadorMeuChamado(id: string, usuarioId: string, user: JwtPayload) {
     const chamado = await this.getChamadoOrThrow(id);
     this.assertMeuChamadoAccess(chamado, user);
-    if (chamado.registradoPorId !== user.sub) {
-      throw new ForbiddenException('Somente quem abriu o chamado pode gerenciar observadores.');
-    }
+    this.assertPodeCadastrarObservadoresMeuChamado(chamado, user);
 
     const currentIds = (chamado.observadores ?? []).map((item) => item.usuarioId).filter((item) => item !== usuarioId);
     return this.syncObservadores(id, currentIds, user, 'meus_chamados');
@@ -642,6 +644,28 @@ export class ChamadosService {
     return this.prisma.tipoChamado.findMany({
       where: { ativo: true },
       orderBy: { nome: 'asc' },
+      include: {
+        secretarias: {
+          include: { secretaria: { select: { id: true, nome: true, sigla: true, ativo: true } } },
+        },
+      },
+    }).then((tipos) =>
+      tipos.map((tipo) => ({
+        id: tipo.id,
+        nome: tipo.nome,
+        secretarias: tipo.secretarias
+          .map((item) => item.secretaria)
+          .filter((secretaria) => secretaria.ativo)
+          .map((secretaria) => ({ id: secretaria.id, nome: secretaria.nome, sigla: secretaria.sigla })),
+      })),
+    );
+  }
+
+  async listSecretariasParaAbertura(_user: JwtPayload) {
+    return this.prisma.secretaria.findMany({
+      where: { ativo: true },
+      orderBy: { nome: 'asc' },
+      select: { id: true, nome: true, sigla: true },
     });
   }
 
@@ -1042,7 +1066,7 @@ export class ChamadosService {
 
   async createChamado(dto: CreateChamadoDto, user: JwtPayload) {
     const location = await this.resolveCreateLocation(dto, user.sub);
-    assertSecretariaNoEscopo(user, location.secretariaId);
+    await this.assertSecretariaExecucaoNaAbertura(user, dto.tipoChamadoId, location.secretariaId);
 
     const tipo = await this.prisma.tipoChamado.findFirst({
       where: { id: dto.tipoChamadoId.trim(), ativo: true },
@@ -2682,6 +2706,135 @@ export class ChamadosService {
     if (!isOpener && !isObserver) {
       throw new ForbiddenException('Você não tem acesso a este chamado em Meus chamados.');
     }
+  }
+
+  private assertPodeCadastrarObservadoresMeuChamado(
+    chamado: { registradoPorId?: string | null },
+    user: JwtPayload,
+  ) {
+    const caps = resolveMeusChamadosTimelineCaps(user.permissoes);
+    if (!caps.cadastrarObservadores) {
+      throw new ForbiddenException('Sem permissão para cadastrar observadores em Meus chamados.');
+    }
+    if (chamado.registradoPorId !== user.sub) {
+      throw new ForbiddenException('Somente quem abriu o chamado pode gerenciar observadores.');
+    }
+  }
+
+  private async assertSecretariaExecucaoNaAbertura(
+    user: JwtPayload,
+    tipoChamadoId: string,
+    secretariaId: string,
+  ) {
+    const secretaria = await this.prisma.secretaria.findFirst({
+      where: { id: secretariaId, ativo: true },
+      select: { id: true },
+    });
+    if (!secretaria) {
+      throw new BadRequestException('Secretaria responsável pela execução não encontrada ou inativa.');
+    }
+
+    if (!isPerfilExterno(user)) {
+      return;
+    }
+
+    const vinculos = await this.prisma.tipoChamadoSecretaria.findMany({
+      where: { tipoChamadoId, secretaria: { ativo: true } },
+      select: { secretariaId: true },
+    });
+    if (vinculos.length === 0) {
+      throw new BadRequestException(
+        'Este tipo de chamado não possui Secretaria responsável vinculada. Não é possível abrir o chamado.',
+      );
+    }
+    if (!vinculos.some((item) => item.secretariaId === secretariaId)) {
+      throw new ForbiddenException(
+        'Usuário externo só pode encaminhar o chamado para Secretarias vinculadas ao tipo selecionado.',
+      );
+    }
+  }
+
+  private filterHistoricoForMeusChamados(
+    entry: {
+      id: string;
+      statusAnterior: string | null;
+      statusNovo: string;
+      motivo: string | null;
+      metadata: unknown;
+      createdAt: string;
+      alteradoPor: { id: string; nome: string } | null;
+      anexos?: unknown;
+    },
+    caps: ReturnType<typeof resolveMeusChamadosTimelineCaps>,
+  ) {
+    const metadata = { ...((entry.metadata ?? {}) as Record<string, unknown>) };
+    const tipo = typeof metadata.tipo === 'string' ? metadata.tipo : null;
+
+    if (
+      (tipo === 'programacao_update' || entry.motivo === 'Programação de execução atualizada.') &&
+      !caps.atualizacaoProgramacao
+    ) {
+      return null;
+    }
+    if ((tipo === 'atribuicao_update' || this.isAtribuicaoMotivo(entry.motivo)) && !caps.atualizacaoAtribuicao && !caps.mudancaAtribuicao) {
+      return null;
+    }
+    if ((tipo === 'HISTORY_UPDATE' || tipo === 'historico_manual') && !caps.historicosAvulsos) {
+      return null;
+    }
+    if (
+      !tipo &&
+      entry.statusAnterior &&
+      entry.statusAnterior !== entry.statusNovo &&
+      !caps.mudancaStatus
+    ) {
+      return null;
+    }
+
+    if (!caps.relatorioExecucao) {
+      delete metadata.relatorio;
+    }
+    if (!caps.participantesExecucao) {
+      delete metadata.membrosExecutores;
+      delete metadata.membrosExternos;
+      delete metadata.participantes;
+    }
+    if (!caps.equipeExecutora) {
+      delete metadata.equipeExecutora;
+    }
+    if (!caps.evidenciasExecucao && !caps.evidenciasRegistradas) {
+      delete metadata.evidenciasCount;
+    }
+
+    let anexos = entry.anexos;
+    const isAbertura = !entry.statusAnterior && (entry.statusNovo === 'ABERTO' || !tipo);
+    const isExecucao =
+      tipo === 'execucao_conclusao' ||
+      tipo === 'execucao_manual' ||
+      tipo === 'execucao_checkin' ||
+      Boolean(metadata.relatorio) ||
+      Boolean(metadata.membrosExecutores) ||
+      Boolean(metadata.evidenciasCount);
+
+    if (isAbertura && !caps.fotosAbertura) {
+      anexos = [];
+    }
+    if (isExecucao && !caps.evidenciasExecucao && !caps.evidenciasRegistradas) {
+      anexos = [];
+    }
+
+    return {
+      ...entry,
+      metadata,
+      anexos,
+    };
+  }
+
+  private isAtribuicaoMotivo(motivo: string | null) {
+    return (
+      motivo === 'Atribuição de equipe/responsável atualizada.' ||
+      motivo === 'Atribuição de equipe atualizada.'
+    );
   }
 
   private simplifyHistoricoEntry(entry: {

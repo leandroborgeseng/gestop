@@ -124,7 +124,7 @@ export const NAV_ITEMS: NavItem[] = [
     shortLabel: 'Agenda',
     href: '/cronograma',
     icon: CalendarDays,
-    permission: 'dashboard.visualizar',
+    permissions: ['cronograma.visualizar', 'dashboard.visualizar'],
   },
   {
     id: 'relatorios',

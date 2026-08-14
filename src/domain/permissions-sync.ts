@@ -34,6 +34,34 @@ export async function syncPermissionsCatalog(prisma: PrismaClient) {
 
   entries.push(
     {
+      chave: 'cronograma.visualizar',
+      descricao: 'Visualizar tela Cronograma',
+      modulo: 'cronograma',
+    },
+    {
+      chave: 'cronograma.inserir',
+      descricao: 'Criar cronograma de checagem',
+      modulo: 'cronograma',
+    },
+    {
+      chave: 'cronograma.alterar',
+      descricao: 'Editar cronograma de checagem',
+      modulo: 'cronograma',
+    },
+    {
+      chave: 'cronograma.excluir',
+      descricao: 'Inativar ou excluir cronograma',
+      modulo: 'cronograma',
+    },
+    {
+      chave: 'cronograma.executar',
+      descricao: 'Executar ações operacionais do Cronograma (ex.: cobertura)',
+      modulo: 'cronograma',
+    },
+  );
+
+  entries.push(
+    {
       chave: 'documentos.visualizar',
       descricao: 'Visualizar documentos do módulo Documentos',
       modulo: 'documentos',

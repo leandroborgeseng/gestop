@@ -4,10 +4,10 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Eye, Search } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
-import { useSessionUser } from '@/components/auth/session-context';
 import { ChamadoDescricaoExpandivel } from '@/components/chamados/chamado-descricao-expandivel';
 import { ChamadoObservadoresSection } from '@/components/chamados/chamado-observadores-section';
 import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
+import { DocumentosRelacionadosPanel } from '@/components/documentos/documentos-relacionados-panel';
 import { TipBanner } from '@/components/help/tip-banner';
 import { PageShell } from '@/components/layout/page-shell';
 import { Badge } from '@/components/ui/badge';
@@ -56,7 +56,6 @@ export default function MeusChamadosPage() {
 function MeusChamadosPageContent() {
   const searchParams = useSearchParams();
   const backHref = useSafeBackHref('/conta');
-  const sessionUser = useSessionUser();
   const [items, setItems] = useState<ChamadoResumo[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -123,9 +122,9 @@ function MeusChamadosPageContent() {
     ? buildChamadoTimelineFromHistorico(detail?.historico ?? [], resumo.status, resumo.createdAt)
     : [];
 
-  const canManageObservadores =
-    Boolean(detail?.podeGerenciarObservadores) ||
-    (Boolean(sessionUser?.id) && resumo?.registradoPor?.id === sessionUser?.id);
+  const canManageObservadores = Boolean(detail?.podeGerenciarObservadores);
+  const showEquipe = detail?.permissoesTimeline?.equipeExecutora !== false;
+  const showDocumentos = Boolean(detail?.permissoesTimeline?.consultarDocumentos);
 
   async function refreshDetail() {
     if (!selectedId) return;
@@ -270,7 +269,7 @@ function MeusChamadosPageContent() {
                     />
                     <Info label="Prazo" value={prazoInfo(resumo.prazoEm, resumo.status).label} />
                     <Info label="Registrado por" value={resumo.registradoPor?.nome ?? '—'} />
-                    <Info label="Equipe" value={resumo.equipe?.nome ?? '—'} />
+                    {showEquipe ? <Info label="Equipe" value={resumo.equipe?.nome ?? '—'} /> : null}
                   </div>
 
                   <ChamadoObservadoresSection
@@ -279,6 +278,10 @@ function MeusChamadosPageContent() {
                     mode="meus"
                     onChanged={() => void refreshDetail()}
                   />
+
+                  {showDocumentos && detail ? (
+                    <DocumentosRelacionadosPanel chamadoId={detail.id} />
+                  ) : null}
 
                   <div>
                     <p className="mb-2 text-[12px] font-bold tracking-wide text-[var(--ink-2)] uppercase">

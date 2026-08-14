@@ -70,6 +70,11 @@ enum FiscalizacaoOrigem {
   MANUAL
 }
 
+enum PerfilNatureza {
+  INTERNO
+  EXTERNO
+}
+
 enum ConformidadeStatus {
   CONFORME
   NAO_CONFORME
@@ -229,6 +234,7 @@ model Secretaria {
   documentos        Documento[]
   dashboardSnapshots DashboardSnapshot[]
   equipes           Equipe[]
+  tiposChamado      TipoChamadoSecretaria[]
 
   @@index([ativo])
 }
@@ -349,13 +355,15 @@ model PushSubscription {
 }
 
 model Perfil {
-  id          String   @id @default(uuid())
-  nome        String   @unique
+  id          String         @id @default(uuid())
+  nome        String         @unique
   descricao   String?
-  sistema     Boolean  @default(false)
-  ativo       Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  /// Interno = servidor/operacional. Externo = cidadão/consulta pública (futuro).
+  natureza    PerfilNatureza @default(INTERNO)
+  sistema     Boolean        @default(false)
+  ativo       Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
 
   usuarios         UsuarioPerfil[]
   usuariosAtivos   Usuario[] @relation("UsuarioPerfilAtivo")
@@ -452,8 +460,21 @@ model TipoChamado {
 
   chamados Chamado[]
   checklists ChecklistTipoChamado[]
+  secretarias TipoChamadoSecretaria[]
 
   @@index([ativo])
+}
+
+model TipoChamadoSecretaria {
+  tipoChamadoId String
+  secretariaId  String
+  createdAt     DateTime @default(now())
+
+  tipoChamado TipoChamado @relation(fields: [tipoChamadoId], references: [id], onDelete: Cascade)
+  secretaria  Secretaria  @relation(fields: [secretariaId], references: [id], onDelete: Cascade)
+
+  @@id([tipoChamadoId, secretariaId])
+  @@index([secretariaId])
 }
 
 model Equipe {
@@ -633,6 +654,9 @@ model Fiscalizacao {
   dataVistoriaInformada DateTime?
   /// Auditoria de lançamento (ex.: lancamentoManual, dataVistoriaInformada, dataLancamento).
   metadata              Json?
+  /// Vínculo com a vistoria prevista no cronograma, quando iniciada pela aba programadas.
+  cronogramaId          String?
+  dataProgramada        DateTime?
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
@@ -641,6 +665,7 @@ model Fiscalizacao {
   checklistVersao ChecklistVersao   @relation(fields: [checklistVersaoId], references: [id], onDelete: Restrict)
   agente          Usuario           @relation("FiscalizacaoAgente", fields: [agenteId], references: [id], onDelete: Restrict)
   lancadoPor      Usuario?          @relation("FiscalizacaoLancadoPor", fields: [lancadoPorId], references: [id], onDelete: SetNull)
+  cronograma      CronogramaChecagem? @relation(fields: [cronogramaId], references: [id], onDelete: SetNull)
   respostas       RespostaChecklist[]
   evidencias      Evidencia[]
   naoConformidades NaoConformidade[]
@@ -654,6 +679,7 @@ model Fiscalizacao {
   @@index([status])
   @@index([origem])
   @@index([createdAt])
+  @@index([cronogramaId])
 }
 
 model CronogramaChecagem {
@@ -674,6 +700,7 @@ model CronogramaChecagem {
   checklist    Checklist      @relation(fields: [checklistId], references: [id], onDelete: Restrict)
   responsavel  Usuario?       @relation("CronogramaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   responsaveis CronogramaChecagemResponsavel[]
+  fiscalizacoes Fiscalizacao[]
 
   @@unique([unidadeId, checklistId])
   @@index([proximaChecagemEm])

@@ -12,7 +12,7 @@ import {
   hasOperationalNavAccess,
   isNavActive,
 } from '@/lib/navigation';
-import { hasAnyAdminVisualizarAccess } from '@/lib/permissions-matrix';
+import { hasAnyAdminVisualizarAccess, hasCronogramaAccess, hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
 import { ErrorState } from '@/components/ui-states';
 
 function permissionSatisfied(required: string, userPermissions: string[]) {
@@ -27,6 +27,12 @@ function permissionSatisfied(required: string, userPermissions: string[]) {
   }
   if (required === 'admin.visualizar') {
     return hasAnyAdminVisualizarAccess(userPermissions);
+  }
+  if (required === 'cronograma.visualizar') {
+    return hasCronogramaAccess(userPermissions, 'visualizar');
+  }
+  if (required === 'documentos.visualizar') {
+    return hasDocumentosModuloAccess(userPermissions);
   }
   return userPermissions.includes(required);
 }

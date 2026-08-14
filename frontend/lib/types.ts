@@ -282,6 +282,7 @@ export type ChamadoMapaItem = {
 export type AuthUserPerfilResumo = {
   id: string;
   nome: string;
+  natureza?: 'INTERNO' | 'EXTERNO';
 };
 
 export type AuthUserSecretariaResumo = {
@@ -445,6 +446,7 @@ export type AdminTipoChamado = {
   slaUrgenteDias: number;
   exigeVistoriaPrevia: boolean;
   ativo: boolean;
+  secretarias?: Array<{ secretaria: SecretariaOption }>;
 };
 
 export type AdminTipoProprio = {
@@ -460,6 +462,7 @@ export type AdminTipoProprio = {
 export type TipoChamadoOpcao = {
   id: string;
   nome: string;
+  secretarias?: SecretariaOption[];
 };
 
 export type TipoProprioOpcao = {
@@ -703,6 +706,8 @@ export type MobileQueuedInspection = {
   checklistVersaoId: string;
   iniciadaEm: string;
   concluidaEm: string;
+  cronogramaId?: string;
+  dataProgramada?: string;
   checkin: {
     latitude: number;
     longitude: number;
@@ -729,6 +734,26 @@ export type MobileQueuedInspection = {
       };
     }>;
   }>;
+};
+
+export type VistoriaProgramadaItem = {
+  id: string;
+  cronogramaId: string;
+  data: string;
+  tipo: 'AGENDADA' | 'REALIZADA' | 'ATRASADA';
+  frequencia: 'SEMANAL' | 'QUINZENAL' | 'MENSAL' | 'BIMESTRAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL';
+  checklist: { id: string; nome: string };
+  unidade: {
+    id: string;
+    nome: string;
+    tipo: UnidadeTipo;
+    endereco: string;
+    bairro: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    secretaria: SecretariaOption;
+  };
+  responsaveis: Array<{ id: string; nome: string }>;
 };
 
 export type ChamadoStatus =
@@ -876,6 +901,21 @@ export type ChamadoDetalhe = ChamadoResumo & {
     anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null }>;
   }>;
   podeGerenciarObservadores?: boolean;
+  permissoesTimeline?: {
+    fotosAbertura: boolean;
+    evidenciasExecucao: boolean;
+    participantesExecucao: boolean;
+    equipeExecutora: boolean;
+    evidenciasRegistradas: boolean;
+    relatorioExecucao: boolean;
+    mudancaStatus: boolean;
+    mudancaAtribuicao: boolean;
+    atualizacaoProgramacao: boolean;
+    atualizacaoAtribuicao: boolean;
+    historicosAvulsos: boolean;
+    cadastrarObservadores: boolean;
+    consultarDocumentos: boolean;
+  };
 };
 
 export type ChamadoEvidencia = {

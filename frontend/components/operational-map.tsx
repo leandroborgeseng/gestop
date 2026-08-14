@@ -29,6 +29,7 @@ export function OperationalMap({
   categoriaFiltroId = null,
   onSelect,
   onHover,
+  popupActionKind = 'modal',
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -39,6 +40,7 @@ export function OperationalMap({
   categoriaFiltroId?: string | null;
   onSelect?: (id: string) => void;
   onHover?: (id: string | null) => void;
+  popupActionKind?: import('@/lib/map-popup-action').MapPopupActionKind;
 }) {
   return (
     <OperationalMapClient
@@ -51,6 +53,7 @@ export function OperationalMap({
       categoriaFiltroId={categoriaFiltroId}
       onSelect={onSelect}
       onHover={onHover}
+      popupActionKind={popupActionKind}
     />
   );
 }

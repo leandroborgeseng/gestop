@@ -144,6 +144,11 @@ export class TipoChamadoDto {
   @IsOptional()
   @IsBoolean()
   ativo?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  secretariaIds?: string[];
 }
 
 export class UsuarioDto {
