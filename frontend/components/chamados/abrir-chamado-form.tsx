@@ -33,13 +33,17 @@ import {
 import { isWithinFrancaMunicipio } from '@/lib/franca-geo';
 import { hasChamadosGerenciar } from '@/lib/navigation';
 import { useSessionUser } from '@/components/auth/session-context';
-import { TipoChamadoOpcao, UnidadeOperacional } from '@/lib/types';
+import { SecretariaOption, TipoChamadoOpcao, UnidadeOperacional } from '@/lib/types';
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Badge } from '@/components/ui/badge';
 
 const PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
 type ModoLocalizacao = 'UNIDADE' | 'ENDERECO';
+
+function compareSecretariaOpcao(a: SecretariaOption, b: SecretariaOption) {
+  return a.sigla.localeCompare(b.sigla, 'pt-BR') || a.nome.localeCompare(b.nome, 'pt-BR');
+}
 
 const textareaClass =
   'min-h-[96px] w-full resize-y rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-[11px] py-2 text-[13px] text-[var(--ink)] transition-all duration-[var(--md-duration-short)] placeholder:text-[var(--ink-4)] hover:border-[#cdd8e6] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)] disabled:cursor-not-allowed disabled:opacity-50';
@@ -64,7 +68,10 @@ export function AbrirChamadoForm({
   const router = useRouter();
   const snackbar = useSnackbar();
   const sessionUser = useSessionUser();
-  const perfilExterno = (sessionUser?.perfilAtivo?.natureza ?? 'INTERNO') === 'EXTERNO';
+  const perfilExterno =
+    (sessionUser?.perfilAtivo?.natureza ??
+      getStoredAuth()?.user.perfilAtivo?.natureza ??
+      'INTERNO') === 'EXTERNO';
 
   const [modo, setModo] = useState<ModoLocalizacao>(initialUnidadeId ? 'UNIDADE' : 'ENDERECO');
   const [descricao, setDescricao] = useState('');
@@ -117,7 +124,7 @@ export function AbrirChamadoForm({
   >([]);
 
   const [unidades, setUnidades] = useState<UnidadeOperacional[]>([]);
-  const [secretarias, setSecretarias] = useState<Array<{ id: string; nome: string; sigla: string }>>([]);
+  const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
   const [loadingUnidades, setLoadingUnidades] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
   const [busy, setBusy] = useState(false);
@@ -160,7 +167,19 @@ export function AbrirChamadoForm({
     [tiposChamado, tipoChamadoId],
   );
 
-  const secretariasSugeridas = useMemo(() => selectedTipo?.secretarias ?? [], [selectedTipo]);
+  const secretariasSugeridas = useMemo(() => {
+    const seen = new Set<string>();
+    return (selectedTipo?.secretarias ?? []).filter((item) => {
+      if (seen.has(item.id)) return false;
+      seen.add(item.id);
+      return true;
+    });
+  }, [selectedTipo]);
+
+  const secretariasDemais = useMemo(() => {
+    const sugeridas = new Set(secretariasSugeridas.map((item) => item.id));
+    return secretarias.filter((item) => !sugeridas.has(item.id)).slice().sort(compareSecretariaOpcao);
+  }, [secretarias, secretariasSugeridas]);
 
   const secretariasDisponiveis = useMemo(() => {
     if (perfilExterno) {
@@ -172,11 +191,6 @@ export function AbrirChamadoForm({
     }
     return [...byId.values()];
   }, [perfilExterno, secretarias, secretariasSugeridas]);
-
-  const secretariasDemais = useMemo(() => {
-    const sugeridas = new Set(secretariasSugeridas.map((item) => item.id));
-    return secretariasDisponiveis.filter((item) => !sugeridas.has(item.id));
-  }, [secretariasDisponiveis, secretariasSugeridas]);
 
   useEffect(() => {
     if (!tipoChamadoId) return;

@@ -797,10 +797,11 @@ export class ChamadosService {
     );
   }
 
+  /** Todas as Secretarias ativas (sem filtro de escopo). Interno escolhe qualquer uma na abertura. */
   async listSecretariasParaAbertura(_user: JwtPayload) {
     return this.prisma.secretaria.findMany({
       where: { ativo: true },
-      orderBy: { nome: 'asc' },
+      orderBy: [{ sigla: 'asc' }, { nome: 'asc' }],
       select: { id: true, nome: true, sigla: true },
     });
   }

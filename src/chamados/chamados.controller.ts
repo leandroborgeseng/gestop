@@ -34,6 +34,13 @@ export class ChamadosController {
     return this.chamadosService.listTiposChamadoAtivos();
   }
 
+  /** Precisa ficar acima de `:id/execucao`, senão `secretarias/execucao` é interpretado como id. */
+  @RequireAnyPermissions(...CHAMADOS_ABRIR_KEYS)
+  @Get('secretarias/execucao')
+  listSecretariasExecucao(@CurrentUser() user: JwtPayload) {
+    return this.chamadosService.listSecretariasParaAbertura(user);
+  }
+
   @RequirePermissions('chamados.gerenciar')
   @Post('ordens-servico/lote.pdf')
   @Header('Content-Type', 'application/pdf')
@@ -187,12 +194,6 @@ export class ChamadosController {
     return new StreamableFile(pdf, {
       disposition: `attachment; filename="chamado-${id.slice(0, 8)}.pdf"`,
     });
-  }
-
-  @RequireAnyPermissions(...CHAMADOS_ABRIR_KEYS)
-  @Get('secretarias/execucao')
-  listSecretariasExecucao(@CurrentUser() user: JwtPayload) {
-    return this.chamadosService.listSecretariasParaAbertura(user);
   }
 
   @RequirePermissions('chamados.gerenciar')
