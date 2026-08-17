@@ -21,6 +21,7 @@ import {
   retrySyncFalhas,
   sendIntegrationNotification,
 } from '@/lib/api';
+import { hasIntegracoesExecutarAccess } from '@/lib/permissions-matrix';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { IntegracoesEventos } from '@/lib/types';
 
@@ -30,11 +31,7 @@ export default function IntegracoesPage() {
   const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
   const session = useSessionUser();
-  const canExec = (session?.permissoes ?? []).some((key) =>
-    key === 'matriz.integracoes._tela.executar' ||
-    key === 'matriz.integracoes.monitorar.executar' ||
-    key === 'usuarios.gerenciar',
-  );
+  const canExec = hasIntegracoesExecutarAccess(session?.permissoes ?? [], session);
   const [eventos, setEventos] = useState<IntegracoesEventos | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -127,7 +124,14 @@ export default function IntegracoesPage() {
   }
 
   return (
-    <RequirePermissions permissions={['auditoria.visualizar', 'matriz.integracoes._tela.visualizar']} match="any">
+    <RequirePermissions
+      permissions={[
+        'auditoria.visualizar',
+        'matriz.integracoes._tela.visualizar',
+        'matriz.integracoes.monitorar.visualizar',
+      ]}
+      match="any"
+    >
       <PageShell
         kicker="Técnico"
         icon={Plug}

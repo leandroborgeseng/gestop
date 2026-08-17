@@ -10,14 +10,14 @@ import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 function afterSessionSwitch(user: AuthUser) {
   const currentPath = window.location.pathname;
-  const stillAllowed = getVisibleNavItems(user.permissoes).some((item) =>
+  const stillAllowed = getVisibleNavItems(user.permissoes, user).some((item) =>
     isNavActive(currentPath, item.href),
   );
   if (stillAllowed) {
     window.location.assign(`${currentPath}${window.location.search}`);
     return;
   }
-  window.location.assign(getDefaultAuthenticatedHref(user.permissoes));
+  window.location.assign(getDefaultAuthenticatedHref(user.permissoes, user));
 }
 
 export function SessionScopeSwitchers({

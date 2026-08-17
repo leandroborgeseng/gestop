@@ -70,7 +70,7 @@ function LoginContent() {
 
     try {
       const data = await login(email, password, remember);
-      router.replace(getDefaultAuthenticatedHref(data.user.permissoes));
+      router.replace(getDefaultAuthenticatedHref(data.user.permissoes, data.user));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha inesperada no login.');
     } finally {

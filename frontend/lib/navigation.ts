@@ -20,6 +20,7 @@ import {
 import {
   hasAbrirChamadoAccess,
   hasMeusChamadosAccess,
+  isAdministradorSistemaAtivo,
   isMatrixPermissionKey,
   navItemAllowedByMatrix,
   screenHasVisualizarAccess,
@@ -184,7 +185,13 @@ export const NAV_GROUPS: NavGroup[] = [
 /** Atalhos fixos na barra inferior mobile — Execução sempre incluído quando permitido. */
 const MOBILE_BAR_CORE = ['cco', 'mobile', 'novo_chamado', 'meus_chamados', 'chamados', 'execucao'] as const;
 
-export function getVisibleNavItems(permissions: string[]) {
+type NavUser = { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null | undefined;
+
+export function getVisibleNavItems(permissions: string[], user?: NavUser) {
+  if (isAdministradorSistemaAtivo(user)) {
+    return NAV_ITEMS;
+  }
+
   const usesMatrix = permissions.some(isMatrixPermissionKey);
 
   return NAV_ITEMS.filter((item) => {
@@ -202,8 +209,8 @@ export function getVisibleNavItems(permissions: string[]) {
   });
 }
 
-export function getGroupedNavItems(permissions: string[]) {
-  const visible = getVisibleNavItems(permissions);
+export function getGroupedNavItems(permissions: string[], user?: NavUser) {
+  const visible = getVisibleNavItems(permissions, user);
   const byId = new Map(visible.map((item) => [item.id, item]));
 
   return NAV_GROUPS.map((group) => ({
@@ -212,8 +219,8 @@ export function getGroupedNavItems(permissions: string[]) {
   })).filter((group) => group.items.length > 0);
 }
 
-export function getMobileNav(permissions: string[]) {
-  const visible = getVisibleNavItems(permissions);
+export function getMobileNav(permissions: string[], user?: NavUser) {
+  const visible = getVisibleNavItems(permissions, user);
   const visibleById = new Map(visible.map((item) => [item.id, item]));
 
   const primary = MOBILE_BAR_CORE.map((id) => visibleById.get(id)).filter(Boolean) as NavItem[];
@@ -226,23 +233,23 @@ export function getMobileNav(permissions: string[]) {
 }
 
 /** Primeira rota operacional permitida na ordem dos menus; fallback `/conta` se nada for liberado. */
-export function getDefaultAuthenticatedHref(permissions: string[]): string {
-  const first = getVisibleNavItems(permissions)[0];
+export function getDefaultAuthenticatedHref(permissions: string[], user?: NavUser): string {
+  const first = getVisibleNavItems(permissions, user)[0];
   return first?.href ?? '/conta';
 }
 
-export function hasOperationalNavAccess(permissions: string[]): boolean {
-  return getVisibleNavItems(permissions).length > 0;
+export function hasOperationalNavAccess(permissions: string[], user?: NavUser): boolean {
+  return getVisibleNavItems(permissions, user).length > 0;
 }
 
 /** Usa a rota preferida se o perfil tiver acesso; senão, a primeira tela permitida. */
-export function resolvePreferredHref(permissions: string[], preferredHref: string): string {
-  const visible = getVisibleNavItems(permissions);
+export function resolvePreferredHref(permissions: string[], preferredHref: string, user?: NavUser): string {
+  const visible = getVisibleNavItems(permissions, user);
   const allowed = visible.some(
     (item) => preferredHref === item.href || preferredHref.startsWith(`${item.href}/`),
   );
   if (allowed) return preferredHref;
-  return getDefaultAuthenticatedHref(permissions);
+  return getDefaultAuthenticatedHref(permissions, user);
 }
 
 export function isNavActive(pathname: string, href: string) {

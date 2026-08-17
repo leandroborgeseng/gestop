@@ -12,10 +12,17 @@ import {
   hasOperationalNavAccess,
   isNavActive,
 } from '@/lib/navigation';
-import { hasAnyAdminVisualizarAccess, hasCronogramaAccess, hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
+import { hasAnyAdminVisualizarAccess, hasCronogramaAccess, hasDocumentosModuloAccess, isAdministradorSistemaAtivo } from '@/lib/permissions-matrix';
 import { ErrorState } from '@/components/ui-states';
 
-function permissionSatisfied(required: string, userPermissions: string[]) {
+function permissionSatisfied(
+  required: string,
+  userPermissions: string[],
+  user?: { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null,
+) {
+  if (isAdministradorSistemaAtivo(user)) {
+    return true;
+  }
   if (required === 'chamados.gerenciar') {
     return hasChamadosGerenciar(userPermissions);
   }
@@ -76,11 +83,11 @@ export function RequirePermissions({
     const userPermissions = user.permissoes;
     const hasAccess =
       match === 'any'
-        ? permissions.some((permission) => permissionSatisfied(permission, userPermissions))
-        : permissions.every((permission) => permissionSatisfied(permission, userPermissions));
+        ? permissions.some((permission) => permissionSatisfied(permission, userPermissions, user))
+        : permissions.every((permission) => permissionSatisfied(permission, userPermissions, user));
 
     if (!hasAccess) {
-      if (!hasOperationalNavAccess(userPermissions)) {
+      if (!hasOperationalNavAccess(userPermissions, user)) {
         setAllowed(false);
         setNoAccessMessage(
           'Não há nenhuma funcionalidade liberada para o perfil atual. Procure o administrador do sistema.',
@@ -88,7 +95,7 @@ export function RequirePermissions({
         return;
       }
 
-      const fallback = getDefaultAuthenticatedHref(userPermissions);
+      const fallback = getDefaultAuthenticatedHref(userPermissions, user);
       // Evita loop se a rota de fallback for a mesma que acabou de negar.
       if (!isNavActive(pathname, fallback)) {
         router.replace(fallback);

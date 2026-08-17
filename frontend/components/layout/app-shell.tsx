@@ -92,7 +92,7 @@ function DesktopSidebar({
   onToggleCollapsed: () => void;
 }) {
   const pathname = usePathname();
-  const groups = getGroupedNavItems(user.permissoes);
+  const groups = getGroupedNavItems(user.permissoes, user);
   const userName = user.nome;
   const initials = userName
     .split(' ')
@@ -355,7 +355,7 @@ export function MobileBottomNav({
   const pathname = usePathname();
   const { openGuide } = useGuide();
   const permissions = user.permissoes;
-  const { primary, secondary, hasMore } = getMobileNav(permissions);
+  const { primary, secondary, hasMore } = getMobileNav(permissions, user);
   const MoreIcon = MORE_NAV_ICON;
   const slotCount = hasMore ? primary.length + 1 : primary.length;
 

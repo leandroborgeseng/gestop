@@ -10,6 +10,7 @@ export function useSafeBackHref(preferredHref = '/cco') {
   const sessionUser = useSessionUser();
   return useMemo(() => {
     const permissions = sessionUser?.permissoes ?? getStoredAuth()?.user.permissoes ?? [];
-    return resolvePreferredHref(permissions, preferredHref);
-  }, [sessionUser?.permissoes, preferredHref]);
+    const user = sessionUser ?? getStoredAuth()?.user ?? null;
+    return resolvePreferredHref(permissions, preferredHref, user);
+  }, [sessionUser, preferredHref]);
 }

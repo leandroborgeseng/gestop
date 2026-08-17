@@ -288,3 +288,34 @@ export function hasAnyAdminVisualizarAccess(permissoes: string[]) {
 }
 
 export const ADMINISTRADOR_SISTEMA_NOME = 'Administrador do Sistema';
+
+export function isAdministradorSistemaAtivo(user?: {
+  perfilAtivo?: { nome?: string } | null;
+  perfis?: string[];
+} | null) {
+  const nome = user?.perfilAtivo?.nome ?? user?.perfis?.[0];
+  return nome === ADMINISTRADOR_SISTEMA_NOME;
+}
+
+export function hasIntegracoesVisualizarAccess(
+  permissoes: string[],
+  user?: { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null,
+) {
+  if (isAdministradorSistemaAtivo(user)) return true;
+  return (
+    permissoes.includes('auditoria.visualizar') ||
+    permissoes.includes(buildMatrixKey('integracoes', '_tela', 'visualizar')) ||
+    permissoes.includes(buildMatrixKey('integracoes', 'monitorar', 'visualizar'))
+  );
+}
+
+export function hasIntegracoesExecutarAccess(
+  permissoes: string[],
+  user?: { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null,
+) {
+  if (isAdministradorSistemaAtivo(user)) return true;
+  return (
+    permissoes.includes(buildMatrixKey('integracoes', '_tela', 'executar')) ||
+    permissoes.includes(buildMatrixKey('integracoes', 'monitorar', 'executar'))
+  );
+}

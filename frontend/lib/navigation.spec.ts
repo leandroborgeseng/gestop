@@ -32,4 +32,10 @@ describe('navigation helpers', () => {
     expect(resolvePreferredHref(['chamados.executar'], '/cco')).toBe('/execucao');
     expect(resolvePreferredHref(['dashboard.visualizar'], '/cco')).toBe('/cco');
   });
+
+  it('libera o menu Integrações para o Administrador do Sistema sem chaves da matriz', () => {
+    const admin = { perfilAtivo: { nome: 'Administrador do Sistema' }, perfis: ['Administrador do Sistema'] };
+    const visible = getVisibleNavItems([], admin);
+    expect(visible.some((item) => item.id === 'integracoes')).toBe(true);
+  });
 });

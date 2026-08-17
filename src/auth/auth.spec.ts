@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { signJwt, verifyJwt } from './jwt';
 import { hashPassword, verifyPassword } from './password';
-import { hasAllPermissions } from './permissions';
+import { hasAllPermissions, hasAnyPermission } from './permissions';
 
 describe('senha de usuario', () => {
   it('gera hash scrypt e valida senha correta', () => {
@@ -71,6 +71,39 @@ describe('RBAC', () => {
           permissoes: ['fiscalizacoes.executar'],
         },
         ['dashboard.visualizar'],
+      ),
+    ).toBe(false);
+  });
+
+  it('libera qualquer permissão para o perfil ativo Administrador do Sistema', () => {
+    expect(
+      hasAllPermissions(
+        {
+          perfis: ['Administrador do Sistema'],
+          permissoes: [],
+        },
+        ['matriz.integracoes.monitorar.executar'],
+      ),
+    ).toBe(true);
+    expect(
+      hasAnyPermission(
+        {
+          perfis: ['Administrador do Sistema'],
+          permissoes: [],
+        },
+        ['matriz.integracoes._tela.executar'],
+      ),
+    ).toBe(true);
+  });
+
+  it('não libera Administrador do Sistema quando o perfil ativo é outro', () => {
+    expect(
+      hasAnyPermission(
+        {
+          perfis: ['Gestor CCO'],
+          permissoes: ['auditoria.visualizar'],
+        },
+        ['matriz.integracoes.monitorar.executar'],
       ),
     ).toBe(false);
   });
