@@ -224,7 +224,8 @@ export type AdminTabPermissionId =
   | 'categorias_vistoria'
   | 'permissoes'
   | 'backup'
-  | 'importacao';
+  | 'importacao'
+  | 'auditoria';
 
 const ADMIN_CADASTROS_TABS: AdminTabPermissionId[] = ['secretarias', 'proprios', 'usuarios'];
 
@@ -240,6 +241,7 @@ const ADMIN_TAB_LEGACY: Partial<Record<AdminTabPermissionId, string[]>> = {
   permissoes: ['permissoes.gerenciar', 'usuarios.gerenciar'],
   backup: ['usuarios.gerenciar'],
   importacao: ['unidades.gerenciar', 'usuarios.gerenciar'],
+  auditoria: ['auditoria.visualizar', 'usuarios.gerenciar'],
 };
 
 /** Verifica permissão de ação em uma aba da Administração (matriz fina + legado). */
@@ -280,6 +282,7 @@ export function hasAnyAdminVisualizarAccess(permissoes: string[]) {
     'permissoes',
     'backup',
     'importacao',
+    'auditoria',
   ];
   return tabs.some((tab) => hasAdminTabAccess(tab, 'visualizar', permissoes));
 }

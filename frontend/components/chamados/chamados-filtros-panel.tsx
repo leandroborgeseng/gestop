@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn';
 import { SlaFilter, AtribuicaoFilter, summarizeChamadoFiltros } from '@/lib/chamado-filtros';
 import { ChamadoStatus, EquipeOpcao, SecretariaOption, TipoChamadoOpcao } from '@/lib/types';
 import { CHAMADO_STATUS_META } from '@/lib/chamado-status';
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 type PrioridadeFilter = 'TODAS' | string;
 
@@ -256,7 +257,7 @@ export function ChamadosFiltrosPanel({
                 <option value="">Todas</option>
                 {secretariasProprio.map((secretaria) => (
                   <option key={secretaria.id} value={secretaria.id}>
-                    {secretaria.sigla} — {secretaria.nome}
+                    {formatSecretariaLabel(secretaria)}
                   </option>
                 ))}
               </Select>
@@ -275,7 +276,7 @@ export function ChamadosFiltrosPanel({
                 <option value="">Todas</option>
                 {secretariasExecucao.map((secretaria) => (
                   <option key={secretaria.id} value={secretaria.id}>
-                    {secretaria.sigla} — {secretaria.nome}
+                    {formatSecretariaLabel(secretaria)}
                   </option>
                 ))}
               </Select>

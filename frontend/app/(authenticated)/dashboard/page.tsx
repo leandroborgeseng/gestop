@@ -1,5 +1,7 @@
 'use client';
 
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
+
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
@@ -174,7 +176,7 @@ export default function DashboardPage() {
                 <option value="">Todas</option>
                 {secretarias.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.sigla} — {item.nome}
+                    {formatSecretariaLabel(item)}
                   </option>
                 ))}
               </Select>
@@ -410,8 +412,7 @@ export default function DashboardPage() {
                   ) : null}
                   {dashboard.pendenciasPorSecretaria.map((item) => (
                     <div key={item.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
-                      <strong className="text-[14px] font-semibold text-[var(--ink)]">{item.sigla}</strong>
-                      <span className="text-[13px] text-[var(--ink-3)]"> — {item.nome}</span>
+                      <strong className="text-[14px] font-semibold text-[var(--ink)]">{formatSecretariaLabel(item)}</strong>
                       <p className="mt-1 text-[13px] text-[var(--ink-3)]">
                         {item.chamadosPendentes} chamados pendentes · {item.fiscalizacoes} vistorias
                       </p>

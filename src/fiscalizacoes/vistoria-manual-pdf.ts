@@ -1,3 +1,4 @@
+import { formatSecretariaLabel } from '../common/format-secretaria';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
@@ -450,7 +451,7 @@ function drawUnidadePage(
   let rightY = drawKeyValue(doc, 'Código patrimonial', unidade.codigoPatrimonial, left + colW + 12, y, colW);
   y = Math.max(leftY, rightY);
   leftY = drawKeyValue(doc, 'Tipo', unidade.tipo, left, y, colW);
-  rightY = drawKeyValue(doc, 'Secretaria', `${unidade.secretariaSigla} — ${unidade.secretariaNome}`, left + colW + 12, y, colW);
+  rightY = drawKeyValue(doc, 'Secretaria', formatSecretariaLabel(unidade.secretariaSigla, unidade.secretariaNome), left + colW + 12, y, colW);
   y = Math.max(leftY, rightY);
   leftY = drawKeyValue(doc, 'Endereço', unidade.endereco, left, y, colW);
   rightY = drawKeyValue(doc, 'Bairro', unidade.bairro ?? '—', left + colW + 12, y, colW);

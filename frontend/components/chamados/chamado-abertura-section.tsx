@@ -13,6 +13,7 @@ import { resolveChamadoCoordinates } from '@/lib/chamado-geo';
 import { composeEnderecoTexto, parseEnderecoTexto } from '@/lib/geocoding';
 import { openMapsRoute } from '@/lib/maps-route';
 import { ChamadoResumo, SecretariaOption } from '@/lib/types';
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 function EditableLabel({
   label,
@@ -42,8 +43,8 @@ function displayEndereco(resumo: ChamadoResumo) {
 }
 
 function secretariaLabel(secretaria: { sigla: string; nome: string } | null | undefined) {
-  if (!secretaria) return '—';
-  return `${secretaria.sigla} — ${secretaria.nome}`;
+  if (!secretaria) return '-';
+  return formatSecretariaLabel(secretaria);
 }
 
 export function ChamadoAberturaSection({
@@ -164,7 +165,7 @@ export function ChamadoAberturaSection({
             ) : (
               secretarias.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.sigla} — {item.nome}
+                  {formatSecretariaLabel(item)}
                 </option>
               ))
             )}
@@ -197,8 +198,8 @@ export function ChamadoAberturaSection({
         <div className="grid gap-3 sm:grid-cols-2">
           <DetailField label="Secretaria responsável pelo próprio">
             {resumo.unidade.secretaria
-              ? `${resumo.unidade.secretaria.sigla} — ${resumo.unidade.secretaria.nome}`
-              : '—'}
+              ? formatSecretariaLabel(resumo.unidade.secretaria)
+              : '-'}
           </DetailField>
           {secretariaExecucaoField}
         </div>

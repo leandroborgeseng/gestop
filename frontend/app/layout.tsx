@@ -21,7 +21,7 @@ export const metadata: Metadata = {
   applicationName: 'SIGMA',
   title: 'SIGMA | CCO',
   description:
-    'SIGMA — Sistema Integrado de Gestão de Manutenção e Ativos · Prefeitura de Franca',
+    'SIGMA - Sistema Integrado de Gestão de Manutenção e Ativos · Prefeitura de Franca',
   icons: {
     icon: [
       { url: '/icon-192.png', sizes: '192x192', type: 'image/png' },

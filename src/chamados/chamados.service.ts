@@ -1,3 +1,4 @@
+import { formatSecretariaLabel } from '../common/format-secretaria';
 import { BadRequestException, ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AuditAction,
@@ -85,12 +86,38 @@ export class ChamadosService {
     private readonly documentosService: DocumentosService,
   ) {}
 
-  async listChamados(params: { limit?: number; offset?: number } | undefined, user: JwtPayload) {
-    const limit = Math.min(Math.max(params?.limit ?? 50, 1), 2000);
-    const offset = Math.max(params?.offset ?? 0, 0);
-    const where = resolveChamadoSecretariaFilter(user);
+  async listChamados(
+    params:
+      | {
+          limit?: number;
+          offset?: number;
+          all?: boolean;
+          search?: string;
+          statuses?: string;
+          prioridade?: string;
+          sla?: string;
+          atribuicao?: string;
+          equipeId?: string;
+          secretariaProprioId?: string;
+          secretariaExecucaoId?: string;
+          tipoChamadoId?: string;
+        }
+      | undefined,
+    user: JwtPayload,
+  ) {
+    const all = Boolean(params?.all);
+    const requested = all ? 5000 : (params?.limit ?? 50);
+    const limit = Math.min(Math.max(requested, 1), 5000);
+    const offset = all ? 0 : Math.max(params?.offset ?? 0, 0);
+    const scoped = resolveChamadoSecretariaFilter(user);
+    const extra = await this.buildTriagemFiltros(params, user);
+    const extraSemStatus = await this.buildTriagemFiltros({ ...params, statuses: undefined }, user);
+    const where: Prisma.ChamadoWhereInput = extra.length ? { AND: [scoped, ...extra] } : scoped;
+    const whereSemStatus: Prisma.ChamadoWhereInput = extraSemStatus.length
+      ? { AND: [scoped, ...extraSemStatus] }
+      : scoped;
 
-    const [items, total] = await Promise.all([
+    const [items, total, grouped, hasSemSla] = await Promise.all([
       this.prisma.chamado.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -99,7 +126,20 @@ export class ChamadosService {
         include: this.includeRelations(),
       }),
       this.prisma.chamado.count({ where }),
+      this.prisma.chamado.groupBy({
+        by: ['status'],
+        where: whereSemStatus,
+        _count: { _all: true },
+      }),
+      this.prisma.chamado.count({
+        where: { AND: [whereSemStatus, { prazoEm: null }] },
+      }),
     ]);
+
+    const statusCounts: Record<string, number> = { TODOS: grouped.reduce((sum, item) => sum + item._count._all, 0) };
+    for (const item of grouped) {
+      statusCounts[item.status] = item._count._all;
+    }
 
     return {
       items: items.map((item) => this.serializeChamado(item, user.sub)),
@@ -107,7 +147,103 @@ export class ChamadosService {
       limit,
       offset,
       hasMore: offset + items.length < total,
+      statusCounts,
+      hasSemSla: hasSemSla > 0,
     };
+  }
+
+  private async buildTriagemFiltros(
+    params:
+      | {
+          search?: string;
+          statuses?: string;
+          prioridade?: string;
+          sla?: string;
+          atribuicao?: string;
+          equipeId?: string;
+          secretariaProprioId?: string;
+          secretariaExecucaoId?: string;
+          tipoChamadoId?: string;
+        }
+      | undefined,
+    user: JwtPayload,
+  ): Promise<Prisma.ChamadoWhereInput[]> {
+    const filters: Prisma.ChamadoWhereInput[] = [];
+    const statuses = (params?.statuses ?? '')
+      .split(',')
+      .map((item) => item.trim().toUpperCase())
+      .filter((item) => item && item !== 'TODOS' && Object.values(ChamadoStatus).includes(item as ChamadoStatus)) as ChamadoStatus[];
+    if (statuses.length > 0) {
+      filters.push({ status: { in: statuses } });
+    }
+    if (params?.prioridade && params.prioridade !== 'TODAS' && Object.values(ChamadoPrioridade).includes(params.prioridade as ChamadoPrioridade)) {
+      filters.push({ prioridade: params.prioridade as ChamadoPrioridade });
+    }
+    if (params?.equipeId === 'sem-equipe') {
+      filters.push({ equipeId: null });
+    } else if (params?.equipeId) {
+      filters.push({ equipeId: params.equipeId });
+    }
+    if (params?.secretariaProprioId) {
+      filters.push({ unidade: { secretariaId: params.secretariaProprioId } });
+    }
+    if (params?.secretariaExecucaoId) {
+      filters.push({ secretariaId: params.secretariaExecucaoId });
+    }
+    if (params?.tipoChamadoId) {
+      filters.push({ tipoChamadoId: params.tipoChamadoId });
+    }
+
+    const sla = params?.sla?.toUpperCase();
+    if (sla === 'SEM') {
+      filters.push({ prazoEm: null, status: { not: ChamadoStatus.CONCLUIDO } });
+    } else if (sla === 'FORA' || sla === 'DENTRO') {
+      const tomorrow = new Date();
+      tomorrow.setHours(0, 0, 0, 0);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      if (sla === 'FORA') {
+        filters.push({
+          prazoEm: { lt: tomorrow },
+          status: { not: ChamadoStatus.CONCLUIDO },
+        });
+      } else {
+        filters.push({
+          OR: [{ status: ChamadoStatus.CONCLUIDO }, { prazoEm: { gte: tomorrow } }],
+        });
+      }
+    }
+
+    const atribuicao = params?.atribuicao?.toUpperCase();
+    if (atribuicao === 'MIM') {
+      filters.push({ responsavelId: user.sub });
+    } else if (atribuicao === 'MINHA_EQUIPE') {
+      const equipes = await this.prisma.equipeUsuario.findMany({
+        where: { usuarioId: user.sub },
+        select: { equipeId: true },
+      });
+      const ids = equipes.map((item) => item.equipeId);
+      filters.push(ids.length ? { equipeId: { in: ids } } : { id: { in: [] } });
+    }
+
+    const search = params?.search?.trim();
+    if (search) {
+      filters.push({
+        OR: [
+          { codigo: { contains: search, mode: 'insensitive' } },
+          { titulo: { contains: search, mode: 'insensitive' } },
+          { descricao: { contains: search, mode: 'insensitive' } },
+          { enderecoTexto: { contains: search, mode: 'insensitive' } },
+          { solicitanteNome: { contains: search, mode: 'insensitive' } },
+          { tipoChamado: { nome: { contains: search, mode: 'insensitive' } } },
+          { unidade: { nome: { contains: search, mode: 'insensitive' } } },
+          { unidade: { codigoPatrimonial: { contains: search, mode: 'insensitive' } } },
+          { responsavel: { nome: { contains: search, mode: 'insensitive' } } },
+          { equipe: { nome: { contains: search, mode: 'insensitive' } } },
+        ],
+      });
+    }
+
+    return filters;
   }
 
   async listMeusChamados(
@@ -1041,7 +1177,7 @@ export class ChamadosService {
       descricaoResumo: chamado.descricao.length > 160 ? `${chamado.descricao.slice(0, 157)}...` : chamado.descricao,
       local: chamado.unidade?.nome ?? chamado.enderecoTexto ?? null,
       bairro: chamado.unidade ? null : chamado.enderecoBairro,
-      secretaria: chamado.secretaria ? `${chamado.secretaria.sigla} — ${chamado.secretaria.nome}` : null,
+      secretaria: chamado.secretaria ? `${formatSecretariaLabel(chamado.secretaria)}` : null,
       abertoEm: chamado.createdAt.toISOString(),
       encerradoEm: chamado.encerradoEm?.toISOString() ?? chamado.concluidoEm?.toISOString() ?? null,
       historico: historico.map((item) => ({
@@ -1660,7 +1796,7 @@ export class ChamadosService {
 
     let secretariaId = before.secretariaId;
     let secretariaNovaLabel = before.secretaria
-      ? `${before.secretaria.sigla} — ${before.secretaria.nome}`
+      ? `${formatSecretariaLabel(before.secretaria)}`
       : '—';
     if (dto.secretariaId !== undefined && dto.secretariaId !== null) {
       const secretaria = await this.prisma.secretaria.findFirst({
@@ -1669,11 +1805,11 @@ export class ChamadosService {
       });
       if (!secretaria) throw new BadRequestException('Secretaria não encontrada ou inativa.');
       secretariaId = secretaria.id;
-      secretariaNovaLabel = `${secretaria.sigla} — ${secretaria.nome}`;
+      secretariaNovaLabel = `${formatSecretariaLabel(secretaria)}`;
     }
 
     const secretariaAnteriorLabel = before.secretaria
-      ? `${before.secretaria.sigla} — ${before.secretaria.nome}`
+      ? `${formatSecretariaLabel(before.secretaria)}`
       : '—';
 
     const alteracoes = buildAberturaAlteracoes({
@@ -2083,7 +2219,7 @@ export class ChamadosService {
       chamadoCodigo: chamado.codigo,
       tipoChamadoNome: chamado.tipoChamado?.nome ?? null,
       secretariaLabel: chamado.secretaria
-        ? `${chamado.secretaria.sigla} — ${chamado.secretaria.nome}`
+        ? `${formatSecretariaLabel(chamado.secretaria)}`
         : '—',
       localLabel,
       endereco: chamado.enderecoTexto || chamado.unidade?.endereco || null,

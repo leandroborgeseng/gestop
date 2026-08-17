@@ -12,6 +12,7 @@ import { IntegracoesModule } from './integracoes/integracoes.module';
 import { MobileModule } from './mobile/mobile.module';
 import { MonitoramentoModule } from './monitoramento/monitoramento.module';
 import { OperacionalModule } from './operacional/operacional.module';
+import { AuditModule } from './audit/audit.module';
 import { ChamadosModule } from './chamados/chamados.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
 import { NotificacoesModule } from './notificacoes/notificacoes.module';
@@ -42,6 +43,7 @@ import { LgpdModule } from './lgpd/lgpd.module';
     OperacionalModule,
     StorageModule,
     LgpdModule,
+    AuditModule,
     ChamadosModule,
     FiscalizacoesModule,
     DocumentosModule,

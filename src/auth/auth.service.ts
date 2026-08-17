@@ -8,6 +8,7 @@ import { resolveJwtSecret, resolvePublicFrontendUrl } from '../config/env';
 import { hashPassword, verifyPassword } from './password';
 import { PASSWORD_MAX_LENGTH, validatePasswordPolicy } from './password-policy';
 import { JwtPayload, signJwt } from './jwt';
+import { AuditService } from '../audit/audit.service';
 
 const SECRETARIA_SELECT = {
   id: true,
@@ -35,9 +36,15 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly emailService: EmailService,
+    private readonly auditService: AuditService,
   ) {}
 
-  async login(email: string, password: string, remember?: boolean) {
+  async login(
+    email: string,
+    password: string,
+    remember?: boolean,
+    meta?: { ip?: string | null; userAgent?: string | null },
+  ) {
     if (password.length > PASSWORD_MAX_LENGTH) {
       throw new UnauthorizedException('Credenciais invalidas');
     }
@@ -76,12 +83,48 @@ export class AuthService {
       data: { ultimoLoginAt: new Date() },
     });
 
+    await this.auditService.record({
+      user: {
+        sub: usuario.id,
+        email: usuario.email,
+        nome: usuario.nome,
+        perfis: session.perfis,
+        permissoes: session.permissoes,
+        secretariaId: session.secretariaId,
+        perfilAtivoId: session.perfilAtivo?.id ?? null,
+        perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
+      },
+      acao: AuditAction.LOGIN,
+      entidadeTipo: 'Auth',
+      entidadeId: usuario.id,
+      tela: 'auth',
+      funcao: '_tela',
+      descricao: `Login de ${usuario.email}`,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+
     return {
       accessToken,
       tokenType: 'Bearer',
       expiresInSeconds,
       user: session.user,
     };
+  }
+
+  async logout(user: JwtPayload, meta?: { ip?: string | null; userAgent?: string | null }) {
+    await this.auditService.record({
+      user,
+      acao: AuditAction.LOGOUT,
+      entidadeTipo: 'Auth',
+      entidadeId: user.sub,
+      tela: 'auth',
+      funcao: '_tela',
+      descricao: `Logoff de ${user.email}`,
+      ip: meta?.ip,
+      userAgent: meta?.userAgent,
+    });
+    return { ok: true };
   }
 
   async resolveActiveSession(userId: string): Promise<{

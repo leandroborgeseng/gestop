@@ -285,7 +285,7 @@ function CcoPageContent() {
         kicker="Central de Controle Operacional"
         icon={Activity}
         title="Visão operacional dos próprios públicos"
-        description="Mapa e lista sincronizados — filtros, busca e seleção refletem nos dois painéis."
+        description="Mapa e lista sincronizados - filtros, busca e seleção refletem nos dois painéis."
         action={
           <div className="flex flex-wrap items-center gap-2">
             <UnidadeAvulsoActions size="md" />
@@ -392,6 +392,7 @@ function CcoPageContent() {
               mapMode={tab === 'chamados' ? 'situacao' : mapMode}
               categoriaFiltroId={categoriaFiltroId || null}
               onSelect={selectItem}
+              onClearSelection={() => setSelectedId(null)}
               onHover={handleMapHover}
             />
           </div>

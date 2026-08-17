@@ -308,6 +308,7 @@ model Usuario {
   logsAuditoria     LogAuditoria[]    @relation("AuditoriaUsuario")
   webmapImports     WebmapImport[]    @relation("WebmapImportUsuario")
   syncEvents        OfflineSyncEvent[] @relation("SyncUsuario")
+  syncIgnorados     OfflineSyncEvent[] @relation("SyncIgnoradoPor")
   passwordResetTokens PasswordResetToken[]
   chamadosRegistrados Chamado[] @relation("ChamadoRegistradoPor")
   chamadosObservados ChamadoObservador[] @relation("ChamadoObservadorUsuario")
@@ -1040,17 +1041,23 @@ model DocumentoAssinatura {
 }
 
 model LogAuditoria {
-  id            String      @id @default(uuid())
-  usuarioId     String?
-  acao          AuditAction
-  entidadeTipo  String
-  entidadeId    String?
-  valorAntigo   Json?
-  valorNovo     Json?
-  ip            String?
-  userAgent     String?
-  correlationId String?
-  createdAt     DateTime    @default(now())
+  id                   String      @id @default(uuid())
+  usuarioId            String?
+  acao                 AuditAction
+  entidadeTipo         String
+  entidadeId           String?
+  valorAntigo          Json?
+  valorNovo            Json?
+  ip                   String?
+  userAgent            String?
+  correlationId        String?
+  perfilAtivoNome      String?
+  secretariaAtivaId    String?
+  secretariaAtivaSigla String?
+  tela                 String?
+  funcao               String?
+  descricao            String?
+  createdAt            DateTime    @default(now())
 
   usuario Usuario? @relation("AuditoriaUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
 
@@ -1059,6 +1066,22 @@ model LogAuditoria {
   @@index([entidadeTipo, entidadeId])
   @@index([createdAt])
   @@index([correlationId])
+  @@index([tela])
+  @@index([secretariaAtivaId])
+}
+
+model AuditoriaConfig {
+  id        String   @id @default(uuid())
+  chave     String   @unique
+  telaId    String
+  funcaoId  String
+  acao      String
+  ativo     Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([telaId, funcaoId])
+  @@index([ativo])
 }
 
 model OfflineSyncEvent {
@@ -1079,8 +1102,12 @@ model OfflineSyncEvent {
   resolvidoEm     DateTime?
   tentativas      Int                 @default(0)
   ultimoErro      String?
+  ignoradoEm      DateTime?
+  ignoradoPorId   String?
+  justificativaIgnorar String?
 
-  usuario Usuario? @relation("SyncUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  usuario     Usuario? @relation("SyncUsuario", fields: [usuarioId], references: [id], onDelete: SetNull)
+  ignoradoPor Usuario? @relation("SyncIgnoradoPor", fields: [ignoradoPorId], references: [id], onDelete: SetNull)
 
   @@index([deviceId])
   @@index([usuarioId])

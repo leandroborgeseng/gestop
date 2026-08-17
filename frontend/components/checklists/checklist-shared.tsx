@@ -1,5 +1,7 @@
 'use client';
 
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
+
 import { FormEvent, useEffect, useState } from 'react';
 import { ClipboardList, GitBranch, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -183,7 +185,7 @@ export function ChecklistBindingFields({
             <option value="">{escopo === 'UNIDADE_TIPO' ? 'Todas as secretarias deste tipo' : 'Selecione'}</option>
             {secretarias.map((secretaria) => (
               <option key={secretaria.id} value={secretaria.id}>
-                {secretaria.sigla} — {secretaria.nome}
+                {formatSecretariaLabel(secretaria)}
               </option>
             ))}
           </Select>

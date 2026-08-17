@@ -204,6 +204,13 @@ export async function login(email: string, password: string, remember = false) {
 }
 
 export function logout() {
+  const auth = getStoredAuth();
+  if (auth?.accessToken) {
+    void fetch(`${API_BASE_URL}/auth/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${auth.accessToken}` },
+    }).catch(() => undefined);
+  }
   clearStoredAuth();
 }
 
@@ -389,6 +396,76 @@ export function deleteAdminUsuario(id: string) {
 
 export function listAdminPerfis() {
   return request<AdminPerfil[]>('/admin/perfis');
+}
+
+export function listAdminAuditoriaLogs(params: {
+  from?: string;
+  to?: string;
+  usuarioId?: string;
+  acao?: string;
+  tela?: string;
+  secretariaId?: string;
+  perfil?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value != null && value !== '') search.set(key, String(value));
+  });
+  const query = search.toString();
+  return request<{
+    items: Array<{
+      id: string;
+      acao: string;
+      entidadeTipo: string;
+      entidadeId?: string | null;
+      createdAt: string;
+      descricao?: string | null;
+      tela?: string | null;
+      funcao?: string | null;
+      ip?: string | null;
+      userAgent?: string | null;
+      perfilAtivoNome?: string | null;
+      secretariaAtivaSigla?: string | null;
+      usuario?: { id: string; nome: string; email: string } | null;
+    }>;
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  }>(`/admin/auditoria/logs${query ? `?${query}` : ''}`);
+}
+
+export function getAdminAuditoriaConfig() {
+  return request<{
+    eventos: Array<{ id: string; label: string }>;
+    usuarios: Array<{ id: string; nome: string; email: string }>;
+    telas: Array<{
+      id: string;
+      label: string;
+      functions: Array<{
+        id: string;
+        label: string;
+        eventos: Array<{ acao: string; label: string; chave: string; ativo: boolean }>;
+      }>;
+    }>;
+  }>('/admin/auditoria/config');
+}
+
+export function saveAdminAuditoriaConfig(payload: {
+  chave?: string;
+  telaId: string;
+  funcaoId: string;
+  acao: string;
+  ativo: boolean;
+}) {
+  return request('/admin/auditoria/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 export type AdminPerfilConfiguravel = {
@@ -766,12 +843,41 @@ export function listAuditoria() {
   return request<AuditoriaEvento[]>('/monitoramento/auditoria');
 }
 
-export function listIntegracoesEventos() {
-  return request<IntegracoesEventos>('/integracoes/eventos');
+export function listIntegracoesEventos(params?: {
+  falhasStatus?: string;
+  falhasSearch?: string;
+  falhasLimit?: number;
+  falhasOffset?: number;
+  notificacoesSearch?: string;
+  notificacoesLimit?: number;
+  notificacoesOffset?: number;
+}) {
+  const search = new URLSearchParams();
+  if (params?.falhasStatus) search.set('falhasStatus', params.falhasStatus);
+  if (params?.falhasSearch) search.set('falhasSearch', params.falhasSearch);
+  if (params?.falhasLimit != null) search.set('falhasLimit', String(params.falhasLimit));
+  if (params?.falhasOffset != null) search.set('falhasOffset', String(params.falhasOffset));
+  if (params?.notificacoesSearch) search.set('notificacoesSearch', params.notificacoesSearch);
+  if (params?.notificacoesLimit != null) search.set('notificacoesLimit', String(params.notificacoesLimit));
+  if (params?.notificacoesOffset != null) search.set('notificacoesOffset', String(params.notificacoesOffset));
+  const query = search.toString();
+  return request<IntegracoesEventos>(`/integracoes/eventos${query ? `?${query}` : ''}`);
 }
 
 export function retrySyncFalhas() {
   return request<{ reenfileirados: number }>('/integracoes/sync/retry', { method: 'POST' });
+}
+
+export function retrySyncFalha(id: string) {
+  return request<{ id: string; ok?: boolean }>(`/integracoes/sync/${id}/retry`, { method: 'POST' });
+}
+
+export function ignoreSyncFalha(id: string, justificativa?: string) {
+  return request(`/integracoes/sync/${id}/ignorar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ justificativa }),
+  });
 }
 
 export function sendIntegrationNotification(evento: string, payload: unknown) {
@@ -856,10 +962,33 @@ export function listPublicTiposChamado() {
   return publicRequest<TipoChamadoOpcao[]>('/public/tipos-chamado');
 }
 
-export function listChamados(params?: { limit?: number; offset?: number }) {
+export function listChamados(params?: {
+  limit?: number;
+  offset?: number;
+  all?: boolean;
+  search?: string;
+  statuses?: string;
+  prioridade?: string;
+  sla?: string;
+  atribuicao?: string;
+  equipeId?: string;
+  secretariaProprioId?: string;
+  secretariaExecucaoId?: string;
+  tipoChamadoId?: string;
+}) {
   const search = new URLSearchParams();
   if (params?.limit != null) search.set('limit', String(params.limit));
   if (params?.offset != null) search.set('offset', String(params.offset));
+  if (params?.all) search.set('all', 'true');
+  if (params?.search) search.set('search', params.search);
+  if (params?.statuses) search.set('statuses', params.statuses);
+  if (params?.prioridade) search.set('prioridade', params.prioridade);
+  if (params?.sla) search.set('sla', params.sla);
+  if (params?.atribuicao) search.set('atribuicao', params.atribuicao);
+  if (params?.equipeId) search.set('equipeId', params.equipeId);
+  if (params?.secretariaProprioId) search.set('secretariaProprioId', params.secretariaProprioId);
+  if (params?.secretariaExecucaoId) search.set('secretariaExecucaoId', params.secretariaExecucaoId);
+  if (params?.tipoChamadoId) search.set('tipoChamadoId', params.tipoChamadoId);
   const query = search.toString();
   return request<ChamadosListResponse>(`/chamados${query ? `?${query}` : ''}`);
 }

@@ -1,5 +1,7 @@
 'use client';
 
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
+
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
@@ -213,7 +215,7 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
               </div>
               <h1 className="mt-3 text-[20px] font-bold text-[var(--ink)]">{unidade.nome}</h1>
               <p className="mt-2 text-[14px] text-[var(--ink-3)]">
-                {unidade.tipo} · {unidade.secretaria.sigla} — {unidade.secretaria.nome}
+                {unidade.tipo} · {formatSecretariaLabel(unidade.secretaria)}
               </p>
               <UnidadeAvulsoActions
                 className="mt-4"
@@ -272,7 +274,7 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
               <Info label="Endereço" value={unidade.endereco} />
               <Info label="Bairro" value={unidade.bairro ?? 'Não informado'} />
               <Info label="CEP" value={unidade.cep ?? 'Não informado'} />
-              <Info label="Secretaria" value={`${unidade.secretaria.sigla} — ${unidade.secretaria.nome}`} />
+              <Info label="Secretaria" value={`${formatSecretariaLabel(unidade.secretaria)}`} />
               <Info label="Responsável" value={unidade.secretaria.responsavelNome ?? 'Não informado'} />
               <Info label="E-mail" value={unidade.secretaria.responsavelEmail ?? 'Não informado'} />
             </dl>

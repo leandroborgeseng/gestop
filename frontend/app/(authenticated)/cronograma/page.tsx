@@ -1,5 +1,7 @@
 'use client';
 
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
+
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CalendarClock, CheckCircle2, Clock, Plus } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
@@ -290,7 +292,7 @@ export default function CronogramaPage() {
                 {!lockedSecretariaId ? <option value="">Todas</option> : null}
                 {secretarias.map((secretaria) => (
                   <option key={secretaria.id} value={secretaria.id}>
-                    {secretaria.sigla} — {secretaria.nome}
+                    {formatSecretariaLabel(secretaria)}
                   </option>
                 ))}
               </Select>
@@ -525,7 +527,7 @@ export default function CronogramaPage() {
                   {!lockedSecretariaId ? <option value="">Todas</option> : null}
                   {secretarias.map((secretaria) => (
                     <option key={secretaria.id} value={secretaria.id}>
-                      {secretaria.sigla} — {secretaria.nome}
+                      {formatSecretariaLabel(secretaria)}
                     </option>
                   ))}
                 </Select>

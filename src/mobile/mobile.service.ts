@@ -388,26 +388,42 @@ export class MobileService {
     const erros: Array<{ id: string; erro: string }> = [];
 
     for (const event of events) {
+      const result = await this.reprocessOneSyncEvent(event, actor);
       processados += 1;
-      const user = await this.resolveSyncUser(event.usuarioId, actor);
-      try {
-        const dto = event.payload as unknown as MobileSyncFiscalizacaoDto;
-        const result = await this.syncFiscalizacao(dto, user);
-        if (result.status === 'sincronizado' || result.status === 'duplicado') {
-          sucesso += 1;
-        } else {
-          falhas += 1;
-        }
-      } catch (error) {
+      if (result.ok) sucesso += 1;
+      else {
         falhas += 1;
-        erros.push({
-          id: event.id,
-          erro: error instanceof Error ? error.message : 'Erro desconhecido',
-        });
+        erros.push({ id: event.id, erro: result.erro ?? 'Erro desconhecido' });
       }
     }
 
     return { processados, sucesso, falhas, erros };
+  }
+
+  async reprocessSyncEventById(id: string, actor: JwtPayload) {
+    const event = await this.prisma.offlineSyncEvent.findUnique({ where: { id } });
+    if (!event) throw new NotFoundException('Evento de sincronização não encontrado.');
+    return this.reprocessOneSyncEvent(event, actor);
+  }
+
+  private async reprocessOneSyncEvent(
+    event: { id: string; usuarioId: string | null; payload: Prisma.JsonValue; entidadeTipo: EntidadeSincronizavel },
+    actor: JwtPayload,
+  ) {
+    if (event.entidadeTipo !== EntidadeSincronizavel.FISCALIZACAO) {
+      return { ok: false, erro: 'Tipo de sincronização não suportado para retentativa automática.' };
+    }
+    const user = await this.resolveSyncUser(event.usuarioId, actor);
+    try {
+      const dto = event.payload as unknown as MobileSyncFiscalizacaoDto;
+      const result = await this.syncFiscalizacao(dto, user);
+      if (result.status === 'sincronizado' || result.status === 'duplicado') {
+        return { ok: true as const, status: result.status };
+      }
+      return { ok: false as const, erro: 'Sincronização não concluída.' };
+    } catch (error) {
+      return { ok: false as const, erro: error instanceof Error ? error.message : 'Erro desconhecido' };
+    }
   }
 
   private async resolveSyncUser(usuarioId: string | null, fallback: JwtPayload): Promise<JwtPayload> {

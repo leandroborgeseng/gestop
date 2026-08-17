@@ -1,3 +1,4 @@
+import { formatSecretariaLabel } from '../common/format-secretaria';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
@@ -229,7 +230,7 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
     const infoRows: Array<[string, string]> = [
       ['Status', chamadoStatusLabel(chamado.status)],
       ['Prioridade', prioridadeLabel(chamado.prioridade)],
-      ['Secretaria', chamado.secretaria ? `${chamado.secretaria.sigla} — ${chamado.secretaria.nome}` : '—'],
+      ['Secretaria', chamado.secretaria ? `${formatSecretariaLabel(chamado.secretaria)}` : '—'],
       ['Próprio', chamado.unidade?.nome ?? '—'],
       ['Patrimônio', chamado.unidade?.codigoPatrimonial ?? '—'],
       ['Tipo', chamado.tipoChamado?.nome ?? '—'],

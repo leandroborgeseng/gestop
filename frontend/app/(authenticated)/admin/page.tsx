@@ -1,7 +1,9 @@
 'use client';
 
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
+
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, Briefcase, ClipboardList, DatabaseBackup, Download, Layers3, MapPin, Shield, Tags, UserRound, UsersRound } from 'lucide-react';
+import { Building2, Briefcase, ClipboardList, DatabaseBackup, Download, Layers3, MapPin, ScrollText, Shield, Tags, UserRound, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
@@ -81,6 +83,7 @@ import {
 } from '@/lib/br-input-masks';
 import { REGIAO_UNIDADE_LABELS, RegiaoUnidade } from '@/lib/regiao-unidade';
 import { PermissoesMatrizPanel } from '@/components/admin/permissoes-matriz-panel';
+import { AuditoriaPanel } from '@/components/admin/auditoria-panel';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { formatUnidadeOrigem, getLockedFields, getUnidadeMetadata, isQgisImported } from '@/lib/unidade-metadata';
 import {
@@ -105,7 +108,8 @@ type Tab =
   | 'categorias-vistoria'
   | 'permissoes'
   | 'backup'
-  | 'importacao';
+  | 'importacao'
+  | 'auditoria';
 
 const TAB_TO_PERM: Record<Tab, AdminTabPermissionId> = {
   secretarias: 'secretarias',
@@ -119,6 +123,7 @@ const TAB_TO_PERM: Record<Tab, AdminTabPermissionId> = {
   permissoes: 'permissoes',
   backup: 'backup',
   importacao: 'importacao',
+  auditoria: 'auditoria',
 };
 
 const regioes: RegiaoUnidade[] = ['NORTE', 'SUL', 'LESTE', 'OESTE', 'CENTRO'];
@@ -179,6 +184,7 @@ export default function AdminPage() {
       { id: 'permissoes', label: 'Permissões', icon: <Shield className="h-4 w-4" /> },
       { id: 'backup', label: 'Backup S3', icon: <DatabaseBackup className="h-4 w-4" /> },
       { id: 'importacao', label: 'Importação', icon: <Download className="h-4 w-4" /> },
+      { id: 'auditoria', label: 'Logs', icon: <ScrollText className="h-4 w-4" /> },
     ];
     return all.filter((item) => hasAdminTabAccess(TAB_TO_PERM[item.id], 'visualizar', permissoes));
   }, [
@@ -276,7 +282,7 @@ export default function AdminPage() {
         kicker="Administração"
         icon={Building2}
         title="Cadastros e acesso"
-        description="Gestão de secretarias, próprios e usuários — com controles de LGPD."
+        description="Gestão de secretarias, próprios e usuários - com controles de LGPD."
         backHref={backHref}
       >
         <TipBanner id="admin-cadastros">
@@ -293,7 +299,7 @@ export default function AdminPage() {
           </div>
         ) : null}
 
-        {loading && tab !== 'backup' ? <LoadingState label="Carregando cadastros..." /> : null}
+        {loading && tab !== 'backup' && tab !== 'auditoria' ? <LoadingState label="Carregando cadastros..." /> : null}
 
         {!loading && tab === 'secretarias' ? (
           <SecretariasPanel secretarias={secretarias} mutate={mutate} />
@@ -326,8 +332,9 @@ export default function AdminPage() {
         {!loading && tab === 'importacao' ? (
           <ImportacaoPanel onSynced={() => void load()} />
         ) : null}
+        {!loading && tab === 'auditoria' ? <AuditoriaPanel /> : null}
 
-        {!loading && canLgpd && tab !== 'importacao' && tab !== 'backup' ? (
+        {!loading && canLgpd && tab !== 'importacao' && tab !== 'backup' && tab !== 'auditoria' ? (
           <section className="mt-8 rounded-[var(--r-card)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-5">
             <div className="flex items-start gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface)] text-[var(--warn)] shadow-[var(--sh-sm)]">
@@ -335,7 +342,7 @@ export default function AdminPage() {
               </span>
               <div className="flex-1">
                 <h3 className="text-[14px] font-bold text-[var(--ink)]">Proteção de dados (LGPD)</h3>
-                <p className="mt-1 text-[13px] text-[var(--ink-3)]">Ações sensíveis — registradas na auditoria.</p>
+                <p className="mt-1 text-[13px] text-[var(--ink-3)]">Ações sensíveis - registradas na auditoria.</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Button
                     variant="outlined"
@@ -689,7 +696,7 @@ function UnidadesPanel({
                 disabled={!caps.escopoTodas && Boolean(caps.secretariaAtivaId)}
               >
                 {secretariasForm.map((s) => (
-                  <option key={s.id} value={s.id}>{s.sigla} — {s.nome}</option>
+                  <option key={s.id} value={s.id}>{formatSecretariaLabel(s)}</option>
                 ))}
               </Select>
             </Field>
@@ -862,7 +869,7 @@ function UnidadesPanel({
                 disabled={!caps.escopoTodas && Boolean(caps.secretariaAtivaId)}
               >
                 {secretariasForm.map((s) => (
-                  <option key={s.id} value={s.id}>{s.sigla} — {s.nome}</option>
+                  <option key={s.id} value={s.id}>{formatSecretariaLabel(s)}</option>
                 ))}
               </Select>
             </Field>
@@ -1220,7 +1227,7 @@ function UsuariosPanel({
                 {caps.escopoTodas ? <option value="">Sem secretaria</option> : null}
                 {secretariasForm.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.sigla} — {s.nome}
+                    {formatSecretariaLabel(s)}
                   </option>
                 ))}
               </Select>
@@ -1249,7 +1256,7 @@ function UsuariosPanel({
                         disabled={forced}
                       />
                       <span>
-                        {s.sigla} — {s.nome}
+                        {formatSecretariaLabel(s)}
                       </span>
                     </label>
                   );
@@ -1561,7 +1568,7 @@ function EquipesPanel({
                 {caps.escopoTodas ? <option value="">Sem secretaria</option> : null}
                 {secretariasForm.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.sigla} — {s.nome}
+                    {formatSecretariaLabel(s)}
                   </option>
                 ))}
               </Select>
@@ -1983,7 +1990,7 @@ function TiposChamadoPanel({
                           defaultChecked={linkedIds.includes(secretaria.id)}
                         />
                         <span>
-                          {secretaria.sigla} — {secretaria.nome}
+                          {formatSecretariaLabel(secretaria)}
                           {!secretaria.ativo ? ' (inativa)' : ''}
                         </span>
                       </label>

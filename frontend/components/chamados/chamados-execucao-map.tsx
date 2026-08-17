@@ -21,6 +21,8 @@ export function ChamadosExecucaoMap({
   selectedId = null,
   hoveredId = null,
   onSelect,
+  onClearSelection,
+  onPopupAction,
   onHover,
   popupActionLabel,
   popupActionKind,
@@ -29,6 +31,8 @@ export function ChamadosExecucaoMap({
   selectedId?: string | null;
   hoveredId?: string | null;
   onSelect?: (id: string) => void;
+  onClearSelection?: () => void;
+  onPopupAction?: (id: string) => void;
   onHover?: (id: string | null) => void;
   popupActionLabel?: string;
   popupActionKind?: import('@/lib/map-popup-action').MapPopupActionKind;
@@ -39,6 +43,8 @@ export function ChamadosExecucaoMap({
       selectedId={selectedId}
       hoveredId={hoveredId}
       onSelect={onSelect}
+      onClearSelection={onClearSelection}
+      onPopupAction={onPopupAction}
       onHover={onHover}
       popupActionLabel={popupActionLabel}
       popupActionKind={popupActionKind}

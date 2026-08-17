@@ -5,11 +5,12 @@ import { AdminController } from './admin.controller';
 import { AdminImportAutomationController, AdminImportController } from './admin-import.controller';
 import { AdminImportService } from './admin-import.service';
 import { AdminPermissionsService } from './admin-permissions.service';
+import { AdminAuditoriaService } from './admin-auditoria.service';
 import { AdminService } from './admin.service';
 
 @Module({
   imports: [AuthModule, IntegracoesModule],
   controllers: [AdminController, AdminImportController, AdminImportAutomationController],
-  providers: [AdminService, AdminImportService, AdminPermissionsService],
+  providers: [AdminService, AdminImportService, AdminPermissionsService, AdminAuditoriaService],
 })
 export class AdminModule {}

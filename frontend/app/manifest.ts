@@ -2,10 +2,10 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'SIGMA — Sistema Integrado de Gestão de Manutenção e Ativos',
+    name: 'SIGMA - Sistema Integrado de Gestão de Manutenção e Ativos',
     short_name: 'SIGMA',
     description:
-      'SIGMA — Sistema Integrado de Gestão de Manutenção e Ativos · Prefeitura de Franca',
+      'SIGMA - Sistema Integrado de Gestão de Manutenção e Ativos · Prefeitura de Franca',
     start_url: '/mobile',
     scope: '/',
     display: 'standalone',

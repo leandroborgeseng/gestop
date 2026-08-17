@@ -28,6 +28,7 @@ export function OperationalMap({
   mapMode = 'situacao',
   categoriaFiltroId = null,
   onSelect,
+  onClearSelection,
   onHover,
   popupActionKind = 'modal',
 }: {
@@ -39,6 +40,7 @@ export function OperationalMap({
   mapMode?: CcoMapMode;
   categoriaFiltroId?: string | null;
   onSelect?: (id: string) => void;
+  onClearSelection?: () => void;
   onHover?: (id: string | null) => void;
   popupActionKind?: import('@/lib/map-popup-action').MapPopupActionKind;
 }) {
@@ -52,6 +54,7 @@ export function OperationalMap({
       mapMode={mapMode}
       categoriaFiltroId={categoriaFiltroId}
       onSelect={onSelect}
+      onClearSelection={onClearSelection}
       onHover={onHover}
       popupActionKind={popupActionKind}
     />

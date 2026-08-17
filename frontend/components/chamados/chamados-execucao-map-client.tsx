@@ -19,7 +19,13 @@ import { escapeHtml } from '@/lib/security';
 import { ChamadoMapPoint } from '@/lib/types';
 import { chamadoPinColor, chamadoPinIcon } from '@/lib/chamado-map-pin';
 import { MapViewControls } from '@/components/map/map-view-controls';
-import { runMapPopupAction, type MapPopupActionKind } from '@/lib/map-popup-action';
+import {
+  bindMapPinSelectionCleanup,
+  mapPopupBindOptions,
+  runMapPopupAction,
+  toggleMapPinSelection,
+  type MapPopupActionKind,
+} from '@/lib/map-popup-action';
 
 function formatDateBr(value?: string | null) {
   if (!value) return '—';
@@ -80,6 +86,8 @@ export function ChamadosExecucaoMapClient({
   selectedId = null,
   hoveredId = null,
   onSelect,
+  onClearSelection,
+  onPopupAction,
   onHover,
   popupActionLabel = 'Executar chamado →',
   popupActionKind = 'navigation',
@@ -88,6 +96,8 @@ export function ChamadosExecucaoMapClient({
   selectedId?: string | null;
   hoveredId?: string | null;
   onSelect?: (id: string) => void;
+  onClearSelection?: () => void;
+  onPopupAction?: (id: string) => void;
   onHover?: (id: string | null) => void;
   popupActionLabel?: string;
   popupActionKind?: MapPopupActionKind;
@@ -102,9 +112,13 @@ export function ChamadosExecucaoMapClient({
   const markerByIdRef = useRef<Map<string, L.Marker>>(new Map());
   const pontoByIdRef = useRef<Map<string, ChamadoMapPoint>>(new Map());
   const onSelectRef = useRef(onSelect);
+  const onClearSelectionRef = useRef(onClearSelection);
+  const onPopupActionRef = useRef(onPopupAction);
   const onHoverRef = useRef(onHover);
   const popupActionLabelRef = useRef(popupActionLabel);
   const popupActionKindRef = useRef(popupActionKind);
+  const selectedIdRef = useRef(selectedId);
+  const dismissedIdRef = useRef<string | null>(null);
   const [containerReady, setContainerReady] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const [basemap, setBasemap] = useState<MapBasemap>('street');
@@ -113,9 +127,12 @@ export function ChamadosExecucaoMapClient({
   const located = useMemo(() => pontos.map((ponto) => ({ ponto, latLng: [ponto.latitude, ponto.longitude] as L.LatLngTuple })), [pontos]);
 
   onSelectRef.current = onSelect;
+  onClearSelectionRef.current = onClearSelection;
+  onPopupActionRef.current = onPopupAction;
   onHoverRef.current = onHover;
   popupActionLabelRef.current = popupActionLabel;
   popupActionKindRef.current = popupActionKind;
+  selectedIdRef.current = selectedId;
 
   useEffect(() => {
     const node = containerRef.current;
@@ -164,8 +181,22 @@ export function ChamadosExecucaoMapClient({
       button.onclick = () => {
         const id = button.dataset.chamadoId;
         if (!id) return;
-        void runMapPopupAction(popupActionKindRef.current, () => onSelectRef.current?.(id), shellRef.current);
+        void runMapPopupAction(
+          popupActionKindRef.current,
+          () => (onPopupActionRef.current ?? onSelectRef.current)?.(id),
+          shellRef.current,
+        );
       };
+    });
+
+    const unbindPinCleanup = bindMapPinSelectionCleanup(map, {
+      getSelectedId: () => (dismissedIdRef.current ? null : selectedIdRef.current),
+      onClear: () => {
+        const current = selectedIdRef.current;
+        if (current) dismissedIdRef.current = current;
+        map.closePopup();
+        onClearSelectionRef.current?.();
+      },
     });
 
     mapRef.current = map;
@@ -173,6 +204,7 @@ export function ChamadosExecucaoMapClient({
     refreshMapSize(map);
 
     return () => {
+      unbindPinCleanup();
       setMapReady(false);
       map.remove();
       mapRef.current = null;
@@ -224,7 +256,26 @@ export function ChamadosExecucaoMapClient({
       pontoByIdRef.current.set(ponto.id, ponto);
       const marker = L.marker(latLng, { icon: createChamadoIcon(ponto, 'normal') }).bindPopup(
         buildPopupHtml(ponto, popupActionLabelRef.current),
+        mapPopupBindOptions(),
       );
+      (marker as L.Marker & { _sigmaId?: string })._sigmaId = ponto.id;
+      marker.on('click', (event) => {
+        L.DomEvent.stopPropagation(event);
+        toggleMapPinSelection(
+          dismissedIdRef.current === ponto.id ? null : selectedIdRef.current,
+          ponto.id,
+          (id) => {
+            dismissedIdRef.current = null;
+            onSelectRef.current?.(id);
+            marker.openPopup();
+          },
+          () => {
+            dismissedIdRef.current = ponto.id;
+            map.closePopup();
+            onClearSelectionRef.current?.();
+          },
+        );
+      });
       marker.on('mouseover', () => onHoverRef.current?.(ponto.id));
       marker.on('mouseout', () => onHoverRef.current?.(null));
       markersLayer.addLayer(marker);
@@ -244,12 +295,16 @@ export function ChamadosExecucaoMapClient({
   }, [located, mapReady, popupActionLabel]);
 
   useEffect(() => {
+    const effectiveSelectedId =
+      selectedId && dismissedIdRef.current === selectedId ? null : selectedId;
+    if (selectedId && dismissedIdRef.current !== selectedId) {
+      dismissedIdRef.current = null;
+    }
     markerByIdRef.current.forEach((marker, id) => {
       const ponto = pontoByIdRef.current.get(id);
       if (!ponto) return;
-      const emphasis = id === selectedId ? 'selected' : id === hoveredId ? 'hover' : 'normal';
+      const emphasis = id === effectiveSelectedId ? 'selected' : id === hoveredId ? 'hover' : 'normal';
       marker.setIcon(createChamadoIcon(ponto, emphasis));
-      if (id === selectedId) marker.openPopup();
     });
   }, [selectedId, hoveredId, located]);
 

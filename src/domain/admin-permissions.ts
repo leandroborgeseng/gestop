@@ -19,7 +19,8 @@ export type AdminTabId =
   | 'categorias_vistoria'
   | 'permissoes'
   | 'backup'
-  | 'importacao';
+  | 'importacao'
+  | 'auditoria';
 
 const LEGACY_BY_TAB: Partial<Record<AdminTabId, string[]>> = {
   secretarias: ['secretarias.gerenciar'],
@@ -33,6 +34,7 @@ const LEGACY_BY_TAB: Partial<Record<AdminTabId, string[]>> = {
   permissoes: ['permissoes.gerenciar', 'usuarios.gerenciar'],
   backup: ['usuarios.gerenciar'],
   importacao: ['unidades.gerenciar', 'usuarios.gerenciar'],
+  auditoria: ['auditoria.visualizar', 'usuarios.gerenciar'],
 };
 
 /** Tabs que o legado `admin.cadastros` cobria. */
@@ -72,6 +74,7 @@ export function adminAnyTabVisualizarKeys(): string[] {
     'permissoes',
     'backup',
     'importacao',
+    'auditoria',
   ];
   const keys = new Set<string>(['usuarios.gerenciar', permissionMatrixKey('admin', '_tela', 'visualizar')]);
   for (const tab of tabs) {

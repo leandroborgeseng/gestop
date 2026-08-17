@@ -1,5 +1,7 @@
 'use client';
 
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
+
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
@@ -199,7 +201,7 @@ function GeralTab({
       ) : null}
 
       <dl className="grid gap-3 text-[13px]">
-        <MetaField label="Secretaria" value={`${unidade.secretaria.sigla} — ${unidade.secretaria.nome}`} />
+        <MetaField label="Secretaria" value={`${formatSecretariaLabel(unidade.secretaria)}`} />
         <MetaField label="Endereço" value={unidade.endereco} />
         <MetaField label="Responsável" value={unidade.secretaria.responsavelNome ?? 'Não informado'} />
         <MetaField label="Raio check-in" value={`${unidade.raioValidacaoMetros} m`} />

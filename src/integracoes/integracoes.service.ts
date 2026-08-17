@@ -1,6 +1,7 @@
-import { Inject, Injectable, Logger, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
-import { AuditAction, OfflineSyncStatus } from '@prisma/client';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, OnModuleDestroy, OnModuleInit, forwardRef } from '@nestjs/common';
+import { AuditAction, OfflineSyncStatus, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
+import { AuditService } from '../audit/audit.service';
 import { MobileService } from '../mobile/mobile.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -29,6 +30,7 @@ export class IntegracoesService implements OnModuleInit, OnModuleDestroy {
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => MobileService))
     private readonly mobileService: MobileService,
+    private readonly auditService: AuditService,
   ) {}
 
   onModuleInit() {
@@ -71,21 +73,200 @@ export class IntegracoesService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  async listEventosTecnicos() {
-    const [syncFalhas, auditoriaIntegracoes] = await Promise.all([
+  async listEventosTecnicos(query: {
+    falhasStatus?: string;
+    falhasSearch?: string;
+    falhasLimit?: number;
+    falhasOffset?: number;
+    notificacoesSearch?: string;
+    notificacoesLimit?: number;
+    notificacoesOffset?: number;
+  } = {}) {
+    const falhasLimit = Math.min(Math.max(query.falhasLimit ?? 50, 1), 500);
+    const falhasOffset = Math.max(query.falhasOffset ?? 0, 0);
+    const notificacoesLimit = Math.min(Math.max(query.notificacoesLimit ?? 50, 1), 500);
+    const notificacoesOffset = Math.max(query.notificacoesOffset ?? 0, 0);
+    const falhasStatus = (query.falhasStatus ?? 'PENDENTE').toUpperCase();
+    const falhasSearch = query.falhasSearch?.trim();
+    const notificacoesSearch = query.notificacoesSearch?.trim();
+
+    const falhasWhere = this.buildFalhasWhere(falhasStatus, falhasSearch);
+    const notificacoesWhere: Prisma.LogAuditoriaWhereInput = {
+      entidadeTipo: { in: ['Integracao', 'Notificacao'] },
+      ...(notificacoesSearch
+        ? {
+            OR: [
+              { entidadeId: { contains: notificacoesSearch, mode: 'insensitive' } },
+              { descricao: { contains: notificacoesSearch, mode: 'insensitive' } },
+              { usuario: { nome: { contains: notificacoesSearch, mode: 'insensitive' } } },
+            ],
+          }
+        : {}),
+    };
+
+    const [syncFalhas, falhasTotal, counts, auditoriaIntegracoes, notificacoesTotal] = await Promise.all([
       this.prisma.offlineSyncEvent.findMany({
-        where: { status: { in: [OfflineSyncStatus.CONFLITO, OfflineSyncStatus.FALHOU, OfflineSyncStatus.PENDENTE] } },
+        where: falhasWhere,
         orderBy: { recebidoEm: 'desc' },
-        take: 50,
+        take: falhasLimit,
+        skip: falhasOffset,
+        include: {
+          usuario: { select: { id: true, nome: true, email: true } },
+          ignoradoPor: { select: { id: true, nome: true, email: true } },
+        },
+      }),
+      this.prisma.offlineSyncEvent.count({ where: falhasWhere }),
+      this.prisma.offlineSyncEvent.groupBy({
+        by: ['status'],
+        _count: { _all: true },
       }),
       this.prisma.logAuditoria.findMany({
-        where: { entidadeTipo: { in: ['Integracao', 'Notificacao'] } },
+        where: notificacoesWhere,
         orderBy: { createdAt: 'desc' },
-        take: 50,
+        take: notificacoesLimit,
+        skip: notificacoesOffset,
+        include: { usuario: { select: { id: true, nome: true, email: true } } },
       }),
+      this.prisma.logAuditoria.count({ where: notificacoesWhere }),
     ]);
 
-    return { syncFalhas, auditoriaIntegracoes };
+    const countByStatus = Object.fromEntries(counts.map((item) => [item.status, item._count._all])) as Record<string, number>;
+    const pendentes =
+      (countByStatus.PENDENTE ?? 0) + (countByStatus.FALHOU ?? 0) + (countByStatus.CONFLITO ?? 0) + (countByStatus.PROCESSANDO ?? 0);
+
+    return {
+      syncFalhas: syncFalhas.map((item) => this.serializeFalha(item)),
+      falhasTotal,
+      falhasLimit,
+      falhasOffset,
+      falhasHasMore: falhasOffset + syncFalhas.length < falhasTotal,
+      counts: {
+        pendentes,
+        ignoradas: countByStatus.IGNORADO ?? 0,
+        resolvidas: countByStatus.SINCRONIZADO ?? 0,
+      },
+      auditoriaIntegracoes: auditoriaIntegracoes.map((item) => this.serializeNotificacao(item)),
+      notificacoesTotal,
+      notificacoesLimit,
+      notificacoesOffset,
+      notificacoesHasMore: notificacoesOffset + auditoriaIntegracoes.length < notificacoesTotal,
+    };
+  }
+
+  private buildFalhasWhere(status: string, search?: string): Prisma.OfflineSyncEventWhereInput {
+    const statusFilter =
+      status === 'TODAS'
+        ? {}
+        : status === 'PENDENTE'
+          ? { status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.FALHOU, OfflineSyncStatus.CONFLITO, OfflineSyncStatus.PROCESSANDO] } }
+          : status === 'IGNORADA' || status === 'IGNORADO'
+            ? { status: OfflineSyncStatus.IGNORADO }
+            : status === 'RESOLVIDA' || status === 'SINCRONIZADO'
+              ? { status: OfflineSyncStatus.SINCRONIZADO }
+              : { status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.FALHOU, OfflineSyncStatus.CONFLITO] } };
+
+    if (!search) return statusFilter;
+
+    return {
+      AND: [
+        statusFilter,
+        {
+          OR: [
+            { clientEventId: { contains: search, mode: 'insensitive' } },
+            { deviceId: { contains: search, mode: 'insensitive' } },
+            { conflitoMotivo: { contains: search, mode: 'insensitive' } },
+            { ultimoErro: { contains: search, mode: 'insensitive' } },
+            { entidadeId: { contains: search, mode: 'insensitive' } },
+            { usuario: { nome: { contains: search, mode: 'insensitive' } } },
+            { justificativaIgnorar: { contains: search, mode: 'insensitive' } },
+          ],
+        },
+      ],
+    };
+  }
+
+  private serializeFalha(item: {
+    id: string;
+    clientEventId: string;
+    deviceId: string;
+    usuarioId: string | null;
+    entidadeTipo: string;
+    entidadeId: string | null;
+    operacao: string;
+    payload: Prisma.JsonValue;
+    status: string;
+    conflitoMotivo: string | null;
+    resolucao: Prisma.JsonValue | null;
+    ocorridoEm: Date;
+    recebidoEm: Date;
+    sincronizadoEm: Date | null;
+    resolvidoEm: Date | null;
+    tentativas: number;
+    ultimoErro: string | null;
+    ignoradoEm: Date | null;
+    justificativaIgnorar: string | null;
+    usuario: { id: string; nome: string; email: string } | null;
+    ignoradoPor: { id: string; nome: string; email: string } | null;
+  }) {
+    const payload = (item.payload ?? {}) as Record<string, unknown>;
+    return {
+      id: item.id,
+      clientEventId: item.clientEventId,
+      deviceId: item.deviceId,
+      status: item.status,
+      tipo: item.entidadeTipo,
+      operacao: item.operacao,
+      origem: 'Sincronização offline',
+      usuario: item.usuario,
+      secretariaAtiva: typeof payload.secretariaAtivaSigla === 'string' ? payload.secretariaAtivaSigla : payload.secretariaId ?? null,
+      unidadeId: payload.unidadeId ?? null,
+      checklistId: payload.checklistId ?? null,
+      chamadoId: payload.chamadoId ?? null,
+      ocorridoEm: item.ocorridoEm,
+      recebidoEm: item.recebidoEm,
+      sincronizadoEm: item.sincronizadoEm,
+      tentativas: item.tentativas,
+      conflitoMotivo: item.conflitoMotivo,
+      ultimoErro: item.ultimoErro,
+      entidadeId: item.entidadeId,
+      ignoradoEm: item.ignoradoEm,
+      ignoradoPor: item.ignoradoPor,
+      justificativaIgnorar: item.justificativaIgnorar,
+      payloadResumo: summarizePayload(payload),
+    };
+  }
+
+  private serializeNotificacao(item: {
+    id: string;
+    acao: string;
+    entidadeTipo: string;
+    entidadeId: string | null;
+    createdAt: Date;
+    descricao: string | null;
+    tela: string | null;
+    funcao: string | null;
+    usuario: { id: string; nome: string; email: string } | null;
+    valorNovo: Prisma.JsonValue | null;
+  }) {
+    const valor = (item.valorNovo ?? {}) as Record<string, unknown>;
+    const payload = (valor.payload as Record<string, unknown> | undefined) ?? valor;
+    return {
+      id: item.id,
+      tipo: item.entidadeTipo,
+      acao: item.acao,
+      evento: item.entidadeId,
+      origem: item.tela ?? item.entidadeTipo,
+      usuario: item.usuario,
+      createdAt: item.createdAt,
+      descricao: item.descricao,
+      delivered: valor.delivered ?? null,
+      adapter: valor.adapter ?? null,
+      chamadoId: payload.chamadoId ?? valor.chamadoId ?? null,
+      codigo: payload.codigo ?? valor.codigo ?? null,
+      documentoId: payload.documentoId ?? valor.documentoId ?? null,
+      fiscalizacaoId: payload.fiscalizacaoId ?? valor.fiscalizacaoId ?? null,
+      detalhes: valor,
+    };
   }
 
   async notify(evento: string, payload: unknown, user: JwtPayload) {
@@ -173,7 +354,7 @@ export class IntegracoesService implements OnModuleInit, OnModuleDestroy {
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const staleEvents = await this.prisma.offlineSyncEvent.findMany({
       where: {
-        status: { in: [OfflineSyncStatus.CONFLITO, OfflineSyncStatus.FALHOU] },
+        status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.FALHOU, OfflineSyncStatus.CONFLITO] },
         recebidoEm: { gte: cutoff },
       },
       orderBy: { recebidoEm: 'asc' },
@@ -196,16 +377,100 @@ export class IntegracoesService implements OnModuleInit, OnModuleDestroy {
 
     const replay = await this.mobileService.reprocessPendingSyncEvents(user);
 
-    await this.prisma.logAuditoria.create({
-      data: {
-        usuarioId: user.sub,
-        acao: AuditAction.SYNC,
-        entidadeTipo: 'Integracao',
-        entidadeId: 'retry-offline-sync',
-        valorNovo: { reenfileirados: result.count, replay },
-      },
+    await this.auditService.record({
+      user,
+      acao: AuditAction.SYNC,
+      entidadeTipo: 'Integracao',
+      entidadeId: 'retry-offline-sync',
+      tela: 'integracoes',
+      funcao: 'monitorar',
+      descricao: `Retentativa em lote: ${result.count} reenfileirado(s)`,
+      valorNovo: { reenfileirados: result.count, replay },
     });
 
     return { reenfileirados: result.count, ...replay };
   }
+
+  async retrySyncEvent(id: string, user: JwtPayload) {
+    const event = await this.prisma.offlineSyncEvent.findUnique({ where: { id } });
+    if (!event) throw new NotFoundException('Falha de sincronização não encontrada.');
+    const anterior = event.status;
+
+    await this.prisma.offlineSyncEvent.update({
+      where: { id },
+      data: {
+        status: OfflineSyncStatus.PENDENTE,
+        ultimoErro: null,
+        conflitoMotivo: null,
+        tentativas: { increment: 1 },
+      },
+    });
+
+    const replay = await this.mobileService.reprocessSyncEventById(id, user);
+    const atual = await this.prisma.offlineSyncEvent.findUnique({ where: { id } });
+
+    await this.auditService.record({
+      user,
+      acao: AuditAction.SYNC,
+      entidadeTipo: 'OfflineSyncEvent',
+      entidadeId: id,
+      tela: 'integracoes',
+      funcao: 'monitorar',
+      descricao: `Retentativa individual da falha ${event.clientEventId}`,
+      valorAntigo: { status: anterior },
+      valorNovo: { status: atual?.status, replay },
+    });
+
+    return { id, anterior, atual: atual?.status, ...replay };
+  }
+
+  async ignoreSyncEvent(id: string, justificativa: string | undefined, user: JwtPayload) {
+    const event = await this.prisma.offlineSyncEvent.findUnique({ where: { id } });
+    if (!event) throw new NotFoundException('Falha de sincronização não encontrada.');
+    if (event.status === OfflineSyncStatus.SINCRONIZADO) {
+      throw new BadRequestException('Falha já resolvida não pode ser ignorada.');
+    }
+    const anterior = event.status;
+    const updated = await this.prisma.offlineSyncEvent.update({
+      where: { id },
+      data: {
+        status: OfflineSyncStatus.IGNORADO,
+        ignoradoEm: new Date(),
+        ignoradoPorId: user.sub,
+        justificativaIgnorar: justificativa?.trim() || null,
+      },
+    });
+
+    await this.auditService.record({
+      user,
+      acao: AuditAction.UPDATE,
+      entidadeTipo: 'OfflineSyncEvent',
+      entidadeId: id,
+      tela: 'integracoes',
+      funcao: 'monitorar',
+      descricao: `Falha ${event.clientEventId} marcada como ignorada`,
+      valorAntigo: { status: anterior },
+      valorNovo: { status: updated.status, justificativa: justificativa?.trim() || null },
+    });
+
+    return this.serializeFalha(
+      await this.prisma.offlineSyncEvent.findUniqueOrThrow({
+        where: { id },
+        include: {
+          usuario: { select: { id: true, nome: true, email: true } },
+          ignoradoPor: { select: { id: true, nome: true, email: true } },
+        },
+      }),
+    );
+  }
+}
+
+function summarizePayload(payload: Record<string, unknown>) {
+  const keys = ['unidadeId', 'unidadeNome', 'checklistId', 'checklistNome', 'chamadoId', 'codigo', 'secretariaId', 'origem'];
+  const resumo: Record<string, unknown> = {};
+  for (const key of keys) {
+    if (payload[key] != null) resumo[key] = payload[key];
+  }
+  if (payload.checkin && typeof payload.checkin === 'object') resumo.checkin = payload.checkin;
+  return resumo;
 }

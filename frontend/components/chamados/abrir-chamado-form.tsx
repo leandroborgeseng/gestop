@@ -34,6 +34,7 @@ import { isWithinFrancaMunicipio } from '@/lib/franca-geo';
 import { hasChamadosGerenciar } from '@/lib/navigation';
 import { useSessionUser } from '@/components/auth/session-context';
 import { TipoChamadoOpcao, UnidadeOperacional } from '@/lib/types';
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Badge } from '@/components/ui/badge';
 
@@ -63,7 +64,7 @@ export function AbrirChamadoForm({
   const router = useRouter();
   const snackbar = useSnackbar();
   const sessionUser = useSessionUser();
-  const perfilExterno = sessionUser?.perfilAtivo?.natureza === 'EXTERNO';
+  const perfilExterno = (sessionUser?.perfilAtivo?.natureza ?? 'INTERNO') === 'EXTERNO';
 
   const [modo, setModo] = useState<ModoLocalizacao>(initialUnidadeId ? 'UNIDADE' : 'ENDERECO');
   const [descricao, setDescricao] = useState('');
@@ -132,7 +133,9 @@ export function AbrirChamadoForm({
   useEffect(() => {
     getSecretariasExecucao()
       .then((items) => setSecretarias(items))
-      .catch(() => undefined);
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Falha ao carregar Secretarias responsáveis.');
+      });
     listTiposChamadoOpcoes()
       .then((items) => setTiposChamado(items))
       .catch(() => undefined);
@@ -157,12 +160,23 @@ export function AbrirChamadoForm({
     [tiposChamado, tipoChamadoId],
   );
 
+  const secretariasSugeridas = useMemo(() => selectedTipo?.secretarias ?? [], [selectedTipo]);
+
   const secretariasDisponiveis = useMemo(() => {
     if (perfilExterno) {
-      return selectedTipo?.secretarias ?? [];
+      return secretariasSugeridas;
     }
-    return secretarias;
-  }, [perfilExterno, selectedTipo, secretarias]);
+    const byId = new Map(secretarias.map((item) => [item.id, item]));
+    for (const item of secretariasSugeridas) {
+      if (!byId.has(item.id)) byId.set(item.id, item);
+    }
+    return [...byId.values()];
+  }, [perfilExterno, secretarias, secretariasSugeridas]);
+
+  const secretariasDemais = useMemo(() => {
+    const sugeridas = new Set(secretariasSugeridas.map((item) => item.id));
+    return secretariasDisponiveis.filter((item) => !sugeridas.has(item.id));
+  }, [secretariasDisponiveis, secretariasSugeridas]);
 
   useEffect(() => {
     if (!tipoChamadoId) return;
@@ -641,8 +655,8 @@ export function AbrirChamadoForm({
               </p>
               <p className="mt-0.5 text-[13px] font-medium text-[var(--ink-2)]">
                 {pickedUnidade.secretaria
-                  ? `${pickedUnidade.secretaria.sigla} — ${pickedUnidade.secretaria.nome}`
-                  : '—'}
+                  ? formatSecretariaLabel(pickedUnidade.secretaria)
+                  : '-'}
               </p>
               <p className="mt-1 text-[11px] text-[var(--ink-3)]">
                 Informação cadastral do próprio (somente consulta).
@@ -686,7 +700,7 @@ export function AbrirChamadoForm({
                     <span className="mono text-[11px] font-semibold text-[var(--brand-hover)]">{item.codigoPatrimonial}</span>
                     <span className="text-[13px] font-semibold text-[var(--ink)]">{item.nome}</span>
                     <span className="text-[11px] text-[var(--ink-3)]">
-                      {item.secretaria.sigla} — {item.secretaria.nome}
+                      {formatSecretariaLabel(item.secretaria)}
                     </span>
                   </button>
                 ))
@@ -869,11 +883,34 @@ export function AbrirChamadoForm({
                 required
               >
                 <option value="">Selecione...</option>
-                {secretariasDisponiveis.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.sigla} — {item.nome}
-                  </option>
-                ))}
+                {perfilExterno ? (
+                  secretariasDisponiveis.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {formatSecretariaLabel(item)}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    {secretariasSugeridas.length > 0 ? (
+                      <optgroup label="Secretarias sugeridas para este tipo de chamado">
+                        {secretariasSugeridas.map((item) => (
+                          <option key={`sug-${item.id}`} value={item.id}>
+                            {formatSecretariaLabel(item)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    {secretariasDemais.length > 0 ? (
+                      <optgroup label="Demais Secretarias">
+                        {secretariasDemais.map((item) => (
+                          <option key={`dem-${item.id}`} value={item.id}>
+                            {formatSecretariaLabel(item)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </>
+                )}
               </Select>
             </Field>
           ) : null}

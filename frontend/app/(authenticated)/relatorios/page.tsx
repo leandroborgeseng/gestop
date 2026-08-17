@@ -1,5 +1,7 @@
 'use client';
 
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
+
 import { useEffect, useState } from 'react';
 import {
   Building2,
@@ -336,7 +338,7 @@ export default function RelatoriosPage() {
                 <option value="">Todas</option>
                 {secretarias.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.sigla} — {item.nome}
+                    {formatSecretariaLabel(item)}
                   </option>
                 ))}
               </Select>
@@ -392,7 +394,7 @@ export default function RelatoriosPage() {
                 <option value="">Todas</option>
                 {secretarias.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.sigla} — {item.nome}
+                    {formatSecretariaLabel(item)}
                   </option>
                 ))}
               </Select>
@@ -503,7 +505,7 @@ export default function RelatoriosPage() {
                 <option value="">Todas</option>
                 {secretarias.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.sigla} — {item.nome}
+                    {formatSecretariaLabel(item)}
                   </option>
                 ))}
               </Select>
@@ -578,7 +580,7 @@ export default function RelatoriosPage() {
                 <option value="">Todas</option>
                 {secretarias.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.sigla} — {item.nome}
+                    {formatSecretariaLabel(item)}
                   </option>
                 ))}
               </Select>

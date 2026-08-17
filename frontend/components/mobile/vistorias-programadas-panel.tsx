@@ -320,7 +320,9 @@ export function VistoriasProgramadasPanel({
                   pontos={mapPoints}
                   selectedId={selectedId}
                   hoveredId={hoveredId}
-                  onSelect={openItem}
+                  onSelect={setSelectedId}
+                  onClearSelection={() => setSelectedId(null)}
+                  onPopupAction={openItem}
                   onHover={setHoveredId}
                   popupActionLabel="Iniciar vistoria"
                   popupActionKind="modal"

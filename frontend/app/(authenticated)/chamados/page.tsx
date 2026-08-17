@@ -38,14 +38,10 @@ import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
-import { downloadChamadoPdf, getChamado, listChamadoEquipes, listChamados, listTiposChamadoOpcoes, notificarChamadoEquipe, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
+import { ListPagination } from '@/components/ui/list-pagination';
+import { downloadChamadoPdf, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTiposChamadoOpcoes, notificarChamadoEquipe, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
-import {
-  chamadoMatchesFiltros,
-  collectSecretariasFromChamados,
-  countChamadosByStatus,
-} from '@/lib/chamado-filtros';
 import { toInputDate } from '@/lib/cronograma';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { useSessionUser } from '@/components/auth/session-context';
@@ -57,13 +53,15 @@ import {
   previstaExecucaoInfo,
   prioridadeVariant,
 } from '@/lib/chamado-status';
-import { ChamadoDetalhe, ChamadoOrigem, ChamadoResumo, ChamadoStatus, EquipeOpcao, TipoChamadoOpcao } from '@/lib/types';
+import { ChamadoDetalhe, ChamadoOrigem, ChamadoResumo, ChamadoStatus, EquipeOpcao, SecretariaOption, TipoChamadoOpcao } from '@/lib/types';
 
 type ChamadosView = 'triagem' | 'programacao';
 
 const TRIAGEM_PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
 
-const CHAMADOS_PAGE_SIZE = 50;
+const TRIAGEM_PAGE_SIZE = 50;
+const TRIAGEM_ALL_WARN = 500;
+const TRIAGEM_ALL_MAX = 5000;
 
 const DEFAULT_FILTROS: ChamadosFiltrosValue = {
   statuses: 'TODOS',
@@ -104,10 +102,14 @@ function ChamadosPageContent() {
   const sessionUser = useSessionUser();
   const [chamados, setChamados] = useState<ChamadoResumo[]>([]);
   const [chamadosTotal, setChamadosTotal] = useState(0);
-  const [hasMoreChamados, setHasMoreChamados] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
+  const [statusCounts, setStatusCounts] = useState<Record<string, number>>({ TODOS: 0 });
+  const [hasSemSlaApi, setHasSemSlaApi] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(TRIAGEM_PAGE_SIZE);
+  const [allSelected, setAllSelected] = useState(false);
   const [equipes, setEquipes] = useState<EquipeOpcao[]>([]);
   const [tiposChamado, setTiposChamado] = useState<TipoChamadoOpcao[]>([]);
+  const [secretariasCadastro, setSecretariasCadastro] = useState<SecretariaOption[]>([]);
   const [detail, setDetail] = useState<ChamadoDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -136,45 +138,67 @@ function ChamadosPageContent() {
     listTiposChamadoOpcoes()
       .then(setTiposChamado)
       .catch(() => undefined);
+    getSecretarias()
+      .then(setSecretariasCadastro)
+      .catch(() => undefined);
   }, []);
+
+  function triagemQuery(nextPage = page, nextSize = pageSize, nextAll = allSelected) {
+    const statuses =
+      filtros.statuses === 'TODOS' ? undefined : [...filtros.statuses].join(',');
+    return {
+      search: search.trim() || undefined,
+      statuses,
+      prioridade: filtros.prioridade !== 'TODAS' ? filtros.prioridade : undefined,
+      sla: filtros.sla !== 'TODOS' ? filtros.sla : undefined,
+      atribuicao: filtros.atribuicao !== 'TODOS' ? filtros.atribuicao : undefined,
+      equipeId: filtros.equipeId || undefined,
+      secretariaProprioId: filtros.secretariaProprioId || undefined,
+      secretariaExecucaoId: filtros.secretariaExecucaoId || undefined,
+      tipoChamadoId: filtros.tipoChamadoId || undefined,
+      all: nextAll || undefined,
+      limit: nextAll ? TRIAGEM_ALL_MAX : nextSize,
+      offset: nextAll ? 0 : (nextPage - 1) * nextSize,
+    };
+  }
+
+  useEffect(() => {
+    if (view !== 'triagem') return;
+    setPage(1);
+  }, [filtros, search, view]);
 
   useEffect(() => {
     if (view !== 'triagem') return;
 
-    setLoading(true);
-    listChamados({ limit: CHAMADOS_PAGE_SIZE, offset: 0 })
-      .then((response) => {
-        setChamados(response.items);
-        setChamadosTotal(response.total);
-        setHasMoreChamados(response.hasMore);
-        setSelectedId((current) => current ?? response.items[0]?.id ?? null);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
-      .finally(() => setLoading(false));
-  }, [view]);
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      listChamados(triagemQuery())
+        .then((response) => {
+          if (response.total > TRIAGEM_ALL_MAX && allSelected) {
+            setError(`Há ${response.total} chamados. Use filtros ou uma quantidade menor que ${TRIAGEM_ALL_MAX}.`);
+            setAllSelected(false);
+          }
+          setChamados(response.items);
+          setChamadosTotal(response.total);
+          if (response.statusCounts) setStatusCounts(response.statusCounts);
+          setHasSemSlaApi(Boolean(response.hasSemSla));
+          setSelectedId((current) => current ?? response.items[0]?.id ?? null);
+        })
+        .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
+        .finally(() => setLoading(false));
+    }, 250);
+
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, page, pageSize, allSelected, filtros, search]);
 
   async function refreshChamadosList() {
-    const limit = Math.max(chamados.length, CHAMADOS_PAGE_SIZE);
-    const response = await listChamados({ limit, offset: 0 });
+    const response = await listChamados(triagemQuery());
     setChamados(response.items);
     setChamadosTotal(response.total);
-    setHasMoreChamados(response.hasMore);
+    if (response.statusCounts) setStatusCounts(response.statusCounts);
+    setHasSemSlaApi(Boolean(response.hasSemSla));
     return response;
-  }
-
-  async function loadMoreChamados() {
-    setLoadingMore(true);
-    setError(null);
-    try {
-      const response = await listChamados({ limit: CHAMADOS_PAGE_SIZE, offset: chamados.length });
-      setChamados((current) => [...current, ...response.items]);
-      setChamadosTotal(response.total);
-      setHasMoreChamados(response.hasMore);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao carregar mais chamados.');
-    } finally {
-      setLoadingMore(false);
-    }
   }
 
   useEffect(() => {
@@ -202,57 +226,19 @@ function ChamadosPageContent() {
   }, [selectedId]);
 
   function load() {
-    if (view !== 'triagem') return;
-    setLoading(true);
-    listChamados({ limit: CHAMADOS_PAGE_SIZE, offset: 0 })
-      .then((response) => {
-        setChamados(response.items);
-        setChamadosTotal(response.total);
-        setHasMoreChamados(response.hasMore);
-        setSelectedId((current) => current ?? response.items[0]?.id ?? null);
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
-      .finally(() => setLoading(false));
+    void refreshChamadosList().finally(() => setLoading(false));
   }
 
-  const secretariasDisponiveis = useMemo(() => collectSecretariasFromChamados(chamados), [chamados]);
-
-  const showSemSla = useMemo(() => chamados.some((item) => !item.prazoEm), [chamados]);
-
-  const minhaEquipeIds = useMemo(() => {
-    const userId = sessionUser?.id;
-    if (!userId) return new Set<string>();
-    return new Set(
-      equipes
-        .filter((equipe) => equipe.membros?.some((membro) => membro.usuario.id === userId))
-        .map((equipe) => equipe.id),
-    );
-  }, [equipes, sessionUser?.id]);
-
-  const filtroMatchOpts = useMemo(
-    () => ({
-      statuses: filtros.statuses,
-      prioridade: filtros.prioridade,
-      sla: filtros.sla,
-      atribuicao: filtros.atribuicao,
-      equipeId: filtros.equipeId,
-      secretariaProprioId: filtros.secretariaProprioId,
-      secretariaExecucaoId: filtros.secretariaExecucaoId,
-      tipoChamadoId: filtros.tipoChamadoId,
-      search,
-      userId: sessionUser?.id,
-      minhaEquipeIds,
-    }),
-    [filtros, minhaEquipeIds, search, sessionUser?.id],
+  const secretariasDisponiveis = useMemo(
+    () => ({ proprio: secretariasCadastro, execucao: secretariasCadastro }),
+    [secretariasCadastro],
   );
 
-  const counts = useMemo(() => {
-    return countChamadosByStatus(chamados, filtroMatchOpts);
-  }, [chamados, filtroMatchOpts]);
+  const showSemSla = hasSemSlaApi || chamados.some((item) => !item.prazoEm);
 
-  const filtered = useMemo(() => {
-    return chamados.filter((item) => chamadoMatchesFiltros(item, filtroMatchOpts));
-  }, [chamados, filtroMatchOpts]);
+  const counts = statusCounts;
+
+  const filtered = chamados;
 
   const selected = useMemo(() => {
     if (selectedId) {
@@ -382,7 +368,7 @@ function ChamadosPageContent() {
         kicker="Atendimento operacional"
         icon={Megaphone}
         title="Chamados"
-        description="Triagem, atendimento e acompanhamento — abertos via QR Code, vistoria, app de vistoria e registro interno."
+        description="Triagem, atendimento e acompanhamento - abertos via QR Code, vistoria, app de vistoria e registro interno."
         backHref={backHref}
         action={
           <Link href="/chamados/novo">
@@ -395,7 +381,7 @@ function ChamadosPageContent() {
       >
         <TipBanner id="chamados-triagem">
           {view === 'triagem'
-            ? 'Selecione um chamado na lista para ver prazo, responsável e linha do tempo. Use a lista de status para alterar ou voltar etapas — cada mudança fica registrada no histórico.'
+            ? 'Selecione um chamado na lista para ver prazo, responsável e linha do tempo. Use a lista de status para alterar ou voltar etapas - cada mudança fica registrada no histórico.'
             : 'Programe chamados para datas futuras e defina a equipe de execução. Clique em um dia no calendário para ver ou ajustar a fila programada.'}
         </TipBanner>
 
@@ -412,18 +398,32 @@ function ChamadosPageContent() {
           <ChamadosProgramacaoPanel equipes={equipes} tiposChamado={tiposChamado} />
         ) : null}
 
-        {view === 'triagem' && chamadosTotal > 0 ? (
-          <p className="mb-3 text-[12px] text-[var(--ink-3)]">
-            Exibindo {filtered.length} de {chamadosTotal} chamados
-            {hasMoreChamados ? ' — carregue mais para ver a lista completa' : ''}.
-          </p>
-        ) : null}
-
-        {view === 'triagem' && hasMoreChamados ? (
-          <div className="mb-4">
-            <Button type="button" variant="outlined" size="sm" disabled={loadingMore} onClick={() => void loadMoreChamados()}>
-              {loadingMore ? 'Carregando...' : `Carregar mais (${CHAMADOS_PAGE_SIZE})`}
-            </Button>
+        {view === 'triagem' ? (
+          <div className="mb-4 space-y-2">
+            <ListPagination
+              page={page}
+              pageSize={pageSize}
+              total={chamadosTotal}
+              allSelected={allSelected}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                if (size === 'TODOS') {
+                  if (chamadosTotal > TRIAGEM_ALL_MAX) {
+                    snackbar.show(`Há ${chamadosTotal} chamados. Use filtros ou escolha no máximo ${TRIAGEM_ALL_MAX}.`, 'warning');
+                    return;
+                  }
+                  if (chamadosTotal > TRIAGEM_ALL_WARN && !window.confirm('Carregar todos os chamados pode deixar a tela mais lenta. Continuar?')) {
+                    return;
+                  }
+                  setAllSelected(true);
+                  setPage(1);
+                  return;
+                }
+                setAllSelected(false);
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
           </div>
         ) : null}
 

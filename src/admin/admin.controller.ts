@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -8,6 +8,7 @@ import { adminTabPermissionKeys } from '../domain/admin-permissions';
 import { AdminPermissionsService } from './admin-permissions.service';
 import { PerfilAtivoDto, PerfilCreateDto, PerfilMatrizDto, PerfilUpdateDto } from './admin-permissions.dto';
 import { AdminService } from './admin.service';
+import { AdminAuditoriaService } from './admin-auditoria.service';
 import {
   SecretariaDto,
   UnidadeDto,
@@ -25,6 +26,7 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly adminPermissionsService: AdminPermissionsService,
+    private readonly adminAuditoriaService: AdminAuditoriaService,
   ) {}
 
   @RequireAnyPermissions(...adminTabPermissionKeys('secretarias', 'visualizar'))
@@ -294,5 +296,48 @@ export class AdminController {
   @Delete('cargos/:id')
   deleteCargo(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.adminService.deleteCargo(id, user);
+  }
+
+  @RequireAnyPermissions(...adminTabPermissionKeys('auditoria', 'visualizar'))
+  @Get('auditoria/logs')
+  listAuditoriaLogs(
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('usuarioId') usuarioId?: string,
+    @Query('acao') acao?: string,
+    @Query('tela') tela?: string,
+    @Query('secretariaId') secretariaId?: string,
+    @Query('perfil') perfil?: string,
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.adminAuditoriaService.listLogs({
+      from,
+      to,
+      usuarioId,
+      acao,
+      tela,
+      secretariaId,
+      perfil,
+      search,
+      limit: limit ? Number(limit) : undefined,
+      offset: offset ? Number(offset) : undefined,
+    });
+  }
+
+  @RequireAnyPermissions(...adminTabPermissionKeys('auditoria', 'visualizar'))
+  @Get('auditoria/config')
+  getAuditoriaConfig() {
+    return this.adminAuditoriaService.getConfig();
+  }
+
+  @RequireAnyPermissions(...adminTabPermissionKeys('auditoria', 'alterar'), ...adminTabPermissionKeys('auditoria', 'executar'))
+  @Put('auditoria/config')
+  updateAuditoriaConfig(
+    @Body() body: { chave?: string; telaId: string; funcaoId: string; acao: string; ativo: boolean },
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.adminAuditoriaService.updateConfig(body, user);
   }
 }

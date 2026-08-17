@@ -1,3 +1,4 @@
+import { formatSecretariaLabel } from '../common/format-secretaria';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
@@ -265,7 +266,7 @@ export function buildVistoriaRealizadaPdf(input: VistoriaRealizadaPdfInput): Pro
     const infoRows: Array<[string, string]> = [
       ['Próprio', input.unidadeNome],
       ['Código patrimonial', input.unidadeCodigoPatrimonial],
-      ['Secretaria', `${input.secretariaSigla} — ${input.secretariaNome}`],
+      ['Secretaria', formatSecretariaLabel(input.secretariaSigla, input.secretariaNome)],
       ['Endereço', [input.endereco, input.bairro].filter(Boolean).join(' · ') || '—'],
       ['Checklist', `${input.checklistNome} (v${input.checklistVersao})`],
       ['Data/hora', input.dataHora ? new Date(input.dataHora).toLocaleString('pt-BR') : '—'],

@@ -1,5 +1,7 @@
 'use client';
 
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
+
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClipboardList, ClipboardPen, FileDown, FileText, MapPin, Printer, Search, UserRound } from 'lucide-react';
@@ -267,7 +269,7 @@ export default function VistoriasPage() {
                       <option value="">Todas</option>
                       {secretarias.map((item) => (
                         <option key={item.id} value={item.id}>
-                          {item.sigla} — {item.nome}
+                          {formatSecretariaLabel(item)}
                         </option>
                       ))}
                     </Select>

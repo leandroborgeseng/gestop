@@ -782,6 +782,8 @@ export type ChamadosListResponse = {
   limit: number;
   offset: number;
   hasMore: boolean;
+  statusCounts?: Record<string, number>;
+  hasSemSla?: boolean;
 };
 
 export type ChamadoProtocoloPublico = {
@@ -1096,11 +1098,43 @@ export type IntegracoesEventos = {
     clientEventId: string;
     deviceId: string;
     status: string;
+    tipo?: string;
+    operacao?: string;
+    origem?: string;
     conflitoMotivo?: string | null;
+    ultimoErro?: string | null;
     tentativas: number;
     recebidoEm: string;
+    ocorridoEm?: string;
+    entidadeId?: string | null;
+    usuario?: { id: string; nome: string; email: string } | null;
+    ignoradoEm?: string | null;
+    ignoradoPor?: { id: string; nome: string } | null;
+    justificativaIgnorar?: string | null;
+    secretariaAtiva?: unknown;
+    unidadeId?: unknown;
+    checklistId?: unknown;
+    chamadoId?: unknown;
+    payloadResumo?: Record<string, unknown>;
   }>;
-  auditoriaIntegracoes: AuditoriaEvento[];
+  falhasTotal?: number;
+  falhasHasMore?: boolean;
+  counts?: { pendentes: number; ignoradas: number; resolvidas: number };
+  auditoriaIntegracoes: Array<
+    AuditoriaEvento & {
+      tipo?: string;
+      evento?: string | null;
+      origem?: string | null;
+      descricao?: string | null;
+      delivered?: boolean | null;
+      adapter?: string | null;
+      chamadoId?: unknown;
+      codigo?: unknown;
+      detalhes?: unknown;
+    }
+  >;
+  notificacoesTotal?: number;
+  notificacoesHasMore?: boolean;
 };
 
 export type CronogramaFrequencia =

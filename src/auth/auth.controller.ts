@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { IsBoolean, IsEmail, IsOptional, IsString, MaxLength, MinLength, ValidateIf } from 'class-validator';
 import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from './auth.guard';
@@ -65,14 +65,23 @@ class SwitchSecretariaDto {
   secretariaId?: string | null;
 }
 
+function requestAuditMeta(req: { headers?: Record<string, string | string[] | undefined>; ip?: string; socket?: { remoteAddress?: string } }) {
+  const forwarded = req.headers?.['x-forwarded-for'];
+  const forwardedValue = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+  const ip = forwardedValue?.split(',')[0]?.trim() || req.ip || req.socket?.remoteAddress || null;
+  const agent = req.headers?.['user-agent'];
+  const userAgent = Array.isArray(agent) ? agent[0] : agent ?? null;
+  return { ip, userAgent };
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @Post('login')
-  login(@Body() body: LoginDto) {
-    return this.authService.login(body.email, body.password, body.remember);
+  login(@Body() body: LoginDto, @Req() req: { headers?: Record<string, string | string[] | undefined>; ip?: string; socket?: { remoteAddress?: string } }) {
+    return this.authService.login(body.email, body.password, body.remember, requestAuditMeta(req));
   }
 
   @UseGuards(AuthGuard)
@@ -111,8 +120,12 @@ export class AuthController {
     return this.authService.resetPasswordWithToken(body.token, body.newPassword);
   }
 
+  @UseGuards(AuthGuard)
   @Post('logout')
-  logout() {
-    return { ok: true };
+  logout(
+    @CurrentUser() user: JwtPayload,
+    @Req() req: { headers?: Record<string, string | string[] | undefined>; ip?: string; socket?: { remoteAddress?: string } },
+  ) {
+    return this.authService.logout(user, requestAuditMeta(req));
   }
 }

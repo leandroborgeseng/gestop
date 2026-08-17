@@ -1,5 +1,7 @@
 'use client';
 
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
+
 import { SlidersHorizontal } from 'lucide-react';
 import { UnidadeFilters, UnidadeFiltroOpcoes } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
@@ -152,7 +154,7 @@ export function UnidadeFiltersPanel({
             <option value="">Todas</option>
             {(opcoes?.secretarias ?? []).map((secretaria) => (
               <option key={secretaria.id} value={secretaria.id}>
-                {secretaria.sigla} — {secretaria.nome}
+                {formatSecretariaLabel(secretaria)}
               </option>
             ))}
           </Select>

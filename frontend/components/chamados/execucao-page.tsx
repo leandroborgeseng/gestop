@@ -422,14 +422,16 @@ function ExecucaoPageContent() {
                 <div className="mb-2 hidden shrink-0 items-center gap-2 xl:flex">
                   <MapIcon className="h-4 w-4 text-[var(--brand)]" />
                   <span className="text-[13px] font-semibold text-[var(--ink)]">Mapa operacional</span>
-                  <span className="text-[12px] text-[var(--ink-3)]">— clique no pin para executar</span>
+                  <span className="text-[12px] text-[var(--ink-3)]">- clique no pin para executar</span>
                 </div>
                 <section className="cco-map-panel min-h-0 flex-1 overflow-hidden">
                   <ChamadosExecucaoMap
                     pontos={mapPoints}
                     selectedId={selectedId}
                     hoveredId={hoveredId}
-                    onSelect={openExecucao}
+                    onSelect={setSelectedId}
+                    onClearSelection={() => setSelectedId(null)}
+                    onPopupAction={openExecucao}
                     onHover={setHoveredId}
                   />
                 </section>

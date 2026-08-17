@@ -6,6 +6,7 @@ import type { AuthUser } from '@/lib/types';
 import { getDefaultAuthenticatedHref, getVisibleNavItems, isNavActive } from '@/lib/navigation';
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
+import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 function afterSessionSwitch(user: AuthUser) {
   const currentPath = window.location.pathname;
@@ -115,7 +116,7 @@ export function SessionScopeSwitchers({
             {acessoTodas ? <option value="">Todas as Secretarias</option> : null}
             {secretariasDisponiveis.map((secretaria) => (
               <option key={secretaria.id} value={secretaria.id}>
-                {secretaria.sigla} — {secretaria.nome}
+                {formatSecretariaLabel(secretaria)}
               </option>
             ))}
           </Select>

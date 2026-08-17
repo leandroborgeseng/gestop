@@ -22,7 +22,14 @@ import { ChamadoMapaItem, UnidadeOperacional, UnidadeSituacao, UnidadeSlaMapa } 
 import { chamadoTitulo } from '@/lib/chamado-geo';
 import { formatNotaBr, notaCorHex, resolveNotaExibicao } from '@/lib/vistoria-nota';
 import { MapViewControls } from '@/components/map/map-view-controls';
-import { runMapPopupAction, subscribeMapFullscreenExit, type MapPopupActionKind } from '@/lib/map-popup-action';
+import {
+  bindMapPinSelectionCleanup,
+  mapPopupBindOptions,
+  runMapPopupAction,
+  subscribeMapFullscreenExit,
+  toggleMapPinSelection,
+  type MapPopupActionKind,
+} from '@/lib/map-popup-action';
 import { situacaoRailColor } from '@/components/status-badge';
 import type { CcoMapMode, CcoMapView } from '@/components/operational-map';
 import { chamadoStatusLabel } from '@/lib/chamado-status';
@@ -248,6 +255,7 @@ export function OperationalMapClient({
   mapMode = 'situacao',
   categoriaFiltroId = null,
   onSelect,
+  onClearSelection,
   onHover,
   popupActionKind = 'modal',
 }: {
@@ -259,6 +267,7 @@ export function OperationalMapClient({
   mapMode?: CcoMapMode;
   categoriaFiltroId?: string | null;
   onSelect?: (id: string) => void;
+  onClearSelection?: () => void;
   onHover?: (id: string | null) => void;
   popupActionKind?: MapPopupActionKind;
 }) {
@@ -274,8 +283,11 @@ export function OperationalMapClient({
   const chamadoByIdRef = useRef<Map<string, ChamadoMapaItem>>(new Map());
   const referenceMarkerRef = useRef<L.Marker | null>(null);
   const onSelectRef = useRef(onSelect);
+  const onClearSelectionRef = useRef(onClearSelection);
   const onHoverRef = useRef(onHover);
   const popupActionKindRef = useRef(popupActionKind);
+  const selectedIdRef = useRef(selectedId);
+  const dismissedIdRef = useRef<string | null>(null);
   const lastFitKeyRef = useRef('');
   const lastContainerSizeRef = useRef({ width: 0, height: 0 });
   const refitTimerRef = useRef<number | null>(null);
@@ -317,10 +329,12 @@ export function OperationalMapClient({
 
   useEffect(() => {
     onSelectRef.current = onSelect;
+    onClearSelectionRef.current = onClearSelection;
     onHoverRef.current = onHover;
     popupActionKindRef.current = popupActionKind;
+    selectedIdRef.current = selectedId;
     locatedRef.current = located.map(({ id, latLng }) => ({ id, latLng }));
-  }, [onSelect, onHover, popupActionKind, located]);
+  }, [onSelect, onClearSelection, onHover, popupActionKind, selectedId, located]);
 
   const scheduleRefit = useCallback((map: L.Map, reason: 'data' | 'layout') => {
     if (refitTimerRef.current) {
@@ -524,11 +538,22 @@ export function OperationalMapClient({
       };
     });
 
+    const unbindPinCleanup = bindMapPinSelectionCleanup(map, {
+      getSelectedId: () => (dismissedIdRef.current ? null : selectedIdRef.current),
+      onClear: () => {
+        const current = selectedIdRef.current;
+        if (current) dismissedIdRef.current = current;
+        map.closePopup();
+        onClearSelectionRef.current?.();
+      },
+    });
+
     mapRef.current = map;
     setMapReady(true);
     refreshMapSize(map);
 
     return () => {
+      unbindPinCleanup();
       setMapReady(false);
       map.remove();
       mapRef.current = null;
@@ -580,9 +605,26 @@ export function OperationalMapClient({
       locatedChamados.forEach(({ chamado, latLng }) => {
         const marker = L.marker(latLng, {
           icon: createUnitIcon(resolveChamadoMarkerColor(chamado.slaMapa), 'normal'),
-        }).bindPopup(buildChamadoPopupHtml(chamado));
+        }).bindPopup(buildChamadoPopupHtml(chamado), mapPopupBindOptions());
+        (marker as L.Marker & { _sigmaId?: string })._sigmaId = chamado.id;
 
-        marker.on('click', () => onSelectRef.current?.(chamado.id));
+        marker.on('click', (event) => {
+          L.DomEvent.stopPropagation(event);
+          toggleMapPinSelection(
+            dismissedIdRef.current === chamado.id ? null : selectedIdRef.current,
+            chamado.id,
+            (id) => {
+              dismissedIdRef.current = null;
+              onSelectRef.current?.(id);
+              marker.openPopup();
+            },
+            () => {
+              dismissedIdRef.current = chamado.id;
+              map.closePopup();
+              onClearSelectionRef.current?.();
+            },
+          );
+        });
         marker.on('mouseover', () => onHoverRef.current?.(chamado.id));
         marker.on('mouseout', () => onHoverRef.current?.(null));
 
@@ -594,9 +636,26 @@ export function OperationalMapClient({
       locatedUnidades.forEach(({ unidade, latLng }) => {
         const marker = L.marker(latLng, {
           icon: resolveUnidadeMarkerIcon(unidade, mapMode, categoriaFiltroId, 'normal'),
-        }).bindPopup(buildUnidadePopupHtml(unidade, mapMode, categoriaFiltroId));
+        }).bindPopup(buildUnidadePopupHtml(unidade, mapMode, categoriaFiltroId), mapPopupBindOptions());
+        (marker as L.Marker & { _sigmaId?: string })._sigmaId = unidade.id;
 
-        marker.on('click', () => onSelectRef.current?.(unidade.id));
+        marker.on('click', (event) => {
+          L.DomEvent.stopPropagation(event);
+          toggleMapPinSelection(
+            dismissedIdRef.current === unidade.id ? null : selectedIdRef.current,
+            unidade.id,
+            (id) => {
+              dismissedIdRef.current = null;
+              onSelectRef.current?.(id);
+              marker.openPopup();
+            },
+            () => {
+              dismissedIdRef.current = unidade.id;
+              map.closePopup();
+              onClearSelectionRef.current?.();
+            },
+          );
+        });
         marker.on('mouseover', () => onHoverRef.current?.(unidade.id));
         marker.on('mouseout', () => onHoverRef.current?.(null));
 
@@ -617,15 +676,15 @@ export function OperationalMapClient({
   useEffect(() => {
     if (!mapReady) return;
 
+    const effectiveSelectedId =
+      selectedId && dismissedIdRef.current === selectedId ? null : selectedId;
+    if (selectedId && dismissedIdRef.current !== selectedId) {
+      dismissedIdRef.current = null;
+    }
     markerByIdRef.current.forEach((_, id) => updateMarkerEmphasis(id, 'normal'));
-    if (hoveredId) updateMarkerEmphasis(hoveredId, 'hover');
-    if (selectedId) {
-      updateMarkerEmphasis(selectedId, 'selected');
-      const marker = markerByIdRef.current.get(selectedId);
-      const map = mapRef.current;
-      if (marker && map) {
-        map.panTo(marker.getLatLng(), { animate: true });
-      }
+    if (hoveredId && hoveredId !== effectiveSelectedId) updateMarkerEmphasis(hoveredId, 'hover');
+    if (effectiveSelectedId) {
+      updateMarkerEmphasis(effectiveSelectedId, 'selected');
     }
   }, [hoveredId, selectedId, updateMarkerEmphasis, mapReady, mapMode, categoriaFiltroId, view]);
 

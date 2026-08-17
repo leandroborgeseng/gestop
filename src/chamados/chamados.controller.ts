@@ -21,13 +21,14 @@ import {
   ChamadoExecucaoManualDto,
 } from './chamados.dto';
 import { ChamadosService } from './chamados.service';
+import { CHAMADOS_ABRIR_KEYS } from './chamados.permissions';
 
 @UseGuards(AuthGuard, PermissionsGuard)
 @Controller('chamados')
 export class ChamadosController {
   constructor(private readonly chamadosService: ChamadosService) {}
 
-  @RequireAnyPermissions('chamados.gerenciar', 'chamados.abrir')
+  @RequireAnyPermissions(...CHAMADOS_ABRIR_KEYS)
   @Get('tipos/opcoes')
   listTiposChamado() {
     return this.chamadosService.listTiposChamadoAtivos();
@@ -92,11 +93,31 @@ export class ChamadosController {
     @CurrentUser() user: JwtPayload,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('all') all?: string,
+    @Query('search') search?: string,
+    @Query('statuses') statuses?: string,
+    @Query('prioridade') prioridade?: string,
+    @Query('sla') sla?: string,
+    @Query('atribuicao') atribuicao?: string,
+    @Query('equipeId') equipeId?: string,
+    @Query('secretariaProprioId') secretariaProprioId?: string,
+    @Query('secretariaExecucaoId') secretariaExecucaoId?: string,
+    @Query('tipoChamadoId') tipoChamadoId?: string,
   ) {
     return this.chamadosService.listChamados(
       {
         limit: limit ? Number(limit) : undefined,
         offset: offset ? Number(offset) : undefined,
+        all: all === 'true' || all === '1',
+        search,
+        statuses,
+        prioridade,
+        sla,
+        atribuicao,
+        equipeId,
+        secretariaProprioId,
+        secretariaExecucaoId,
+        tipoChamadoId,
       },
       user,
     );
@@ -168,7 +189,7 @@ export class ChamadosController {
     });
   }
 
-  @RequireAnyPermissions('chamados.gerenciar', 'chamados.abrir')
+  @RequireAnyPermissions(...CHAMADOS_ABRIR_KEYS)
   @Get('secretarias/execucao')
   listSecretariasExecucao(@CurrentUser() user: JwtPayload) {
     return this.chamadosService.listSecretariasParaAbertura(user);
@@ -180,7 +201,7 @@ export class ChamadosController {
     return this.chamadosService.getChamado(id, user);
   }
 
-  @RequireAnyPermissions('chamados.gerenciar', 'chamados.abrir')
+  @RequireAnyPermissions(...CHAMADOS_ABRIR_KEYS)
   @Post()
   create(@Body() body: CreateChamadoDto, @CurrentUser() user: JwtPayload) {
     return this.chamadosService.createChamado(body, user);

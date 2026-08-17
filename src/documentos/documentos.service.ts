@@ -1,3 +1,4 @@
+import { formatSecretariaLabel } from '../common/format-secretaria';
 import {
   BadRequestException,
   ForbiddenException,
@@ -1793,7 +1794,7 @@ export class DocumentosService {
       chamadoCodigo: chamado.codigo,
       tipoChamadoNome: chamado.tipoChamado?.nome ?? null,
       secretariaLabel: chamado.secretaria
-        ? `${chamado.secretaria.sigla} — ${chamado.secretaria.nome}`
+        ? `${formatSecretariaLabel(chamado.secretaria)}`
         : '—',
       localLabel: chamado.unidade
         ? `${chamado.unidade.codigoPatrimonial ?? ''} ${chamado.unidade.nome}`.trim()
@@ -1909,7 +1910,7 @@ export class DocumentosService {
       origemLabel: ORIGEM_LABELS[documento.origem] ?? documento.origem,
       titulo: documento.titulo,
       secretariaLabel: documento.secretaria
-        ? `${documento.secretaria.sigla} — ${documento.secretaria.nome}`
+        ? `${formatSecretariaLabel(documento.secretaria)}`
         : '—',
       unidadeLabel: documento.unidade
         ? `${documento.unidade.codigoPatrimonial ?? ''} ${documento.unidade.nome}`.trim()
