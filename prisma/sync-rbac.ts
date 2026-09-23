@@ -209,6 +209,59 @@ export async function syncSystemRbac(prisma: PrismaClient) {
     'sync-rbac',
     `Perfil "${solicitacaoPerfil.nome}" sincronizado (${solicitacaoPermissoes.length} permissoes de abertura/meus chamados).`,
   );
+
+  await ensureAdministradorFacef(prisma);
+}
+
+/** Conta administrativa pedida para acesso ao sistema. A senha é reaplicada a cada subida da API. */
+async function ensureAdministradorFacef(prisma: PrismaClient) {
+  const perfil = await prisma.perfil.findFirst({
+    where: { nome: 'Administrador do Sistema' },
+    select: { id: true },
+  });
+  if (!perfil) {
+    logInfo('sync-rbac', 'Perfil Administrador do Sistema ausente; admin@facef.br nao foi criado.');
+    return;
+  }
+
+  const email = 'admin@facef.br';
+  const senhaHash = hashPassword('Lean1234$');
+  const usuario = await prisma.usuario.upsert({
+    where: { email },
+    update: {
+      nome: 'Administrador FACEF',
+      ativo: true,
+      senhaHash,
+      cargo: 'Administrador do Sistema',
+      perfilAtivoId: perfil.id,
+      acessoTodasSecretarias: true,
+    },
+    create: {
+      nome: 'Administrador FACEF',
+      email,
+      senhaHash,
+      cargo: 'Administrador do Sistema',
+      perfilAtivoId: perfil.id,
+      acessoTodasSecretarias: true,
+      ativo: true,
+    },
+  });
+
+  await prisma.usuarioPerfil.upsert({
+    where: {
+      usuarioId_perfilId: {
+        usuarioId: usuario.id,
+        perfilId: perfil.id,
+      },
+    },
+    update: {},
+    create: {
+      usuarioId: usuario.id,
+      perfilId: perfil.id,
+    },
+  });
+
+  logInfo('sync-rbac', `Administrador ${email} sincronizado com perfil Administrador do Sistema.`);
 }
 
 async function main() {
