@@ -21,6 +21,7 @@ import { chamadoPinColor, chamadoPinIcon } from '@/lib/chamado-map-pin';
 import { MapViewControls } from '@/components/map/map-view-controls';
 import {
   bindMapPinSelectionCleanup,
+  bindMapPopupActionClicks,
   mapPopupBindOptions,
   runMapPopupAction,
   toggleMapPinSelection,
@@ -69,7 +70,7 @@ function buildPopupHtml(point: ChamadoMapPoint, actionLabel: string) {
       ${point.equipeNome ? `<span style="display:block;margin-top:4px;font-size:12px;color:#647389;">Equipe: <strong>${escapeHtml(point.equipeNome)}</strong></span>` : ''}
       <span style="display:block;margin-top:4px;font-size:12px;color:#647389;">Prioridade: <strong>${escapeHtml(point.prioridade)}</strong></span>
       ${prazo ? `<span style="display:block;margin-top:4px;font-size:12px;color:#647389;">Prazo: <strong>${escapeHtml(prazo)}</strong></span>` : ''}
-      <button type="button" data-chamado-id="${point.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
+      <button type="button" data-map-popup-id="${escapeHtml(point.id)}" data-chamado-id="${escapeHtml(point.id)}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
         ${escapeHtml(actionLabel)}
       </button>
     </div>
@@ -174,19 +175,12 @@ export function ChamadosExecucaoMapClient({
 
     markersLayerRef.current = L.layerGroup().addTo(map);
 
-    map.on('popupopen', (event) => {
-      const popup = event.popup.getElement();
-      const button = popup?.querySelector<HTMLButtonElement>('button[data-chamado-id]');
-      if (!button) return;
-      button.onclick = () => {
-        const id = button.dataset.chamadoId;
-        if (!id) return;
-        void runMapPopupAction(
-          popupActionKindRef.current,
-          () => (onPopupActionRef.current ?? onSelectRef.current)?.(id),
-          shellRef.current,
-        );
-      };
+    const unbindPopupAction = bindMapPopupActionClicks(map.getContainer(), (id) => {
+      void runMapPopupAction(
+        popupActionKindRef.current,
+        () => (onPopupActionRef.current ?? onSelectRef.current)?.(id),
+        shellRef.current,
+      );
     });
 
     const unbindPinCleanup = bindMapPinSelectionCleanup(map, {
@@ -204,6 +198,7 @@ export function ChamadosExecucaoMapClient({
     refreshMapSize(map);
 
     return () => {
+      unbindPopupAction();
       unbindPinCleanup();
       setMapReady(false);
       map.remove();
@@ -267,7 +262,7 @@ export function ChamadosExecucaoMapClient({
           (id) => {
             dismissedIdRef.current = null;
             onSelectRef.current?.(id);
-            marker.openPopup();
+            if (!marker.isPopupOpen()) marker.openPopup();
           },
           () => {
             dismissedIdRef.current = ponto.id;

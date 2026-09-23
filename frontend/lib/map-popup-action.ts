@@ -27,12 +27,49 @@ export async function runMapPopupAction(
 ) {
   const native = Boolean(document.fullscreenElement);
   if (kind === 'navigation' || native) {
-    await exitMapFullscreen(shell);
+    await Promise.race([
+      exitMapFullscreen(shell),
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, 400);
+      }),
+    ]);
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => resolve());
     });
   }
   run();
+}
+
+const POPUP_ACTION_SELECTOR = 'button[data-map-popup-id], button[data-chamado-id], button[data-marker-id]';
+
+function popupActionId(button: Element) {
+  return (
+    button.getAttribute('data-map-popup-id') ||
+    button.getAttribute('data-chamado-id') ||
+    button.getAttribute('data-marker-id')
+  );
+}
+
+/**
+ * O balão do Leaflet é HTML solto. Reabrir o pin recria o innerHTML e apaga
+ * onclick colocado em popupopen. A delegação no container do mapa continua
+ * válida depois disso, em visualização normal e em tela cheia.
+ */
+export function bindMapPopupActionClicks(container: HTMLElement, onAction: (id: string) => void) {
+  const onClick = (event: Event) => {
+    const raw = event.target;
+    const element = raw instanceof Element ? raw : raw instanceof Node ? raw.parentElement : null;
+    const button = element?.closest(POPUP_ACTION_SELECTOR);
+    if (!button || !container.contains(button)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const id = popupActionId(button);
+    if (!id) return;
+    onAction(id);
+  };
+
+  container.addEventListener('click', onClick, true);
+  return () => container.removeEventListener('click', onClick, true);
 }
 
 const POPUP_AUTO_PAN = { autoPan: false as const, closeOnEscapeKey: true as const };

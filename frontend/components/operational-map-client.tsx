@@ -24,6 +24,7 @@ import { formatNotaBr, notaCorHex, resolveNotaExibicao } from '@/lib/vistoria-no
 import { MapViewControls } from '@/components/map/map-view-controls';
 import {
   bindMapPinSelectionCleanup,
+  bindMapPopupActionClicks,
   mapPopupBindOptions,
   runMapPopupAction,
   subscribeMapFullscreenExit,
@@ -148,7 +149,7 @@ function buildUnidadePopupHtml(unidade: UnidadeOperacional, mapMode: CcoMapMode,
       </span>
       ${notaLine}
       ${slaLine}
-      <button type="button" data-marker-id="${unidade.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
+      <button type="button" data-map-popup-id="${escapeHtml(unidade.id)}" data-marker-id="${escapeHtml(unidade.id)}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
         Ver detalhes →
       </button>
     </div>
@@ -178,7 +179,7 @@ function buildChamadoPopupHtml(chamado: ChamadoMapaItem) {
         ${escapeHtml(chamadoStatusLabel(chamado.status))} · ${escapeHtml(chamado.prioridade)} · ${local}
       </span>
       <span style="display:block;margin-top:6px;font-size:12px;font-weight:700;color:${slaColor};">SLA: ${sla}</span>
-      <button type="button" data-marker-id="${chamado.id}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
+      <button type="button" data-map-popup-id="${escapeHtml(chamado.id)}" data-marker-id="${escapeHtml(chamado.id)}" style="display:inline-block;margin-top:10px;font-size:12px;font-weight:700;color:#0066cc;background:none;border:0;padding:0;cursor:pointer;">
         Ver chamado →
       </button>
     </div>
@@ -527,15 +528,8 @@ export function OperationalMapClient({
       .bindPopup(`<strong>${FRANCA_REFERENCIA_FREDERICO_MOURA.label}</strong>`)
       .addTo(map);
 
-    map.on('popupopen', (event) => {
-      const popup = event.popup.getElement();
-      const button = popup?.querySelector<HTMLButtonElement>('button[data-marker-id]');
-      if (!button) return;
-      button.onclick = () => {
-        const id = button.dataset.markerId;
-        if (!id) return;
-        void runMapPopupAction(popupActionKindRef.current, () => onSelectRef.current?.(id), shellRef.current);
-      };
+    const unbindPopupAction = bindMapPopupActionClicks(map.getContainer(), (id) => {
+      void runMapPopupAction(popupActionKindRef.current, () => onSelectRef.current?.(id), shellRef.current);
     });
 
     const unbindPinCleanup = bindMapPinSelectionCleanup(map, {
@@ -553,6 +547,7 @@ export function OperationalMapClient({
     refreshMapSize(map);
 
     return () => {
+      unbindPopupAction();
       unbindPinCleanup();
       setMapReady(false);
       map.remove();
@@ -616,7 +611,7 @@ export function OperationalMapClient({
             (id) => {
               dismissedIdRef.current = null;
               onSelectRef.current?.(id);
-              marker.openPopup();
+              if (!marker.isPopupOpen()) marker.openPopup();
             },
             () => {
               dismissedIdRef.current = chamado.id;
@@ -647,7 +642,7 @@ export function OperationalMapClient({
             (id) => {
               dismissedIdRef.current = null;
               onSelectRef.current?.(id);
-              marker.openPopup();
+              if (!marker.isPopupOpen()) marker.openPopup();
             },
             () => {
               dismissedIdRef.current = unidade.id;

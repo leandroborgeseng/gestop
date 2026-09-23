@@ -15,7 +15,9 @@ import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { chamadoToMapPoint } from '@/lib/chamado-geo';
+import { chamadoStatusLabel } from '@/lib/chamado-status';
 import { downloadOrdensServicoLote, listChamadosEmExecucao, listEquipesExecucao } from '@/lib/api';
+import { useSnackbar } from '@/components/ui/snackbar';
 import { toInputDate } from '@/lib/cronograma';
 import { ChamadosEmExecucaoGrupo, EquipeOpcaoResumo } from '@/lib/types';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
@@ -163,6 +165,7 @@ export function ExecucaoPage() {
 
 function ExecucaoPageContent() {
   const router = useRouter();
+  const snackbar = useSnackbar();
   const canGerenciar = useCanGerenciarChamados();
   const backHref = useSafeBackHref(canGerenciar ? '/chamados' : '/cco');
   const [grupos, setGrupos] = useState<ChamadosEmExecucaoGrupo[]>([]);
@@ -250,10 +253,22 @@ function ExecucaoPageContent() {
 
   const openExecucao = useCallback(
     (id: string) => {
+      const chamado = chamados.find((item) => item.id === id);
+      if (chamado && chamado.status !== 'EM_EXECUCAO') {
+        const label = chamadoStatusLabel(chamado.status).toLowerCase();
+        const encerrado = chamado.status === 'CONCLUIDO' || chamado.status === 'CANCELADO' || chamado.status === 'IMPEDIDO';
+        snackbar.show(
+          encerrado
+            ? `Este chamado está ${label} e não pode ser executado.`
+            : 'Somente chamados em execução podem ser abertos neste fluxo.',
+          'warning',
+        );
+        return;
+      }
       setSelectedId(id);
       router.push(`/execucao/${id}`);
     },
-    [router],
+    [chamados, router, snackbar],
   );
 
   return (

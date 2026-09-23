@@ -45,11 +45,18 @@ export function clampToFrancaMunicipio(latitude: number, longitude: number) {
 export const CARTO_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
-export const CARTO_VOYAGER_NO_LABELS =
-  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png';
+/** Chave dos tiles CARTO. O browser precisa dela na URL; NEXT_PUBLIC_CARTO_API_KEY substitui esta, se existir. */
+const CARTO_API_KEY = process.env.NEXT_PUBLIC_CARTO_API_KEY?.trim() || 'cb1_3vch_1_795381e886b9d6e9966a8faa';
 
-export const CARTO_VOYAGER_LABELS =
-  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png';
+/** CARTO exige `?key=` nos raster tiles. Sem a chave, o PNG volta com a marca “API KEY REQUIRED”. */
+function cartoRasterUrl(stylePath: string) {
+  const url = `https://{s}.basemaps.cartocdn.com/${stylePath}/{z}/{x}/{y}{r}.png`;
+  return `${url}?key=${encodeURIComponent(CARTO_API_KEY)}`;
+}
+
+export const CARTO_VOYAGER_NO_LABELS = cartoRasterUrl('rastertiles/voyager_nolabels');
+
+export const CARTO_VOYAGER_LABELS = cartoRasterUrl('rastertiles/voyager_only_labels');
 
 export const CARTO_SUBDOMAINS = 'abcd';
 

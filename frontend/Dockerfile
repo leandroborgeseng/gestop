@@ -12,6 +12,9 @@ COPY . ./
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV NODE_OPTIONS=--max-old-space-size=2048
+# Embutida no bundle do browser no build. Sem ela, os tiles CARTO exibem “API KEY REQUIRED”.
+ARG NEXT_PUBLIC_CARTO_API_KEY=
+ENV NEXT_PUBLIC_CARTO_API_KEY=$NEXT_PUBLIC_CARTO_API_KEY
 
 RUN npm run build
 

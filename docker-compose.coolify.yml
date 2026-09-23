@@ -94,6 +94,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_CARTO_API_KEY: ${NEXT_PUBLIC_CARTO_API_KEY:-}
     restart: unless-stopped
     # service_started: web sobe mesmo se a API crashar; /api/health/backend mostra o status
     # healthcheck da api permanece para ops (nao bloqueia o web)
