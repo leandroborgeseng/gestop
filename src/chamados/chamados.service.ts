@@ -24,6 +24,13 @@ import { buildRelatorioExecucaoPdf } from '../documentos/relatorio-execucao-pdf'
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  andChamadoAtivo,
+  andChamadoComExcluidos,
+  podeExcluirChamadoLogicamente,
+  podeRestaurarChamadoExcluido,
+  podeVisualizarChamadosExcluidos,
+} from './chamado-visibilidade';
 import { StorageService } from '../storage/storage.service';
 import { extractStorageKeyFromUrl, resolveStoragePublicUrl } from '../storage/storage-url';
 import {
@@ -101,6 +108,7 @@ export class ChamadosService {
           secretariaProprioId?: string;
           secretariaExecucaoId?: string;
           tipoChamadoId?: string;
+          incluirExcluidos?: boolean;
         }
       | undefined,
     user: JwtPayload,
@@ -112,10 +120,15 @@ export class ChamadosService {
     const scoped = resolveChamadoSecretariaFilter(user);
     const extra = await this.buildTriagemFiltros(params, user);
     const extraSemStatus = await this.buildTriagemFiltros({ ...params, statuses: undefined }, user);
-    const where: Prisma.ChamadoWhereInput = extra.length ? { AND: [scoped, ...extra] } : scoped;
-    const whereSemStatus: Prisma.ChamadoWhereInput = extraSemStatus.length
-      ? { AND: [scoped, ...extraSemStatus] }
-      : scoped;
+    const incluirExcluidos = Boolean(params?.incluirExcluidos) && podeVisualizarChamadosExcluidos(user);
+    const aplicarVisibilidade = (base: Prisma.ChamadoWhereInput) =>
+      incluirExcluidos ? andChamadoComExcluidos(base) : andChamadoAtivo(base);
+    const where: Prisma.ChamadoWhereInput = aplicarVisibilidade(
+      extra.length ? { AND: [scoped, ...extra] } : scoped,
+    );
+    const whereSemStatus: Prisma.ChamadoWhereInput = aplicarVisibilidade(
+      extraSemStatus.length ? { AND: [scoped, ...extraSemStatus] } : scoped,
+    );
 
     const [items, total, grouped, hasSemSla] = await Promise.all([
       this.prisma.chamado.findMany({
@@ -257,6 +270,7 @@ export class ChamadosService {
 
     const where: Prisma.ChamadoWhereInput = {
       AND: [
+        { excluidoEm: null },
         {
           OR: [
             { registradoPorId: user.sub },
@@ -393,6 +407,7 @@ export class ChamadosService {
 
     const chamados = await this.prisma.chamado.findMany({
       where: {
+        excluidoEm: null,
         status: ChamadoStatus.EM_EXECUCAO,
         ...programacaoFilter,
         ...(onlyExecutor
@@ -549,6 +564,7 @@ export class ChamadosService {
     const secretariaFilter = resolveChamadoSecretariaFilter(user);
 
     const pendentesWhere = {
+      excluidoEm: null,
       status: statusAtivos,
       previstaExecucaoEm: null,
       ...secretariaFilter,
@@ -558,6 +574,7 @@ export class ChamadosService {
     const [programados, pendentes, totalPendentes] = await Promise.all([
       this.prisma.chamado.findMany({
         where: {
+          excluidoEm: null,
           status: statusAtivos,
           previstaExecucaoEm: { gte: fromDate, lte: toDate },
           ...secretariaFilter,
@@ -604,7 +621,10 @@ export class ChamadosService {
   }
 
   async getChamado(id: string, user: JwtPayload) {
-    const chamado = await this.getChamadoOrThrow(id);
+    const chamado = await this.getChamadoOrThrow(id, { allowExcluido: true });
+    if (chamado.excluidoEm && !podeVisualizarChamadosExcluidos(user)) {
+      throw new NotFoundException('Chamado nao encontrado.');
+    }
     assertChamadoSecretariaAccess(user, chamado);
     const historico = await this.prisma.historicoStatus.findMany({
       where: { entidadeTipo: 'Chamado', entidadeId: id },
@@ -1142,7 +1162,7 @@ export class ChamadosService {
     }
 
     const chamado = await this.prisma.chamado.findFirst({
-      where: { codigo: normalized },
+      where: { codigo: normalized, excluidoEm: null },
       select: {
         id: true,
         codigo: true,
@@ -2419,6 +2439,7 @@ export class ChamadosService {
 
   async exportOrdensServicoLote(dto: EmitirOrdensServicoDto, user: JwtPayload) {
     const where: Prisma.ChamadoWhereInput = {
+      excluidoEm: null,
       ...resolveChamadoSecretariaFilter(user),
       status: { notIn: [ChamadoStatus.CONCLUIDO, ChamadoStatus.CANCELADO] },
     };
@@ -2775,12 +2796,14 @@ export class ChamadosService {
     return unidade;
   }
 
-  private async getChamadoOrThrow(id: string) {
+  private async getChamadoOrThrow(id: string, options?: { allowExcluido?: boolean }) {
     const chamado = await this.prisma.chamado.findUnique({
       where: { id },
       include: this.includeRelations(),
     });
-    if (!chamado) throw new NotFoundException('Chamado nao encontrado.');
+    if (!chamado || (chamado.excluidoEm && !options?.allowExcluido)) {
+      throw new NotFoundException('Chamado nao encontrado.');
+    }
     return chamado;
   }
 
@@ -3639,6 +3662,191 @@ export class ChamadosService {
     }
   }
 
+  async excluirLogicamente(id: string, justificativaInformada: string, user: JwtPayload) {
+    if (!podeExcluirChamadoLogicamente(user)) {
+      throw new ForbiddenException('Sem permissão para excluir logicamente chamados.');
+    }
+    const justificativa = this.assertJustificativaExclusao(justificativaInformada);
+    const chamado = await this.getChamadoOrThrow(id, { allowExcluido: true });
+    assertChamadoSecretariaAccess(user, chamado);
+    if (chamado.excluidoEm) {
+      throw new BadRequestException('Este chamado já está excluído logicamente.');
+    }
+
+    const now = new Date();
+    const contexto = await this.contextoExclusao(user);
+    const mensagem = `Chamado excluído logicamente por ${user.nome} em ${formatExclusaoDateTime(now)}. Justificativa: ${justificativa}.`;
+
+    await this.prisma.$transaction([
+      this.prisma.chamado.update({
+        where: { id },
+        data: {
+          excluidoEm: now,
+          excluidoPorId: user.sub,
+          exclusaoJustificativa: justificativa,
+          exclusaoPerfilNome: contexto.perfilNome,
+          exclusaoSecretariaId: contexto.secretariaId,
+        },
+      }),
+      this.prisma.historicoStatus.create({
+        data: {
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          statusAnterior: chamado.status,
+          statusNovo: chamado.status,
+          motivo: mensagem,
+          alteradoPorId: user.sub,
+          metadata: {
+            tipo: 'exclusao_logica',
+            justificativa,
+            perfilAtivo: contexto.perfilNome,
+            secretariaAtivaId: contexto.secretariaId,
+            secretariaAtiva: contexto.secretariaLabel,
+          },
+        },
+      }),
+      this.prisma.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.DELETE,
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          descricao: mensagem,
+          tela: 'chamados',
+          funcao: 'excluir_logicamente',
+          perfilAtivoNome: contexto.perfilNome,
+          secretariaAtivaId: contexto.secretariaId,
+          secretariaAtivaSigla: contexto.secretariaSigla,
+          valorAntigo: JSON.parse(JSON.stringify({ excluido: false, status: chamado.status })),
+          valorNovo: JSON.parse(
+            JSON.stringify({
+              excluido: true,
+              status: chamado.status,
+              excluidoEm: now.toISOString(),
+              justificativa,
+              perfilAtivo: contexto.perfilNome,
+              secretariaAtivaId: contexto.secretariaId,
+              secretariaAtiva: contexto.secretariaLabel,
+            }),
+          ),
+        },
+      }),
+    ]);
+
+    return this.getChamado(id, user);
+  }
+
+  async restaurarExclusaoLogica(id: string, justificativaInformada: string, user: JwtPayload) {
+    if (!podeRestaurarChamadoExcluido(user)) {
+      throw new ForbiddenException('Sem permissão para restaurar chamados excluídos.');
+    }
+    const justificativa = this.assertJustificativaExclusao(justificativaInformada);
+    const chamado = await this.getChamadoOrThrow(id, { allowExcluido: true });
+    assertChamadoSecretariaAccess(user, chamado);
+    if (!chamado.excluidoEm) {
+      throw new BadRequestException('Este chamado não está excluído logicamente.');
+    }
+
+    const now = new Date();
+    const contexto = await this.contextoExclusao(user);
+    const mensagem = `Exclusão lógica desfeita por ${user.nome} em ${formatExclusaoDateTime(now)}. Justificativa: ${justificativa}.`;
+    const situacaoAnterior = {
+      excluido: true,
+      status: chamado.status,
+      excluidoEm: chamado.excluidoEm.toISOString(),
+      justificativaExclusao: chamado.exclusaoJustificativa,
+      perfilExclusao: chamado.exclusaoPerfilNome,
+      secretariaExclusaoId: chamado.exclusaoSecretariaId,
+    };
+
+    await this.prisma.$transaction([
+      this.prisma.chamado.update({
+        where: { id },
+        data: {
+          excluidoEm: null,
+          excluidoPorId: null,
+          exclusaoJustificativa: null,
+          exclusaoPerfilNome: null,
+          exclusaoSecretariaId: null,
+        },
+      }),
+      this.prisma.historicoStatus.create({
+        data: {
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          statusAnterior: chamado.status,
+          statusNovo: chamado.status,
+          motivo: mensagem,
+          alteradoPorId: user.sub,
+          metadata: {
+            tipo: 'restauracao_logica',
+            justificativa,
+            perfilAtivo: contexto.perfilNome,
+            secretariaAtivaId: contexto.secretariaId,
+            secretariaAtiva: contexto.secretariaLabel,
+            situacaoAnterior,
+          },
+        },
+      }),
+      this.prisma.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.UPDATE,
+          entidadeTipo: 'Chamado',
+          entidadeId: id,
+          descricao: mensagem,
+          tela: 'chamados',
+          funcao: 'restaurar_excluido',
+          perfilAtivoNome: contexto.perfilNome,
+          secretariaAtivaId: contexto.secretariaId,
+          secretariaAtivaSigla: contexto.secretariaSigla,
+          valorAntigo: JSON.parse(JSON.stringify(situacaoAnterior)),
+          valorNovo: JSON.parse(
+            JSON.stringify({
+              excluido: false,
+              status: chamado.status,
+              justificativa,
+              perfilAtivo: contexto.perfilNome,
+              secretariaAtivaId: contexto.secretariaId,
+              secretariaAtiva: contexto.secretariaLabel,
+            }),
+          ),
+        },
+      }),
+    ]);
+
+    return this.getChamado(id, user);
+  }
+
+  private assertJustificativaExclusao(texto: string) {
+    const justificativa = texto.trim();
+    if (justificativa.length < 20) {
+      throw new BadRequestException('A justificativa deve ter no mínimo 20 caracteres.');
+    }
+    return justificativa;
+  }
+
+  private async contextoExclusao(user: JwtPayload) {
+    const [perfil, secretaria] = await Promise.all([
+      user.perfilAtivoId
+        ? this.prisma.perfil.findUnique({ where: { id: user.perfilAtivoId }, select: { nome: true } })
+        : Promise.resolve(null),
+      user.secretariaId
+        ? this.prisma.secretaria.findUnique({
+            where: { id: user.secretariaId },
+            select: { id: true, nome: true, sigla: true },
+          })
+        : Promise.resolve(null),
+    ]);
+    const perfilNome = perfil?.nome ?? user.perfis?.[0] ?? null;
+    return {
+      perfilNome,
+      secretariaId: secretaria?.id ?? user.secretariaId ?? null,
+      secretariaSigla: secretaria?.sigla ?? null,
+      secretariaLabel: secretaria ? `${secretaria.sigla} — ${secretaria.nome}` : null,
+    };
+  }
+
   private audit(usuarioId: string, acao: AuditAction, entidadeId: string, antes: unknown, depois: unknown) {
     return this.prisma.logAuditoria.create({
       data: {
@@ -3651,6 +3859,14 @@ export class ChamadosService {
       },
     });
   }
+}
+
+function formatExclusaoDateTime(date: Date) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    dateStyle: 'short',
+    timeStyle: 'short',
+  }).format(date);
 }
 
 function toIsoString(value: Date | string | null | undefined) {

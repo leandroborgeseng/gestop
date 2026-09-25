@@ -82,7 +82,9 @@ export class HealthController {
           usuarios: users,
           secretarias,
           unidades: await this.prisma.unidadePublica.count({ where: { ativo: true } }),
-          chamados: await this.prisma.chamado.count(),
+          chamados: await this.prisma.chamado.count({
+            where: { OR: [{ excluidoEm: null }, { excluidoEm: { not: null } }] },
+          }),
         },
         migrations: migrations.map((item) => ({
           name: item.migration_name,

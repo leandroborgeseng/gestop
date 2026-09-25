@@ -502,6 +502,7 @@ export class MobileService {
 
     const chamados = await this.prisma.chamado.findMany({
       where: {
+        excluidoEm: null,
         unidadeId,
         status: { in: CHAMADO_OPEN_STATUSES },
       },

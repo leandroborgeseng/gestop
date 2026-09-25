@@ -473,7 +473,12 @@ export class AdminService {
 
   async deleteTipoChamado(id: string, user: JwtPayload) {
     const before = await this.getTipoChamadoOrThrow(id);
-    const emUso = await this.prisma.chamado.count({ where: { tipoChamadoId: id } });
+    const emUso = await this.prisma.chamado.count({
+      where: {
+        tipoChamadoId: id,
+        OR: [{ excluidoEm: null }, { excluidoEm: { not: null } }],
+      },
+    });
     if (emUso > 0) {
       throw new BadRequestException('Tipo de chamado em uso. Inative em vez de excluir.');
     }

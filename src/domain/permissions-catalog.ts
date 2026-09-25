@@ -63,6 +63,9 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
       { id: 'triagem', label: 'Triagem', actions: ['alterar'] },
       { id: 'exportar_pdf', label: 'Exportar PDF do chamado', actions: ['visualizar', 'executar'] },
       { id: 'execucao_manual', label: 'Lançamento manual de execução', actions: ['executar'] },
+      { id: 'excluidos_visualizar', label: 'Visualizar chamados excluídos', actions: ['visualizar'] },
+      { id: 'excluir_logicamente', label: 'Excluir logicamente chamado', actions: ['excluir'] },
+      { id: 'restaurar_excluido', label: 'Restaurar chamado excluído', actions: ['alterar'] },
     ],
   },
   {

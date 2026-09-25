@@ -135,7 +135,7 @@ export class MonitoramentoService {
           nome: true,
           _count: {
             select: {
-              chamados: { where: { status: { in: CHAMADO_OPEN_STATUSES } } },
+              chamados: { where: { status: { in: CHAMADO_OPEN_STATUSES }, excluidoEm: null } },
               fiscalizacoes: true,
             },
           },
@@ -201,6 +201,7 @@ export class MonitoramentoService {
         : {};
 
     return {
+      excluidoEm: null,
       ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
       ...(filtro.tipoChamadoId ? { tipoChamadoId: filtro.tipoChamadoId } : {}),
       ...(filtro.prioridade ? { prioridade: filtro.prioridade as ChamadoPrioridade } : {}),
@@ -426,6 +427,7 @@ export class MonitoramentoService {
     const [chamadosAtrasados, chamadosSemTriagem, syncFalhas, chamadosUrgentes] = await Promise.all([
       this.prisma.chamado.findMany({
         where: {
+          excluidoEm: null,
           prazoEm: { lt: now },
           status: { in: CHAMADO_OPEN_STATUSES },
         },
@@ -445,6 +447,7 @@ export class MonitoramentoService {
       }),
       this.prisma.chamado.findMany({
         where: {
+          excluidoEm: null,
           status: { in: [ChamadoStatus.ABERTO, ChamadoStatus.EM_TRIAGEM] },
           createdAt: { lt: chamadoLimite },
         },
@@ -465,6 +468,7 @@ export class MonitoramentoService {
       }),
       this.prisma.chamado.count({
         where: {
+          excluidoEm: null,
           prioridade: 'URGENTE',
           status: { in: CHAMADO_OPEN_STATUSES },
         },

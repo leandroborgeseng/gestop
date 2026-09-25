@@ -19,7 +19,9 @@ import {
   RegistrarChamadoHistoricoDto,
   EmitirOrdensServicoDto,
   ChamadoExecucaoManualDto,
+  ChamadoExclusaoLogicaDto,
 } from './chamados.dto';
+import { CHAMADO_EXCLUIR_LOGICAMENTE, CHAMADO_RESTAURAR_EXCLUIDO } from './chamado-visibilidade';
 import { ChamadosService } from './chamados.service';
 import { CHAMADOS_ABRIR_KEYS } from './chamados.permissions';
 
@@ -110,6 +112,7 @@ export class ChamadosController {
     @Query('secretariaProprioId') secretariaProprioId?: string,
     @Query('secretariaExecucaoId') secretariaExecucaoId?: string,
     @Query('tipoChamadoId') tipoChamadoId?: string,
+    @Query('incluirExcluidos') incluirExcluidos?: string,
   ) {
     return this.chamadosService.listChamados(
       {
@@ -125,9 +128,30 @@ export class ChamadosController {
         secretariaProprioId,
         secretariaExecucaoId,
         tipoChamadoId,
+        incluirExcluidos: incluirExcluidos === 'true' || incluirExcluidos === '1',
       },
       user,
     );
+  }
+
+  @RequirePermissions(CHAMADO_EXCLUIR_LOGICAMENTE)
+  @Post(':id/exclusao-logica')
+  excluirLogicamente(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: ChamadoExclusaoLogicaDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.chamadosService.excluirLogicamente(id, body.justificativa, user);
+  }
+
+  @RequirePermissions(CHAMADO_RESTAURAR_EXCLUIDO)
+  @Post(':id/restaurar-exclusao')
+  restaurarExclusao(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: ChamadoExclusaoLogicaDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.chamadosService.restaurarExclusaoLogica(id, body.justificativa, user);
   }
 
   @RequireAnyPermissions('chamados.gerenciar', 'chamados.executar')

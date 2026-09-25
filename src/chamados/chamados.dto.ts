@@ -399,3 +399,9 @@ export class ChamadoExecucaoManualDto {
   @MinLength(5)
   impedimentoMotivo?: string;
 }
+
+export class ChamadoExclusaoLogicaDto {
+  @IsString()
+  @MinLength(20)
+  justificativa!: string;
+}

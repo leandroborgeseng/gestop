@@ -376,6 +376,7 @@ export class RelatoriosService {
 
   private chamadoWhere(filtro: RelatorioFiltroDto): Prisma.ChamadoWhereInput {
     return {
+      excluidoEm: null,
       ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
       ...(filtro.status ? { status: filtro.status as ChamadoStatus } : {}),
       ...(filtro.tipoChamadoId ? { tipoChamadoId: filtro.tipoChamadoId } : {}),
@@ -399,6 +400,7 @@ export class RelatoriosService {
   /** Período por data de conclusão; somente chamados CONCLUIDO. */
   private chamadoProdutividadeWhere(filtro: RelatorioFiltroDto): Prisma.ChamadoWhereInput {
     return {
+      excluidoEm: null,
       status: ChamadoStatus.CONCLUIDO,
       ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
       ...(filtro.tipoChamadoId ? { tipoChamadoId: filtro.tipoChamadoId } : {}),

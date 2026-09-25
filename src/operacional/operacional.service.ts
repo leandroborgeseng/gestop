@@ -90,7 +90,7 @@ export class OperacionalService {
         },
       }),
       this.prisma.chamado.count({
-        where: { ...chamadoWhere, status: { in: CHAMADO_OPEN_STATUSES } },
+        where: { ...chamadoWhere, excluidoEm: null, status: { in: CHAMADO_OPEN_STATUSES } },
       }),
       this.prisma.offlineSyncEvent.count({
         where: { status: { in: ['PENDENTE', 'PROCESSANDO', 'CONFLITO', 'FALHOU'] } },
@@ -418,7 +418,7 @@ export class OperacionalService {
   async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload): Promise<ChamadoMapaItem[]> {
     const bairros = query.bairros?.length ? query.bairros : query.bairro ? [query.bairro] : undefined;
 
-    const conditions: Prisma.ChamadoWhereInput[] = [resolveChamadoSecretariaFilter(user)];
+    const conditions: Prisma.ChamadoWhereInput[] = [{ excluidoEm: null }, resolveChamadoSecretariaFilter(user)];
 
     if (query.status?.length) conditions.push({ status: { in: query.status as ChamadoStatus[] } });
     if (query.prioridade?.length) conditions.push({ prioridade: { in: query.prioridade as ChamadoPrioridade[] } });
@@ -672,7 +672,7 @@ export class OperacionalService {
           },
         },
         chamados: {
-          where: { status: { in: CHAMADO_OPEN_STATUSES } },
+          where: { status: { in: CHAMADO_OPEN_STATUSES }, excluidoEm: null },
           orderBy: { createdAt: 'desc' },
           take: 10,
           select: {
@@ -702,7 +702,7 @@ export class OperacionalService {
               where: this.buildNcPendenciaWhere(),
             },
             chamados: {
-              where: { status: { in: CHAMADO_OPEN_STATUSES } },
+              where: { status: { in: CHAMADO_OPEN_STATUSES }, excluidoEm: null },
             },
           },
         },
@@ -783,6 +783,7 @@ export class OperacionalService {
     const statusFilter = filters?.status?.trim() as ChamadoStatus | undefined;
     const chamados = await this.prisma.chamado.findMany({
       where: {
+        excluidoEm: null,
         unidadeId,
         naoConformidadeId: null,
         ...(statusFilter ? { status: statusFilter } : { status: { in: CHAMADO_OPEN_STATUSES } }),
@@ -846,11 +847,12 @@ export class OperacionalService {
         id: true,
         codigo: true,
         unidadeId: true,
+        excluidoEm: true,
         naoConformidadeId: true,
         status: true,
       },
     });
-    if (!chamado) {
+    if (!chamado || chamado.excluidoEm) {
       throw new NotFoundException('Chamado não encontrado.');
     }
     if (chamado.unidadeId !== nc.unidadeId) {
@@ -1130,6 +1132,7 @@ export class OperacionalService {
     equipeIds?: string[];
   }): Prisma.ChamadoWhereInput {
     return {
+      excluidoEm: null,
       status: { in: CHAMADO_OPEN_STATUSES },
       ...(filters.tiposChamadoId?.length ? { tipoChamadoId: { in: filters.tiposChamadoId } } : {}),
       ...(filters.equipeIds?.length ? { equipeId: { in: filters.equipeIds } } : {}),

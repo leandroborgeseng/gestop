@@ -39,12 +39,17 @@ import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { ListPagination } from '@/components/ui/list-pagination';
-import { downloadChamadoPdf, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTiposChamadoOpcoes, notificarChamadoEquipe, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
+import { downloadChamadoPdf, excluirChamadoLogicamente, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTiposChamadoOpcoes, notificarChamadoEquipe, restaurarChamadoExcluido, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import { toInputDate } from '@/lib/cronograma';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { useSessionUser } from '@/components/auth/session-context';
+import {
+  canExcluirChamadoLogicamente,
+  canRestaurarChamadoExcluido,
+  canVisualizarChamadosExcluidos,
+} from '@/lib/permissions-matrix';
 import {
   CHAMADO_STATUS_META,
   buildChamadoTimelineFromHistorico,
@@ -117,6 +122,8 @@ function ChamadosPageContent() {
   const [filtros, setFiltros] = useState<ChamadosFiltrosValue>(DEFAULT_FILTROS);
   const [view, setView] = useState<ChamadosView>('triagem');
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
+  const [exibirExcluidos, setExibirExcluidos] = useState(false);
+  const podeVerExcluidos = canVisualizarChamadosExcluidos(sessionUser);
 
   useEffect(() => {
     const value = searchParams.get('search');
@@ -156,6 +163,7 @@ function ChamadosPageContent() {
       secretariaProprioId: filtros.secretariaProprioId || undefined,
       secretariaExecucaoId: filtros.secretariaExecucaoId || undefined,
       tipoChamadoId: filtros.tipoChamadoId || undefined,
+      incluirExcluidos: podeVerExcluidos && exibirExcluidos ? true : undefined,
       all: nextAll || undefined,
       limit: nextAll ? TRIAGEM_ALL_MAX : nextSize,
       offset: nextAll ? 0 : (nextPage - 1) * nextSize,
@@ -165,7 +173,7 @@ function ChamadosPageContent() {
   useEffect(() => {
     if (view !== 'triagem') return;
     setPage(1);
-  }, [filtros, search, view]);
+  }, [filtros, search, view, exibirExcluidos]);
 
   useEffect(() => {
     if (view !== 'triagem') return;
@@ -190,7 +198,7 @@ function ChamadosPageContent() {
 
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, page, pageSize, allSelected, filtros, search]);
+  }, [view, page, pageSize, allSelected, filtros, search, exibirExcluidos, podeVerExcluidos]);
 
   async function refreshChamadosList() {
     const response = await listChamados(triagemQuery());
@@ -463,6 +471,17 @@ function ChamadosPageContent() {
                     className="h-[38px] w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
                   />
                 </div>
+                {podeVerExcluidos ? (
+                  <label className="mt-2 flex items-center gap-2 text-[12px] text-[var(--ink-3)]">
+                    <input
+                      type="checkbox"
+                      checked={exibirExcluidos}
+                      onChange={(event) => setExibirExcluidos(event.target.checked)}
+                      className="h-3.5 w-3.5 accent-[var(--danger)]"
+                    />
+                    Exibir chamados excluídos
+                  </label>
+                ) : null}
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
@@ -491,9 +510,12 @@ function ChamadosPageContent() {
                         onClick={() => setSelectedId(chamado.id)}
                         className={cn(
                           'ch-row mb-0.5 flex w-full flex-col gap-1.5 rounded-[var(--r-md)] border border-transparent px-3 py-2.5 text-left transition-colors',
-                          isSelected
+                          chamado.excluidoEm && 'border-[#f3c0c0] bg-[#fde8e8]',
+                          isSelected && !chamado.excluidoEm
                             ? 'border-[color-mix(in_srgb,var(--brand)_30%,transparent)] bg-[var(--brand-soft)]'
-                            : 'hover:bg-[var(--surface-2)]',
+                            : null,
+                          isSelected && chamado.excluidoEm && 'border-[#e8a0a0] bg-[#f8d4d4]',
+                          !isSelected && !chamado.excluidoEm && 'hover:bg-[var(--surface-2)]',
                         )}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -504,6 +526,7 @@ function ChamadosPageContent() {
                         <p className="truncate text-[12px] text-[var(--ink-3)]">{chamadoLocalLabel(chamado)}</p>
                         <div className="flex flex-wrap items-center gap-2 pt-0.5">
                           <Badge variant={st.badge}>{st.label}</Badge>
+                          {chamado.excluidoEm ? <Badge variant="danger">Excluído</Badge> : null}
                           <span
                             className={cn(
                               'inline-flex items-center gap-1 text-[11px] font-semibold',
@@ -576,6 +599,13 @@ function ChamadosPageContent() {
                     })
                     .catch(() => undefined);
                 }}
+                onExclusaoAlterada={() => {
+                  void refreshChamadosList();
+                  if (!selected?.id) return;
+                  getChamado(selected.id)
+                    .then(setDetail)
+                    .catch(() => setSelectedId(null));
+                }}
               />
             </section>
           </div>
@@ -597,6 +627,7 @@ function ChamadoDetailPanel({
   onSavePlanejamento,
   onSaveTriagem,
   onRefreshDetail,
+  onExclusaoAlterada,
 }: {
   resumo: ChamadoResumo | null;
   detail: ChamadoDetalhe | null;
@@ -619,8 +650,15 @@ function ChamadoDetailPanel({
     payload: { tipoChamadoId: string | null; prioridade: (typeof TRIAGEM_PRIORIDADES)[number]; motivoAlteracao?: string },
   ) => void;
   onRefreshDetail: () => void;
+  onExclusaoAlterada: () => void;
 }) {
   const snackbar = useSnackbar();
+  const sessionUser = useSessionUser();
+  const podeExcluir = canExcluirChamadoLogicamente(sessionUser);
+  const podeRestaurar = canRestaurarChamadoExcluido(sessionUser);
+  const [exclusaoModal, setExclusaoModal] = useState<'excluir' | 'restaurar' | null>(null);
+  const [justificativaExclusao, setJustificativaExclusao] = useState('');
+  const [exclusaoBusy, setExclusaoBusy] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<ChamadoStatus>('ABERTO');
   const [pdfBusy, setPdfBusy] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
@@ -686,13 +724,65 @@ function ChamadoDetailPanel({
     ? buildChamadoTimelineFromHistorico(detail.historico, resumo.status, resumo.createdAt)
     : buildChamadoTimelineFromHistorico([], resumo.status, resumo.createdAt);
 
+  const justificativaOk = justificativaExclusao.trim().length >= 20;
+
+  async function confirmarExclusao() {
+    if (!resumo || !exclusaoModal || !justificativaOk) return;
+    setExclusaoBusy(true);
+    try {
+      if (exclusaoModal === 'excluir') {
+        await excluirChamadoLogicamente(resumo.id, justificativaExclusao.trim());
+        snackbar.show('Chamado excluído logicamente.', 'success');
+      } else {
+        await restaurarChamadoExcluido(resumo.id, justificativaExclusao.trim());
+        snackbar.show('Chamado restaurado.', 'success');
+      }
+      setExclusaoModal(null);
+      setJustificativaExclusao('');
+      onExclusaoAlterada();
+    } catch (err) {
+      snackbar.show(err instanceof Error ? err.message : 'Não foi possível concluir a ação.', 'error');
+    } finally {
+      setExclusaoBusy(false);
+    }
+  }
+
   return (
+    <>
     <Card elevation={1} className="h-full overflow-hidden">
       <CardContent className="flex h-full flex-col p-0">
         <div className="border-b border-[var(--line-2)] p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <span className="mono text-[13px] font-semibold text-[var(--brand-hover)]">{resumo.codigo}</span>
             <div className="flex flex-wrap items-center gap-1.5">
+              {podeExcluir && !resumo.excluidoEm ? (
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  disabled={busy || exclusaoBusy}
+                  onClick={() => {
+                    setJustificativaExclusao('');
+                    setExclusaoModal('excluir');
+                  }}
+                >
+                  Excluir chamado
+                </Button>
+              ) : null}
+              {podeRestaurar && resumo.excluidoEm ? (
+                <Button
+                  type="button"
+                  variant="outlined"
+                  size="sm"
+                  disabled={busy || exclusaoBusy}
+                  onClick={() => {
+                    setJustificativaExclusao('');
+                    setExclusaoModal('restaurar');
+                  }}
+                >
+                  Restaurar chamado
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outlined"
@@ -723,6 +813,7 @@ function ChamadoDetailPanel({
               </Button>
               <Badge variant={prioridadeVariant(resumo.prioridade)}>{resumo.prioridade}</Badge>
               <Badge variant={st.badge}>{st.label}</Badge>
+              {resumo.excluidoEm ? <Badge variant="danger">Excluído</Badge> : null}
             </div>
           </div>
           <h2 className="mt-3 text-[17px] font-semibold leading-snug text-[var(--ink)]">{chamadoTitulo(resumo)}</h2>
@@ -734,6 +825,20 @@ function ChamadoDetailPanel({
             </span>
             {resumo.unidade?.codigoPatrimonial ? <span className="mono">{resumo.unidade.codigoPatrimonial}</span> : null}
           </div>
+          {resumo.excluidoEm ? (
+            <div className="mt-4 rounded-[var(--r-md)] border border-[#f3c0c0] bg-[#fde8e8] p-3 text-[13px] text-[var(--ink)]">
+              <p className="font-semibold text-[var(--danger)]">Chamado excluído logicamente</p>
+              <p className="mt-1 text-[var(--ink-2)]">
+                Este chamado permanece registrado para consulta, mas não entra nas telas, relatórios, mapas, estatísticas e demais rotinas do sistema.
+              </p>
+              {resumo.exclusaoJustificativa ? (
+                <p className="mt-2 text-[12px] text-[var(--ink-2)]">Justificativa: {resumo.exclusaoJustificativa}</p>
+              ) : null}
+              {resumo.exclusaoPerfilNome ? (
+                <p className="mt-1 text-[12px] text-[var(--ink-3)]">Perfil: {resumo.exclusaoPerfilNome}</p>
+              ) : null}
+            </div>
+          ) : null}
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
@@ -780,6 +885,8 @@ function ChamadoDetailPanel({
             <SummaryCard label="Canal" value={canal.label} />
           </div>
 
+          {resumo.excluidoEm ? null : (
+          <>
           <div className="space-y-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4">
             <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Alterar status</p>
             <div className="grid gap-3 sm:grid-cols-[minmax(180px,220px)_1fr]">
@@ -1063,12 +1170,14 @@ function ChamadoDetailPanel({
               Notificar equipe
             </Button>
           </div>
+          </>
+          )}
 
-          <ChamadoAberturaSection resumo={resumo} busy={busy} onSaved={onRefreshDetail} />
+          <ChamadoAberturaSection resumo={resumo} busy={busy || Boolean(resumo.excluidoEm)} onSaved={onRefreshDetail} />
 
           <ChamadoObservadoresSection
             chamado={resumo}
-            canManage
+            canManage={!resumo.excluidoEm}
             mode="chamados"
             onChanged={onRefreshDetail}
           />
@@ -1108,7 +1217,7 @@ function ChamadoDetailPanel({
 
           <div>
             <div className="mb-3">
-              <ChamadoHistoricoForm chamadoId={resumo.id} disabled={busy} onSaved={onRefreshDetail} />
+              <ChamadoHistoricoForm chamadoId={resumo.id} disabled={busy || Boolean(resumo.excluidoEm)} onSaved={onRefreshDetail} />
             </div>
             <p className="mb-3 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Linha do tempo</p>
             {loading ? <LoadingState label="Carregando timeline..." /> : <ChamadoTimeline steps={timeline} />}
@@ -1116,6 +1225,59 @@ function ChamadoDetailPanel({
         </div>
       </CardContent>
     </Card>
+    {exclusaoModal ? (
+      <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-4 sm:items-center" role="presentation">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="exclusao-chamado-titulo"
+          className="w-full max-w-lg rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--sh-md)]"
+        >
+          <h3 id="exclusao-chamado-titulo" className="text-[16px] font-semibold text-[var(--ink)]">
+            {exclusaoModal === 'excluir' ? 'Excluir chamado' : 'Restaurar chamado'}
+          </h3>
+          <p className="mt-2 text-[13px] leading-relaxed text-[var(--ink-2)]">
+            {exclusaoModal === 'excluir'
+              ? 'O chamado deixará de aparecer nas telas, relatórios, mapas e estatísticas, mas continuará registrado para consulta por usuários autorizados.'
+              : 'O chamado voltará a ser considerado normalmente em todas as telas, relatórios, mapas, estatísticas e rotinas do sistema.'}
+          </p>
+          <label htmlFor="justificativa-exclusao" className="mt-4 block text-[12px] font-semibold text-[var(--ink-2)]">
+            Justificativa
+          </label>
+          <textarea
+            id="justificativa-exclusao"
+            value={justificativaExclusao}
+            onChange={(event) => setJustificativaExclusao(event.target.value)}
+            rows={4}
+            disabled={exclusaoBusy}
+            placeholder="Descreva o motivo, com pelo menos 20 caracteres."
+            className="mt-1 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+          />
+          <p className="mt-1 text-[11px] text-[var(--ink-3)]">{justificativaExclusao.trim().length}/20 caracteres mínimos</p>
+          <div className="mt-4 flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="outlined"
+              size="sm"
+              disabled={exclusaoBusy}
+              onClick={() => setExclusaoModal(null)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant={exclusaoModal === 'excluir' ? 'danger' : 'filled'}
+              size="sm"
+              disabled={exclusaoBusy || !justificativaOk}
+              onClick={() => void confirmarExclusao()}
+            >
+              {exclusaoBusy ? 'Salvando…' : 'Confirmar'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    ) : null}
+    </>
   );
 }
 

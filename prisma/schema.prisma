@@ -230,7 +230,8 @@ model Secretaria {
   usuarioVinculos   UsuarioSecretaria[]
   checklists        Checklist[]
   fiscalizacoes     Fiscalizacao[]
-  chamados          Chamado[]
+  chamados          Chamado[] @relation("ChamadoSecretaria")
+  chamadosExclusaoLogica Chamado[] @relation("ChamadoExclusaoSecretaria")
   documentos        Documento[]
   dashboardSnapshots DashboardSnapshot[]
   equipes           Equipe[]
@@ -311,6 +312,7 @@ model Usuario {
   syncIgnorados     OfflineSyncEvent[] @relation("SyncIgnoradoPor")
   passwordResetTokens PasswordResetToken[]
   chamadosRegistrados Chamado[] @relation("ChamadoRegistradoPor")
+  chamadosExcluidos Chamado[] @relation("ChamadoExcluidoPor")
   chamadosObservados ChamadoObservador[] @relation("ChamadoObservadorUsuario")
   chamadosObservadoresCriados ChamadoObservador[] @relation("ChamadoObservadorCreatedBy")
   documentosResponsavel Documento[] @relation("DocumentoResponsavel")
@@ -849,10 +851,17 @@ model Chamado {
   fotoUrl             String?
   fotoStorageKey      String?
   fotoMimeType        String?
+  excluidoEm              DateTime?
+  excluidoPorId           String?
+  exclusaoJustificativa   String?
+  exclusaoPerfilNome      String?
+  exclusaoSecretariaId    String?
   createdAt           DateTime               @default(now())
   updatedAt           DateTime               @updatedAt
 
-  secretaria      Secretaria       @relation(fields: [secretariaId], references: [id], onDelete: Restrict)
+  secretaria      Secretaria       @relation("ChamadoSecretaria", fields: [secretariaId], references: [id], onDelete: Restrict)
+  excluidoPor     Usuario?         @relation("ChamadoExcluidoPor", fields: [excluidoPorId], references: [id], onDelete: SetNull)
+  exclusaoSecretaria Secretaria?   @relation("ChamadoExclusaoSecretaria", fields: [exclusaoSecretariaId], references: [id], onDelete: SetNull)
   unidade         UnidadePublica?  @relation(fields: [unidadeId], references: [id], onDelete: SetNull)
   naoConformidade NaoConformidade? @relation(fields: [naoConformidadeId], references: [id], onDelete: SetNull)
   responsavel     Usuario?         @relation("ChamadoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
@@ -875,6 +884,7 @@ model Chamado {
   @@index([previstaExecucaoEm])
   @@index([status, equipeId])
   @@index([status, previstaExecucaoEm])
+  @@index([excluidoEm])
 }
 
 model ChamadoObservador {

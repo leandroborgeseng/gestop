@@ -99,7 +99,7 @@ async function main() {
     prisma.webmapImport.count({ where: { dryRun: false } }),
     prisma.checklistVersao.count({ where: { status: 'PUBLICADA' } }),
     prisma.chamado.count({
-      where: { status: { notIn: ['CONCLUIDO', 'CANCELADO'] } },
+      where: { excluidoEm: null, status: { notIn: ['CONCLUIDO', 'CANCELADO'] } },
     }),
   ]);
 

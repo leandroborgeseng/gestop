@@ -880,6 +880,9 @@ export type ChamadoResumo = {
   observadores?: ChamadoObservador[];
   observadorIds?: string[];
   relacaoComigo?: 'ABERTO_POR_MIM' | 'OBSERVADOR' | null;
+  excluidoEm?: string | null;
+  exclusaoJustificativa?: string | null;
+  exclusaoPerfilNome?: string | null;
 };
 
 export type ChamadoObservador = {

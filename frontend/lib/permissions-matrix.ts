@@ -289,6 +289,33 @@ export function hasAnyAdminVisualizarAccess(permissoes: string[]) {
 
 export const ADMINISTRADOR_SISTEMA_NOME = 'Administrador do Sistema';
 
+export function canVisualizarChamadosExcluidos(user?: {
+  permissoes?: string[];
+  perfilAtivo?: { nome?: string } | null;
+  perfis?: string[];
+} | null) {
+  if (isAdministradorSistemaAtivo(user)) return true;
+  return Boolean(user?.permissoes?.includes(buildMatrixKey('chamados', 'excluidos_visualizar', 'visualizar')));
+}
+
+export function canExcluirChamadoLogicamente(user?: {
+  permissoes?: string[];
+  perfilAtivo?: { nome?: string } | null;
+  perfis?: string[];
+} | null) {
+  if (isAdministradorSistemaAtivo(user)) return true;
+  return Boolean(user?.permissoes?.includes(buildMatrixKey('chamados', 'excluir_logicamente', 'excluir')));
+}
+
+export function canRestaurarChamadoExcluido(user?: {
+  permissoes?: string[];
+  perfilAtivo?: { nome?: string } | null;
+  perfis?: string[];
+} | null) {
+  if (isAdministradorSistemaAtivo(user)) return true;
+  return Boolean(user?.permissoes?.includes(buildMatrixKey('chamados', 'restaurar_excluido', 'alterar')));
+}
+
 export function isAdministradorSistemaAtivo(user?: {
   perfilAtivo?: { nome?: string } | null;
   perfis?: string[];

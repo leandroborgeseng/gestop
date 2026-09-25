@@ -975,6 +975,7 @@ export function listChamados(params?: {
   secretariaProprioId?: string;
   secretariaExecucaoId?: string;
   tipoChamadoId?: string;
+  incluirExcluidos?: boolean;
 }) {
   const search = new URLSearchParams();
   if (params?.limit != null) search.set('limit', String(params.limit));
@@ -989,8 +990,25 @@ export function listChamados(params?: {
   if (params?.secretariaProprioId) search.set('secretariaProprioId', params.secretariaProprioId);
   if (params?.secretariaExecucaoId) search.set('secretariaExecucaoId', params.secretariaExecucaoId);
   if (params?.tipoChamadoId) search.set('tipoChamadoId', params.tipoChamadoId);
+  if (params?.incluirExcluidos) search.set('incluirExcluidos', 'true');
   const query = search.toString();
   return request<ChamadosListResponse>(`/chamados${query ? `?${query}` : ''}`);
+}
+
+export function excluirChamadoLogicamente(id: string, justificativa: string) {
+  return request<ChamadoDetalhe>(`/chamados/${id}/exclusao-logica`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ justificativa }),
+  });
+}
+
+export function restaurarChamadoExcluido(id: string, justificativa: string) {
+  return request<ChamadoDetalhe>(`/chamados/${id}/restaurar-exclusao`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ justificativa }),
+  });
 }
 
 export function listChamadosEmExecucao(params?: { programacaoFrom?: string; programacaoTo?: string; hoje?: boolean }) {

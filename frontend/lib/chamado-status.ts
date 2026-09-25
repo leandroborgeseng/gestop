@@ -431,6 +431,17 @@ export function buildChamadoTimelineFromHistorico(
       };
     }
 
+    if (tipo === 'exclusao_logica' || tipo === 'restauracao_logica') {
+      return {
+        id: entry.id,
+        title: entry.motivo || (tipo === 'exclusao_logica' ? 'Chamado excluído logicamente' : 'Exclusão lógica desfeita'),
+        date: formatTimelineDate(entry.createdAt),
+        sub: entry.alteradoPor?.nome,
+        done: true,
+        active: false,
+      };
+    }
+
     if (tipo === 'triagem_update' || entry.motivo === 'Triagem atualizada.') {
       const alteracoes = Array.isArray(metadata.alteracoes)
         ? (metadata.alteracoes as Array<{ campo: string; label: string; de: string; para: string }>)

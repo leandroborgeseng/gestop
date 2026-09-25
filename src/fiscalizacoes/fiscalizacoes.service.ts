@@ -531,6 +531,7 @@ export class FiscalizacoesService {
 
     const chamadosPendentes = await this.prisma.chamado.findMany({
       where: {
+        excluidoEm: null,
         unidadeId: { in: unidadeIds },
         status: { in: CHAMADO_OPEN_STATUSES },
         ...this.chamadoScopeFilter(user),

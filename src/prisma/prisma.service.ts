@@ -1,6 +1,7 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
+import { installChamadoOperacionalFilter } from '../chamados/chamado-visibilidade';
 
 function maskDatabaseUrl(url: string) {
   try {
@@ -26,6 +27,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     super({
       adapter: new PrismaPg({ connectionString }),
     });
+    installChamadoOperacionalFilter(this);
   }
 
   async onModuleInit() {
