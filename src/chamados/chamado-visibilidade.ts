@@ -64,7 +64,8 @@ export function withChamadoOperacionalFilter(client: PrismaClient) {
       chamado: {
         async $allOperations({ operation, args, query }) {
           if (!CHAMADO_LIST_OPS.has(operation)) return query(args);
-          return query(applyChamadoOperacionalFilter(args));
+          const filtered = applyChamadoOperacionalFilter(args as ChamadoQueryArgs);
+          return query(filtered as typeof args);
         },
       },
     },
