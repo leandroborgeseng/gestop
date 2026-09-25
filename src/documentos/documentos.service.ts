@@ -59,7 +59,7 @@ import {
 const DOCUMENTO_INCLUDE = {
   secretaria: { select: { id: true, nome: true, sigla: true } },
   unidade: { select: { id: true, nome: true, codigoPatrimonial: true, endereco: true } },
-  chamado: { select: { id: true, codigo: true, status: true } },
+  chamado: { select: { id: true, codigo: true, status: true, excluidoEm: true } },
   fiscalizacao: {
     select: {
       id: true,
@@ -1382,7 +1382,7 @@ export class DocumentosService {
     return {
       secretaria: { select: { sigla: true, nome: true } },
       unidade: { select: { nome: true, codigoPatrimonial: true } },
-      chamado: { select: { codigo: true } },
+      chamado: { select: { codigo: true, excluidoEm: true } },
       fiscalizacao: {
         select: {
           id: true,
@@ -1420,7 +1420,7 @@ export class DocumentosService {
       pdfAssinadoSha256: string | null;
       secretaria: { sigla: string; nome: string };
       unidade: { nome: string; codigoPatrimonial: string } | null;
-      chamado: { codigo: string } | null;
+      chamado: { codigo: string; excluidoEm?: Date | null } | null;
       fiscalizacao: {
         id: string;
         concluidaEm: Date | null;
@@ -1449,7 +1449,7 @@ export class DocumentosService {
       titulo: documento.titulo,
       secretaria: documento.secretaria,
       unidade: documento.unidade,
-      chamadoCodigo: documento.chamado?.codigo ?? null,
+      chamadoCodigo: documento.chamado?.excluidoEm ? null : documento.chamado?.codigo ?? null,
       vistoriaLabel: documento.fiscalizacao
         ? `${documento.fiscalizacao.unidade?.codigoPatrimonial ?? ''} ${documento.fiscalizacao.unidade?.nome ?? 'Vistoria'}`.trim()
         : null,
@@ -1916,7 +1916,7 @@ export class DocumentosService {
         ? `${documento.unidade.codigoPatrimonial ?? ''} ${documento.unidade.nome}`.trim()
         : null,
       endereco: documento.enderecoTexto || documento.unidade?.endereco || null,
-      chamadoCodigo: documento.chamado?.codigo ?? null,
+      chamadoCodigo: documento.chamado?.excluidoEm ? null : documento.chamado?.codigo ?? null,
       vistoriaLabel: documento.fiscalizacao
         ? `Vistoria ${documento.fiscalizacao.id.slice(0, 8)}`
         : null,
@@ -2404,7 +2404,14 @@ export class DocumentosService {
       descricao: documento.descricao,
       secretaria: documento.secretaria ?? null,
       unidade: documento.unidade ?? null,
-      chamado: documento.chamado ?? null,
+      chamado:
+        documento.chamado && !documento.chamado.excluidoEm
+          ? {
+              id: documento.chamado.id,
+              codigo: documento.chamado.codigo,
+              status: documento.chamado.status,
+            }
+          : null,
       fiscalizacao: documento.fiscalizacao
         ? {
             id: documento.fiscalizacao.id,

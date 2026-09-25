@@ -85,8 +85,22 @@ export class OperacionalService {
       this.prisma.naoConformidade.count({
         where: {
           ...ncWhere,
-          status: { in: [NaoConformidadeStatus.ABERTA, NaoConformidadeStatus.EM_TRIAGEM] },
-          chamado: { is: null },
+          OR: [
+            {
+              status: { in: [NaoConformidadeStatus.ABERTA, NaoConformidadeStatus.EM_TRIAGEM] },
+              chamado: { is: null },
+            },
+            {
+              status: {
+                in: [
+                  NaoConformidadeStatus.ABERTA,
+                  NaoConformidadeStatus.EM_TRIAGEM,
+                  NaoConformidadeStatus.CHAMADO_GERADO,
+                ],
+              },
+              chamado: { is: { excluidoEm: { not: null } } },
+            },
+          ],
         },
       }),
       this.prisma.chamado.count({
@@ -1062,7 +1076,8 @@ export class OperacionalService {
       situacaoVisual = 'RESOLVIDA_CHAMADO';
     } else if (
       nc.status === NaoConformidadeStatus.ABERTA ||
-      nc.status === NaoConformidadeStatus.EM_TRIAGEM
+      nc.status === NaoConformidadeStatus.EM_TRIAGEM ||
+      (nc.status === NaoConformidadeStatus.CHAMADO_GERADO && Boolean(nc.chamado?.excluidoEm))
     ) {
       situacaoVisual = 'ABERTA';
     } else {
@@ -1127,15 +1142,29 @@ export class OperacionalService {
   }
 
   private buildNcPendenciaWhere(): Prisma.NaoConformidadeWhereInput {
-    // NC pendente = gerou chamado ainda aberto, ou NC aberta/em triagem ainda sem chamado.
+    // NC pendente = chamado ativo ainda aberto, ou NC aberta sem chamado operacional.
     return {
       status: { in: NON_CONFORMITY_CANDIDATE_STATUSES },
       OR: [
-        { chamado: { status: { in: CHAMADO_OPEN_STATUSES } } },
+        { chamado: { status: { in: CHAMADO_OPEN_STATUSES }, excluidoEm: null } },
         {
           AND: [
             { chamado: { is: null } },
             { status: { in: [NaoConformidadeStatus.ABERTA, NaoConformidadeStatus.EM_TRIAGEM] } },
+          ],
+        },
+        {
+          AND: [
+            { chamado: { is: { excluidoEm: { not: null } } } },
+            {
+              status: {
+                in: [
+                  NaoConformidadeStatus.ABERTA,
+                  NaoConformidadeStatus.EM_TRIAGEM,
+                  NaoConformidadeStatus.CHAMADO_GERADO,
+                ],
+              },
+            },
           ],
         },
       ],
@@ -1217,8 +1246,22 @@ export class OperacionalService {
       by: ['unidadeId'],
       where: {
         unidadeId: { in: unidadeIds },
-        status: { in: [NaoConformidadeStatus.ABERTA, NaoConformidadeStatus.EM_TRIAGEM] },
-        chamado: { is: null },
+        OR: [
+          {
+            status: { in: [NaoConformidadeStatus.ABERTA, NaoConformidadeStatus.EM_TRIAGEM] },
+            chamado: { is: null },
+          },
+          {
+            status: {
+              in: [
+                NaoConformidadeStatus.ABERTA,
+                NaoConformidadeStatus.EM_TRIAGEM,
+                NaoConformidadeStatus.CHAMADO_GERADO,
+              ],
+            },
+            chamado: { is: { excluidoEm: { not: null } } },
+          },
+        ],
       },
       _count: { _all: true },
     });

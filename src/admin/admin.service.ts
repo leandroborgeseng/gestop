@@ -1088,7 +1088,7 @@ export class AdminService {
           usuario: { select: { id: true, nome: true, email: true, ativo: true } },
         },
       },
-      _count: { select: { chamados: true } },
+      _count: { select: { chamados: { where: { excluidoEm: null } } } },
     } satisfies Prisma.EquipeInclude;
   }
 

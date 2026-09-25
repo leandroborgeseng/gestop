@@ -190,7 +190,11 @@ function ChamadosPageContent() {
           setChamadosTotal(response.total);
           if (response.statusCounts) setStatusCounts(response.statusCounts);
           setHasSemSlaApi(Boolean(response.hasSemSla));
-          setSelectedId((current) => current ?? response.items[0]?.id ?? null);
+          setSelectedId((current) =>
+            current && response.items.some((item) => item.id === current)
+              ? current
+              : response.items[0]?.id ?? null,
+          );
         })
         .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
         .finally(() => setLoading(false));
@@ -206,6 +210,11 @@ function ChamadosPageContent() {
     setChamadosTotal(response.total);
     if (response.statusCounts) setStatusCounts(response.statusCounts);
     setHasSemSlaApi(Boolean(response.hasSemSla));
+    setSelectedId((current) =>
+      current && response.items.some((item) => item.id === current)
+        ? current
+        : response.items[0]?.id ?? null,
+    );
     return response;
   }
 
@@ -219,7 +228,13 @@ function ChamadosPageContent() {
     setDetailLoading(true);
     getChamado(selectedId)
       .then((data) => {
-        if (active) setDetail(data);
+        if (!active) return;
+        if (data.excluidoEm && !(podeVerExcluidos && exibirExcluidos)) {
+          setDetail((current) => (current?.id === data.id ? null : current));
+          setSelectedId((current) => (current === data.id ? null : current));
+          return;
+        }
+        setDetail(data);
       })
       .catch((err) => {
         if (active) setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe do chamado.');
@@ -231,7 +246,7 @@ function ChamadosPageContent() {
     return () => {
       active = false;
     };
-  }, [selectedId]);
+  }, [selectedId, exibirExcluidos, podeVerExcluidos]);
 
   function load() {
     void refreshChamadosList().finally(() => setLoading(false));
