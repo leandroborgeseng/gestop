@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { hasAllPermissions } from '../auth/permissions';
 import { permissionMatrixKey } from '../domain/permissions-catalog';
@@ -55,25 +55,18 @@ export function applyChamadoOperacionalFilter<T extends ChamadoQueryArgs | undef
   return { ...source, where: andChamadoAtivo(source.where) } as T;
 }
 
-const CHAMADO_LIST_OPS = ['findMany', 'findFirst', 'count', 'groupBy', 'aggregate'] as const;
+const CHAMADO_LIST_OPS = new Set(['findMany', 'findFirst', 'count', 'groupBy', 'aggregate']);
 
-export function installChamadoOperacionalFilter(client: { chamado: Record<string, unknown> }) {
-  const delegate = client.chamado;
-  for (const op of CHAMADO_LIST_OPS) {
-    const current = delegate[op];
-    if (typeof current !== 'function') continue;
-    if ((current as { __chamadoAtivo?: boolean }).__chamadoAtivo) continue;
-    const original = (current as (args?: ChamadoQueryArgs) => unknown).bind(delegate);
-    const wrapped = (args?: ChamadoQueryArgs) => original(applyChamadoOperacionalFilter(args));
-    (wrapped as { __chamadoAtivo?: boolean }).__chamadoAtivo = true;
-    try {
-      delegate[op] = wrapped;
-    } catch {
-      try {
-        Object.defineProperty(delegate, op, { value: wrapped, writable: true, configurable: true });
-      } catch {
-        // As consultas operacionais também aplicam excluidoEm: null no where.
-      }
-    }
-  }
+/** Toda leitura operacional de Chamado ignora excluídos, salvo where que já cite `excluidoEm`. */
+export function withChamadoOperacionalFilter(client: PrismaClient) {
+  return client.$extends({
+    query: {
+      chamado: {
+        async $allOperations({ operation, args, query }) {
+          if (!CHAMADO_LIST_OPS.has(operation)) return query(args);
+          return query(applyChamadoOperacionalFilter(args));
+        },
+      },
+    },
+  });
 }

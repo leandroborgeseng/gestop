@@ -2018,7 +2018,13 @@ export class DocumentosService {
     if (query.origem) and.push({ origem: query.origem });
     if (query.secretariaId) and.push({ secretariaId: query.secretariaId });
     if (query.unidadeId) and.push({ unidadeId: query.unidadeId });
-    if (query.chamadoId) and.push({ chamadoId: query.chamadoId });
+    if (query.chamadoId) {
+      and.push({ chamadoId: query.chamadoId });
+    } else {
+      and.push({
+        OR: [{ chamadoId: null }, { chamado: { is: { excluidoEm: null } } }],
+      });
+    }
     if (query.fiscalizacaoId) and.push({ fiscalizacaoId: query.fiscalizacaoId });
     if (query.responsavelId) and.push({ responsavelId: query.responsavelId });
 

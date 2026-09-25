@@ -599,11 +599,25 @@ function ChamadosPageContent() {
                     })
                     .catch(() => undefined);
                 }}
-                onExclusaoAlterada={() => {
+                onExclusaoAlterada={(acao) => {
+                  if (acao === 'excluir' && !exibirExcluidos) {
+                    const removidoId = selected?.id;
+                    setChamados((current) => current.filter((item) => item.id !== removidoId));
+                    setChamadosTotal((total) => Math.max(0, total - 1));
+                    setSelectedId(null);
+                    setDetail(null);
+                    void refreshChamadosList();
+                    return;
+                  }
                   void refreshChamadosList();
                   if (!selected?.id) return;
                   getChamado(selected.id)
-                    .then(setDetail)
+                    .then((refreshed) => {
+                      setDetail(refreshed);
+                      setChamados((current) =>
+                        current.map((item) => (item.id === refreshed.id ? { ...item, ...refreshed } : item)),
+                      );
+                    })
                     .catch(() => setSelectedId(null));
                 }}
               />
@@ -650,7 +664,7 @@ function ChamadoDetailPanel({
     payload: { tipoChamadoId: string | null; prioridade: (typeof TRIAGEM_PRIORIDADES)[number]; motivoAlteracao?: string },
   ) => void;
   onRefreshDetail: () => void;
-  onExclusaoAlterada: () => void;
+  onExclusaoAlterada: (acao: 'excluir' | 'restaurar') => void;
 }) {
   const snackbar = useSnackbar();
   const sessionUser = useSessionUser();
@@ -739,7 +753,7 @@ function ChamadoDetailPanel({
       }
       setExclusaoModal(null);
       setJustificativaExclusao('');
-      onExclusaoAlterada();
+      onExclusaoAlterada(exclusaoModal);
     } catch (err) {
       snackbar.show(err instanceof Error ? err.message : 'Não foi possível concluir a ação.', 'error');
     } finally {
@@ -1231,7 +1245,7 @@ function ChamadoDetailPanel({
           role="dialog"
           aria-modal="true"
           aria-labelledby="exclusao-chamado-titulo"
-          className="w-full max-w-lg rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--sh-md)]"
+          className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-5 shadow-[var(--sh-md)]"
         >
           <h3 id="exclusao-chamado-titulo" className="text-[16px] font-semibold text-[var(--ink)]">
             {exclusaoModal === 'excluir' ? 'Excluir chamado' : 'Restaurar chamado'}

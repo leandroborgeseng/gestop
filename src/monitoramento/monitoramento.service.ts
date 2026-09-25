@@ -360,7 +360,7 @@ export class MonitoramentoService {
         },
         naoConformidades: {
           select: {
-            chamado: { select: { id: true } },
+            chamado: { select: { id: true, excluidoEm: true } },
           },
         },
       },
@@ -389,7 +389,7 @@ export class MonitoramentoService {
       };
       current.total += 1;
       current.naoConformidades += item._count.naoConformidades;
-      current.chamadosGerados += item.naoConformidades.filter((nc) => nc.chamado).length;
+      current.chamadosGerados += item.naoConformidades.filter((nc) => nc.chamado && !nc.chamado.excluidoEm).length;
       byExecutor.set(chave, current);
     }
 

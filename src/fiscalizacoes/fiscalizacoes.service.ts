@@ -169,7 +169,7 @@ export class FiscalizacoesService {
                 status: true,
                 motivoBaixa: true,
                 baixadaEm: true,
-                chamado: { select: { id: true, codigo: true, status: true } },
+                chamado: { select: { id: true, codigo: true, status: true, excluidoEm: true } },
               },
             },
             evidencias: {
@@ -206,7 +206,7 @@ export class FiscalizacoesService {
             motivoBaixa: true,
             baixadaEm: true,
             item: { select: { codigo: true, titulo: true } },
-            chamado: { select: { id: true, codigo: true, status: true } },
+            chamado: { select: { id: true, codigo: true, status: true, excluidoEm: true } },
           },
         },
       },
@@ -233,6 +233,7 @@ export class FiscalizacoesService {
           ? {
               ...resposta.naoConformidade,
               baixadaEm: resposta.naoConformidade.baixadaEm?.toISOString() ?? null,
+              chamado: resposta.naoConformidade.chamado?.excluidoEm ? null : resposta.naoConformidade.chamado,
             }
           : null,
         evidencias: resposta.evidencias.map((evidencia) => ({
@@ -284,7 +285,7 @@ export class FiscalizacoesService {
               select: {
                 status: true,
                 motivoBaixa: true,
-                chamado: { select: { codigo: true, status: true } },
+                chamado: { select: { codigo: true, status: true, excluidoEm: true } },
               },
             },
             evidencias: {
@@ -364,9 +365,10 @@ export class FiscalizacoesService {
           ? {
               status: resposta.naoConformidade.status,
               motivoBaixa: resposta.naoConformidade.motivoBaixa,
-              chamado: resposta.naoConformidade.chamado
-                ? { codigo: resposta.naoConformidade.chamado.codigo, status: resposta.naoConformidade.chamado.status }
-                : null,
+              chamado:
+                resposta.naoConformidade.chamado && !resposta.naoConformidade.chamado.excluidoEm
+                  ? { codigo: resposta.naoConformidade.chamado.codigo, status: resposta.naoConformidade.chamado.status }
+                  : null,
             }
           : null,
         evidencias: await Promise.all(resposta.evidencias.map((evidencia) => resolveAnexo(evidencia))),

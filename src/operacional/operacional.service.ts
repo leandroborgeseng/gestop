@@ -667,6 +667,7 @@ export class OperacionalService {
                 status: true,
                 prioridade: true,
                 titulo: true,
+                excluidoEm: true,
               },
             },
           },
@@ -878,7 +879,7 @@ export class OperacionalService {
         where: { id: nc.id },
         data: { status: NaoConformidadeStatus.CHAMADO_GERADO },
         include: {
-          chamado: { select: { id: true, codigo: true, status: true } },
+          chamado: { select: { id: true, codigo: true, status: true, excluidoEm: true } },
           item: { select: { codigo: true, titulo: true } },
         },
       });
@@ -922,7 +923,7 @@ export class OperacionalService {
     const nc = await this.prisma.naoConformidade.findUnique({
       where: { id: naoConformidadeId },
       include: {
-        chamado: { select: { id: true, codigo: true, status: true } },
+        chamado: { select: { id: true, codigo: true, status: true, excluidoEm: true } },
         unidade: { select: { id: true, secretariaId: true } },
       },
     });
@@ -939,7 +940,11 @@ export class OperacionalService {
       throw new BadRequestException('Não conformidade já encerrada.');
     }
 
-    if (nc.chamado && CHAMADO_OPEN_STATUSES.includes(nc.chamado.status as (typeof CHAMADO_OPEN_STATUSES)[number])) {
+    if (
+      nc.chamado &&
+      !nc.chamado.excluidoEm &&
+      CHAMADO_OPEN_STATUSES.includes(nc.chamado.status as (typeof CHAMADO_OPEN_STATUSES)[number])
+    ) {
       throw new BadRequestException(
         `NC vinculada ao chamado ${nc.chamado.codigo} em andamento. Conclua o chamado ou desvincule antes da baixa manual.`,
       );
@@ -1039,19 +1044,21 @@ export class OperacionalService {
       status: string;
       prioridade: string;
       titulo: string | null;
+      excluidoEm?: Date | null;
     } | null;
   }) {
+    const chamado = nc.chamado?.excluidoEm ? null : nc.chamado;
     const chamadoAberto =
-      nc.chamado != null &&
-      CHAMADO_OPEN_STATUSES.includes(nc.chamado.status as (typeof CHAMADO_OPEN_STATUSES)[number]);
+      chamado != null &&
+      CHAMADO_OPEN_STATUSES.includes(chamado.status as (typeof CHAMADO_OPEN_STATUSES)[number]);
     let situacaoVisual: 'ABERTA' | 'VINCULADA_EM_ANDAMENTO' | 'RESOLVIDA_CHAMADO' | 'BAIXADA_MANUAL' | 'ENCERRADA';
     if (nc.status === NaoConformidadeStatus.BAIXADA_MANUAL) {
       situacaoVisual = 'BAIXADA_MANUAL';
     } else if (nc.status === NaoConformidadeStatus.RESOLVIDA) {
       situacaoVisual = 'RESOLVIDA_CHAMADO';
-    } else if (nc.chamado && chamadoAberto) {
+    } else if (chamado && chamadoAberto) {
       situacaoVisual = 'VINCULADA_EM_ANDAMENTO';
-    } else if (nc.chamado && !chamadoAberto) {
+    } else if (chamado && !chamadoAberto) {
       situacaoVisual = 'RESOLVIDA_CHAMADO';
     } else if (
       nc.status === NaoConformidadeStatus.ABERTA ||
@@ -1097,7 +1104,15 @@ export class OperacionalService {
       })),
       registradaPor: nc.registradaPor,
       baixadaPor: nc.baixadaPor,
-      chamado: nc.chamado,
+      chamado: chamado
+        ? {
+            id: chamado.id,
+            codigo: chamado.codigo,
+            status: chamado.status,
+            prioridade: chamado.prioridade,
+            titulo: chamado.titulo,
+          }
+        : null,
     };
   }
 
