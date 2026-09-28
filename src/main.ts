@@ -50,9 +50,9 @@ async function bootstrap() {
     rawBody: true,
   });
 
-  // Fotos de celular em data URL (evidências de execução) podem passar de 10 MB.
-  app.useBodyParser('json', { limit: '32mb' });
-  app.useBodyParser('urlencoded', { extended: true, limit: '32mb' });
+  // Fotos de celular e vários anexos da abertura chegam como data URL.
+  app.useBodyParser('json', { limit: '40mb' });
+  app.useBodyParser('urlencoded', { extended: true, limit: '40mb' });
 
   const corsOrigins = process.env.CORS_ORIGINS?.split(',').map((item) => item.trim()).filter(Boolean);
   app.enableCors({

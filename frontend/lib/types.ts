@@ -850,6 +850,7 @@ export type ChamadoResumo = {
   solicitanteTelefone?: string | null;
   fotoUrl?: string | null;
   fotoMimeType?: string | null;
+  anexosAbertura?: ChamadoAnexoAbertura[];
   latitude?: number | null;
   longitude?: number | null;
   createdAt: string;
@@ -885,6 +886,19 @@ export type ChamadoResumo = {
   exclusaoPerfilNome?: string | null;
 };
 
+export type ChamadoAnexoAbertura = {
+  id: string;
+  nome: string;
+  mimeType?: string | null;
+  extensao?: string | null;
+  categoria: 'imagem' | 'pdf';
+  url: string;
+  tamanhoBytes?: number | null;
+  enviadoEm?: string | null;
+  anexadoPorId?: string | null;
+  anexadoPorNome?: string | null;
+};
+
 export type ChamadoObservador = {
   id: string;
   usuarioId: string;
@@ -906,6 +920,7 @@ export type ChamadoDetalhe = ChamadoResumo & {
     anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null }>;
   }>;
   podeGerenciarObservadores?: boolean;
+  podeVerAnexosAbertura?: boolean;
   permissoesTimeline?: {
     fotosAbertura: boolean;
     evidenciasExecucao: boolean;

@@ -16,6 +16,7 @@ export type StoredObject = {
 };
 
 const ALLOWED_EVIDENCE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+const ALLOWED_ABERTURA_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
 
 @Injectable()
 export class StorageService {
@@ -29,6 +30,15 @@ export class StorageService {
     }
 
     throw new BadRequestException('Envie a evidencia como upload (data URL). URLs externas nao sao aceitas.');
+  }
+
+  /** Anexo da abertura do chamado: imagens JPG/PNG/WEBP ou PDF. */
+  async persistAberturaAnexo(url: string, mimeType?: string | null): Promise<StoredObject> {
+    if (!url.startsWith('data:')) {
+      throw new BadRequestException('Envie o anexo como arquivo. Endereços externos não são aceitos.');
+    }
+    const parsed = parseDataUrl(url, mimeType, ALLOWED_ABERTURA_MIMES);
+    return this.storeBuffer(parsed.buffer, parsed.mimeType, 'evidencias');
   }
 
   /** Persiste buffer arbitrário (ex.: PDF de documento formal). */
@@ -186,15 +196,20 @@ function isProductionEnv() {
   return process.env.NODE_ENV === 'production';
 }
 
-function parseDataUrl(url: string, fallbackMimeType?: string | null) {
+function parseDataUrl(url: string, fallbackMimeType?: string | null, allowed = ALLOWED_EVIDENCE_MIMES) {
   const match = /^data:([^;,]+)?(?:;base64)?,(.+)$/i.exec(url);
   if (!match) {
     throw new BadRequestException('Data URL de evidencia invalida.');
   }
 
-  const mimeType = (match[1] || fallbackMimeType || 'application/octet-stream').toLowerCase();
-  if (!ALLOWED_EVIDENCE_MIMES.has(mimeType)) {
-    throw new BadRequestException(`Tipo de arquivo nao permitido: ${mimeType}`);
+  let mimeType = (match[1] || fallbackMimeType || 'application/octet-stream').toLowerCase();
+  if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+  if (!allowed.has(mimeType)) {
+    throw new BadRequestException(
+      allowed === ALLOWED_ABERTURA_MIMES
+        ? 'Formato não permitido. Use JPG, JPEG, PNG, WEBP ou PDF.'
+        : `Tipo de arquivo nao permitido: ${mimeType}`,
+    );
   }
   const payload = match[2];
   const buffer = url.includes(';base64,')

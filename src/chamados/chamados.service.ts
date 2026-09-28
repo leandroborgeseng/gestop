@@ -31,6 +31,13 @@ import {
   podeRestaurarChamadoExcluido,
   podeVisualizarChamadosExcluidos,
 } from './chamado-visibilidade';
+import {
+  extensaoDeMime,
+  metadataAbertura,
+  normalizarAnexosAbertura,
+  origemEvidencia,
+  type AnexoAberturaNormalizado,
+} from './chamado-anexos-abertura';
 import { StorageService } from '../storage/storage.service';
 import { extractStorageKeyFromUrl, resolveStoragePublicUrl } from '../storage/storage-url';
 import {
@@ -286,6 +293,7 @@ export class ChamadosService {
       ],
     };
 
+    const caps = resolveMeusChamadosTimelineCaps(user.permissoes);
     const [items, total] = await Promise.all([
       this.prisma.chamado.findMany({
         where,
@@ -298,7 +306,9 @@ export class ChamadosService {
     ]);
 
     return {
-      items: items.map((item) => this.serializeChamado(item, user.sub)),
+      items: items.map((item) =>
+        this.aplicarVisibilidadeAnexosAbertura(this.serializeChamado(item, user.sub), caps.fotosAbertura),
+      ),
       total,
       limit,
       offset,
@@ -322,10 +332,13 @@ export class ChamadosService {
       .map((entry) => this.filterHistoricoForMeusChamados(entry, caps))
       .filter((entry): entry is NonNullable<typeof entry> => entry != null);
 
-    const serialized = this.serializeChamado(chamado, user.sub);
+    const serialized = this.aplicarVisibilidadeAnexosAbertura(
+      this.serializeChamado(chamado, user.sub),
+      caps.fotosAbertura,
+    );
     return {
       ...serialized,
-      fotoUrl: caps.fotosAbertura ? serialized.fotoUrl : null,
+      podeVerAnexosAbertura: caps.fotosAbertura,
       equipe: caps.equipeExecutora ? serialized.equipe : null,
       historico: timeline,
       podeGerenciarObservadores: caps.cadastrarObservadores && chamado.registradoPorId === user.sub,
@@ -716,54 +729,58 @@ export class ChamadosService {
       }),
     );
 
-    let fotoAbertura: ChamadoDetalhePdfAnexo | null = null;
-    const fotoStorageKey =
-      (detail as { fotoStorageKey?: string | null }).fotoStorageKey ??
-      extractStorageKeyFromUrl(detail.fotoUrl ?? null);
-    if (fotoStorageKey || detail.fotoUrl) {
-      const mimeGuess =
-        fotoStorageKey?.toLowerCase().endsWith('.png')
-          ? 'image/png'
-          : fotoStorageKey?.toLowerCase().endsWith('.webp')
-            ? 'image/webp'
-            : 'image/jpeg';
-      const loaded = fotoStorageKey
-        ? await this.storageService.readObjectBuffer(fotoStorageKey, mimeGuess)
-        : null;
-      fotoAbertura = {
-        id: 'foto-abertura',
-        legenda: 'Foto anexada na abertura',
-        mimeType: loaded?.mimeType ?? mimeGuess,
-        nomeArquivo: fotoStorageKey?.split('/').pop() ?? null,
-        capturadaEm: toIsoString(detail.createdAt),
-        usuarioNome: detail.registradoPor?.nome ?? null,
+    const anexosAberturaPdf: ChamadoDetalhePdfAnexo[] = [];
+    for (const anexo of detail.anexosAbertura ?? []) {
+      if (anexo.categoria === 'pdf') {
+        anexosAberturaPdf.push({
+          id: anexo.id,
+          legenda: anexo.nome,
+          mimeType: anexo.mimeType,
+          nomeArquivo: anexo.nome,
+          capturadaEm: anexo.enviadoEm,
+          usuarioNome: anexo.anexadoPorNome,
+        });
+        continue;
+      }
+      const storageKey = extractStorageKeyFromUrl(anexo.url);
+      const loaded = storageKey ? await this.storageService.readObjectBuffer(storageKey, anexo.mimeType) : null;
+      anexosAberturaPdf.push({
+        id: anexo.id,
+        legenda: anexo.nome,
+        mimeType: loaded?.mimeType ?? anexo.mimeType,
+        nomeArquivo: anexo.nome,
+        capturadaEm: anexo.enviadoEm,
+        usuarioNome: anexo.anexadoPorNome,
         imageBuffer: loaded?.buffer ?? null,
         renderError: loaded?.buffer ? null : 'Arquivo anexado não renderizável no PDF',
-      };
+      });
     }
 
     const todasEvidencias = await this.prisma.evidencia.findMany({
       where: { chamadoId: id },
       orderBy: { capturadaEm: 'asc' },
     });
-    const anexosSoltos = await Promise.all(
-      todasEvidencias
-        .filter((item) => !usedEvidenciaIds.has(item.id))
-        .map((item) => {
-          const serialized = this.serializeEvidencia(item);
-          const origem =
-            item.metadata && typeof item.metadata === 'object' && item.metadata !== null && 'origem' in item.metadata
-              ? String((item.metadata as { origem?: string }).origem ?? '')
-              : '';
-          const legenda =
-            origem === 'execucao_campo' || origem === 'execucao_manual'
-              ? 'Evidência da execução'
-              : origem === 'nao_conformidade'
-                ? 'Evidência de não conformidade'
-                : 'Anexo do chamado';
-          return resolveAnexo(serialized, legenda);
-        }),
-    );
+    const anexosSoltos = (
+      await Promise.all(
+        todasEvidencias
+          .filter((item) => !usedEvidenciaIds.has(item.id))
+          .map((item) => {
+            const serialized = this.serializeEvidencia(item);
+            const origem =
+              item.metadata && typeof item.metadata === 'object' && item.metadata !== null && 'origem' in item.metadata
+                ? String((item.metadata as { origem?: string }).origem ?? '')
+                : '';
+            if (origem === 'abertura') return null;
+            const legenda =
+              origem === 'execucao_campo' || origem === 'execucao_manual'
+                ? 'Evidência da execução'
+                : origem === 'nao_conformidade'
+                  ? 'Evidência de não conformidade'
+                  : 'Anexo do chamado';
+            return resolveAnexo(serialized, legenda);
+          }),
+      )
+    ).filter((item): item is ChamadoDetalhePdfAnexo => item != null);
 
     return buildChamadoDetalhePdf({
       codigo: detail.codigo,
@@ -790,7 +807,7 @@ export class ChamadosService {
       tipoChamado: detail.tipoChamado,
       registradoPor: detail.registradoPor,
       naoConformidade: detail.naoConformidade,
-      fotoAbertura,
+      anexosAbertura: anexosAberturaPdf,
       historico,
       anexosSoltos,
     });
@@ -1234,45 +1251,49 @@ export class ChamadosService {
     const abertoEm = new Date();
     const prazoEm = calcularPrazoSla(abertoEm, prioridade, tipo);
 
-    let fotoStorageKey: string | undefined;
-    let fotoUrl: string | undefined;
-    let fotoMimeType: string | undefined;
-    if (dto.fotoDataUrl?.trim()) {
-      const stored = await this.storageService.persistEvidenceUrl(dto.fotoDataUrl.trim());
-      fotoStorageKey = stored.storageKey;
-      fotoUrl = stored.url;
-      fotoMimeType = stored.mimeType;
-    }
+    const anexos = await this.persistirAnexosAbertura(dto);
+    const capa = anexos.find((item) => item.categoria === 'imagem');
 
-    const chamado = await this.prisma.$transaction(async (tx) => {
-      const sequence = await this.nextChamadoSequence(tx);
-      return tx.chamado.create({
-        data: {
-          codigo: buildChamadoCode(sequence),
-          secretariaId: location.secretariaId,
-          unidadeId: location.unidadeId,
-          modoLocalizacao: dto.modoLocalizacao,
-          enderecoTexto: location.enderecoTexto,
-          enderecoBairro: location.enderecoBairro,
-          titulo: tipo.nome,
-          tipoChamadoId: tipo.id,
-          descricao: dto.descricao.trim(),
-          prioridade,
-          prazoEm,
-          origem: dto.origem ?? ChamadoOrigem.INTERNO,
-          solicitanteNome: dto.solicitanteNome?.trim(),
-          solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
-          solicitanteTelefone: dto.solicitanteTelefone?.trim(),
-          latitude: location.latitude,
-          longitude: location.longitude,
-          fotoUrl,
-          fotoStorageKey,
-          fotoMimeType,
-          registradoPorId: user.sub,
-        },
-        include: this.includeRelations(),
+    let chamado;
+    try {
+      chamado = await this.prisma.$transaction(async (tx) => {
+        const sequence = await this.nextChamadoSequence(tx);
+        const created = await tx.chamado.create({
+          data: {
+            codigo: buildChamadoCode(sequence),
+            secretariaId: location.secretariaId,
+            unidadeId: location.unidadeId,
+            modoLocalizacao: dto.modoLocalizacao,
+            enderecoTexto: location.enderecoTexto,
+            enderecoBairro: location.enderecoBairro,
+            titulo: tipo.nome,
+            tipoChamadoId: tipo.id,
+            descricao: dto.descricao.trim(),
+            prioridade,
+            prazoEm,
+            origem: dto.origem ?? ChamadoOrigem.INTERNO,
+            solicitanteNome: dto.solicitanteNome?.trim(),
+            solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
+            solicitanteTelefone: dto.solicitanteTelefone?.trim(),
+            latitude: location.latitude,
+            longitude: location.longitude,
+            fotoUrl: capa?.url,
+            fotoStorageKey: capa?.storageKey,
+            fotoMimeType: capa?.mimeType,
+            registradoPorId: user.sub,
+          },
+          include: this.includeRelations(),
+        });
+        await this.registrarEvidenciasAbertura(tx, created.id, anexos, abertoEm, {
+          id: user.sub,
+          nome: user.nome,
+        });
+        return created;
       });
-    });
+    } catch (error) {
+      await this.storageService.deleteStoredObjects(anexos.map((item) => item.storageKey));
+      throw error;
+    }
 
     await this.audit(user.sub, AuditAction.CREATE, chamado.id, null, chamado);
 
@@ -1310,40 +1331,50 @@ export class ChamadosService {
     const abertoEm = new Date();
     const prazoEm = calcularPrazoSla(abertoEm, ChamadoPrioridade.MEDIA, tipo);
 
-    let fotoStorageKey: string | undefined;
-    let fotoUrl: string | undefined;
-    let fotoMimeType: string | undefined;
-    if (dto.fotoDataUrl?.trim()) {
-      const stored = await this.storageService.persistEvidenceUrl(dto.fotoDataUrl.trim());
-      fotoStorageKey = stored.storageKey;
-      fotoUrl = stored.url;
-      fotoMimeType = stored.mimeType;
+    const anexos = await this.persistirAnexosAbertura(dto);
+    const capa = anexos.find((item) => item.categoria === 'imagem');
+
+    let chamado;
+    try {
+      chamado = await this.prisma.$transaction(async (tx) => {
+        const sequence = await this.nextChamadoSequence(tx);
+        const created = await tx.chamado.create({
+          data: {
+            codigo: buildChamadoCode(sequence),
+            secretariaId: unidade.secretariaId,
+            unidadeId: unidade.id,
+            titulo: tipo.nome,
+            tipoChamadoId: tipo.id,
+            descricao: dto.descricao.trim(),
+            prazoEm,
+            origem: ChamadoOrigem.QR_CODE,
+            solicitanteNome: dto.solicitanteNome?.trim(),
+            solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
+            solicitanteTelefone: dto.solicitanteTelefone?.trim(),
+            latitude: unidade.latitude,
+            longitude: unidade.longitude,
+            fotoUrl: capa?.url,
+            fotoStorageKey: capa?.storageKey,
+            fotoMimeType: capa?.mimeType,
+          },
+          include: this.includeRelations(),
+        });
+        await this.registrarEvidenciasAbertura(tx, created.id, anexos, abertoEm, {
+          id: null,
+          nome: dto.solicitanteNome?.trim() || null,
+        });
+        return created;
+      });
+    } catch (error) {
+      await this.storageService.deleteStoredObjects(anexos.map((item) => item.storageKey));
+      throw error;
     }
 
-    const chamado = await this.prisma.$transaction(async (tx) => {
-      const sequence = await this.nextChamadoSequence(tx);
-      return tx.chamado.create({
-        data: {
-          codigo: buildChamadoCode(sequence),
-          secretariaId: unidade.secretariaId,
-          unidadeId: unidade.id,
-          titulo: tipo.nome,
-          tipoChamadoId: tipo.id,
-          descricao: dto.descricao.trim(),
-          prazoEm,
-          origem: ChamadoOrigem.QR_CODE,
-          solicitanteNome: dto.solicitanteNome?.trim(),
-          solicitanteEmail: dto.solicitanteEmail?.trim().toLowerCase(),
-          solicitanteTelefone: dto.solicitanteTelefone?.trim(),
-          latitude: unidade.latitude,
-          longitude: unidade.longitude,
-          fotoUrl,
-          fotoStorageKey,
-          fotoMimeType,
-        },
-        include: this.includeRelations(),
-      });
+    const refreshed = await this.prisma.chamado.findUnique({
+      where: { id: chamado.id },
+      include: this.includeRelations(),
     });
+    chamado = refreshed ?? chamado;
 
     await this.prisma.logAuditoria.create({
       data: {
@@ -2845,6 +2876,15 @@ export class ChamadosService {
           usuario: { select: { id: true, nome: true, email: true } },
         },
       },
+      evidencias: {
+        where: {
+          metadata: {
+            path: ['origem'],
+            equals: 'abertura',
+          },
+        },
+        orderBy: { capturadaEm: 'asc' as const },
+      },
       naoConformidade: {
         select: {
           id: true,
@@ -3360,12 +3400,16 @@ export class ChamadosService {
   }
 
   private serializeChamado<T extends {
+    id?: string;
+    createdAt?: Date | string;
     fotoUrl?: string | null;
     fotoStorageKey?: string | null;
+    fotoMimeType?: string | null;
     latitude?: unknown;
     longitude?: unknown;
     unidade?: Record<string, unknown> | null;
     registradoPorId?: string | null;
+    registradoPor?: { id: string; nome: string } | null;
     observadores?: Array<{
       id: string;
       usuarioId: string;
@@ -3373,9 +3417,20 @@ export class ChamadosService {
       origem?: string | null;
       usuario?: { id: string; nome: string; email?: string | null };
     }>;
+    evidencias?: Array<{
+      id: string;
+      tipo: string;
+      url: string;
+      storageKey?: string | null;
+      mimeType?: string | null;
+      tamanhoBytes?: number | null;
+      capturadaEm: Date | string;
+      metadata?: unknown;
+    }>;
   }>(chamado: T, currentUserId?: string) {
     const fotoStorageKey =
       chamado.fotoStorageKey ?? extractStorageKeyFromUrl(chamado.fotoUrl ?? null);
+    const fotoUrl = resolveStoragePublicUrl(fotoStorageKey, chamado.fotoUrl ?? null);
 
     const observadores = (chamado.observadores ?? []).map((item) => ({
       id: item.id,
@@ -3395,11 +3450,14 @@ export class ChamadosService {
             ? 'OBSERVADOR'
             : null;
 
-    const { observadores: _rawObservadores, ...rest } = chamado as T & { observadores?: unknown };
+    const { observadores: _rawObservadores, evidencias: _evidencias, ...rest } = chamado as T & {
+      observadores?: unknown;
+      evidencias?: unknown;
+    };
 
     return {
       ...rest,
-      fotoUrl: resolveStoragePublicUrl(fotoStorageKey, chamado.fotoUrl ?? null),
+      fotoUrl,
       latitude: chamado.latitude != null ? Number(chamado.latitude) : null,
       longitude: chamado.longitude != null ? Number(chamado.longitude) : null,
       unidade: chamado.unidade
@@ -3412,7 +3470,144 @@ export class ChamadosService {
       observadores,
       observadorIds: observadores.map((item) => item.usuarioId),
       relacaoComigo,
+      anexosAbertura: this.montarAnexosAbertura({ ...chamado, fotoUrl }),
     };
+  }
+
+  private aplicarVisibilidadeAnexosAbertura<T extends {
+    fotoUrl?: string | null;
+    fotoMimeType?: string | null;
+    fotoStorageKey?: string | null;
+    anexosAbertura?: unknown[];
+  }>(chamado: T, permitir: boolean): T {
+    if (permitir) return chamado;
+    return {
+      ...chamado,
+      fotoUrl: null,
+      fotoMimeType: null,
+      fotoStorageKey: null,
+      anexosAbertura: [],
+    };
+  }
+
+  private montarAnexosAbertura(chamado: {
+    id?: string;
+    createdAt?: Date | string;
+    fotoUrl?: string | null;
+    fotoMimeType?: string | null;
+    registradoPorId?: string | null;
+    registradoPor?: { nome: string } | null;
+    evidencias?: Array<{
+      id: string;
+      url: string;
+      storageKey?: string | null;
+      mimeType?: string | null;
+      tamanhoBytes?: number | null;
+      capturadaEm: Date | string;
+      metadata?: unknown;
+    }>;
+  }) {
+    const daAbertura = (chamado.evidencias ?? []).filter((item) => origemEvidencia(item.metadata) === 'abertura');
+    if (daAbertura.length) {
+      return daAbertura.map((item) => {
+        const meta = metadataAbertura(item.metadata);
+        const storageKey = item.storageKey ?? extractStorageKeyFromUrl(item.url);
+        const mimeType = item.mimeType || (meta.categoria === 'pdf' ? 'application/pdf' : 'image/jpeg');
+        return {
+          id: item.id,
+          nome: meta.nomeOriginal || 'Anexo da abertura',
+          mimeType,
+          extensao: meta.extensao || extensaoDeMime(mimeType),
+          categoria: meta.categoria === 'pdf' || mimeType === 'application/pdf' ? 'pdf' as const : 'imagem' as const,
+          url: resolveStoragePublicUrl(storageKey, item.url) ?? item.url,
+          tamanhoBytes: item.tamanhoBytes ?? null,
+          enviadoEm: item.capturadaEm instanceof Date ? item.capturadaEm.toISOString() : item.capturadaEm,
+          anexadoPorId: meta.anexadoPorId,
+          anexadoPorNome: meta.anexadoPorNome,
+        };
+      });
+    }
+
+    if (!chamado.fotoUrl) return [];
+    const mimeType = chamado.fotoMimeType || 'image/jpeg';
+    const enviadoEm =
+      chamado.createdAt instanceof Date
+        ? chamado.createdAt.toISOString()
+        : chamado.createdAt ?? new Date(0).toISOString();
+    return [
+      {
+        id: `legado-${chamado.id ?? 'foto'}`,
+        nome: 'Foto da abertura',
+        mimeType,
+        extensao: extensaoDeMime(mimeType),
+        categoria: 'imagem' as const,
+        url: chamado.fotoUrl,
+        tamanhoBytes: null,
+        enviadoEm,
+        anexadoPorId: chamado.registradoPorId ?? null,
+        anexadoPorNome: chamado.registradoPor?.nome ?? null,
+      },
+    ];
+  }
+
+  private async persistirAnexosAbertura(input: {
+    anexos?: Array<{ dataUrl?: string; mimeType?: string; nome?: string }>;
+    fotoDataUrl?: string;
+  }) {
+    const normalizados = normalizarAnexosAbertura(input);
+    const gravados: Array<
+      AnexoAberturaNormalizado & { url: string; storageKey: string; checksum: string }
+    > = [];
+    try {
+      for (const anexo of normalizados) {
+        const stored = await this.storageService.persistAberturaAnexo(anexo.dataUrl, anexo.mimeType);
+        gravados.push({
+          ...anexo,
+          mimeType: stored.mimeType,
+          tamanhoBytes: stored.tamanhoBytes,
+          url: stored.url,
+          storageKey: stored.storageKey,
+          checksum: stored.checksum,
+        });
+      }
+      return gravados;
+    } catch (error) {
+      await this.storageService.deleteStoredObjects(gravados.map((item) => item.storageKey));
+      throw error;
+    }
+  }
+
+  private async registrarEvidenciasAbertura(
+    tx: Tx,
+    chamadoId: string,
+    anexos: Array<
+      AnexoAberturaNormalizado & { url: string; storageKey: string; checksum: string }
+    >,
+    quando: Date,
+    autor: { id: string | null; nome: string | null },
+  ) {
+    if (!anexos.length) return;
+    await tx.evidencia.createMany({
+      data: anexos.map((arquivo, index) => ({
+        chamadoId,
+        tipo: arquivo.categoria === 'pdf' ? EvidenciaTipo.DOCUMENTO : EvidenciaTipo.FOTO,
+        url: arquivo.url,
+        storageKey: arquivo.storageKey,
+        mimeType: arquivo.mimeType,
+        tamanhoBytes: arquivo.tamanhoBytes,
+        checksum: arquivo.checksum,
+        capturadaEm: new Date(quando.getTime() + index),
+        enviadaEm: quando,
+        metadata: {
+          origem: 'abertura',
+          nomeOriginal: arquivo.nome,
+          extensao: arquivo.extensao,
+          categoria: arquivo.categoria,
+          anexadoPorId: autor.id,
+          anexadoPorNome: autor.nome,
+        },
+      })),
+    });
   }
 
   private serializeEvidencia(evidencia: {

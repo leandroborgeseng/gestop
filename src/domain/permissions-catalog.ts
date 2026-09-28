@@ -74,7 +74,7 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
     functions: [
       { id: '_tela', label: 'Meus chamados', actions: ['visualizar'] },
       { id: 'consultar', label: 'Consultar meus chamados', actions: ['visualizar'] },
-      { id: 'fotos_abertura', label: 'Fotos de abertura', actions: ['visualizar'] },
+      { id: 'fotos_abertura', label: 'Fotos e documentos de abertura', actions: ['visualizar'] },
       { id: 'evidencias_execucao', label: 'Evidências de execução', actions: ['visualizar'] },
       { id: 'participantes_execucao', label: 'Participantes da execução', actions: ['visualizar'] },
       { id: 'equipe_executora', label: 'Equipe executora', actions: ['visualizar'] },

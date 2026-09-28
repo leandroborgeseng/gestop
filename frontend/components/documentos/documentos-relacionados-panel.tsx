@@ -21,9 +21,16 @@ type Props = {
   chamadoId?: string;
   fiscalizacaoId?: string;
   onClose?: () => void;
+  /** Em Meus chamados, esconde o atalho do cadastro quando o usuário não tem o módulo Documentos. */
+  ocultarCadastroSemPermissao?: boolean;
 };
 
-export function DocumentosRelacionadosPanel({ chamadoId, fiscalizacaoId, onClose }: Props) {
+export function DocumentosRelacionadosPanel({
+  chamadoId,
+  fiscalizacaoId,
+  onClose,
+  ocultarCadastroSemPermissao = false,
+}: Props) {
   const sessionUser = useSessionUser();
   const canAbrirCadastro = hasDocumentosModuloAccess(sessionUser?.permissoes ?? []);
   const [items, setItems] = useState<DocumentoResumo[]>([]);
@@ -73,7 +80,7 @@ export function DocumentosRelacionadosPanel({ chamadoId, fiscalizacaoId, onClose
       {loading ? <LoadingState label="Carregando documentos..." /> : null}
       {error ? <ErrorState message={error} /> : null}
       {!loading && !error && items.length === 0 ? (
-        <EmptyState title="Nenhum documento" description="Ainda não há documentos vinculados a este registro." />
+        <EmptyState title="Nenhum documento" description="Nenhum documento vinculado a este registro." />
       ) : null}
 
       <ul className="space-y-2">
@@ -101,7 +108,7 @@ export function DocumentosRelacionadosPanel({ chamadoId, fiscalizacaoId, onClose
                       Abrir
                     </Button>
                   </Link>
-                ) : (
+                ) : ocultarCadastroSemPermissao ? null : (
                   <Button
                     type="button"
                     size="sm"
@@ -133,7 +140,7 @@ export function DocumentosRelacionadosPanel({ chamadoId, fiscalizacaoId, onClose
                   </Button>
                 ) : null}
               </div>
-              {!canAbrirCadastro ? (
+              {!canAbrirCadastro && !ocultarCadastroSemPermissao ? (
                 <p className="mt-1.5 text-[11px] text-[var(--ink-3)]">
                   Sem permissão para abrir o cadastro do documento
                 </p>

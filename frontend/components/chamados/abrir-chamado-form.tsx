@@ -1,11 +1,9 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {
   Building2,
-  Camera,
   Crosshair,
   Loader2,
   MapPin,
@@ -13,6 +11,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
+import { ChamadoAnexosAberturaField } from '@/components/chamados/chamado-anexos-abertura-field';
 import { ChamadoLocationMapPicker } from '@/components/chamados/chamado-location-map-picker';
 import { TipoChamadoSelect } from '@/components/chamados/tipo-chamado-select';
 import { Button } from '@/components/ui/button';
@@ -33,6 +32,7 @@ import {
 import { isWithinFrancaMunicipio } from '@/lib/franca-geo';
 import { hasChamadosGerenciar } from '@/lib/navigation';
 import { useSessionUser } from '@/components/auth/session-context';
+import { AnexoAberturaDraft } from '@/lib/chamado-anexos-abertura';
 import { SecretariaOption, TipoChamadoOpcao, UnidadeOperacional } from '@/lib/types';
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 import { SearchableSelect } from '@/components/ui/searchable-select';
@@ -114,8 +114,7 @@ export function AbrirChamadoForm({
   /** Número que estava ativo quando o pin foi sincronizado (busca/geocode/manual). */
   const [pinSyncedNumero, setPinSyncedNumero] = useState<string | null>(null);
   const reverseGeocodePinTimerRef = useRef<number | null>(null);
-  const [fotoDataUrl, setFotoDataUrl] = useState<string | null>(null);
-  const [fotoPreview, setFotoPreview] = useState<string | null>(null);
+  const [anexos, setAnexos] = useState<AnexoAberturaDraft[]>([]);
   const [fotoGeo, setFotoGeo] = useState<{ latitude: number; longitude: number } | null>(null);
   const [observadorIds, setObservadorIds] = useState<string[]>([]);
   const [observadorPick, setObservadorPick] = useState('');
@@ -454,27 +453,7 @@ export function AbrirChamadoForm({
     }
   }
 
-  async function handlePhotoSelect(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setError('Selecione um arquivo de imagem (JPEG, PNG ou WebP).');
-      return;
-    }
-    if (file.size > 8 * 1024 * 1024) {
-      setError('A foto deve ter no máximo 8 MB.');
-      return;
-    }
-
-    setError(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = String(reader.result ?? '');
-      setFotoDataUrl(dataUrl);
-      setFotoPreview(dataUrl);
-    };
-    reader.readAsDataURL(file);
-
+  async function registrarGpsDaFoto() {
     try {
       const position = await captureCurrentPosition(
         latitude != null && longitude != null
@@ -559,7 +538,9 @@ export function AbrirChamadoForm({
         origem: 'MANUAL',
         solicitanteNome: solicitanteNome.trim() || undefined,
         solicitanteTelefone: normalizePhoneForApi(solicitanteTelefone) ?? undefined,
-        fotoDataUrl: fotoDataUrl ?? undefined,
+        anexos: anexos.length
+          ? anexos.map((item) => ({ dataUrl: item.dataUrl, mimeType: item.mimeType, nome: item.nome }))
+          : undefined,
         observadorIds: observadorIds.length ? observadorIds : undefined,
       });
       snackbar.show(`Chamado ${chamado.codigo} aberto com sucesso.`, 'success');
@@ -940,36 +921,21 @@ export function AbrirChamadoForm({
             />
           </Field>
 
-          <Field label="Foto georeferenciada (opcional)" hint="Ao capturar, tentamos registrar o GPS do dispositivo.">
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--r-md)] border border-dashed border-[var(--line)] px-4 py-3 text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--surface-2)]">
-                <Camera className="h-4 w-4" />
-                Tirar / escolher foto
-                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => void handlePhotoSelect(event)} disabled={busy} />
-              </label>
-              {fotoPreview ? (
-                <div className="relative h-20 w-20 overflow-hidden rounded-[var(--r-md)] border border-[var(--line)]">
-                  <Image src={fotoPreview} alt="Prévia da foto" fill className="object-cover" unoptimized />
-                  <button
-                    type="button"
-                    className="absolute top-1 right-1 rounded-full bg-black/60 p-0.5 text-white"
-                    onClick={() => {
-                      setFotoPreview(null);
-                      setFotoDataUrl(null);
-                      setFotoGeo(null);
-                    }}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : null}
-            </div>
-            {fotoGeo ? (
-              <p className="mt-1 text-[11px] text-[var(--ink-3)]">
-                GPS da foto: {fotoGeo.latitude.toFixed(5)}, {fotoGeo.longitude.toFixed(5)}
-              </p>
-            ) : null}
-          </Field>
+          <ChamadoAnexosAberturaField
+            value={anexos}
+            disabled={busy}
+            onError={setError}
+            onImageAdded={() => void registrarGpsDaFoto()}
+            onChange={(next) => {
+              setAnexos(next);
+              if (!next.some((item) => item.categoria === 'imagem')) setFotoGeo(null);
+            }}
+          />
+          {fotoGeo ? (
+            <p className="text-[11px] text-[var(--ink-3)]">
+              GPS da foto: {fotoGeo.latitude.toFixed(5)}, {fotoGeo.longitude.toFixed(5)}
+            </p>
+          ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Prioridade">

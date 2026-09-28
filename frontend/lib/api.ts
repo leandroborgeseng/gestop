@@ -949,6 +949,7 @@ export function createPublicChamado(
     solicitanteEmail?: string;
     solicitanteTelefone?: string;
     fotoDataUrl?: string;
+    anexos?: Array<{ dataUrl: string; mimeType?: string; nome?: string }>;
   },
 ) {
   return publicRequest<ChamadoResumo>(`/public/unidades/${encodeURIComponent(codigoPatrimonial)}/chamados`, {
@@ -1036,6 +1037,7 @@ export function createChamado(payload: {
   solicitanteEmail?: string;
   solicitanteTelefone?: string;
   fotoDataUrl?: string;
+  anexos?: Array<{ dataUrl: string; mimeType?: string; nome?: string }>;
   observadorIds?: string[];
 }) {
   return request<ChamadoResumo>('/chamados', {

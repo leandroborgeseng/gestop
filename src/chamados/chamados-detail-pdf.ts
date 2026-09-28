@@ -66,7 +66,7 @@ export type ChamadoDetalhePdfInput = {
     descricao: string;
     item: { codigo: string; titulo: string };
   } | null;
-  fotoAbertura?: ChamadoDetalhePdfAnexo | null;
+  anexosAbertura?: ChamadoDetalhePdfAnexo[];
   historico: ChamadoDetalhePdfHistorico[];
   anexosSoltos?: ChamadoDetalhePdfAnexo[];
 };
@@ -191,6 +191,100 @@ function drawAnexo(
   return y;
 }
 
+function colunasMosaico(quantidade: number) {
+  if (quantidade <= 1) return 1;
+  if (quantidade <= 4) return 2;
+  return 3;
+}
+
+function alturaMaximaMosaico(quantidade: number) {
+  if (quantidade <= 1) return 280;
+  if (quantidade === 2) return 200;
+  if (quantidade <= 4) return 160;
+  return 120;
+}
+
+function drawDocumentosAbertura(
+  doc: InstanceType<typeof PDFDocument>,
+  anexos: ChamadoDetalhePdfAnexo[],
+  left: number,
+  width: number,
+  y: number,
+  marginTop: number,
+) {
+  if (!anexos.length) return y;
+  const imagens = anexos.filter((item) => isPdfRenderableImage(item.mimeType) && item.imageBuffer?.length);
+
+  y = ensureSpace(doc, y, 28, marginTop);
+  doc.font('Helvetica-Bold').fontSize(11).fillColor(TEXT_PRIMARY).text('Documentos anexados na abertura', left, y);
+  y += 16;
+
+  if (imagens.length) {
+    const gap = 8;
+    const colunas = colunasMosaico(imagens.length);
+    const maxH = alturaMaximaMosaico(imagens.length);
+    const cellW = imagens.length === 1 ? Math.min(width, width * 0.78) : (width - gap * (colunas - 1)) / colunas;
+    let coluna = 0;
+    let rowY = y;
+    let rowH = 0;
+
+    for (const imagem of imagens) {
+      const buffer = imagem.imageBuffer;
+      if (!buffer?.length) continue;
+      let drawW = cellW;
+      let drawH = maxH;
+      try {
+        const opened = (
+          doc as InstanceType<typeof PDFDocument> & {
+            openImage: (src: Buffer) => { width: number; height: number };
+          }
+        ).openImage(buffer);
+        const scale = Math.min(cellW / Math.max(1, opened.width), maxH / Math.max(1, opened.height), 1);
+        drawW = Math.max(48, opened.width * scale);
+        drawH = Math.max(48, opened.height * scale);
+      } catch {
+        drawH = 16;
+      }
+
+      if (coluna === 0) {
+        rowY = ensureSpace(doc, rowY, maxH + gap, marginTop);
+        rowH = 0;
+      }
+      const x = left + coluna * (cellW + gap);
+      try {
+        doc.image(buffer, x, rowY, { width: drawW, height: drawH });
+      } catch {
+        doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED).text(imagem.nomeArquivo || 'Imagem', x, rowY, { width: cellW });
+        drawH = 14;
+      }
+      rowH = Math.max(rowH, drawH);
+      coluna += 1;
+      if (coluna >= colunas) {
+        coluna = 0;
+        rowY += rowH + gap;
+        rowH = 0;
+      }
+    }
+    y = coluna === 0 ? rowY : rowY + rowH + gap;
+  }
+
+  const documentos = anexos.filter((item) => (item.mimeType ?? '').toLowerCase().includes('pdf'));
+  if (documentos.length) {
+    y = ensureSpace(doc, y, 18, marginTop);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(TEXT_PRIMARY).text('PDFs anexados na abertura', left, y);
+    y += 12;
+    for (const documento of documentos) {
+      const nome = documento.nomeArquivo?.trim() || documento.legenda || 'Documento PDF';
+      y = ensureSpace(doc, y, 14, marginTop);
+      doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(`• ${nome}`, left, y, { width });
+      y = doc.y + 3;
+    }
+    y += 6;
+  }
+
+  return y + 4;
+}
+
 export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise<Buffer> {
   return new Promise((resolvePromise, reject) => {
     const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'portrait' });
@@ -279,13 +373,7 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
     doc.font('Helvetica').fontSize(8).fillColor(TEXT_PRIMARY).text(chamado.descricao, left, y, { width });
     y += doc.heightOfString(chamado.descricao, { width }) + 12;
 
-    if (chamado.fotoAbertura) {
-      y = ensureSpace(doc, y, 24, marginTop);
-      doc.font('Helvetica-Bold').fontSize(11).fillColor(TEXT_PRIMARY).text('Foto anexada na abertura', left, y);
-      y += 14;
-      y = drawAnexo(doc, chamado.fotoAbertura, left, width, y, marginTop);
-      y += 6;
-    }
+    y = drawDocumentosAbertura(doc, chamado.anexosAbertura ?? [], left, width, y, marginTop);
 
     if (chamado.naoConformidade) {
       y = ensureSpace(doc, y, 36, marginTop);

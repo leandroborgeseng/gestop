@@ -2,8 +2,9 @@
 
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Eye, Search } from 'lucide-react';
+import { Eye, FileText, Search } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
+import { ChamadoAnexosAberturaView } from '@/components/chamados/chamado-anexos-abertura-view';
 import { ChamadoDescricaoExpandivel } from '@/components/chamados/chamado-descricao-expandivel';
 import { ChamadoObservadoresSection } from '@/components/chamados/chamado-observadores-section';
 import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
@@ -11,6 +12,7 @@ import { DocumentosRelacionadosPanel } from '@/components/documentos/documentos-
 import { TipBanner } from '@/components/help/tip-banner';
 import { PageShell } from '@/components/layout/page-shell';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { getMeuChamado, listMeusChamados } from '@/lib/api';
@@ -65,6 +67,7 @@ function MeusChamadosPageContent() {
   const [status, setStatus] = useState('TODOS');
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('id'));
   const [detail, setDetail] = useState<ChamadoDetalhe | null>(null);
+  const [docsOpen, setDocsOpen] = useState(false);
 
   function loadList() {
     setLoading(true);
@@ -110,6 +113,10 @@ function MeusChamadosPageContent() {
     return () => {
       active = false;
     };
+  }, [selectedId]);
+
+  useEffect(() => {
+    setDocsOpen(false);
   }, [selectedId]);
 
   const selected = useMemo(
@@ -249,12 +256,18 @@ function MeusChamadosPageContent() {
                       <h2 className="mt-1 text-[18px] font-semibold text-[var(--ink)]">{chamadoTitulo(resumo)}</h2>
                       <p className="mt-1 text-[13px] text-[var(--ink-3)]">{chamadoLocalLabel(resumo)}</p>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {relacaoBadge(resumo.relacaoComigo)}
                       <Badge variant={CHAMADO_STATUS_META[resumo.status]?.badge ?? 'muted'}>
                         {CHAMADO_STATUS_META[resumo.status]?.label ?? resumo.status}
                       </Badge>
                       <Badge variant={prioridadeVariant(resumo.prioridade)}>{resumo.prioridade}</Badge>
+                      {showDocumentos ? (
+                        <Button type="button" variant="outlined" size="sm" onClick={() => setDocsOpen((aberto) => !aberto)}>
+                          <FileText className="h-3.5 w-3.5" />
+                          Documentos relacionados
+                        </Button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -272,6 +285,18 @@ function MeusChamadosPageContent() {
                     {showEquipe ? <Info label="Equipe" value={resumo.equipe?.nome ?? '—'} /> : null}
                   </div>
 
+                  {(() => {
+                    const detalheDeste = detail?.id === resumo.id ? detail : null;
+                    const podeVerAnexos = detalheDeste ? detalheDeste.podeVerAnexosAbertura !== false : true;
+                    if (!podeVerAnexos) return null;
+                    return (
+                      <ChamadoAnexosAberturaView
+                        anexos={detalheDeste?.anexosAbertura ?? resumo.anexosAbertura}
+                        fotoUrl={detalheDeste?.fotoUrl ?? resumo.fotoUrl}
+                      />
+                    );
+                  })()}
+
                   <ChamadoObservadoresSection
                     chamado={resumo}
                     canManage={canManageObservadores}
@@ -279,8 +304,12 @@ function MeusChamadosPageContent() {
                     onChanged={() => void refreshDetail()}
                   />
 
-                  {showDocumentos && detail ? (
-                    <DocumentosRelacionadosPanel chamadoId={detail.id} />
+                  {showDocumentos && docsOpen && detail ? (
+                    <DocumentosRelacionadosPanel
+                      chamadoId={detail.id}
+                      ocultarCadastroSemPermissao
+                      onClose={() => setDocsOpen(false)}
+                    />
                   ) : null}
 
                   <div>

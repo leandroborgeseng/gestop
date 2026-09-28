@@ -2,6 +2,19 @@ import { ChamadoModoLocalizacao, ChamadoOrigem, ChamadoPrioridade, ChamadoStatus
 import { Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsDateString, IsEmail, IsEnum, IsNumber, IsOptional, IsString, IsUUID, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 
+export class ChamadoAnexoAberturaDto {
+  @IsString()
+  dataUrl!: string;
+
+  @IsOptional()
+  @IsString()
+  mimeType?: string;
+
+  @IsOptional()
+  @IsString()
+  nome?: string;
+}
+
 export class CreateChamadoDto {
   @IsEnum(ChamadoModoLocalizacao)
   modoLocalizacao!: ChamadoModoLocalizacao;
@@ -64,6 +77,12 @@ export class CreateChamadoDto {
 
   @IsOptional()
   @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChamadoAnexoAberturaDto)
+  anexos?: ChamadoAnexoAberturaDto[];
+
+  @IsOptional()
+  @IsArray()
   @IsUUID(undefined, { each: true })
   observadorIds?: string[];
 }
@@ -102,6 +121,12 @@ export class PublicCreateChamadoDto {
   @IsOptional()
   @IsString()
   fotoDataUrl?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ChamadoAnexoAberturaDto)
+  anexos?: ChamadoAnexoAberturaDto[];
 }
 
 export class UpdateChamadoStatusDto {
