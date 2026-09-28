@@ -588,8 +588,7 @@ export function AbrirChamadoForm({
               setPrioridade('MEDIA');
               setSolicitanteNome('');
               setSolicitanteTelefone('');
-              setFotoDataUrl(null);
-              setFotoPreview(null);
+              setAnexos([]);
               setFotoGeo(null);
               setError(null);
               setPinHint(null);
