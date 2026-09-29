@@ -66,6 +66,8 @@ export function entidadeTipoParaTela(entidadeTipo: string): { telaId: string; fu
       return { telaId: 'admin', funcaoId: 'permissoes' };
     case 'AuditoriaConfig':
       return { telaId: 'admin', funcaoId: 'auditoria' };
+    case 'ConfiguracaoEmail':
+      return { telaId: 'admin', funcaoId: 'email' };
     case 'BackupS3Config':
     case 'BackupS3Run':
     case 'BackupS3Restore':

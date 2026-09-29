@@ -4,7 +4,7 @@ import dynamic from 'next/dynamic';
 import { ChamadoMapaItem, UnidadeOperacional } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export type CcoMapMode = 'situacao' | 'notas';
+export type CcoMapMode = 'situacao' | 'notas' | 'calor';
 export type CcoMapView = 'unidades' | 'chamados';
 
 const OperationalMapClient = dynamic(

@@ -773,6 +773,7 @@ export type ChamadosEmExecucaoGrupo = {
 
 export type ChamadosEmExecucaoResponse = {
   total: number;
+  minhasEquipeIds?: string[];
   grupos: ChamadosEmExecucaoGrupo[];
 };
 
@@ -917,7 +918,7 @@ export type ChamadoDetalhe = ChamadoResumo & {
     metadata?: Record<string, unknown> | null;
     createdAt: string;
     alteradoPor?: { id: string; nome: string } | null;
-    anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null }>;
+    anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null; nome?: string | null }>;
   }>;
   podeGerenciarObservadores?: boolean;
   podeVerAnexosAbertura?: boolean;
@@ -1359,7 +1360,36 @@ export type FiscalizacoesListResponse = {
   hasMore: boolean;
 };
 
-export type BackupS3PublicConfig = {
+export type EmailConfigPublica = {
+  ativo: boolean;
+  remetenteEmail: string;
+  remetenteNome: string;
+  replyTo: string;
+  smtpHost: string;
+  smtpPort: number;
+  seguranca: 'NENHUMA' | 'SSL' | 'TLS';
+  usarAutenticacao: boolean;
+  usuario: string;
+  senhaDefinida: boolean;
+  assuntoEquipe: string;
+  textoIntroEquipe: string;
+  origem: 'tela' | 'ambiente' | 'nenhuma';
+};
+
+export type EmailConfigPayload = {
+  ativo: boolean;
+  remetenteEmail?: string;
+  remetenteNome?: string;
+  replyTo?: string;
+  smtpHost?: string;
+  smtpPort: number;
+  seguranca: 'NENHUMA' | 'SSL' | 'TLS';
+  usarAutenticacao: boolean;
+  usuario?: string;
+  senha?: string;
+  assuntoEquipe?: string;
+  textoIntroEquipe?: string;
+};
   enabled: boolean;
   bucket: string | null;
   region: string;

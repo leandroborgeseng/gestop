@@ -162,7 +162,7 @@ export function parseMultiplaEscolhaOpcoes(opcoes: unknown): ChecklistMultiplaEs
   return { opcoes: ['', ''], modoExibicao: 'SELECT' };
 }
 
-export function serializeItemOpcoes(tipo: string, opcoes: unknown): unknown {
+export function serializeItemOpcoes(tipo: string, opcoes: unknown, options?: { semAvaliacao?: boolean }): unknown {
   if (tipo === 'MULTIPLA_ESCOLHA') {
     const config = parseMultiplaEscolhaOpcoes(opcoes);
     const paired = config.opcoes
@@ -177,7 +177,7 @@ export function serializeItemOpcoes(tipo: string, opcoes: unknown): unknown {
       modoExibicao: config.modoExibicao,
     };
 
-    if (config.notas != null) {
+    if (config.notas != null && !options?.semAvaliacao) {
       result.notas = paired.map((entry) => entry.nota);
     }
 
@@ -189,6 +189,7 @@ export function serializeItemOpcoes(tipo: string, opcoes: unknown): unknown {
   }
 
   if (tipo === 'BOOLEANO') {
+    if (options?.semAvaliacao) return undefined;
     const config = parseBooleanoOpcoes(opcoes);
     const result: ChecklistBooleanoOpcoes = {
       simConformidade: config.simConformidade,
@@ -238,8 +239,15 @@ export function formatOpcoesResumo(tipo: string, opcoes: unknown): string | null
   return null;
 }
 
-export function validateItemOpcoes(tipo: string, opcoes: unknown, titulo: string, codigo: string): string | null {
+export function validateItemOpcoes(
+  tipo: string,
+  opcoes: unknown,
+  titulo: string,
+  codigo: string,
+  options?: { ignorarAvaliacao?: boolean },
+): string | null {
   const label = titulo.trim() || codigo.trim() || 'sem título';
+  const ignorarAvaliacao = options?.ignorarAvaliacao === true;
 
   if (tipo === 'MULTIPLA_ESCOLHA') {
     const config = parseMultiplaEscolhaOpcoes(opcoes);
@@ -251,7 +259,7 @@ export function validateItemOpcoes(tipo: string, opcoes: unknown, titulo: string
       return `Item "${label}": cadastre ao menos 2 opções de múltipla escolha.`;
     }
 
-    if (config.notas) {
+    if (!ignorarAvaliacao && config.notas) {
       for (const entry of filledIndexes) {
         const nota = config.notas[entry.index];
         if (nota != null && !isNotaInRange(nota)) {
@@ -272,7 +280,7 @@ export function validateItemOpcoes(tipo: string, opcoes: unknown, titulo: string
     }
   }
 
-  if (tipo === 'BOOLEANO') {
+  if (!ignorarAvaliacao && tipo === 'BOOLEANO') {
     const config = parseBooleanoOpcoes(opcoes);
     if (config.pontuar) {
       if (config.notaSim == null || config.notaNao == null) {

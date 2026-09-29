@@ -2,6 +2,8 @@ export const MAX_ANEXOS_ABERTURA = 8;
 export const MAX_ANEXO_ABERTURA_BYTES = 8 * 1024 * 1024;
 export const MAX_TOTAL_ANEXOS_ABERTURA_BYTES = 20 * 1024 * 1024;
 
+export const ANEXOS_ABERTURA_FORMATOS = 'JPG, JPEG, PNG, WEBP e PDF';
+
 export const ANEXOS_ABERTURA_ACCEPT =
   'image/jpeg,image/jpg,image/png,image/webp,.jpg,.jpeg,.png,.webp,application/pdf,.pdf';
 

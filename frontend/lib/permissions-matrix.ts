@@ -225,7 +225,8 @@ export type AdminTabPermissionId =
   | 'permissoes'
   | 'backup'
   | 'importacao'
-  | 'auditoria';
+  | 'auditoria'
+  | 'email';
 
 const ADMIN_CADASTROS_TABS: AdminTabPermissionId[] = ['secretarias', 'proprios', 'usuarios'];
 
@@ -242,6 +243,7 @@ const ADMIN_TAB_LEGACY: Partial<Record<AdminTabPermissionId, string[]>> = {
   backup: ['usuarios.gerenciar'],
   importacao: ['unidades.gerenciar', 'usuarios.gerenciar'],
   auditoria: ['auditoria.visualizar', 'usuarios.gerenciar'],
+  email: ['usuarios.gerenciar'],
 };
 
 /** Verifica permissão de ação em uma aba da Administração (matriz fina + legado). */
@@ -283,6 +285,7 @@ export function hasAnyAdminVisualizarAccess(permissoes: string[]) {
     'backup',
     'importacao',
     'auditoria',
+    'email',
   ];
   return tabs.some((tab) => hasAdminTabAccess(tab, 'visualizar', permissoes));
 }
@@ -314,6 +317,17 @@ export function canRestaurarChamadoExcluido(user?: {
 } | null) {
   if (isAdministradorSistemaAtivo(user)) return true;
   return Boolean(user?.permissoes?.includes(buildMatrixKey('chamados', 'restaurar_excluido', 'alterar')));
+}
+
+export function hasChecklistAccess(permissoes: string[], action: PermissionAction = 'visualizar') {
+  const matrix = permissoes.filter((key) => key.startsWith('matriz.checklists.'));
+  if (matrix.length > 0) {
+    return (
+      matrix.includes(buildMatrixKey('checklists', '_tela', action)) ||
+      matrix.includes(buildMatrixKey('checklists', 'gerenciar', action))
+    );
+  }
+  return permissoes.includes('checklists.gerenciar');
 }
 
 export function isAdministradorSistemaAtivo(user?: {

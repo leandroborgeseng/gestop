@@ -285,18 +285,12 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
 
   function abrirDocumentoPdf() {
     if (!pdfUrl) return;
-    const opened = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
-    if (!opened) {
-      const anchor = document.createElement('a');
-      anchor.href = pdfUrl;
-      anchor.target = '_blank';
-      anchor.rel = 'noopener noreferrer';
-      anchor.download = `${documento.codigo.replace(/[^a-zA-Z0-9-]/g, '')}-${pdfVariante}.pdf`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      anchor.remove();
-      snackbar.show('Se o PDF não abriu, use o arquivo baixado para conferir o documento.', 'info');
-    }
+    const anchor = document.createElement('a');
+    anchor.href = pdfUrl;
+    anchor.download = `${documento.codigo.replace(/[^a-zA-Z0-9-]/g, '')}-${pdfVariante}.pdf`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
   }
 
   const sheetClassName = cn(

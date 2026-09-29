@@ -180,11 +180,12 @@ function drawAnexo(
   }
 
   const fileLabel = anexo.nomeArquivo?.trim() || `Arquivo ${extensionLabel(anexo.mimeType, anexo.nomeArquivo)}`;
+  const pdf = (anexo.mimeType ?? '').toLowerCase() === 'application/pdf';
   doc
     .font('Helvetica')
     .fontSize(8)
     .fillColor(TEXT_PRIMARY)
-    .text(`Arquivo anexado: ${fileLabel}${anexo.mimeType ? ` (${anexo.mimeType})` : ''}`, left + 8, y, {
+    .text(pdf ? `Documento PDF: ${fileLabel}` : `Arquivo anexado: ${fileLabel}${anexo.mimeType ? ` (${anexo.mimeType})` : ''}`, left + 8, y, {
       width: width - 8,
     });
   y = doc.y + 8;

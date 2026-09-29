@@ -164,6 +164,7 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
       { id: 'backup', label: 'Backup S3', actions: ['visualizar', 'alterar', 'executar'] },
       { id: 'importacao', label: 'Importação', actions: ['visualizar', 'executar'] },
       { id: 'auditoria', label: 'Logs / Auditoria', actions: ['visualizar', 'alterar', 'executar'] },
+      { id: 'email', label: 'E-mail', actions: ['visualizar', 'alterar', 'executar'] },
       // Legado: mantido para compatibilidade com matrizes antigas
       { id: 'cadastros', label: 'Cadastros (legado)', actions: ['visualizar', 'inserir', 'alterar', 'excluir'] },
     ],

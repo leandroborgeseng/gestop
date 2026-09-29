@@ -129,13 +129,22 @@ export function normalizeChecklistBinding(dto: ChecklistDto): ChecklistDto {
   }
 }
 
+export function isDocumentoAvulsoExclusivo(input: {
+  finalidade?: string | null;
+  finalidades?: string[] | null;
+}) {
+  const lista = input.finalidades?.length ? input.finalidades : input.finalidade ? [input.finalidade] : [];
+  return lista.length > 0 && lista.every((item) => item === 'DOCUMENTO_AVULSO');
+}
+
 export function assertValidChecklistVersion(
   dto: ChecklistVersionDto,
-  options?: { finalidadeChamado?: boolean },
+  options?: { finalidadeChamado?: boolean; finalidadeDocumentoAvulso?: boolean },
 ) {
   assertValidChecklistVersionItems(dto.itens, {
     finalidadeChamado: options?.finalidadeChamado,
-    requireCategoria: !options?.finalidadeChamado,
+    finalidadeDocumentoAvulso: options?.finalidadeDocumentoAvulso,
+    requireCategoria: !options?.finalidadeChamado && !options?.finalidadeDocumentoAvulso,
   });
 }
 

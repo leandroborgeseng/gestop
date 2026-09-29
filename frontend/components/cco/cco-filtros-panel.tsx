@@ -169,6 +169,8 @@ export function CcoFiltrosPanel({
   opcoesFiltro,
   mapMode,
   onMapModeChange,
+  chamadoMapMode,
+  onChamadoMapModeChange,
   categoriaFiltroId,
   onCategoriaFiltroChange,
   onClear,
@@ -187,6 +189,8 @@ export function CcoFiltrosPanel({
   opcoesFiltro: UnidadeFiltroOpcoes | null;
   mapMode: CcoMapMode;
   onMapModeChange: (mode: CcoMapMode) => void;
+  chamadoMapMode: 'situacao' | 'calor';
+  onChamadoMapModeChange: (mode: 'situacao' | 'calor') => void;
   categoriaFiltroId: string;
   onCategoriaFiltroChange: (id: string) => void;
   onClear: () => void;
@@ -480,6 +484,14 @@ export function CcoFiltrosPanel({
                 <option value="TODOS">Vínculo próprio: Todos</option>
                 <option value="COM">Com próprio público</option>
                 <option value="SEM">Sem próprio público</option>
+              </select>
+              <select
+                value={chamadoMapMode}
+                onChange={(event) => onChamadoMapModeChange(event.target.value as 'situacao' | 'calor')}
+                className={SELECT_CLASS}
+              >
+                <option value="situacao">Mapa: Localização</option>
+                <option value="calor">Mapa: Calor</option>
               </select>
             </div>
           )}

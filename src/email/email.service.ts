@@ -1,6 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
-import nodemailer from 'nodemailer';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import type { Transporter } from 'nodemailer';
+import { PrismaService } from '../prisma/prisma.service';
+import {
+  buildSmtpTransport,
+  decryptEmailPassword,
+  explainSmtpError,
+  mensagemEmailNaoConfigurado,
+} from './email-transport';
 
 export type SendEmailInput = {
   to: string | string[];
@@ -17,13 +23,33 @@ export type SendEmailResult = {
   detail?: string;
 };
 
+type ResolvedMail = {
+  driver: 'smtp' | 'webhook' | 'log';
+  from?: string;
+  replyTo?: string | null;
+  transporter?: Transporter;
+  assuntoEquipe?: string | null;
+  textoIntroEquipe?: string | null;
+  disabled?: boolean;
+};
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private transporter: Transporter | null = null;
+
+  constructor(@Optional() @Inject(PrismaService) private readonly prisma?: PrismaService) {}
+
+  invalidate() {
+    // O transporte é criado a cada envio para refletir a configuração da tela.
+  }
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
-    const driver = this.resolveDriver();
+    const resolved = await this.resolve();
+    if (resolved.disabled) {
+      return { delivered: false, driver: 'smtp', detail: mensagemEmailNaoConfigurado() };
+    }
+
+    const driver = resolved.driver;
 
     if (driver === 'log') {
       this.logger.log(`[email:log] Para: ${formatRecipients(input.to)} | ${input.subject}`);
@@ -35,7 +61,7 @@ export class EmailService {
       return this.sendViaWebhook(input);
     }
 
-    return this.sendViaSmtp(input);
+    return this.sendViaSmtp(input, resolved);
   }
 
   isConfigured() {
@@ -43,6 +69,14 @@ export class EmailService {
     if (driver === 'log') return false;
     if (driver === 'webhook') return Boolean(this.webhookUrl());
     return Boolean(process.env.SMTP_HOST?.trim() && process.env.EMAIL_FROM?.trim());
+  }
+
+  async getEquipeTemplate() {
+    const resolved = await this.resolve();
+    return {
+      subject: resolved.assuntoEquipe?.trim() || 'Novo chamado atribuído à equipe',
+      intro: resolved.textoIntroEquipe?.trim() || '',
+    };
   }
 
   private resolveDriver(): 'smtp' | 'webhook' | 'log' {
@@ -92,15 +126,15 @@ export class EmailService {
     return { delivered: true, driver: 'webhook' };
   }
 
-  private async sendViaSmtp(input: SendEmailInput): Promise<SendEmailResult> {
-    const transporter = this.getTransporter();
-    if (!transporter) {
-      return { delivered: false, driver: 'smtp', detail: 'SMTP incompleto' };
+  private async sendViaSmtp(input: SendEmailInput, resolved: ResolvedMail): Promise<SendEmailResult> {
+    if (!resolved.transporter || !resolved.from) {
+      return { delivered: false, driver: 'smtp', detail: mensagemEmailNaoConfigurado() };
     }
 
     try {
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM?.trim(),
+      await resolved.transporter.sendMail({
+        from: resolved.from,
+        replyTo: resolved.replyTo || undefined,
         to: input.to,
         cc: input.cc,
         subject: input.subject,
@@ -109,32 +143,76 @@ export class EmailService {
       });
       return { delivered: true, driver: 'smtp' };
     } catch (error) {
-      const detail = error instanceof Error ? error.message : 'erro SMTP';
+      const detail = explainSmtpError(error);
       this.logger.error(`Falha SMTP: ${detail}`);
       return { delivered: false, driver: 'smtp', detail };
     }
   }
 
-  private getTransporter() {
-    if (this.transporter) return this.transporter;
+  private async resolve(): Promise<ResolvedMail> {
+    const fromDb = await this.resolveFromDatabase();
+    if (fromDb) return fromDb;
+    return this.resolveFromEnv();
+  }
 
+  private async resolveFromDatabase(): Promise<ResolvedMail | null> {
+    if (!this.prisma) return null;
+    const row = await this.prisma.configuracaoEmail.findUnique({ where: { id: 'default' } });
+    if (!row) return null;
+    const cadastrada = Boolean(row.smtpHost || row.remetenteEmail || row.senhaEnc);
+    if (!row.ativo) {
+      return cadastrada ? { driver: 'smtp', disabled: true } : null;
+    }
+    if (!row.smtpHost || !row.remetenteEmail) {
+      return { driver: 'smtp', disabled: true };
+    }
+    const seguranca = row.seguranca === 'SSL' || row.seguranca === 'NENHUMA' ? row.seguranca : 'TLS';
+    const senha = row.senhaEnc ? decryptEmailPassword(row.senhaEnc) : null;
+    const from = row.remetenteNome?.trim()
+      ? `"${row.remetenteNome.trim().replace(/"/g, '')}" <${row.remetenteEmail}>`
+      : row.remetenteEmail;
+    return {
+      driver: 'smtp',
+      from,
+      replyTo: row.replyTo,
+      assuntoEquipe: row.assuntoEquipe,
+      textoIntroEquipe: row.textoIntroEquipe,
+      transporter: buildSmtpTransport({
+        host: row.smtpHost,
+        port: row.smtpPort,
+        seguranca,
+        usarAutenticacao: row.usarAutenticacao,
+        usuario: row.usuario,
+        senha,
+      }),
+    };
+  }
+
+  private resolveFromEnv(): ResolvedMail {
+    const driver = this.resolveDriver();
+    if (driver !== 'smtp') {
+      return { driver };
+    }
     const host = process.env.SMTP_HOST?.trim();
     const from = process.env.EMAIL_FROM?.trim();
-    if (!host || !from) return null;
-
-    const port = Number(process.env.SMTP_PORT ?? 587);
-    const secure = process.env.SMTP_SECURE === 'true';
+    if (!host || !from) {
+      return { driver: 'smtp', disabled: true };
+    }
     const user = process.env.SMTP_USER?.trim();
     const pass = process.env.SMTP_PASSWORD?.trim();
-
-    this.transporter = nodemailer.createTransport({
-      host,
-      port,
-      secure,
-      auth: user && pass ? { user, pass } : undefined,
-    });
-
-    return this.transporter;
+    const secure = process.env.SMTP_SECURE === 'true';
+    return {
+      driver: 'smtp',
+      from,
+      transporter: buildSmtpTransport({
+        host,
+        port: Number(process.env.SMTP_PORT ?? 587),
+        seguranca: secure ? 'SSL' : 'TLS',
+        usarAutenticacao: Boolean(user && pass),
+        usuario: user,
+        senha: pass,
+      }),
+    };
   }
 }
 

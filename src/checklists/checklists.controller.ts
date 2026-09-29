@@ -13,9 +13,14 @@ import { ChecklistsService } from './checklists.service';
 export class ChecklistsController {
   constructor(private readonly checklistsService: ChecklistsService) {}
 
+  @Get('secretarias')
+  listSecretarias(@CurrentUser() user: JwtPayload) {
+    return this.checklistsService.listSecretariasOpcoes(user);
+  }
+
   @Get()
-  listChecklists() {
-    return this.checklistsService.listChecklists();
+  listChecklists(@CurrentUser() user: JwtPayload) {
+    return this.checklistsService.listChecklists(user);
   }
 
   @Get('tipos-proprio/opcoes')
@@ -24,8 +29,8 @@ export class ChecklistsController {
   }
 
   @Get(':id')
-  getChecklist(@Param('id') id: string) {
-    return this.checklistsService.getChecklist(id);
+  getChecklist(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.checklistsService.getChecklist(id, user);
   }
 
   @Post()

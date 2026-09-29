@@ -50,6 +50,8 @@ import {
   WebmapImportSelection,
   WebmapSyncAllResult,
   WebmapImportStatus,
+  EmailConfigPayload,
+  EmailConfigPublica,
   BackupS3ConfigPayload,
   BackupS3ObjectItem,
   BackupS3StatusResponse,
@@ -687,6 +689,10 @@ export function syncSecretariasImport(dryRun = false) {
 
 export function listChecklists() {
   return request<ChecklistModel[]>('/checklists');
+}
+
+export function listChecklistSecretarias() {
+  return request<AdminSecretaria[]>('/checklists/secretarias');
 }
 
 /** Checklists ativos para o formulário de Cronograma (não exige checklists.gerenciar). */
@@ -1566,6 +1572,26 @@ export function unsubscribeWebPush(endpoint: string) {
 export function dispararAlertasOperacionais() {
   return request<{ enviados: number; webhook: boolean; push: number }>('/notificacoes/alertas/disparar', {
     method: 'POST',
+  });
+}
+
+export function getEmailConfig() {
+  return request<EmailConfigPublica>('/admin/email');
+}
+
+export function saveEmailConfig(payload: EmailConfigPayload) {
+  return request<EmailConfigPublica>('/admin/email', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testarEmailConfig(destino: string) {
+  return request<{ ok: boolean; mensagem: string }>('/admin/email/teste', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ destino }),
   });
 }
 

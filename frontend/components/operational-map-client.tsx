@@ -17,6 +17,7 @@ import {
   MapBasemap,
 } from '@/lib/franca-geo';
 import { hasPlottableCoordinates, toLatLngTuple } from '@/lib/geo-coordinates';
+import { heatLegend, paintHeat } from '@/lib/map-heat';
 import { escapeHtml } from '@/lib/security';
 import { ChamadoMapaItem, UnidadeOperacional, UnidadeSituacao, UnidadeSlaMapa } from '@/lib/types';
 import { chamadoTitulo } from '@/lib/chamado-geo';
@@ -247,6 +248,37 @@ function resolveUnidadeMarkerIcon(
   return createUnitIcon(resolveUnidadeMarkerColor(unidade, mapMode) ?? situacaoMarkerColor[unidade.situacao], emphasis);
 }
 
+function HeatLegendBox({ points }: { points: Array<{ lat: number; lng: number }> }) {
+  const legend = heatLegend(points);
+  if (!legend) {
+    return <p className="text-xs leading-snug text-[var(--ink-2)]">Não há chamados com localização para gerar o mapa de calor.</p>;
+  }
+  if (legend.baixaAte === 1 && legend.mediaAte === 1) {
+    return (
+      <div className="flex items-center gap-2 text-xs text-[var(--ink-2)]">
+        <span className="h-2.5 w-6 shrink-0 rounded-sm" style={{ background: '#9a3412' }} />
+        <span>1 chamado</span>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-1 text-xs text-[var(--ink-2)]">
+      <div className="flex items-center gap-2">
+        <span className="h-2.5 w-6 shrink-0 rounded-sm" style={{ background: '#fde68a' }} />
+        <span>Baixa concentração: até {legend.baixaAte}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="h-2.5 w-6 shrink-0 rounded-sm" style={{ background: '#f97316' }} />
+        <span>Média concentração: {legend.mediaDe} a {legend.mediaAte}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="h-2.5 w-6 shrink-0 rounded-sm" style={{ background: '#9a3412' }} />
+        <span>Alta concentração: acima de {legend.altaAcima}</span>
+      </div>
+    </div>
+  );
+}
+
 export function OperationalMapClient({
   view = 'unidades',
   unidades = [],
@@ -275,6 +307,7 @@ export function OperationalMapClient({
   const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const heatCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const streetLayerRef = useRef<L.TileLayer | null>(null);
   const satelliteLayerRef = useRef<L.TileLayer | null>(null);
   const labelsLayerRef = useRef<L.TileLayer | null>(null);
@@ -596,7 +629,13 @@ export function OperationalMapClient({
     unidadeByIdRef.current.clear();
     chamadoByIdRef.current.clear();
 
-    if (view === 'chamados') {
+    const calor = view === 'chamados' && mapMode === 'calor';
+    if (!calor && heatCanvasRef.current) {
+      heatCanvasRef.current.remove();
+      heatCanvasRef.current = null;
+    }
+
+    if (view === 'chamados' && !calor) {
       locatedChamados.forEach(({ chamado, latLng }) => {
         const marker = L.marker(latLng, {
           icon: createUnitIcon(resolveChamadoMarkerColor(chamado.slaMapa), 'normal'),
@@ -660,6 +699,42 @@ export function OperationalMapClient({
       });
     }
 
+    if (calor) {
+      const legend = heatLegend(locatedChamados.map(({ latLng }) => ({ lat: latLng[0], lng: latLng[1] })));
+      let canvas = heatCanvasRef.current;
+      if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.style.pointerEvents = 'none';
+        canvas.style.position = 'absolute';
+        map.getPanes().overlayPane.appendChild(canvas);
+        heatCanvasRef.current = canvas;
+      }
+      const size = map.getSize();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(size.x * dpr));
+      canvas.height = Math.max(1, Math.floor(size.y * dpr));
+      canvas.style.width = `${size.x}px`;
+      canvas.style.height = `${size.y}px`;
+      const topLeft = map.containerPointToLayerPoint([0, 0]);
+      L.DomUtil.setPosition(canvas, topLeft);
+      const ctx = canvas.getContext('2d');
+      if (ctx && legend) {
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        paintHeat(
+          ctx,
+          size.x,
+          size.y,
+          locatedChamados.map(({ latLng }) => {
+            const point = map.latLngToContainerPoint(latLng);
+            return { x: point.x, y: point.y };
+          }),
+          legend,
+        );
+      } else if (ctx) {
+        ctx.clearRect(0, 0, size.x, size.y);
+      }
+    }
+
     const shouldRefit = lastFitKeyRef.current !== locatedKey;
     if (shouldRefit) {
       scheduleRefit(map, 'data');
@@ -667,6 +742,40 @@ export function OperationalMapClient({
       refreshMapSize(map);
     }
   }, [mapReady, locatedKey, locatedUnidades, locatedChamados, scheduleRefit, mapMode, categoriaFiltroId, view]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!mapReady || !map || view !== 'chamados' || mapMode !== 'calor') return;
+    const redraw = () => {
+      const canvas = heatCanvasRef.current;
+      if (!canvas) return;
+      const size = map.getSize();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(size.x * dpr));
+      canvas.height = Math.max(1, Math.floor(size.y * dpr));
+      canvas.style.width = `${size.x}px`;
+      canvas.style.height = `${size.y}px`;
+      L.DomUtil.setPosition(canvas, map.containerPointToLayerPoint([0, 0]));
+      const ctx = canvas.getContext('2d');
+      const legend = heatLegend(locatedChamados.map(({ latLng }) => ({ lat: latLng[0], lng: latLng[1] })));
+      if (!ctx || !legend) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      paintHeat(
+        ctx,
+        size.x,
+        size.y,
+        locatedChamados.map(({ latLng }) => {
+          const point = map.latLngToContainerPoint(latLng);
+          return { x: point.x, y: point.y };
+        }),
+        legend,
+      );
+    };
+    map.on('moveend zoomend', redraw);
+    return () => {
+      map.off('moveend zoomend', redraw);
+    };
+  }, [mapReady, view, mapMode, locatedChamados]);
 
   useEffect(() => {
     if (!mapReady) return;
@@ -708,7 +817,12 @@ export function OperationalMapClient({
     { dentro: 0, fora: 0, sem: 0 },
   );
 
-  const emptyTitle = view === 'chamados' ? 'Nenhum chamado com localização' : 'Nenhuma unidade com localização';
+  const emptyTitle =
+    view === 'chamados' && mapMode === 'calor' && located.length === 0
+      ? 'Não há chamados com localização para gerar o mapa de calor.'
+      : view === 'chamados'
+        ? 'Nenhum chamado com localização'
+        : 'Nenhuma unidade com localização';
   const emptyDescription =
     totalItems > 0
       ? view === 'chamados'
@@ -743,9 +857,11 @@ export function OperationalMapClient({
           </span>
         </div>
 
-        <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-[500] min-w-[168px] rounded-[var(--r-md)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-3 shadow-[var(--sh-md)] backdrop-blur-md">
+        <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-[500] max-w-[280px] min-w-[168px] rounded-[var(--r-md)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-3 shadow-[var(--sh-md)] backdrop-blur-md">
           <div className="mb-1.5 text-[10.5px] font-bold tracking-[0.05em] uppercase text-[var(--ink-3)]">Legenda</div>
-          {view === 'chamados' || mapMode === 'situacao' ? (
+          {view === 'chamados' && mapMode === 'calor' ? (
+            <HeatLegendBox points={locatedChamados.map(({ latLng }) => ({ lat: latLng[0], lng: latLng[1] }))} />
+          ) : view === 'chamados' || mapMode === 'situacao' ? (
             <>
               <div className="flex items-center gap-2 py-0.5 text-xs text-[var(--ink-2)]">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: SLA_COLORS.DENTRO }} />

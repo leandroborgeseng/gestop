@@ -67,6 +67,7 @@ function CcoPageContent() {
   const [bootLoading, setBootLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [mapMode, setMapMode] = useState<CcoMapMode>('situacao');
+  const [chamadoMapMode, setChamadoMapMode] = useState<'situacao' | 'calor'>('situacao');
   const [categoriaFiltroId, setCategoriaFiltroId] = useState('');
 
   const selectedUnidade = useMemo(
@@ -343,6 +344,8 @@ function CcoPageContent() {
           opcoesFiltro={opcoesFiltro}
           mapMode={mapMode}
           onMapModeChange={setMapMode}
+          chamadoMapMode={chamadoMapMode}
+          onChamadoMapModeChange={setChamadoMapMode}
           categoriaFiltroId={categoriaFiltroId}
           onCategoriaFiltroChange={setCategoriaFiltroId}
           onClear={clearFilters}
@@ -389,7 +392,7 @@ function CcoPageContent() {
               chamados={chamados}
               selectedId={selectedId}
               hoveredId={hoveredId}
-              mapMode={tab === 'chamados' ? 'situacao' : mapMode}
+              mapMode={tab === 'chamados' ? chamadoMapMode : mapMode}
               categoriaFiltroId={categoriaFiltroId || null}
               onSelect={selectItem}
               onClearSelection={() => setSelectedId(null)}

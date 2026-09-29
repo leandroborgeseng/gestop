@@ -1,7 +1,7 @@
 'use client';
 
 import { FileText } from 'lucide-react';
-import { fetchAuthenticatedStorageBlob } from '@/lib/storage-url';
+import { baixarStorageAutenticado } from '@/lib/storage-url';
 
 export function AuthenticatedStorageLink({
   href,
@@ -14,23 +14,8 @@ export function AuthenticatedStorageLink({
 }) {
   async function handleClick(event: React.MouseEvent<HTMLButtonElement>) {
     event.preventDefault();
-    try {
-      const blob = await fetchAuthenticatedStorageBlob(href);
-      if (!blob) {
-        window.open(href, '_blank', 'noopener,noreferrer');
-        return;
-      }
-      const objectUrl = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = objectUrl;
-      anchor.download = label;
-      anchor.target = '_blank';
-      anchor.rel = 'noreferrer';
-      anchor.click();
-      URL.revokeObjectURL(objectUrl);
-    } catch {
-      window.open(href, '_blank', 'noopener,noreferrer');
-    }
+    event.stopPropagation();
+    await baixarStorageAutenticado(href, label);
   }
 
   return (

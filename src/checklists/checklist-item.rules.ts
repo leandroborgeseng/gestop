@@ -97,14 +97,18 @@ function parseBooleanoOpcoes(opcoes: unknown): BooleanoOpcoes {
   };
 }
 
-export function normalizeChecklistItemOpcoes(tipo: ChecklistItemTipo, opcoes: unknown): unknown | undefined {
+export function normalizeChecklistItemOpcoes(
+  tipo: ChecklistItemTipo,
+  opcoes: unknown,
+  options?: { omitirAvaliacao?: boolean },
+): unknown | undefined {
   if (tipo === ChecklistItemTipo.MULTIPLA_ESCOLHA) {
     const config = parseMultiplaEscolhaOpcoes(opcoes);
     const result: MultiplaEscolhaOpcoes = {
       opcoes: config.opcoes,
       modoExibicao: config.modoExibicao,
     };
-    if (config.notas) {
+    if (config.notas && !options?.omitirAvaliacao) {
       result.notas = config.notas;
     }
     return result;
@@ -115,6 +119,7 @@ export function normalizeChecklistItemOpcoes(tipo: ChecklistItemTipo, opcoes: un
   }
 
   if (tipo === ChecklistItemTipo.BOOLEANO) {
+    if (options?.omitirAvaliacao) return undefined;
     const config = parseBooleanoOpcoes(opcoes);
     const result: BooleanoOpcoes = {
       simConformidade: config.simConformidade,
@@ -140,8 +145,10 @@ export function validateChecklistItemOpcoes(
   opcoes: unknown,
   titulo: string,
   codigo: string,
+  options?: { ignorarAvaliacao?: boolean },
 ): string | null {
   const label = titulo.trim() || codigo.trim() || 'sem titulo';
+  const ignorarAvaliacao = options?.ignorarAvaliacao === true;
 
   if (tipo === ChecklistItemTipo.MULTIPLA_ESCOLHA) {
     const config = parseMultiplaEscolhaOpcoes(opcoes);
@@ -149,7 +156,7 @@ export function validateChecklistItemOpcoes(
       return `Item "${label}": cadastre ao menos 2 opcoes de multipla escolha.`;
     }
 
-    if (config.notas) {
+    if (!ignorarAvaliacao && config.notas) {
       for (const nota of config.notas) {
         if (nota != null && !isNotaInRange(nota)) {
           return `Item "${label}": nota da opcao deve estar entre 0 e 10.`;
@@ -168,7 +175,7 @@ export function validateChecklistItemOpcoes(
     }
   }
 
-  if (tipo === ChecklistItemTipo.BOOLEANO) {
+  if (!ignorarAvaliacao && tipo === ChecklistItemTipo.BOOLEANO) {
     const config = parseBooleanoOpcoes(opcoes);
     if (config.pontuar) {
       if (config.notaSim == null || config.notaNao == null) {
@@ -195,14 +202,16 @@ export function validateChecklistItemOpcoes(
 
 export function assertValidChecklistVersionItems(
   itens: ChecklistItemDto[],
-  options?: { requireCategoria?: boolean; finalidadeChamado?: boolean },
+  options?: { requireCategoria?: boolean; finalidadeChamado?: boolean; finalidadeDocumentoAvulso?: boolean },
 ) {
   if (itens.length === 0) {
     throw new Error('Informe ao menos um item na versao do checklist.');
   }
 
   const codes = new Set<string>();
-  const requireCategoria = options?.requireCategoria !== false && !options?.finalidadeChamado;
+  const documentoAvulso = options?.finalidadeDocumentoAvulso === true;
+  const requireCategoria =
+    options?.requireCategoria !== false && !options?.finalidadeChamado && !documentoAvulso;
 
   for (const item of itens) {
     if (!item.titulo?.trim()) {
@@ -223,7 +232,9 @@ export function assertValidChecklistVersionItems(
       throw new Error(`Item "${item.titulo.trim()}": escala Likert nao e permitida em checklist de chamado.`);
     }
 
-    const opcoesError = validateChecklistItemOpcoes(item.tipo, item.opcoes, item.titulo, item.codigo);
+    const opcoesError = validateChecklistItemOpcoes(item.tipo, item.opcoes, item.titulo, item.codigo, {
+      ignorarAvaliacao: documentoAvulso,
+    });
     if (opcoesError) {
       throw new Error(opcoesError);
     }

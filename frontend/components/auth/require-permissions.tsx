@@ -12,7 +12,7 @@ import {
   hasOperationalNavAccess,
   isNavActive,
 } from '@/lib/navigation';
-import { hasAnyAdminVisualizarAccess, hasCronogramaAccess, hasDocumentosModuloAccess, isAdministradorSistemaAtivo } from '@/lib/permissions-matrix';
+import { hasAnyAdminVisualizarAccess, hasChecklistAccess, hasCronogramaAccess, hasDocumentosModuloAccess, isAdministradorSistemaAtivo } from '@/lib/permissions-matrix';
 import { ErrorState } from '@/components/ui-states';
 
 function permissionSatisfied(
@@ -40,6 +40,9 @@ function permissionSatisfied(
   }
   if (required === 'documentos.visualizar') {
     return hasDocumentosModuloAccess(userPermissions);
+  }
+  if (required === 'checklists.gerenciar') {
+    return hasChecklistAccess(userPermissions, 'visualizar') || userPermissions.includes('checklists.gerenciar');
   }
   return userPermissions.includes(required);
 }

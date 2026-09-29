@@ -5,6 +5,14 @@ import { History, Paperclip } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { registrarChamadoHistorico } from '@/lib/api';
+import {
+  ANEXOS_ABERTURA_ACCEPT,
+  ANEXOS_ABERTURA_FORMATOS,
+  mensagemArquivoAbertura,
+  mimeDeArquivo,
+  lerArquivoComoDataUrl,
+  type AnexoAberturaDraft,
+} from '@/lib/chamado-anexos-abertura';
 
 type AnexoDraft = { dataUrl: string; mimeType: string; nome: string };
 
@@ -27,17 +35,36 @@ export function ChamadoHistoricoForm({
     const files = event.target.files;
     if (!files?.length) return;
 
-    const next: AnexoDraft[] = [];
+    const aceitos: AnexoDraft[] = [];
+    let atuais: AnexoAberturaDraft[] = anexos.map((item) => ({
+      id: item.nome,
+      nome: item.nome,
+      mimeType: item.mimeType,
+      dataUrl: item.dataUrl,
+      categoria: item.mimeType === 'application/pdf' ? 'pdf' : 'imagem',
+    }));
     for (const file of Array.from(files)) {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      next.push({ dataUrl, mimeType: file.type || 'application/octet-stream', nome: file.name });
+      const erro = mensagemArquivoAbertura(file, atuais).replace(' na abertura', '');
+      if (erro) {
+        snackbar.show(
+          erro.startsWith('Formato não permitido')
+            ? `Formato não permitido. Formatos permitidos: ${ANEXOS_ABERTURA_FORMATOS}.`
+            : erro,
+          'warning',
+        );
+        continue;
+      }
+      const mimeType = mimeDeArquivo(file);
+      if (!mimeType) continue;
+      const dataUrl = await lerArquivoComoDataUrl(file);
+      const anexo = { dataUrl, mimeType, nome: file.name };
+      aceitos.push(anexo);
+      atuais = [
+        ...atuais,
+        { id: file.name, nome: file.name, mimeType, dataUrl, categoria: mimeType === 'application/pdf' ? 'pdf' : 'imagem' },
+      ];
     }
-    setAnexos((current) => [...current, ...next]);
+    if (aceitos.length) setAnexos((current) => [...current, ...aceitos]);
     event.target.value = '';
   }
 
@@ -94,10 +121,11 @@ export function ChamadoHistoricoForm({
         <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-[var(--r-sm)] border border-[var(--line)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-2)] hover:bg-[var(--surface)]">
           <Paperclip className="h-3.5 w-3.5" />
           Anexar arquivos
-          <input type="file" multiple accept="image/*,.pdf,.doc,.docx" className="hidden" onChange={onPickFiles} disabled={busy || disabled} />
+          <input type="file" multiple accept={ANEXOS_ABERTURA_ACCEPT} className="hidden" onChange={onPickFiles} disabled={busy || disabled} />
         </label>
         {anexos.length > 0 ? <span className="text-[12px] text-[var(--ink-3)]">{anexos.length} anexo(s)</span> : null}
       </div>
+      <p className="text-[12px] text-[var(--ink-3)]">Formatos permitidos: {ANEXOS_ABERTURA_FORMATOS}.</p>
       <div className="flex flex-wrap gap-2">
         <Button type="submit" variant="filled" size="sm" disabled={busy || disabled}>
           Salvar histórico

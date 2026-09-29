@@ -1204,3 +1204,23 @@ model BackupS3Config {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 }
+
+/// Configuração única de envio de e-mail do SIGMA. A senha fica criptografada e não volta na API.
+model ConfiguracaoEmail {
+  id               String   @id @default("default")
+  ativo            Boolean  @default(false)
+  remetenteEmail   String?
+  remetenteNome    String?
+  replyTo          String?
+  smtpHost         String?
+  smtpPort         Int      @default(587)
+  /// NENHUMA | SSL | TLS
+  seguranca        String   @default("TLS")
+  usarAutenticacao Boolean  @default(true)
+  usuario          String?
+  senhaEnc         String?
+  assuntoEquipe    String?
+  textoIntroEquipe String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}

@@ -19,7 +19,9 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { cn } from '@/lib/cn';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
-import { listAdminSecretarias, listChecklists, listTiposChamadoOpcoes, saveChecklist } from '@/lib/api';
+import { listChecklistSecretarias, listChecklists, listTiposChamadoOpcoes, saveChecklist } from '@/lib/api';
+import { hasChecklistAccess, isAdministradorSistemaAtivo } from '@/lib/permissions-matrix';
+import { useSessionUser } from '@/components/auth/session-context';
 import { formatChecklistVinculo } from '@/lib/unidade-tipo';
 import { AdminSecretaria, ChecklistModel, TipoChamadoOpcao } from '@/lib/types';
 
@@ -42,6 +44,9 @@ function tipoBadgeVariant(tipo: string): 'info' | 'warning' | 'neutral' {
 
 export default function ChecklistsPage() {
   const router = useRouter();
+  const sessionUser = useSessionUser();
+  const podeInserir =
+    isAdministradorSistemaAtivo(sessionUser) || hasChecklistAccess(sessionUser?.permissoes ?? [], 'inserir');
   const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
   const [checklists, setChecklists] = useState<ChecklistModel[]>([]);
@@ -58,7 +63,7 @@ export default function ChecklistsPage() {
     try {
       const [nextChecklists, nextSecretarias, nextTipos] = await Promise.all([
         listChecklists(),
-        listAdminSecretarias(),
+        listChecklistSecretarias(),
         listTiposChamadoOpcoes().catch(() => [] as TipoChamadoOpcao[]),
       ]);
       setChecklists(nextChecklists);
@@ -103,10 +108,12 @@ export default function ChecklistsPage() {
         description="Modelos versionados para vistoria e perguntas complementares na execução de chamados."
         backHref={backHref}
         action={
+          podeInserir ? (
           <Button variant="filled" size="md" className="gap-1.5" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
             Criar
           </Button>
+          ) : null
         }
       >
         <TipBanner id="checklists-versionamento">

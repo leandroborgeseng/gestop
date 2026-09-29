@@ -33,6 +33,8 @@ import {
 } from './chamado-visibilidade';
 import {
   extensaoDeMime,
+  MAX_ANEXOS_ABERTURA,
+  MAX_TOTAL_ANEXOS_ABERTURA_BYTES,
   metadataAbertura,
   normalizarAnexosAbertura,
   origemEvidencia,
@@ -62,7 +64,7 @@ import {
   isPdfRenderableImage,
   type ChamadoDetalhePdfAnexo,
 } from './chamados-detail-pdf';
-import { sendChamadoEquipeNotificacao } from './chamados-notificacao';
+import { mensagemEmailNaoConfigurado } from '../email/email-transport';
 import {
   buildAtribuicaoAlteracoes,
   buildAberturaAlteracoes,
@@ -462,8 +464,17 @@ export class ChamadosService {
       return a.equipe.nome.localeCompare(b.equipe.nome, 'pt-BR');
     });
 
+    const equipeIds = chamados.map((item) => item.equipeId).filter((id): id is string => Boolean(id));
+    const minhas = equipeIds.length
+      ? await this.prisma.equipeUsuario.findMany({
+          where: { usuarioId: user.sub, equipeId: { in: equipeIds } },
+          select: { equipeId: true },
+        })
+      : [];
+
     return {
       total: chamados.length,
+      minhasEquipeIds: [...new Set(minhas.map((item) => item.equipeId))],
       grupos: grupos.map((grupo) => ({
         ...grupo,
         chamados: grupo.chamados.map((item) => this.serializeChamado(item)),
@@ -2341,13 +2352,21 @@ export class ChamadosService {
     assertChamadoSecretariaAccess(user, chamado);
 
     const anexosInput = dto.anexos ?? [];
+    if (anexosInput.length > MAX_ANEXOS_ABERTURA) {
+      throw new BadRequestException(`É possível anexar no máximo ${MAX_ANEXOS_ABERTURA} arquivos.`);
+    }
     const evidenciaIds: string[] = [];
     const storedKeys: string[] = [];
+    let totalBytes = 0;
 
     try {
       for (const anexo of anexosInput) {
-        const stored = await this.storageService.persistEvidenceUrl(anexo.dataUrl.trim(), anexo.mimeType);
+        const stored = await this.storageService.persistAberturaAnexo(anexo.dataUrl.trim(), anexo.mimeType);
         storedKeys.push(stored.storageKey);
+        totalBytes += stored.tamanhoBytes;
+        if (totalBytes > MAX_TOTAL_ANEXOS_ABERTURA_BYTES) {
+          throw new BadRequestException('O total dos anexos passa de 20 MB.');
+        }
         const isImage = (stored.mimeType ?? anexo.mimeType ?? '').startsWith('image/');
         const evidencia = await this.prisma.evidencia.create({
           data: {
@@ -2422,7 +2441,7 @@ export class ChamadosService {
     ].filter(Boolean) as string[];
 
     if (to.length === 0) {
-      throw new BadRequestException('Equipe sem e-mail configurado ou membros com e-mail.');
+      throw new BadRequestException('Não há e-mails vinculados à equipe.');
     }
 
     const baseUrl =
@@ -2438,13 +2457,22 @@ export class ChamadosService {
     const serialized = this.serializeChamado(chamado);
     const fotos = [serialized.fotoUrl].filter(Boolean) as string[];
 
+    const template = await this.emailService.getEquipeTemplate();
     const result = await sendChamadoEquipeNotificacao(this.emailService, {
       to,
       cc: secretaria?.responsavelEmail ? [secretaria.responsavelEmail] : undefined,
+      subject: template.subject,
+      intro: template.intro,
       chamado: {
         codigo: chamado.codigo,
+        tipo: chamado.tipoChamado?.nome ?? 'Não informado',
         descricao: chamado.descricao,
         endereco,
+        prioridade: chamado.prioridade,
+        status: chamado.status,
+        secretaria: chamado.secretaria?.nome ?? 'Não informada',
+        equipe: equipe.nome,
+        responsavel: chamado.responsavel?.nome ?? 'Não definido',
         prazoSla: formatDateBr(chamado.prazoEm),
         link,
         fotos,
@@ -2459,11 +2487,19 @@ export class ChamadosService {
         entidadeId: id,
         valorNovo: {
           acao: 'notificar_equipe',
-          delivered: result.delivered,
+          delivered: result.delivered && result.driver !== 'log',
           driver: 'driver' in result ? result.driver : undefined,
         },
       },
     });
+
+    if (!result.delivered || result.driver === 'log') {
+      throw new BadRequestException(
+        result.driver === 'log'
+          ? mensagemEmailNaoConfigurado()
+          : result.detail || 'Não foi possível enviar a notificação.',
+      );
+    }
 
     return result;
   }
@@ -3624,6 +3660,12 @@ export class ChamadosService {
     metadata: unknown;
   }) {
     const storageKey = evidencia.storageKey ?? extractStorageKeyFromUrl(evidencia.url);
+    const meta =
+      evidencia.metadata && typeof evidencia.metadata === 'object' && evidencia.metadata !== null
+        ? (evidencia.metadata as { descricao?: string; nome?: string; nomeOriginal?: string })
+        : null;
+    const nomeArquivo = meta?.nome?.trim() || meta?.nomeOriginal?.trim() || null;
+    const descricao = meta?.descricao?.trim() || nomeArquivo;
 
     return {
       id: evidencia.id,
@@ -3636,10 +3678,8 @@ export class ChamadosService {
       longitude: evidencia.longitude != null ? Number(evidencia.longitude) : null,
       precisaoMetros: evidencia.precisaoMetros != null ? Number(evidencia.precisaoMetros) : null,
       capturadaEm: evidencia.capturadaEm.toISOString(),
-      descricao:
-        evidencia.metadata && typeof evidencia.metadata === 'object' && evidencia.metadata !== null && 'descricao' in evidencia.metadata
-          ? String((evidencia.metadata as { descricao?: string }).descricao ?? '')
-          : null,
+      descricao,
+      nome: nomeArquivo,
     };
   }
 

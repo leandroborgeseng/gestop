@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, FileText, X } from 'lucide-react';
 import { AuthenticatedImage } from '@/components/ui/authenticated-image';
 import { Button } from '@/components/ui/button';
-import { fetchAuthenticatedStorageBlob } from '@/lib/storage-url';
+import { baixarStorageAutenticado } from '@/lib/storage-url';
 import { cn } from '@/lib/cn';
 
 export type ChamadoAnexoAberturaView = {
@@ -62,20 +62,7 @@ export function ChamadoAnexosAberturaView({
   const duasImagens = imagens.length === 2;
 
   async function abrirPdf(url: string, nome: string) {
-    const blob = await fetchAuthenticatedStorageBlob(url);
-    if (!blob) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    const objectUrl = URL.createObjectURL(blob);
-    const aba = window.open(objectUrl, '_blank', 'noopener,noreferrer');
-    if (!aba) {
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = nome || 'documento.pdf';
-      link.click();
-    }
-    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    await baixarStorageAutenticado(url, nome);
   }
 
   return (

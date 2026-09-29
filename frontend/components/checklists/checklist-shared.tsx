@@ -392,6 +392,9 @@ export function ChecklistHeader({
   onNewVersion,
   onDeactivate,
   onUpdateBinding,
+  onFinalidadesChange,
+  podeAlterar = true,
+  podeExcluir = true,
 }: {
   checklist: ChecklistModel;
   secretarias: AdminSecretaria[];
@@ -399,6 +402,9 @@ export function ChecklistHeader({
   onNewVersion: () => void;
   onDeactivate: () => void;
   onUpdateBinding: (payload: Record<string, unknown>) => void;
+  onFinalidadesChange?: (finalidades: Array<'VISTORIA' | 'CHAMADO' | 'DOCUMENTO_AVULSO'>) => void;
+  podeAlterar?: boolean;
+  podeExcluir?: boolean;
 }) {
   const resolvedFinalidades = (checklist.finalidades?.length
     ? checklist.finalidades
@@ -415,6 +421,10 @@ export function ChecklistHeader({
   const [formError, setFormError] = useState<string | null>(null);
   const usaVistoria = finalidades.includes('VISTORIA');
   const usaChamado = finalidades.includes('CHAMADO');
+
+  useEffect(() => {
+    onFinalidadesChange?.(finalidades);
+  }, [finalidades, onFinalidadesChange]);
 
   useEffect(() => {
     if (editOpen) {
@@ -486,19 +496,32 @@ export function ChecklistHeader({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="tonal" size="sm" onClick={() => setEditOpen(true)}>
-              Editar vínculo
-            </Button>
-            <Button variant="tonal" size="sm" onClick={onNewVersion}>
-              Nova versão
-            </Button>
-            <Button variant="text" size="sm" className="text-red-700" onClick={onDeactivate}>
-              Inativar
-            </Button>
+            {podeAlterar ? (
+              <Button variant="tonal" size="sm" onClick={() => setEditOpen(true)}>
+                Editar vínculo
+              </Button>
+            ) : null}
+            {podeAlterar ? (
+              <Button variant="tonal" size="sm" onClick={onNewVersion}>
+                Nova versão
+              </Button>
+            ) : null}
+            {podeExcluir ? (
+              <Button variant="text" size="sm" className="text-red-700" onClick={onDeactivate}>
+                Inativar
+              </Button>
+            ) : null}
           </div>
         </CardContent>
       </Card>
-      <Sheet open={editOpen} onClose={() => setEditOpen(false)} title="Vínculo do checklist">
+      <Sheet
+        open={editOpen}
+        onClose={() => {
+          setFinalidades(resolvedFinalidades);
+          setEditOpen(false);
+        }}
+        title="Vínculo do checklist"
+      >
         <form onSubmit={submitBinding} className="space-y-4">
           <Field label="Finalidades de uso">
             <div className="space-y-1.5 rounded-[var(--r-md)] border border-[var(--line)] p-2">
@@ -570,7 +593,14 @@ export function ChecklistHeader({
             <Button type="submit" variant="filled" className="flex-1">
               Salvar vínculo
             </Button>
-            <Button type="button" variant="text" onClick={() => setEditOpen(false)}>
+            <Button
+              type="button"
+              variant="text"
+              onClick={() => {
+                setFinalidades(resolvedFinalidades);
+                setEditOpen(false);
+              }}
+            >
               Cancelar
             </Button>
           </div>
@@ -686,11 +716,13 @@ export function VersionEditor({
 }: {
   version: ChecklistVersao;
   categorias: AdminCategoriaVistoria[];
-  finalidade?: 'VISTORIA' | 'CHAMADO';
+  finalidade?: 'VISTORIA' | 'CHAMADO' | 'DOCUMENTO_AVULSO';
   onSave: (items: Array<Omit<ItemDraft, 'draftKey'>>) => void;
   onPublish: (items: Array<Omit<ItemDraft, 'draftKey'>>) => void;
 }) {
   const isChamado = finalidade === 'CHAMADO';
+  const isDocumentoAvulso = finalidade === 'DOCUMENTO_AVULSO';
+  const semAvaliacao = isChamado || isDocumentoAvulso;
   const defaultCategoriaId = categorias.find((item) => item.ativo)?.id ?? categorias[0]?.id ?? '';
   const availableTipos = isChamado ? tiposItem.filter((tipo) => tipo !== 'ESCALA_LIKERT') : tiposItem;
   const [items, setItems] = useState<ItemDraft[]>(
@@ -702,32 +734,34 @@ export function VersionEditor({
           titulo: item.titulo,
           tipo: item.tipo,
           obrigatorio: item.obrigatorio,
-          geraNaoConformidade: isChamado ? false : item.geraNaoConformidade,
+          geraNaoConformidade: semAvaliacao ? false : item.geraNaoConformidade,
           exigeEvidencia: item.exigeEvidencia,
-          categoriaVistoriaId: isChamado ? '' : item.categoriaVistoriaId ?? defaultCategoriaId,
+          categoriaVistoriaId: semAvaliacao ? '' : item.categoriaVistoriaId ?? defaultCategoriaId,
           opcoes: item.opcoes ?? defaultOpcoesForTipo(item.tipo),
         }))
-      : [emptyItem(1, isChamado ? '' : defaultCategoriaId, isChamado)],
+      : [emptyItem(1, semAvaliacao ? '' : defaultCategoriaId, semAvaliacao)],
   );
   const [editorError, setEditorError] = useState<string | null>(null);
 
   function prepareItems() {
     return items.map(({ draftKey: _draftKey, ...item }) => ({
       ...item,
-      geraNaoConformidade: isChamado ? false : item.geraNaoConformidade,
-      categoriaVistoriaId: isChamado ? '' : item.categoriaVistoriaId,
-      opcoes: serializeItemOpcoes(item.tipo, item.opcoes),
+      geraNaoConformidade: semAvaliacao ? false : item.geraNaoConformidade,
+      categoriaVistoriaId: semAvaliacao ? '' : item.categoriaVistoriaId,
+      opcoes: serializeItemOpcoes(item.tipo, item.opcoes, { semAvaliacao: isDocumentoAvulso }),
     }));
   }
 
   function validateItems(prepared: Array<Omit<ItemDraft, 'draftKey'>>) {
     const codes = new Set<string>();
     for (const item of prepared) {
-      const opcoesError = validateItemOpcoes(item.tipo, item.opcoes, item.titulo, item.codigo);
+      const opcoesError = validateItemOpcoes(item.tipo, item.opcoes, item.titulo, item.codigo, {
+        ignorarAvaliacao: isDocumentoAvulso,
+      });
       if (opcoesError) return opcoesError;
       if (!item.titulo.trim()) return `Item #${item.ordem}: informe o título.`;
       if (!item.codigo.trim()) return `Item #${item.ordem}: informe o código.`;
-      if (!isChamado && !item.categoriaVistoriaId?.trim()) {
+      if (!semAvaliacao && !item.categoriaVistoriaId?.trim()) {
         return `Item #${item.ordem}: selecione a categoria de vistoria.`;
       }
       const normalizedCode = item.codigo.trim().toUpperCase();
@@ -762,7 +796,7 @@ export function VersionEditor({
   function handleAddItem() {
     setItems((current) => [
       ...current,
-      emptyItem(current.length + 1, isChamado ? '' : defaultCategoriaId, isChamado),
+      emptyItem(current.length + 1, semAvaliacao ? '' : defaultCategoriaId, semAvaliacao),
     ]);
   }
 
@@ -815,7 +849,7 @@ export function VersionEditor({
                   ))}
                 </Select>
               </Field>
-              {!isChamado ? (
+              {!semAvaliacao ? (
                 <Field label="Categoria de vistoria">
                   <Select
                     value={item.categoriaVistoriaId}
@@ -839,7 +873,7 @@ export function VersionEditor({
                 />
                 Obrigatório
               </label>
-              {!isChamado ? (
+              {!semAvaliacao ? (
                 <label className="flex min-h-11 items-center gap-2 md-label-lg">
                   <input
                     type="checkbox"
@@ -864,12 +898,12 @@ export function VersionEditor({
             {item.tipo === 'MULTIPLA_ESCOLHA' ? (
               <MultiplaEscolhaEditor
                 opcoes={item.opcoes}
-                simplified={isChamado}
+                simplified={semAvaliacao}
                 onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
               />
             ) : null}
             {item.tipo === 'BOOLEANO' ? (
-              isChamado ? null : (
+              semAvaliacao ? null : (
                 <BooleanoOpcoesEditor
                   opcoes={item.opcoes}
                   onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
@@ -879,6 +913,7 @@ export function VersionEditor({
             {item.tipo === 'ESCALA_LIKERT' && !isChamado ? (
               <LikertOpcoesEditor
                 opcoes={item.opcoes}
+                simplified={isDocumentoAvulso}
                 onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
               />
             ) : null}
@@ -1099,9 +1134,11 @@ function BooleanoOpcoesEditor({
 function LikertOpcoesEditor({
   opcoes,
   onChange,
+  simplified = false,
 }: {
   opcoes: unknown;
   onChange: (opcoes: unknown) => void;
+  simplified?: boolean;
 }) {
   const config = parseLikertConfig(opcoes);
   const selected = new Set(config.opcoes.niveis);
@@ -1139,18 +1176,20 @@ function LikertOpcoesEditor({
         </Button>
       </div>
       <p className="text-[13px] text-[var(--md-on-surface-variant)]">
-        Níveis padronizados com pontuação de 0 a 10 (5 = neutro). Escolha quais aparecem na vistoria.
+        {simplified
+          ? 'Escolha quais níveis aparecem no documento.'
+          : 'Níveis padronizados com pontuação de 0 a 10 (5 = neutro). Escolha quais aparecem na vistoria.'}
       </p>
-      <LikertScale opcoes={config.opcoes} preview />
+      {simplified ? null : <LikertScale opcoes={config.opcoes} preview />}
       <div className="overflow-hidden rounded-[var(--md-shape-md)] border border-[var(--line-2)]">
         <table className="w-full text-left text-[13px]">
           <thead className="bg-[var(--surface-2)] text-[11px] font-bold uppercase tracking-wide text-[var(--ink-3)]">
             <tr>
               <th className="px-3 py-2">Usar</th>
               <th className="px-3 py-2">Nível</th>
-              <th className="px-3 py-2">Categoria</th>
-              <th className="px-3 py-2">Pontuação</th>
-              <th className="px-3 py-2">Conformidade</th>
+              {simplified ? null : <th className="px-3 py-2">Categoria</th>}
+              {simplified ? null : <th className="px-3 py-2">Pontuação</th>}
+              {simplified ? null : <th className="px-3 py-2">Conformidade</th>}
             </tr>
           </thead>
           <tbody>
@@ -1166,8 +1205,11 @@ function LikertOpcoesEditor({
                     />
                   </td>
                   <td className="px-3 py-2 font-semibold text-[var(--ink)]">{nivel.label}</td>
-                  <td className="px-3 py-2 text-[var(--ink-2)]">{LIKERT_CATEGORIA_LABELS[nivel.categoria]}</td>
-                  <td className="px-3 py-2 font-mono text-[var(--ink-2)]">{nivel.pontuacao}/10</td>
+                  {simplified ? null : (
+                    <td className="px-3 py-2 text-[var(--ink-2)]">{LIKERT_CATEGORIA_LABELS[nivel.categoria]}</td>
+                  )}
+                  {simplified ? null : <td className="px-3 py-2 font-mono text-[var(--ink-2)]">{nivel.pontuacao}/10</td>}
+                  {simplified ? null : (
                   <td className="px-3 py-2">
                     <Select
                       value={conformidadeAtual(id)}
@@ -1182,6 +1224,7 @@ function LikertOpcoesEditor({
                       <option value="NAO_CONFORME">Não conforme</option>
                     </Select>
                   </td>
+                  )}
                 </tr>
               );
             })}

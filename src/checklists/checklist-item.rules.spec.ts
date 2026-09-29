@@ -117,4 +117,29 @@ describe('checklist-item.rules', () => {
       ]),
     ).toThrow('Codigo duplicado');
   });
+
+  it('documento avulso exclusivo aceita multipla escolha sem nota e sem categoria', () => {
+    expect(() =>
+      assertValidChecklistVersionItems(
+        [
+          {
+            ordem: 1,
+            codigo: 'P1',
+            titulo: 'Tipo de vistoria solicitada',
+            tipo: ChecklistItemTipo.MULTIPLA_ESCOLHA,
+            obrigatorio: true,
+            geraNaoConformidade: false,
+            exigeEvidencia: false,
+            categoriaVistoriaId: '',
+            opcoes: {
+              opcoes: ['A', 'B', 'C', 'D', 'E'],
+              notas: [null, null, null, null, null],
+              modoExibicao: 'SELECT',
+            },
+          },
+        ],
+        { finalidadeDocumentoAvulso: true },
+      ),
+    ).not.toThrow();
+  });
 });

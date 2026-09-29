@@ -135,7 +135,7 @@ export type ChamadoHistoricoEntry = {
   createdAt: string;
   alteradoPor?: { nome: string } | null;
   metadata?: Record<string, unknown> | null;
-  anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null }>;
+  anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null; nome?: string | null }>;
 };
 
 function formatTimelineDate(value?: string | null) {
@@ -147,7 +147,7 @@ function mapHistoricoAnexos(entry: ChamadoHistoricoEntry) {
     id: item.id,
     url: item.url,
     mimeType: item.mimeType,
-    nome: item.descricao,
+    nome: item.nome ?? item.descricao,
   }));
 }
 
