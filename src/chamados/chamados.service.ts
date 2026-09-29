@@ -42,6 +42,8 @@ import {
 } from './chamado-anexos-abertura';
 import { StorageService } from '../storage/storage.service';
 import { extractStorageKeyFromUrl, resolveStoragePublicUrl } from '../storage/storage-url';
+import { shrinkImageForPdf } from '../storage/pdf-image';
+import { mapPool } from '../common/map-pool';
 import {
   CreateChamadoDto,
   PublicCreateChamadoDto,
@@ -146,7 +148,7 @@ export class ChamadosService {
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
-        include: this.includeRelations(),
+        include: this.includeRelations('lista'),
       }),
       this.prisma.chamado.count({ where }),
       this.prisma.chamado.groupBy({
@@ -303,7 +305,7 @@ export class ChamadosService {
         orderBy: { createdAt: 'desc' },
         take: limit,
         skip: offset,
-        include: this.includeRelations(),
+        include: this.includeRelations('meus'),
       }),
       this.prisma.chamado.count({ where }),
     ]);
@@ -431,7 +433,7 @@ export class ChamadosService {
           : resolveChamadoSecretariaFilter(user)),
       },
       orderBy: [{ equipe: { nome: 'asc' } }, { prioridade: 'desc' }, { createdAt: 'asc' }],
-      include: this.includeRelations(),
+      include: this.includeRelations('lista'),
     });
 
     const gruposMap = new Map<
@@ -607,13 +609,13 @@ export class ChamadosService {
         },
         orderBy: [{ previstaExecucaoEm: 'asc' }, { prioridade: 'desc' }, { createdAt: 'asc' }],
         take: 2000,
-        include: this.includeRelations(),
+        include: this.includeRelations('lista'),
       }),
       this.prisma.chamado.findMany({
         where: pendentesWhere,
         orderBy: [{ prioridade: 'desc' }, { createdAt: 'asc' }],
         take: 500,
-        include: this.includeRelations(),
+        include: this.includeRelations('lista'),
       }),
       this.prisma.chamado.count({ where: pendentesWhere }),
     ]);
@@ -699,11 +701,11 @@ export class ChamadosService {
         return { ...base, renderError: 'Arquivo anexado não renderizável no PDF' };
       }
 
-      const loaded = await this.storageService.readObjectBuffer(storageKey, mimeType);
+      const loaded = await this.loadPdfImage(storageKey, mimeType);
       if (!loaded?.buffer.length) {
         return { ...base, renderError: 'Arquivo anexado não renderizável no PDF' };
       }
-      return { ...base, imageBuffer: loaded.buffer, mimeType: loaded.mimeType || mimeType };
+      return { ...base, imageBuffer: loaded.buffer, mimeType: loaded.mimeType };
     };
 
     const historico = await Promise.all(
@@ -755,7 +757,7 @@ export class ChamadosService {
         continue;
       }
       const storageKey = extractStorageKeyFromUrl(anexo.url);
-      const loaded = storageKey ? await this.storageService.readObjectBuffer(storageKey, anexo.mimeType) : null;
+      const loaded = storageKey ? await this.loadPdfImage(storageKey, anexo.mimeType) : null;
       anexosAberturaPdf.push({
         id: anexo.id,
         legenda: anexo.nome,
@@ -773,10 +775,10 @@ export class ChamadosService {
       orderBy: { capturadaEm: 'asc' },
     });
     const anexosSoltos = (
-      await Promise.all(
-        todasEvidencias
-          .filter((item) => !usedEvidenciaIds.has(item.id))
-          .map((item) => {
+      await mapPool(
+        todasEvidencias.filter((item) => !usedEvidenciaIds.has(item.id)),
+        3,
+        (item) => {
             const serialized = this.serializeEvidencia(item);
             const origem =
               item.metadata && typeof item.metadata === 'object' && item.metadata !== null && 'origem' in item.metadata
@@ -790,7 +792,7 @@ export class ChamadosService {
                   ? 'Evidência de não conformidade'
                   : 'Anexo do chamado';
             return resolveAnexo(serialized, legenda);
-          }),
+        },
       )
     ).filter((item): item is ChamadoDetalhePdfAnexo => item != null);
 
@@ -2233,7 +2235,7 @@ export class ChamadosService {
       const storageKey = evidencia.storageKey ?? extractStorageKeyFromUrl(evidencia.url);
       let imageBuffer: Buffer | null = null;
       if (storageKey && isPdfRenderableImage(evidencia.mimeType)) {
-        const loaded = await this.storageService.readObjectBuffer(storageKey, evidencia.mimeType);
+        const loaded = await this.loadPdfImage(storageKey, evidencia.mimeType);
         imageBuffer = loaded?.buffer ?? null;
       }
       const meta = (evidencia.metadata ?? {}) as { nome?: string; descricao?: string };
@@ -2326,11 +2328,12 @@ export class ChamadosService {
       }
       const mimeType = match[1];
       const imageBuffer = Buffer.from(match[2], 'base64');
+      const preparado = isPdfRenderableImage(mimeType) ? await shrinkImageForPdf(imageBuffer, mimeType) : null;
       return {
         legenda,
-        mimeType,
+        mimeType: preparado?.mimeType ?? mimeType,
         nomeArquivo: null,
-        imageBuffer: isPdfRenderableImage(mimeType) ? imageBuffer : null,
+        imageBuffer: preparado?.buffer ?? null,
       };
     }
 
@@ -2338,14 +2341,21 @@ export class ChamadosService {
     if (!storageKey) {
       return { legenda, mimeType: null, nomeArquivo: trimmed.split('/').pop() ?? null, imageBuffer: null };
     }
-    const loaded = await this.storageService.readObjectBuffer(storageKey);
+    const loaded = await this.loadPdfImage(storageKey);
     return {
       legenda,
       mimeType: loaded?.mimeType ?? null,
       nomeArquivo: storageKey.split('/').pop() ?? null,
-      imageBuffer:
-        loaded?.buffer && isPdfRenderableImage(loaded.mimeType) ? loaded.buffer : null,
+      imageBuffer: loaded?.buffer ?? null,
     };
+  }
+
+  private async loadPdfImage(storageKey: string, mimeType?: string | null) {
+    const loaded = await this.storageService.readObjectBuffer(storageKey, mimeType);
+    if (!loaded?.buffer.length) return null;
+    const mime = loaded.mimeType || mimeType || '';
+    if (!isPdfRenderableImage(mime)) return null;
+    return shrinkImageForPdf(loaded.buffer, mime);
   }
 
   async registrarHistorico(id: string, dto: RegistrarChamadoHistoricoDto, user: JwtPayload) {
@@ -2875,8 +2885,8 @@ export class ChamadosService {
     return chamado;
   }
 
-  private includeRelations() {
-    return {
+  private includeRelations(modo: 'completo' | 'lista' | 'meus' = 'completo') {
+    const relacoes = {
       secretaria: { select: { id: true, nome: true, sigla: true } },
       unidade: {
         select: {
@@ -2921,6 +2931,15 @@ export class ChamadosService {
           },
         },
         orderBy: { capturadaEm: 'asc' as const },
+        select: {
+          id: true,
+          url: true,
+          storageKey: true,
+          mimeType: true,
+          tamanhoBytes: true,
+          capturadaEm: true,
+          metadata: true,
+        },
       },
       naoConformidade: {
         select: {
@@ -2932,6 +2951,16 @@ export class ChamadosService {
         },
       },
     };
+
+    if (modo === 'lista') {
+      const { observadores: _observadores, evidencias: _evidencias, ...lista } = relacoes;
+      return lista;
+    }
+    if (modo === 'meus') {
+      const { evidencias: _evidencias, ...meus } = relacoes;
+      return meus;
+    }
+    return relacoes;
   }
 
   private assertMeuChamadoAccess(

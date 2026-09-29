@@ -691,6 +691,10 @@ export function listChecklists() {
   return request<ChecklistModel[]>('/checklists');
 }
 
+export function getChecklist(id: string) {
+  return request<ChecklistModel>(`/checklists/${id}`);
+}
+
 export function listChecklistSecretarias() {
   return request<AdminSecretaria[]>('/checklists/secretarias');
 }

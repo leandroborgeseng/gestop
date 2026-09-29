@@ -23,7 +23,7 @@ import {
   deactivateChecklist,
   listAdminCategoriasVistoria,
   listChecklistSecretarias,
-  listChecklists,
+  getChecklist,
   listTiposChamadoOpcoes,
   publishChecklistVersion,
   saveChecklist,
@@ -77,13 +77,12 @@ export default function ChecklistDetalhePage() {
     setLoading(true);
     setError(null);
     try {
-      const [checklists, nextSecretarias, nextCategorias, nextTipos] = await Promise.all([
-        listChecklists(),
+      const [found, nextSecretarias, nextCategorias, nextTipos] = await Promise.all([
+        getChecklist(params.id),
         listChecklistSecretarias(),
         listAdminCategoriasVistoria().catch(() => [] as AdminCategoriaVistoria[]),
         listTiposChamadoOpcoes().catch(() => [] as TipoChamadoOpcao[]),
       ]);
-      const found = checklists.find((item) => item.id === params.id) ?? null;
       setSecretarias(nextSecretarias);
       setCategorias(nextCategorias);
       setTiposChamado(nextTipos);

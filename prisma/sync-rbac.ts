@@ -225,27 +225,26 @@ async function ensureAdministradorFacef(prisma: PrismaClient) {
   }
 
   const email = 'admin@facef.br';
-  const senhaHash = hashPassword('Lean1234$');
-  const usuario = await prisma.usuario.upsert({
-    where: { email },
-    update: {
-      nome: 'Administrador FACEF',
-      ativo: true,
-      senhaHash,
-      cargo: 'Administrador do Sistema',
-      perfilAtivoId: perfil.id,
-      acessoTodasSecretarias: true,
-    },
-    create: {
-      nome: 'Administrador FACEF',
-      email,
-      senhaHash,
-      cargo: 'Administrador do Sistema',
-      perfilAtivoId: perfil.id,
-      acessoTodasSecretarias: true,
-      ativo: true,
-    },
-  });
+  const existente = await prisma.usuario.findUnique({ where: { email }, select: { id: true } });
+  const usuario = existente
+    ? await prisma.usuario.update({
+        where: { id: existente.id },
+        data: {
+          perfilAtivoId: perfil.id,
+          acessoTodasSecretarias: true,
+        },
+      })
+    : await prisma.usuario.create({
+        data: {
+          nome: 'Administrador FACEF',
+          email,
+          senhaHash: hashPassword('Lean1234$'),
+          cargo: 'Administrador do Sistema',
+          perfilAtivoId: perfil.id,
+          acessoTodasSecretarias: true,
+          ativo: true,
+        },
+      });
 
   await prisma.usuarioPerfil.upsert({
     where: {

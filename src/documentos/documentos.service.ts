@@ -24,6 +24,7 @@ import { validateChecklistResponses } from '../domain/checklist-response.rules';
 import { resolveMeusChamadosTimelineCaps } from '../chamados/meus-chamados-timeline.permissions';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { shrinkImageForPdf } from '../storage/pdf-image';
 import {
   buildDocumentoPdf,
   type DocumentoPdfAssinatura,
@@ -781,7 +782,9 @@ export class DocumentosService {
           assinatura.evidenciaStorageKey,
           'image/png',
         );
-        imageBuffer = loaded?.buffer ?? null;
+        imageBuffer = loaded?.buffer
+          ? (await shrinkImageForPdf(loaded.buffer, loaded.mimeType || 'image/jpeg')).buffer
+          : null;
       }
       const meta = this.asRecord(assinatura.metadata);
       assinaturasPdf.push({
@@ -1693,7 +1696,9 @@ export class DocumentosService {
       let imageBuffer: Buffer | null = null;
       if (storageKey && isPdfRenderableImage(evidencia.mimeType)) {
         const loaded = await this.storageService.readObjectBuffer(storageKey, evidencia.mimeType);
-        imageBuffer = loaded?.buffer ?? null;
+        imageBuffer = loaded?.buffer
+          ? (await shrinkImageForPdf(loaded.buffer, loaded.mimeType || 'image/jpeg')).buffer
+          : null;
       }
       const evMeta = this.asRecord(evidencia.metadata);
       evidenciasGerais.push({
@@ -1849,7 +1854,9 @@ export class DocumentosService {
             evidencia.storageKey,
             evidencia.mimeType,
           );
-          imageBuffer = loaded?.buffer ?? null;
+          imageBuffer = loaded?.buffer
+          ? (await shrinkImageForPdf(loaded.buffer, loaded.mimeType || 'image/jpeg')).buffer
+          : null;
         }
         evidencias.push({
           legenda: `Evidência ${index + 1}`,
@@ -1881,7 +1888,9 @@ export class DocumentosService {
             assinatura.evidenciaStorageKey,
             'image/png',
           );
-          imageBuffer = loaded?.buffer ?? null;
+          imageBuffer = loaded?.buffer
+          ? (await shrinkImageForPdf(loaded.buffer, loaded.mimeType || 'image/jpeg')).buffer
+          : null;
         }
         const meta = this.asRecord(assinatura.metadata);
         assinaturasPdf.push({

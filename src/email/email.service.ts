@@ -36,11 +36,12 @@ type ResolvedMail = {
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
+  private resolvedCache: { at: number; value: ResolvedMail } | null = null;
 
   constructor(@Optional() @Inject(PrismaService) private readonly prisma?: PrismaService) {}
 
   invalidate() {
-    // O transporte é criado a cada envio para refletir a configuração da tela.
+    this.resolvedCache = null;
   }
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
@@ -150,9 +151,14 @@ export class EmailService {
   }
 
   private async resolve(): Promise<ResolvedMail> {
+    const agora = Date.now();
+    if (this.resolvedCache && agora - this.resolvedCache.at < 60_000) {
+      return this.resolvedCache.value;
+    }
     const fromDb = await this.resolveFromDatabase();
-    if (fromDb) return fromDb;
-    return this.resolveFromEnv();
+    const value = fromDb ?? this.resolveFromEnv();
+    this.resolvedCache = { at: agora, value };
+    return value;
   }
 
   private async resolveFromDatabase(): Promise<ResolvedMail | null> {

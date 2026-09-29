@@ -1211,7 +1211,10 @@ function ChamadoDetailPanel({
             onChanged={onRefreshDetail}
           />
 
-          <ChamadoAnexosAberturaView anexos={resumo.anexosAbertura} fotoUrl={resumo.fotoUrl} />
+          <ChamadoAnexosAberturaView
+            anexos={detail?.id === resumo.id ? detail.anexosAbertura : resumo.anexosAbertura}
+            fotoUrl={detail?.id === resumo.id ? detail.fotoUrl : resumo.fotoUrl}
+          />
 
           {resumo.naoConformidade ? (
             <div className="rounded-[var(--r-md)] border border-[var(--brand-soft)] bg-[var(--brand-soft)] p-4">

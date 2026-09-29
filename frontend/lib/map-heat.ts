@@ -7,14 +7,22 @@ export type HeatLegend = {
 
 const CELL = 0.008;
 
+function cellKey(lat: number, lng: number) {
+  return `${Math.floor(lat / CELL)}:${Math.floor(lng / CELL)}`;
+}
+
 export function heatCellCounts(points: Array<{ lat: number; lng: number }>) {
   const counts = new Map<string, number>();
   for (const point of points) {
     if (!Number.isFinite(point.lat) || !Number.isFinite(point.lng)) continue;
-    const key = `${Math.floor(point.lat / CELL)}:${Math.floor(point.lng / CELL)}`;
+    const key = cellKey(point.lat, point.lng);
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
   return counts;
+}
+
+export function heatCountAt(counts: Map<string, number>, lat: number, lng: number) {
+  return counts.get(cellKey(lat, lng)) ?? 0;
 }
 
 export function heatLegend(points: Array<{ lat: number; lng: number }>): HeatLegend | null {
@@ -38,42 +46,23 @@ export function paintHeat(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  pixels: Array<{ x: number; y: number }>,
-  _legend: HeatLegend,
+  pixels: Array<{ x: number; y: number; count: number }>,
+  legend: HeatLegend,
 ) {
   ctx.clearRect(0, 0, width, height);
-  const cell = 42;
-  const cols = Math.max(1, Math.ceil(width / cell));
-  const rows = Math.max(1, Math.ceil(height / cell));
-  const grid = new Float32Array(cols * rows);
+  const seen = new Set<string>();
   for (const pixel of pixels) {
-    const c = Math.floor(pixel.x / cell);
-    const r = Math.floor(pixel.y / cell);
-    for (let dr = -1; dr <= 1; dr += 1) {
-      for (let dc = -1; dc <= 1; dc += 1) {
-        const cc = c + dc;
-        const rr = r + dr;
-        if (cc < 0 || rr < 0 || cc >= cols || rr >= rows) continue;
-        const weight = dr === 0 && dc === 0 ? 1 : 0.4;
-        grid[rr * cols + cc] += weight;
-      }
-    }
-  }
-  let max = 0;
-  for (const value of grid) if (value > max) max = value;
-  if (max <= 0) return;
-  for (let r = 0; r < rows; r += 1) {
-    for (let c = 0; c < cols; c += 1) {
-      const value = grid[r * cols + c];
-      if (value <= 0) continue;
-      const t = value / max;
-      const intensity = t < 0.34 ? 0.35 : t < 0.67 ? 0.65 : 1;
-      ctx.fillStyle = intensity < 0.5 ? '#fde68a' : intensity < 0.8 ? '#f97316' : '#9a3412';
-      ctx.globalAlpha = 0.28 + 0.5 * intensity;
-      ctx.beginPath();
-      ctx.arc(c * cell + cell / 2, r * cell + cell / 2, cell * 0.78, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    if (!Number.isFinite(pixel.x) || !Number.isFinite(pixel.y) || pixel.count <= 0) continue;
+    if (pixel.x < -40 || pixel.y < -40 || pixel.x > width + 40 || pixel.y > height + 40) continue;
+    const bucket = `${Math.round(pixel.x / 8)}:${Math.round(pixel.y / 8)}:${pixel.count}`;
+    if (seen.has(bucket)) continue;
+    seen.add(bucket);
+    const faixa = pixel.count <= legend.baixaAte ? 0 : pixel.count <= legend.mediaAte ? 1 : 2;
+    ctx.fillStyle = faixa === 0 ? '#fde68a' : faixa === 1 ? '#f97316' : '#9a3412';
+    ctx.globalAlpha = faixa === 0 ? 0.55 : faixa === 1 ? 0.7 : 0.82;
+    ctx.beginPath();
+    ctx.arc(pixel.x, pixel.y, faixa === 2 ? 22 : 16, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.globalAlpha = 1;
 }

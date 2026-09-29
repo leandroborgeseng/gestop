@@ -39,7 +39,18 @@ export class ChecklistsService {
       this.prisma.checklist.findMany({
         where,
         orderBy: [{ ativo: 'desc' }, { nome: 'asc' }],
-        include: checklistInclude,
+        include: {
+          ...checklistInclude,
+          versoes: {
+            orderBy: { versao: 'desc' as const },
+            include: {
+              itens: {
+                orderBy: { ordem: 'asc' as const },
+                select: { id: true, ordem: true, codigo: true, titulo: true, tipo: true },
+              },
+            },
+          },
+        },
       }),
     );
   }

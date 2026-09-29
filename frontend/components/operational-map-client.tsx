@@ -17,7 +17,7 @@ import {
   MapBasemap,
 } from '@/lib/franca-geo';
 import { hasPlottableCoordinates, toLatLngTuple } from '@/lib/geo-coordinates';
-import { heatLegend, paintHeat } from '@/lib/map-heat';
+import { heatCellCounts, heatCountAt, heatLegend, paintHeat } from '@/lib/map-heat';
 import { escapeHtml } from '@/lib/security';
 import { ChamadoMapaItem, UnidadeOperacional, UnidadeSituacao, UnidadeSlaMapa } from '@/lib/types';
 import { chamadoTitulo } from '@/lib/chamado-geo';
@@ -720,13 +720,14 @@ export function OperationalMapClient({
       const ctx = canvas.getContext('2d');
       if (ctx && legend) {
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const counts = heatCellCounts(locatedChamados.map(({ latLng }) => ({ lat: latLng[0], lng: latLng[1] })));
         paintHeat(
           ctx,
           size.x,
           size.y,
           locatedChamados.map(({ latLng }) => {
             const point = map.latLngToContainerPoint(latLng);
-            return { x: point.x, y: point.y };
+            return { x: point.x, y: point.y, count: heatCountAt(counts, latLng[0], latLng[1]) };
           }),
           legend,
         );
@@ -760,13 +761,14 @@ export function OperationalMapClient({
       const legend = heatLegend(locatedChamados.map(({ latLng }) => ({ lat: latLng[0], lng: latLng[1] })));
       if (!ctx || !legend) return;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const counts = heatCellCounts(locatedChamados.map(({ latLng }) => ({ lat: latLng[0], lng: latLng[1] })));
       paintHeat(
         ctx,
         size.x,
         size.y,
         locatedChamados.map(({ latLng }) => {
           const point = map.latLngToContainerPoint(latLng);
-          return { x: point.x, y: point.y };
+          return { x: point.x, y: point.y, count: heatCountAt(counts, latLng[0], latLng[1]) };
         }),
         legend,
       );

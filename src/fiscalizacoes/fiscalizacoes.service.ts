@@ -34,6 +34,7 @@ import { computeVistoriaNotas } from '../domain/vistoria-nota';
 import { buildFieldPackageChecklistWhere } from '../mobile/field-package';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
+import { shrinkImageForPdf } from '../storage/pdf-image';
 import { ListFiscalizacoesQueryDto } from './fiscalizacoes.dto';
 import {
   ImprimirVistoriaManualDto,
@@ -346,10 +347,11 @@ export class FiscalizacoesService {
       }
 
       const loaded = await this.storageService.readObjectBuffer(storageKey, mimeType);
-      if (!loaded?.buffer.length) {
+      const preparado = loaded?.buffer.length ? await shrinkImageForPdf(loaded.buffer, loaded.mimeType || mimeType || 'image/jpeg') : null;
+      if (!preparado?.buffer.length) {
         return { ...base, renderError: 'Arquivo anexado não renderizável no PDF' };
       }
-      return { ...base, imageBuffer: loaded.buffer, mimeType: loaded.mimeType || mimeType };
+      return { ...base, imageBuffer: preparado.buffer, mimeType: preparado.mimeType };
     };
 
     const respostas: VistoriaRealizadaPdfResposta[] = await Promise.all(
