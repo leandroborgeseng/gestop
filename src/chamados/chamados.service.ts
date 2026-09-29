@@ -778,20 +778,20 @@ export class ChamadosService {
       await mapPool(
         todasEvidencias.filter((item) => !usedEvidenciaIds.has(item.id)),
         3,
-        (item) => {
-            const serialized = this.serializeEvidencia(item);
-            const origem =
-              item.metadata && typeof item.metadata === 'object' && item.metadata !== null && 'origem' in item.metadata
-                ? String((item.metadata as { origem?: string }).origem ?? '')
-                : '';
-            if (origem === 'abertura') return null;
-            const legenda =
-              origem === 'execucao_campo' || origem === 'execucao_manual'
-                ? 'Evidência da execução'
-                : origem === 'nao_conformidade'
-                  ? 'Evidência de não conformidade'
-                  : 'Anexo do chamado';
-            return resolveAnexo(serialized, legenda);
+        async (item) => {
+          const serialized = this.serializeEvidencia(item);
+          const origem =
+            item.metadata && typeof item.metadata === 'object' && item.metadata !== null && 'origem' in item.metadata
+              ? String((item.metadata as { origem?: string }).origem ?? '')
+              : '';
+          if (origem === 'abertura') return null;
+          const legenda =
+            origem === 'execucao_campo' || origem === 'execucao_manual'
+              ? 'Evidência da execução'
+              : origem === 'nao_conformidade'
+                ? 'Evidência de não conformidade'
+                : 'Anexo do chamado';
+          return resolveAnexo(serialized, legenda);
         },
       )
     ).filter((item): item is ChamadoDetalhePdfAnexo => item != null);
@@ -2885,8 +2885,28 @@ export class ChamadosService {
     return chamado;
   }
 
+  private includeRelations(): ReturnType<ChamadosService['chamadoRelations']>;
+  private includeRelations(modo: 'completo'): ReturnType<ChamadosService['chamadoRelations']>;
+  private includeRelations(
+    modo: 'lista',
+  ): Omit<ReturnType<ChamadosService['chamadoRelations']>, 'observadores' | 'evidencias'>;
+  private includeRelations(modo: 'meus'): Omit<ReturnType<ChamadosService['chamadoRelations']>, 'evidencias'>;
   private includeRelations(modo: 'completo' | 'lista' | 'meus' = 'completo') {
-    const relacoes = {
+    const relacoes = this.chamadoRelations();
+
+    if (modo === 'lista') {
+      const { observadores: _observadores, evidencias: _evidencias, ...lista } = relacoes;
+      return lista;
+    }
+    if (modo === 'meus') {
+      const { evidencias: _evidencias, ...meus } = relacoes;
+      return meus;
+    }
+    return relacoes;
+  }
+
+  private chamadoRelations() {
+    return {
       secretaria: { select: { id: true, nome: true, sigla: true } },
       unidade: {
         select: {
@@ -2933,6 +2953,7 @@ export class ChamadosService {
         orderBy: { capturadaEm: 'asc' as const },
         select: {
           id: true,
+          tipo: true,
           url: true,
           storageKey: true,
           mimeType: true,
@@ -2951,16 +2972,6 @@ export class ChamadosService {
         },
       },
     };
-
-    if (modo === 'lista') {
-      const { observadores: _observadores, evidencias: _evidencias, ...lista } = relacoes;
-      return lista;
-    }
-    if (modo === 'meus') {
-      const { evidencias: _evidencias, ...meus } = relacoes;
-      return meus;
-    }
-    return relacoes;
   }
 
   private assertMeuChamadoAccess(
