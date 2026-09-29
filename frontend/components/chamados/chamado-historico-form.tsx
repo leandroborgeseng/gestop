@@ -44,12 +44,12 @@ export function ChamadoHistoricoForm({
       categoria: item.mimeType === 'application/pdf' ? 'pdf' : 'imagem',
     }));
     for (const file of Array.from(files)) {
-      const erro = mensagemArquivoAbertura(file, atuais).replace(' na abertura', '');
-      if (erro) {
+      const mensagem = mensagemArquivoAbertura(file, atuais);
+      if (mensagem) {
         snackbar.show(
-          erro.startsWith('Formato não permitido')
+          mensagem.startsWith('Formato não permitido')
             ? `Formato não permitido. Formatos permitidos: ${ANEXOS_ABERTURA_FORMATOS}.`
-            : erro,
+            : mensagem.replace(' na abertura', ''),
           'warning',
         );
         continue;

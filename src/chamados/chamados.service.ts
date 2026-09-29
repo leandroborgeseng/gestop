@@ -65,6 +65,7 @@ import {
   type ChamadoDetalhePdfAnexo,
 } from './chamados-detail-pdf';
 import { mensagemEmailNaoConfigurado } from '../email/email-transport';
+import { sendChamadoEquipeNotificacao } from './chamados-notificacao';
 import {
   buildAtribuicaoAlteracoes,
   buildAberturaAlteracoes,

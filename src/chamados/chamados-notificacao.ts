@@ -68,7 +68,7 @@ export async function sendChamadoEquipeNotificacao(
 ) {
   const recipients = [...new Set(input.to.map((item) => item.trim().toLowerCase()).filter(Boolean))];
   if (recipients.length === 0) {
-    return { delivered: false, detail: 'Nenhum destinatário válido' };
+    return { delivered: false, driver: 'smtp' as const, detail: 'Nenhum destinatário válido' };
   }
 
   const cc = [...new Set((input.cc ?? []).map((item) => item.trim().toLowerCase()).filter(Boolean))];
