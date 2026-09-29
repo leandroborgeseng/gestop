@@ -1390,6 +1390,8 @@ export type EmailConfigPayload = {
   assuntoEquipe?: string;
   textoIntroEquipe?: string;
 };
+
+export type BackupS3PublicConfig = {
   enabled: boolean;
   bucket: string | null;
   region: string;
