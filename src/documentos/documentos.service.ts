@@ -11,6 +11,8 @@ import {
   ChecklistFinalidade,
   ChecklistVersaoStatus,
   ConformidadeStatus,
+  ChamadoStatus,
+  ChamadoTarefaStatus,
   DocumentoAssinaturaPedidoStatus,
   DocumentoOrigem,
   DocumentoSituacao,
@@ -43,6 +45,7 @@ import {
   verifyCodigoVerificador,
 } from './documentos-validation';
 import { buildRelatorioExecucaoPdf } from './relatorio-execucao-pdf';
+import { tarefaAtrasada } from '../chamados/chamado-tarefa.regras';
 import { extractStorageKeyFromUrl } from '../storage/storage-url';
 import { isPdfRenderableImage } from '../fiscalizacoes/vistoria-realizada-pdf';
 import {
@@ -924,7 +927,7 @@ export class DocumentosService {
     const pedidos = await this.prisma.documentoAssinaturaPedido.findMany({
       where: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
       orderBy: { requestedAt: 'desc' },
-      take: 8,
+      take: 40,
       include: {
         documento: {
           select: {
@@ -940,21 +943,86 @@ export class DocumentosService {
     const total = await this.prisma.documentoAssinaturaPedido.count({
       where: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
     });
-    const itens = pedidos.map((pedido) => ({
-      id: pedido.documento.id,
-      codigo: pedido.documento.codigo,
-      titulo: pedido.documento.titulo,
-      prazo: null as string | null,
-      status: pedido.documento.situacao,
-      secretaria: pedido.documento.secretaria?.sigla ?? pedido.documento.secretaria?.nome ?? null,
-      equipe: null as string | null,
-      atrasado: false,
-      href: `/documentos?id=${pedido.documento.id}&pendentes=1`,
-    }));
-    const grupos = itens.length
-      ? [{ id: 'documentos', titulo: 'Documentos para assinatura', total, itens }]
-      : [];
-    return { total, grupos };
+    const documentos = pedidos
+      .map((pedido) => ({
+        id: pedido.documento.id,
+        codigo: pedido.documento.codigo,
+        titulo: pedido.documento.titulo,
+        prazo: null as string | null,
+        status: pedido.documento.situacao,
+        secretaria: pedido.documento.secretaria?.sigla ?? pedido.documento.secretaria?.nome ?? null,
+        equipe: null as string | null,
+        atrasado: false,
+        href: `/documentos?id=${pedido.documento.id}&pendentes=1`,
+        createdAt: pedido.requestedAt.toISOString(),
+      }))
+      .sort(ordenarPendencias);
+    const tarefasBrutas = await this.prisma.chamadoTarefa.findMany({
+      where: {
+        responsavelId: user.sub,
+        status: { in: [ChamadoTarefaStatus.NOVA, ChamadoTarefaStatus.VISUALIZADA, ChamadoTarefaStatus.EM_ANDAMENTO, ChamadoTarefaStatus.IMPEDIDA] },
+        chamado: { excluidoEm: null },
+      },
+      take: 40,
+      include: {
+        secretaria: { select: { sigla: true, nome: true } },
+        equipe: { select: { nome: true } },
+        chamado: { select: { codigo: true } },
+      },
+    });
+    const tarefas = tarefasBrutas
+      .map((tarefa) => ({
+        id: tarefa.id,
+        codigo: tarefa.chamado.codigo,
+        titulo: tarefa.titulo,
+        prazo: tarefa.prazo?.toISOString() ?? null,
+        status: tarefa.status,
+        secretaria: tarefa.secretaria.sigla || tarefa.secretaria.nome,
+        equipe: tarefa.equipe?.nome ?? null,
+        atrasado: tarefaAtrasada(tarefa.status, tarefa.prazo),
+        href: `/execucao?aba=tarefas&tarefa=${tarefa.id}`,
+        createdAt: tarefa.createdAt.toISOString(),
+      }))
+      .sort(ordenarPendencias);
+    const chamadosBrutos = await this.prisma.chamado.findMany({
+      where: {
+        responsavelId: user.sub,
+        excluidoEm: null,
+        status: { notIn: [ChamadoStatus.CONCLUIDO, ChamadoStatus.CANCELADO] },
+      },
+      take: 40,
+      include: {
+        secretaria: { select: { sigla: true, nome: true } },
+        equipe: { select: { nome: true } },
+      },
+    });
+    const chamados = chamadosBrutos
+      .map((chamado) => ({
+        id: chamado.id,
+        codigo: chamado.codigo,
+        titulo: chamado.titulo?.trim() || chamado.descricao.slice(0, 80),
+        prazo: chamado.prazoEm?.toISOString() ?? null,
+        status: chamado.status,
+        secretaria: chamado.secretaria.sigla || chamado.secretaria.nome,
+        equipe: chamado.equipe?.nome ?? null,
+        atrasado: chamadoAtrasado(chamado.status, chamado.prazoEm),
+        href: `/chamados?id=${chamado.id}`,
+        createdAt: chamado.createdAt.toISOString(),
+      }))
+      .sort(ordenarPendencias);
+    const grupos = [
+      documentos.length
+        ? { id: 'documentos', titulo: 'Documentos para assinatura', total, itens: documentos.slice(0, 8), verMaisHref: '/documentos?pendentes=1' }
+        : null,
+      tarefas.length
+        ? { id: 'tarefas', titulo: 'Tarefas pendentes', total: tarefas.length, itens: tarefas.slice(0, 8), verMaisHref: '/execucao?aba=tarefas' }
+        : null,
+      chamados.length
+        ? { id: 'chamados', titulo: 'Chamados sob minha responsabilidade', total: chamados.length, itens: chamados.slice(0, 8), verMaisHref: '/chamados' }
+        : null,
+    ].filter((grupo): grupo is NonNullable<typeof grupo> => grupo != null);
+    const totalGeral = grupos.reduce((sum, grupo) => sum + grupo.total, 0);
+    return { total: totalGeral, grupos };
   }
 
   async listSignatariosInternos(search: string | undefined, user: JwtPayload) {
@@ -2919,4 +2987,21 @@ export class DocumentosService {
       linkValidacao: buildPublicValidationUrl(documento.codigoValidacao, codigoVerificador),
     };
   }
+}
+
+function ordenarPendencias<T extends { atrasado: boolean; prazo: string | null; createdAt: string }>(a: T, b: T) {
+  if (a.atrasado !== b.atrasado) return a.atrasado ? -1 : 1;
+  if (a.prazo && b.prazo && a.prazo !== b.prazo) return a.prazo < b.prazo ? -1 : 1;
+  if (a.prazo && !b.prazo) return -1;
+  if (!a.prazo && b.prazo) return 1;
+  return a.createdAt < b.createdAt ? 1 : -1;
+}
+
+function chamadoAtrasado(status: string, prazoEm: Date | null) {
+  if (!prazoEm || status === 'CONCLUIDO' || status === 'CANCELADO') return false;
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const prazo = new Date(prazoEm);
+  prazo.setHours(0, 0, 0, 0);
+  return prazo.getTime() < hoje.getTime();
 }

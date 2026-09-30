@@ -21,6 +21,7 @@ import { buildNavBadges, resolveGlobalSearchRoute, type NavBadges } from '@/lib/
 import { getGroupedNavItems, getMobileNav, isNavActive, MORE_NAV_ICON, type NavItem } from '@/lib/navigation';
 import { SessionScopeSwitchers } from '@/components/auth/session-scope-switchers';
 import { useGuide } from '@/components/help/guide-provider';
+import { PendenciasButton } from '@/components/pendencias/pendencias-button';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 
@@ -269,6 +270,7 @@ function DesktopTopbar({ syncPending, permissions }: { syncPending: number; perm
       </div>
 
       <div className="ml-auto flex items-center gap-2.5">
+        <PendenciasButton />
         <button
           type="button"
           onClick={openGuide}
@@ -319,6 +321,7 @@ export function MobileAppBar({ userName, syncPending }: { userName: string; sync
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <PendenciasButton compact />
           <button
             type="button"
             aria-label="Abrir guia"
@@ -452,6 +455,9 @@ export function MobileBottomNav({
             <KeyRound className="h-5 w-5 text-[var(--brand)]" />
             Minha conta
           </Link>
+          <div className="px-4 py-2">
+            <PendenciasButton />
+          </div>
           <button
             type="button"
             onClick={openGuide}

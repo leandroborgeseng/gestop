@@ -56,7 +56,7 @@ export function PendenciasAcessoDialog({
                   <li key={`${grupo.id}-${item.id}`}>
                     <button
                       type="button"
-                      className="w-full rounded-[10px] border border-[var(--line)] px-3 py-2 text-left hover:bg-[var(--canvas-2)]"
+                      className={`w-full rounded-[10px] border px-3 py-2 text-left hover:bg-[var(--canvas-2)] ${item.atrasado ? 'border-amber-400 bg-amber-50' : 'border-[var(--line)]'}`}
                       onClick={() => {
                         onClose();
                         router.replace(item.href);
@@ -65,12 +65,26 @@ export function PendenciasAcessoDialog({
                       <span className="mono text-[12px] font-semibold text-[var(--brand-hover)]">{item.codigo}</span>
                       <span className="mt-0.5 block text-[13px] text-[var(--ink)]">{item.titulo}</span>
                       <span className="text-[11px] text-[var(--ink-3)]">
-                        {[item.status, item.secretaria, item.equipe].filter(Boolean).join(' · ')}
+                        {[item.status, item.secretaria, item.equipe, item.prazo ? new Date(item.prazo).toLocaleDateString('pt-BR') : null, item.atrasado ? 'Atrasado' : null]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </span>
                     </button>
                   </li>
                 ))}
               </ul>
+              {grupo.verMaisHref && grupo.total > grupo.itens.length ? (
+                <button
+                  type="button"
+                  className="mt-1 text-[12px] font-semibold text-[var(--brand)]"
+                  onClick={() => {
+                    onClose();
+                    router.replace(grupo.verMaisHref!);
+                  }}
+                >
+                  Ver mais ({grupo.total})
+                </button>
+              ) : null}
             </section>
           ))}
         </div>
