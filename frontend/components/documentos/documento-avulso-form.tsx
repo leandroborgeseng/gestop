@@ -80,9 +80,7 @@ export function DocumentoAvulsoForm({
     setDrafts((current) => ({
       ...current,
       [itemId]: {
-        conformidade: 'CONFORME',
-        comentario: '',
-        ...current[itemId],
+        ...(current[itemId] ?? { conformidade: 'CONFORME' as const, comentario: '' }),
         ...patch,
       },
     }));
