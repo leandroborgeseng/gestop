@@ -3,7 +3,7 @@
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, Briefcase, ClipboardList, DatabaseBackup, Download, Layers3, Mail, MapPin, ScrollText, Shield, Tags, UserRound, UsersRound } from 'lucide-react';
+import { BookOpen, Building2, Briefcase, ClipboardList, DatabaseBackup, Download, Layers3, Mail, MapPin, ScrollText, Shield, Tags, UserRound, UsersRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
@@ -85,6 +85,7 @@ import {
 import { REGIAO_UNIDADE_LABELS, RegiaoUnidade } from '@/lib/regiao-unidade';
 import { PermissoesMatrizPanel } from '@/components/admin/permissoes-matriz-panel';
 import { AuditoriaPanel } from '@/components/admin/auditoria-panel';
+import { DocumentacaoEngenhariaPanel } from '@/components/admin/documentacao-engenharia-panel';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { formatUnidadeOrigem, getLockedFields, getUnidadeMetadata, isQgisImported } from '@/lib/unidade-metadata';
 import {
@@ -112,9 +113,10 @@ type Tab =
   | 'backup'
   | 'importacao'
   | 'auditoria'
-  | 'email';
+  | 'email'
+  | 'documentacao';
 
-const TAB_TO_PERM: Record<Tab, AdminTabPermissionId> = {
+const TAB_TO_PERM: Record<Exclude<Tab, 'documentacao'>, AdminTabPermissionId> = {
   secretarias: 'secretarias',
   unidades: 'proprios',
   usuarios: 'usuarios',
@@ -191,8 +193,12 @@ export default function AdminPage() {
       { id: 'importacao', label: 'Importação', icon: <Download className="h-4 w-4" /> },
       { id: 'auditoria', label: 'Logs', icon: <ScrollText className="h-4 w-4" /> },
       { id: 'email', label: 'E-mail', icon: <Mail className="h-4 w-4" /> },
+      { id: 'documentacao', label: 'Documentação', icon: <BookOpen className="h-4 w-4" /> },
     ];
-    return all.filter((item) => adminTotal || hasAdminTabAccess(TAB_TO_PERM[item.id], 'visualizar', permissoes));
+    return all.filter((item) => {
+      if (item.id === 'documentacao') return true;
+      return adminTotal || hasAdminTabAccess(TAB_TO_PERM[item.id], 'visualizar', permissoes);
+    });
   }, [
     permissoes,
     secretarias.length,
@@ -306,7 +312,7 @@ export default function AdminPage() {
           </div>
         ) : null}
 
-        {loading && tab !== 'backup' && tab !== 'auditoria' ? <LoadingState label="Carregando cadastros..." /> : null}
+        {loading && tab !== 'backup' && tab !== 'auditoria' && tab !== 'documentacao' ? <LoadingState label="Carregando cadastros..." /> : null}
 
         {!loading && tab === 'secretarias' ? (
           <SecretariasPanel secretarias={secretarias} mutate={mutate} />
@@ -341,8 +347,9 @@ export default function AdminPage() {
           <ImportacaoPanel onSynced={() => void load()} />
         ) : null}
         {!loading && tab === 'auditoria' ? <AuditoriaPanel /> : null}
+        {tab === 'documentacao' ? <DocumentacaoEngenhariaPanel /> : null}
 
-        {!loading && canLgpd && tab !== 'importacao' && tab !== 'backup' && tab !== 'auditoria' && tab !== 'email' ? (
+        {!loading && canLgpd && tab !== 'importacao' && tab !== 'backup' && tab !== 'auditoria' && tab !== 'email' && tab !== 'documentacao' ? (
           <section className="mt-8 rounded-[var(--r-card)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-5">
             <div className="flex items-start gap-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--surface)] text-[var(--warn)] shadow-[var(--sh-sm)]">
