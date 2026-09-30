@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Copy, FileText, Search } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
+import { useSessionUser } from '@/components/auth/session-context';
 import { TipBanner } from '@/components/help/tip-banner';
 import { PageShell } from '@/components/layout/page-shell';
 import { Badge } from '@/components/ui/badge';
@@ -18,13 +19,16 @@ import {
   gerarDocumentoPdfOriginal,
   getDocumento,
   listDocumentos,
+  listMinhasPendenciasAssinatura,
   toggleAssinaturaPendenteDocumento,
 } from '@/lib/api';
+import { AssinarInternoDialog, DisponibilizarAssinaturaDialog } from '@/components/documentos/assinatura-interna-dialogs';
 import { ColetarAssinaturaDialog } from '@/components/documentos/coletar-assinatura-dialog';
 import { DocumentoAvulsoForm, DocumentoAvulsoRespostasLeitura } from '@/components/documentos/documento-avulso-form';
 import { NovoDocumentoAvulsoDialog } from '@/components/documentos/novo-documento-avulso-dialog';
 import { DOCUMENTO_SITUACAO_META, DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
 import { cn } from '@/lib/cn';
+import { hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { DocumentoDetalhe, DocumentoResumo, DocumentoSituacao, DocumentoTipo } from '@/lib/types';
@@ -44,13 +48,27 @@ const SITUACAO_OPTIONS = [
 export default function DocumentosPage() {
   return (
     <Suspense fallback={<LoadingState label="Carregando documentos..." />}>
-      <DocumentosPageContent />
+      <DocumentosGate />
     </Suspense>
   );
 }
 
-function DocumentosPageContent() {
+function DocumentosGate() {
   const searchParams = useSearchParams();
+  if (searchParams.get('pendentes') === '1') {
+    return <DocumentosPageContent modoPendencias />;
+  }
+  return (
+    <RequirePermissions permissions={['documentos.visualizar']} match="any">
+      <DocumentosPageContent />
+    </RequirePermissions>
+  );
+}
+
+function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: boolean }) {
+  const searchParams = useSearchParams();
+  const sessionUser = useSessionUser();
+  const gestaoDocumentos = hasDocumentosModuloAccess(sessionUser?.permissoes ?? []);
   const backHref = useSafeBackHref('/dashboard');
   const snackbar = useSnackbar();
   const [items, setItems] = useState<DocumentoResumo[]>([]);
@@ -67,6 +85,8 @@ function DocumentosPageContent() {
   const [busyAction, setBusyAction] = useState(false);
   const [novoOpen, setNovoOpen] = useState(false);
   const [assinaturaOpen, setAssinaturaOpen] = useState(false);
+  const [assinarInternoOpen, setAssinarInternoOpen] = useState(false);
+  const [disponibilizarOpen, setDisponibilizarOpen] = useState(false);
   const [preencherAberto, setPreencherAberto] = useState(() => searchParams.get('preencher') === '1');
 
   useEffect(() => {
@@ -78,14 +98,18 @@ function DocumentosPageContent() {
   function loadList() {
     setLoading(true);
     setError(null);
-    listDocumentos({
-      limit: PAGE_SIZE,
-      offset: 0,
-      search: search.trim() || undefined,
-      tipo: tipo === 'TODOS' ? undefined : tipo,
-      situacao: situacao === 'TODOS' ? undefined : situacao,
-      assinatura: assinatura === 'TODOS' ? undefined : assinatura,
-    })
+    const lista = modoPendencias
+      ? listMinhasPendenciasAssinatura()
+      : listDocumentos({
+          limit: PAGE_SIZE,
+          offset: 0,
+          search: search.trim() || undefined,
+          tipo: tipo === 'TODOS' ? undefined : tipo,
+          situacao: situacao === 'TODOS' ? undefined : situacao,
+          assinatura: assinatura === 'TODOS' || assinatura === 'minha' ? undefined : assinatura,
+          pendentesAssinatura: assinatura === 'minha' ? '1' : undefined,
+        });
+    lista
       .then((response) => {
         setItems(response.items);
         setTotal(response.total);
@@ -99,7 +123,7 @@ function DocumentosPageContent() {
     const handle = window.setTimeout(() => loadList(), 200);
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, tipo, situacao, assinatura]);
+  }, [search, tipo, situacao, assinatura, modoPendencias]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -131,14 +155,17 @@ function DocumentosPageContent() {
   async function refreshSelected() {
     if (!selectedId) return;
     const [list, nextDetail] = await Promise.all([
-      listDocumentos({
-        limit: Math.max(items.length, PAGE_SIZE),
-        offset: 0,
-        search: search.trim() || undefined,
-        tipo: tipo === 'TODOS' ? undefined : tipo,
-        situacao: situacao === 'TODOS' ? undefined : situacao,
-        assinatura: assinatura === 'TODOS' ? undefined : assinatura,
-      }),
+      modoPendencias
+        ? listMinhasPendenciasAssinatura()
+        : listDocumentos({
+            limit: Math.max(items.length, PAGE_SIZE),
+            offset: 0,
+            search: search.trim() || undefined,
+            tipo: tipo === 'TODOS' ? undefined : tipo,
+            situacao: situacao === 'TODOS' ? undefined : situacao,
+            assinatura: assinatura === 'TODOS' || assinatura === 'minha' ? undefined : assinatura,
+            pendentesAssinatura: assinatura === 'minha' ? '1' : undefined,
+          }),
       getDocumento(selectedId),
     ]);
     setItems(list.items);
@@ -160,7 +187,6 @@ function DocumentosPageContent() {
   }
 
   return (
-    <RequirePermissions permissions={['documentos.visualizar']} match="any">
       <PageShell
         kicker="Gestão documental"
         icon={FileText}
@@ -168,9 +194,11 @@ function DocumentosPageContent() {
         description="Central de consulta, geração, assinatura e validação dos documentos produzidos no SIGMA."
         backHref={backHref}
         action={
-          <Button type="button" variant="filled" size="sm" onClick={() => setNovoOpen(true)}>
-            Novo documento
-          </Button>
+          modoPendencias ? null : (
+            <Button type="button" variant="filled" size="sm" onClick={() => setNovoOpen(true)}>
+              Novo documento
+            </Button>
+          )
         }
       >
         <TipBanner id="documentos-central">
@@ -187,12 +215,26 @@ function DocumentosPageContent() {
           }}
         />
         {detail ? (
+          <>
           <ColetarAssinaturaDialog
             open={assinaturaOpen}
             documento={detail}
             onClose={() => setAssinaturaOpen(false)}
             onDone={() => void refreshSelected()}
           />
+          <AssinarInternoDialog
+            open={assinarInternoOpen}
+            documentoId={detail.id}
+            onClose={() => setAssinarInternoOpen(false)}
+            onDone={() => void refreshSelected()}
+          />
+          <DisponibilizarAssinaturaDialog
+            open={disponibilizarOpen}
+            documento={detail}
+            onClose={() => setDisponibilizarOpen(false)}
+            onDone={() => void refreshSelected()}
+          />
+          </>
         ) : null}
 
         <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -225,6 +267,7 @@ function DocumentosPageContent() {
             <option value="assinado">Assinado</option>
             <option value="cancelado">Cancelado</option>
             <option value="substituido">Substituído</option>
+            <option value="minha">Pendentes para minha assinatura</option>
           </Select>
         </div>
 
@@ -285,6 +328,7 @@ function DocumentosPageContent() {
             ) : (
               <DocumentoDetail
                 documento={(detail ?? selected) as DocumentoDetalhe}
+                gestaoDocumentos={gestaoDocumentos}
                 busy={busyAction}
                 onCopyLink={() => {
                   const link = detail?.linkValidacao || selected.linkValidacao || `/documento/validar/${selected.codigoValidacao}`;
@@ -313,6 +357,8 @@ function DocumentosPageContent() {
                 onPreencher={() => setPreencherAberto(true)}
                 onFormSaved={() => refreshSelected()}
                 onColetar={() => setAssinaturaOpen(true)}
+                onAssinarInterno={() => setAssinarInternoOpen(true)}
+                onDisponibilizar={() => setDisponibilizarOpen(true)}
                 onPendente={() =>
                   void runAction(
                     () => toggleAssinaturaPendenteDocumento(selected.id),
@@ -336,12 +382,12 @@ function DocumentosPageContent() {
           </section>
         </div>
       </PageShell>
-    </RequirePermissions>
   );
 }
 
 function DocumentoDetail({
   documento,
+  gestaoDocumentos,
   busy,
   onCopyLink,
   onPdfOriginal,
@@ -352,10 +398,13 @@ function DocumentoDetail({
   onPreencher,
   onFormSaved,
   onColetar,
+  onAssinarInterno,
+  onDisponibilizar,
   onPendente,
   onCancelar,
 }: {
   documento: DocumentoDetalhe;
+  gestaoDocumentos: boolean;
   busy: boolean;
   onCopyLink: () => void;
   onPdfOriginal: () => void;
@@ -366,6 +415,8 @@ function DocumentoDetail({
   onPreencher: () => void;
   onFormSaved: () => void | Promise<void>;
   onColetar: () => void;
+  onAssinarInterno: () => void;
+  onDisponibilizar: () => void;
   onPendente: () => void;
   onCancelar: () => void;
 }) {
@@ -434,17 +485,17 @@ function DocumentoDetail({
       </dl>
 
       <div className="flex flex-wrap gap-1.5">
-        {podePreencherAvulso ? (
+        {gestaoDocumentos && podePreencherAvulso ? (
           <Button type="button" size="sm" variant="filled" disabled={busy} onClick={onPreencher}>
             Preencher documento
           </Button>
         ) : null}
-        {!documento.possuiPdfOriginal && documento.situacao === 'RASCUNHO' && !podePreencherAvulso ? (
+        {gestaoDocumentos && !documento.possuiPdfOriginal && documento.situacao === 'RASCUNHO' && !podePreencherAvulso ? (
           <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onConcluir}>
             Concluir documento
           </Button>
         ) : null}
-        {podeGerarPdfOriginal ? (
+        {gestaoDocumentos && podeGerarPdfOriginal ? (
           <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onGerarPdf}>
             {precisaCorrigirPdfExecucao
               ? 'Corrigir PDF original'
@@ -467,25 +518,40 @@ function DocumentoDetail({
             Visualizar PDF assinado
           </Button>
         ) : null}
-        <Button
-          type="button"
-          size="sm"
-          variant="filled"
-          disabled={busy || !documento.possuiPdfOriginal || documento.situacao === 'CANCELADO'}
-          onClick={onColetar}
-        >
-          {documento.possuiPdfAssinado ? 'Coletar nova assinatura' : 'Coletar assinatura'}
-        </Button>
+        {documento.podeAssinarInterno && documento.possuiPdfOriginal && documento.situacao !== 'RASCUNHO' ? (
+          <Button type="button" size="sm" variant="filled" disabled={busy} onClick={onAssinarInterno}>
+            Assinar com usuário e senha
+          </Button>
+        ) : null}
+        {documento.podeDisponibilizarAssinatura && documento.possuiPdfOriginal && documento.situacao !== 'RASCUNHO' ? (
+          <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onDisponibilizar}>
+            Encaminhar para assinatura
+          </Button>
+        ) : null}
+        {gestaoDocumentos ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="filled"
+            disabled={busy || !documento.possuiPdfOriginal || documento.situacao === 'CANCELADO'}
+            onClick={onColetar}
+          >
+            {documento.possuiPdfAssinado ? 'Coletar nova assinatura' : 'Coletar assinatura'}
+          </Button>
+        ) : null}
         <Button type="button" size="sm" variant="ghost" onClick={onCopyLink}>
           <Copy className="h-3.5 w-3.5" />
           Copiar link de validação
         </Button>
-        <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onPendente}>
-          {documento.situacao === 'ASSINATURA_PENDENTE'
-            ? 'Desmarcar assinatura pendente'
-            : 'Marcar assinatura pendente'}
-        </Button>
-        {documento.possuiPdfAssinado &&
+        {gestaoDocumentos ? (
+          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onPendente}>
+            {documento.situacao === 'ASSINATURA_PENDENTE'
+              ? 'Desmarcar assinatura pendente'
+              : 'Marcar assinatura pendente'}
+          </Button>
+        ) : null}
+        {gestaoDocumentos &&
+        documento.possuiPdfAssinado &&
         (documento.situacao === 'ASSINADO_VIGENTE' || documento.situacao === 'ASSINATURA_PENDENTE') ? (
           <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancelar}>
             Cancelar PDF assinado vigente
@@ -493,7 +559,13 @@ function DocumentoDetail({
         ) : null}
       </div>
 
-      {podePreencherAvulso && preencherAberto ? (
+      {(documento.signatariosPendentes ?? []).length ? (
+        <p className="text-[12px] text-[var(--ink-3)]">
+          Signatários internos pendentes: {documento.signatariosPendentes?.map((item) => item.nome).join(', ')}
+        </p>
+      ) : null}
+
+      {gestaoDocumentos && podePreencherAvulso && preencherAberto ? (
         <DocumentoAvulsoForm key={documento.id} documento={documento} onSaved={onFormSaved} />
       ) : null}
       {documento.origem === 'AVULSO' && !podePreencherAvulso ? (

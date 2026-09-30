@@ -1642,6 +1642,7 @@ export function listDocumentos(params?: {
   from?: string;
   to?: string;
   assinatura?: string;
+  pendentesAssinatura?: string;
   avulso?: string;
   limit?: number;
   offset?: number;
@@ -1659,11 +1660,84 @@ export function listDocumentos(params?: {
   if (params?.from) query.set('from', params.from);
   if (params?.to) query.set('to', params.to);
   if (params?.assinatura) query.set('assinatura', params.assinatura);
+  if (params?.pendentesAssinatura) query.set('pendentesAssinatura', params.pendentesAssinatura);
   if (params?.avulso) query.set('avulso', params.avulso);
   if (params?.limit != null) query.set('limit', String(params.limit));
   if (params?.offset != null) query.set('offset', String(params.offset));
   const qs = query.toString();
   return request<DocumentosListResponse>(`/documentos${qs ? `?${qs}` : ''}`);
+}
+
+export type PendenciaAcessoItem = {
+  id: string;
+  codigo: string;
+  titulo: string;
+  prazo: string | null;
+  status: string;
+  secretaria: string | null;
+  equipe: string | null;
+  atrasado: boolean;
+  href: string;
+};
+
+export type PendenciasResumo = {
+  total: number;
+  grupos: Array<{
+    id: string;
+    titulo: string;
+    total: number;
+    itens: PendenciaAcessoItem[];
+  }>;
+};
+
+export function getPendenciasResumo() {
+  return request<PendenciasResumo>('/documentos/pendencias-resumo');
+}
+
+export function listMinhasPendenciasAssinatura() {
+  return request<DocumentosListResponse>('/documentos/minhas-pendencias-assinatura');
+}
+
+export function listSignatariosInternos(search?: string) {
+  const query = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  return request<
+    Array<{
+      id: string;
+      nome: string;
+      email: string;
+      cargo?: string | null;
+      secretaria?: { id: string; nome: string; sigla: string } | null;
+      perfil?: string | null;
+    }>
+  >(`/documentos/signatarios-internos${query}`);
+}
+
+export function assinarDocumentoInterno(id: string, payload: { senha: string; confirmacao: boolean }) {
+  return request<DocumentoDetalhe>(`/documentos/${id}/assinatura-interna`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function disponibilizarAssinaturaInterna(id: string, destinatarioIds: string[]) {
+  return request<DocumentoDetalhe>(`/documentos/${id}/disponibilizar-assinatura`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ destinatarioIds }),
+  });
+}
+
+export function retirarPedidoAssinatura(pedidoId: string) {
+  return request<DocumentoDetalhe>(`/documentos/pedidos-assinatura/${pedidoId}/retirar`, { method: 'POST' });
+}
+
+export function recusarPedidoAssinatura(pedidoId: string, motivo?: string) {
+  return request<{ ok: boolean }>(`/documentos/pedidos-assinatura/${pedidoId}/recusar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ motivo }),
+  });
 }
 
 export function getDocumento(id: string) {

@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   StreamableFile,
   UseGuards,
 } from '@nestjs/common';
@@ -16,10 +17,13 @@ import { JwtPayload } from '../auth/jwt';
 import { RequireAnyPermissions } from '../auth/permissions';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import {
+  AssinarDocumentoInternoDto,
   CancelarDocumentoDto,
   ColetarAssinaturaDto,
   CreateDocumentoAvulsoDto,
+  DisponibilizarAssinaturaInternaDto,
   ListDocumentosQueryDto,
+  RecusarAssinaturaInternaDto,
   SalvarDocumentoRespostasDto,
   UpdateDocumentoVinculosDto,
 } from './documentos.dto';
@@ -35,6 +39,26 @@ export class DocumentosController {
   @RequireAnyPermissions(...DOCUMENTOS_MODULO_KEYS)
   list(@Query() query: ListDocumentosQueryDto, @CurrentUser() user: JwtPayload) {
     return this.documentosService.list(query, user);
+  }
+
+  @Get('minhas-pendencias-assinatura')
+  listMinhasPendencias(@CurrentUser() user: JwtPayload) {
+    return this.documentosService.listMinhasPendenciasAssinatura(user);
+  }
+
+  @Get('pendencias-resumo')
+  pendenciasResumo(@CurrentUser() user: JwtPayload) {
+    return this.documentosService.pendenciasResumo(user);
+  }
+
+  @Get('signatarios-internos')
+  @RequireAnyPermissions(
+    'documentos.disponibilizar_assinatura',
+    'documentos.administrar',
+    'usuarios.gerenciar',
+  )
+  listSignatarios(@CurrentUser() user: JwtPayload, @Query('search') search?: string) {
+    return this.documentosService.listSignatariosInternos(search, user);
   }
 
   @Get('checklists-avulso')
@@ -64,13 +88,11 @@ export class DocumentosController {
   }
 
   @Get(':id')
-  @RequireAnyPermissions(...DOCUMENTOS_MODULO_KEYS)
   getById(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.documentosService.getById(id, user);
   }
 
   @Get(':id/pdf/original')
-  @RequireAnyPermissions(...DOCUMENTOS_RELACIONADOS_KEYS)
   @Header('Content-Type', 'application/pdf')
   async pdfOriginal(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     const { buffer, codigo } = await this.documentosService.getPdfBuffer(id, 'original', user);
@@ -81,7 +103,6 @@ export class DocumentosController {
   }
 
   @Get(':id/pdf/assinado')
-  @RequireAnyPermissions(...DOCUMENTOS_RELACIONADOS_KEYS)
   @Header('Content-Type', 'application/pdf')
   async pdfAssinado(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     const { buffer, codigo } = await this.documentosService.getPdfBuffer(id, 'assinado', user);
@@ -135,6 +156,54 @@ export class DocumentosController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.documentosService.updateVinculos(id, body, user);
+  }
+
+  @Post(':id/assinatura-interna')
+  assinarInterno(
+    @Param('id') id: string,
+    @Body() body: AssinarDocumentoInternoDto,
+    @CurrentUser() user: JwtPayload,
+    @Req() req: { headers?: Record<string, string | string[] | undefined>; ip?: string; socket?: { remoteAddress?: string } },
+  ) {
+    const forwarded = req.headers?.['x-forwarded-for'];
+    const forwardedValue = Array.isArray(forwarded) ? forwarded[0] : forwarded;
+    const ip = forwardedValue?.split(',')[0]?.trim() || req.ip || req.socket?.remoteAddress || null;
+    const agent = req.headers?.['user-agent'];
+    const userAgent = Array.isArray(agent) ? agent[0] : agent ?? null;
+    return this.documentosService.assinarInterno(id, body, user, { ip, userAgent });
+  }
+
+  @Post(':id/disponibilizar-assinatura')
+  @RequireAnyPermissions(
+    'documentos.disponibilizar_assinatura',
+    'documentos.administrar',
+    'usuarios.gerenciar',
+  )
+  disponibilizar(
+    @Param('id') id: string,
+    @Body() body: DisponibilizarAssinaturaInternaDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.documentosService.disponibilizarAssinaturaInterna(id, body, user);
+  }
+
+  @Post('pedidos-assinatura/:pedidoId/retirar')
+  @RequireAnyPermissions(
+    'documentos.disponibilizar_assinatura',
+    'documentos.administrar',
+    'usuarios.gerenciar',
+  )
+  retirarPedido(@Param('pedidoId') pedidoId: string, @CurrentUser() user: JwtPayload) {
+    return this.documentosService.retirarAssinaturaInterna(pedidoId, user);
+  }
+
+  @Post('pedidos-assinatura/:pedidoId/recusar')
+  recusarPedido(
+    @Param('pedidoId') pedidoId: string,
+    @Body() body: RecusarAssinaturaInternaDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.documentosService.recusarAssinaturaInterna(pedidoId, body, user);
   }
 
   @Post(':id/assinatura')

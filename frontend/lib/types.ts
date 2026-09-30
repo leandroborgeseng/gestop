@@ -1523,6 +1523,7 @@ export type DocumentoResumo = {
   createdAt: string;
   updatedAt: string;
   linkValidacao?: string;
+  signatariosPendentes?: Array<{ id: string; nome: string; email?: string | null; requestedAt?: string; meu?: boolean }>;
 };
 
 export type DocumentoRespostaItem = {
@@ -1550,6 +1551,8 @@ export type DocumentoRespostaItem = {
 export type DocumentoDetalhe = DocumentoResumo & {
   conteudoTravado?: boolean;
   checklistItens?: ChecklistItem[];
+  podeAssinarInterno?: boolean;
+  podeDisponibilizarAssinatura?: boolean;
   podeVerAssinaturasAnteriores?: boolean;
   assinaturasAnteriores?: DocumentoResumo['assinaturas'];
   historico: Array<{

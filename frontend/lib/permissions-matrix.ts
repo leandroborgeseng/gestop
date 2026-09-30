@@ -185,6 +185,22 @@ export function hasCronogramaAccess(
   return false;
 }
 
+export function canAssinarDocumentoInterno(permissoes: string[]) {
+  if (permissoes.includes('usuarios.gerenciar') || permissoes.includes('documentos.administrar')) return true;
+  return (
+    permissoes.includes('documentos.assinar_interno') ||
+    permissoes.includes(buildMatrixKey('documentos', 'assinar_interno', 'executar'))
+  );
+}
+
+export function canDisponibilizarAssinaturaInterna(permissoes: string[]) {
+  if (permissoes.includes('usuarios.gerenciar') || permissoes.includes('documentos.administrar')) return true;
+  return (
+    permissoes.includes('documentos.disponibilizar_assinatura') ||
+    permissoes.includes(buildMatrixKey('documentos', 'disponibilizar_assinatura', 'executar'))
+  );
+}
+
 export function canCriarDocumentoAvulso(permissoes: string[]) {
   if (permissoes.includes('usuarios.gerenciar') || permissoes.includes('documentos.administrar')) return true;
   return (

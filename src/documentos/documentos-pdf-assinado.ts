@@ -10,6 +10,7 @@ export type AssinaturaPdfAppend = {
   qualificacao?: string | null;
   coletadaEm: string;
   imageBuffer?: Buffer | null;
+  canal?: 'interna' | 'externa' | string | null;
 };
 
 export type AuthBlockAppend = {
@@ -101,8 +102,13 @@ export async function appendAssinaturasAoPdfOriginal(
     }
   };
 
+  const temInterna = assinaturas.some((item) => item.canal === 'interna');
+  const temExterna = assinaturas.some((item) => item.canal !== 'interna');
+  const tituloAssinaturas =
+    temInterna && temExterna ? 'Assinaturas' : temInterna ? 'Assinaturas internas' : 'Assinaturas externas';
+
   ensure(30);
-  page.drawText('Assinaturas externas', {
+  page.drawText(tituloAssinaturas, {
     x: left,
     y,
     size: 14,
@@ -141,7 +147,23 @@ export async function appendAssinaturasAoPdfOriginal(
     });
     y -= 6;
 
-    if (assinatura.imageBuffer?.length) {
+    if (assinatura.canal === 'interna') {
+      y = drawWrappedText(
+        page,
+        `Documento assinado eletronicamente por ${assinatura.assinanteNome}, mediante usuário e senha. Esta assinatura interna não é um desenho.`,
+        {
+          x: left,
+          y,
+          size: 9,
+          font,
+          maxWidth: width,
+          lineHeight: 12,
+          color: rgb(0.15, 0.15, 0.15),
+          maxCharsPerLine: 95,
+        },
+      );
+      y -= 10;
+    } else if (assinatura.imageBuffer?.length) {
       try {
         const embedded =
           assinatura.imageBuffer[0] === 0x89

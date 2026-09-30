@@ -319,6 +319,8 @@ model Usuario {
   documentosCriados Documento[] @relation("DocumentoCriadoPor")
   documentoAssinaturas DocumentoAssinatura[] @relation("DocumentoAssinaturaUsuario")
   documentoAssinaturasColetadas DocumentoAssinatura[] @relation("DocumentoAssinaturaColetadaPor")
+  assinaturaPedidosDestino DocumentoAssinaturaPedido[] @relation("PedidoAssinaturaDestinatario")
+  assinaturaPedidosSolicitados DocumentoAssinaturaPedido[] @relation("PedidoAssinaturaSolicitante")
   pushSubscriptions   PushSubscription[]
   cronogramasResponsavel CronogramaChecagem[] @relation("CronogramaResponsavel")
   cronogramasResponsaveisPrevistos CronogramaChecagemResponsavel[]
@@ -969,6 +971,7 @@ model Documento {
   substituidoPor  Documento?       @relation("DocumentoSubstituicao", fields: [substituidoPorId], references: [id], onDelete: SetNull)
   substitutos     Documento[]      @relation("DocumentoSubstituicao")
   assinaturas     DocumentoAssinatura[]
+  assinaturaPedidos DocumentoAssinaturaPedido[]
   respostas       DocumentoResposta[]
 
   @@index([secretariaId])
@@ -1048,6 +1051,38 @@ model DocumentoAssinatura {
   @@index([coletadaPorId])
   @@index([coletadaEm])
   @@index([invalida])
+}
+
+enum DocumentoAssinaturaPedidoStatus {
+  PENDENTE
+  ASSINADO
+  CANCELADO
+  RETIRADO
+}
+
+/// Pedido de assinatura interna. O registro da assinatura em si continua em DocumentoAssinatura.
+model DocumentoAssinaturaPedido {
+  id               String                           @id @default(uuid())
+  documentoId      String
+  destinatarioId   String
+  solicitanteId    String
+  status           DocumentoAssinaturaPedidoStatus @default(PENDENTE)
+  requestedAt      DateTime                         @default(now())
+  signedAt         DateTime?
+  canceladoEm      DateTime?
+  canceladoMotivo  String?
+  retiradoEm       DateTime?
+  createdAt        DateTime                         @default(now())
+  updatedAt        DateTime                         @updatedAt
+
+  documento    Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+  destinatario Usuario   @relation("PedidoAssinaturaDestinatario", fields: [destinatarioId], references: [id], onDelete: Cascade)
+  solicitante  Usuario   @relation("PedidoAssinaturaSolicitante", fields: [solicitanteId], references: [id], onDelete: Restrict)
+
+  @@index([documentoId])
+  @@index([destinatarioId, status])
+  @@index([solicitanteId])
+  @@index([status])
 }
 
 model LogAuditoria {

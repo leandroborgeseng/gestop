@@ -63,6 +63,11 @@ export class ListDocumentosQueryDto {
   @IsString()
   assinatura?: string;
 
+  /** `1` lista só documentos com pedido de assinatura interna pendente para o usuário. */
+  @IsOptional()
+  @IsString()
+  pendentesAssinatura?: string;
+
   @IsOptional()
   @IsString()
   avulso?: string;
@@ -276,6 +281,29 @@ export class ColetarAssinaturaDto {
   @IsOptional()
   @IsDateString()
   localizacaoEm?: string;
+}
+
+export class AssinarDocumentoInternoDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(200)
+  senha!: string;
+
+  @IsBoolean()
+  confirmacao!: boolean;
+}
+
+export class DisponibilizarAssinaturaInternaDto {
+  @IsArray()
+  @IsUUID('all', { each: true })
+  destinatarioIds!: string[];
+}
+
+export class RecusarAssinaturaInternaDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  motivo?: string;
 }
 
 export class CancelarDocumentoDto {

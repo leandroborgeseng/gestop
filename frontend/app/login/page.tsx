@@ -6,7 +6,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { LockKeyhole } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { SIGMA_NAME, SIGMA_TAGLINE } from '@/lib/brand';
-import { login } from '@/lib/api';
+import { getPendenciasResumo, login, type PendenciasResumo } from '@/lib/api';
+import { PendenciasAcessoDialog } from '@/components/pendencias/pendencias-acesso-dialog';
 import { getDefaultAuthenticatedHref } from '@/lib/navigation';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,8 @@ function LoginContent() {
   const [remember, setRemember] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendencias, setPendencias] = useState<PendenciasResumo | null>(null);
+  const [destino, setDestino] = useState('/dashboard');
 
   const notice = useMemo(() => {
     const reason = searchParams.get('reason');
@@ -70,7 +73,14 @@ function LoginContent() {
 
     try {
       const data = await login(email, password, remember);
-      router.replace(getDefaultAuthenticatedHref(data.user.permissoes, data.user));
+      const href = getDefaultAuthenticatedHref(data.user.permissoes, data.user);
+      const resumo = await getPendenciasResumo().catch(() => null);
+      if (resumo && resumo.total > 0) {
+        setDestino(href);
+        setPendencias(resumo);
+        return;
+      }
+      router.replace(href);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha inesperada no login.');
     } finally {
@@ -177,6 +187,12 @@ function LoginContent() {
           </CardContent>
         </Card>
       </div>
+      <PendenciasAcessoDialog
+        open={Boolean(pendencias && pendencias.total > 0)}
+        resumo={pendencias}
+        destinoAoFechar={destino}
+        onClose={() => setPendencias(null)}
+      />
     </main>
   );
 }

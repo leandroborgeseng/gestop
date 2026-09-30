@@ -11,6 +11,7 @@ import {
   ChecklistFinalidade,
   ChecklistVersaoStatus,
   ConformidadeStatus,
+  DocumentoAssinaturaPedidoStatus,
   DocumentoOrigem,
   DocumentoSituacao,
   DocumentoTipo,
@@ -18,7 +19,8 @@ import {
   type DocumentoResposta,
 } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
-import { hasAnyPermission } from '../auth/permissions';
+import { verifyPassword } from '../auth/password';
+import { hasAnyPermission, isAdministradorSistema } from '../auth/permissions';
 import { resolveDirectSecretariaFilter } from '../auth/secretaria-scope';
 import { validateChecklistResponses } from '../domain/checklist-response.rules';
 import { resolveMeusChamadosTimelineCaps } from '../chamados/meus-chamados-timeline.permissions';
@@ -44,11 +46,14 @@ import { buildRelatorioExecucaoPdf } from './relatorio-execucao-pdf';
 import { extractStorageKeyFromUrl } from '../storage/storage-url';
 import { isPdfRenderableImage } from '../fiscalizacoes/vistoria-realizada-pdf';
 import {
+  AssinarDocumentoInternoDto,
   CancelarDocumentoDto,
   ColetarAssinaturaDto,
   CreateDocumentoAvulsoDto,
+  DisponibilizarAssinaturaInternaDto,
   DocumentoRespostaItemDto,
   ListDocumentosQueryDto,
+  RecusarAssinaturaInternaDto,
   SalvarDocumentoRespostasDto,
   UpdateDocumentoVinculosDto,
 } from './documentos.dto';
@@ -100,6 +105,16 @@ const DOCUMENTO_INCLUDE = {
     include: {
       assinanteUsuario: { select: { id: true, nome: true } },
       coletadaPor: { select: { id: true, nome: true } },
+    },
+  },
+  assinaturaPedidos: {
+    where: { status: 'PENDENTE' as const },
+    orderBy: { requestedAt: 'asc' as const },
+    select: {
+      id: true,
+      status: true,
+      requestedAt: true,
+      destinatario: { select: { id: true, nome: true, email: true } },
     },
   },
 } satisfies Prisma.DocumentoInclude;
@@ -173,17 +188,36 @@ export class DocumentosService {
 
     return {
       total,
-      items: items.map((item) => this.serialize(item)),
+      items: items.map((item) => this.serialize(item, { usuarioId: user.sub })),
     };
   }
 
   async getById(id: string, user: JwtPayload) {
-    this.assertCanVisualizarModulo(user);
+    const pedidoDoUsuario = await this.prisma.documentoAssinaturaPedido.findFirst({
+      where: { documentoId: id, destinatarioId: user.sub },
+      select: { id: true },
+    });
+    const modulo =
+      isAdministradorSistema(user) ||
+      hasDocumentosModuloAccess(user.permissoes) ||
+      hasAnyPermission(user, ['documentos.visualizar', 'documentos.administrar']);
     const documento = await this.prisma.documento.findFirst({
-      where: { id, ...this.scopeFilter(user) },
+      where: { id },
       include: DOCUMENTO_INCLUDE,
     });
     if (!documento) throw new NotFoundException('Documento não encontrado.');
+    const elaborador = documento.criadoPorId === user.sub || documento.responsavelId === user.sub;
+    const noEscopo = modulo
+      ? Boolean(
+          await this.prisma.documento.findFirst({
+            where: { id, ...this.scopeFilter(user) },
+            select: { id: true },
+          }),
+        )
+      : false;
+    if (!noEscopo && !pedidoDoUsuario && !elaborador) {
+      throw new NotFoundException('Documento não encontrado.');
+    }
 
     const historico = await this.prisma.historicoStatus.findMany({
       where: { entidadeTipo: 'DOCUMENTO', entidadeId: id },
@@ -222,8 +256,12 @@ export class DocumentosService {
       : [];
 
     return {
-      ...this.serialize(documento, { fullPii: true }),
+      ...this.serialize(documento, { fullPii: true, usuarioId: user.sub }),
       checklistItens,
+      podeAssinarInterno: await this.podeAssinarInterno(documento, user),
+      podeDisponibilizarAssinatura:
+        isAdministradorSistema(user) ||
+        hasAnyPermission(user, ['documentos.disponibilizar_assinatura', 'documentos.administrar', 'usuarios.gerenciar']),
       podeVerAssinaturasAnteriores,
       assinaturasAnteriores: podeVerAssinaturasAnteriores
         ? anteriores.map((item) => this.mapAssinaturaApi(item, { fullPii: true }))
@@ -671,8 +709,7 @@ export class DocumentosService {
   }
 
   async getPdfBuffer(id: string, variante: 'original' | 'assinado', user: JwtPayload) {
-    this.assertCanVisualizarRelacionado(user);
-    const documento = await this.requireDocumento(id, user);
+    const documento = await this.requireDocumentoVisivel(id, user);
     const key =
       variante === 'assinado' ? documento.pdfAssinadoStorageKey : documento.pdfOriginalStorageKey;
     if (!key) {
@@ -820,79 +857,7 @@ export class DocumentosService {
       },
     });
 
-    const withAssinaturas = await this.requireDocumentoFull(id, user);
-    const basePdf = await this.resolvePdfBaseParaAssinatura(withAssinaturas);
-
-    const assinaturasValidas = withAssinaturas.assinaturas.filter((item) => !item.invalida);
-    const assinaturasPdf = [];
-    for (const assinatura of assinaturasValidas) {
-      let imageBuffer: Buffer | null = null;
-      if (assinatura.evidenciaStorageKey) {
-        const loaded = await this.storageService.readObjectBuffer(
-          assinatura.evidenciaStorageKey,
-          'image/png',
-        );
-        imageBuffer = loaded?.buffer
-          ? (await shrinkImageForPdf(loaded.buffer, loaded.mimeType || 'image/jpeg')).buffer
-          : null;
-      }
-      const meta = this.asRecord(assinatura.metadata);
-      assinaturasPdf.push({
-        assinanteNome: assinatura.assinanteNome,
-        assinanteDocumento: displayAssinanteCpf({
-          cpf: assinatura.assinanteDocumento,
-          cpfNaoInformado: Boolean(meta.cpfNaoInformado),
-        }),
-        assinanteEmail: displayAssinanteEmail({
-          email: assinatura.assinanteEmail,
-          emailNaoInformado: Boolean(meta.emailNaoInformado),
-        }),
-        qualificacao: assinatura.qualificacaoOutro?.trim() || assinatura.qualificacao,
-        coletadaEm: assinatura.coletadaEm.toISOString(),
-        imageBuffer,
-      });
-    }
-
-    const codigoVerificador = generateCodigoVerificador(
-      withAssinaturas.codigo,
-      withAssinaturas.codigoValidacao,
-    );
-    const validationUrl = buildPublicValidationUrl(
-      withAssinaturas.codigoValidacao,
-      codigoVerificador,
-    );
-
-    const { pdfBuffer, hashArquivoFinal } = await appendAssinaturasAoPdfOriginal(
-      basePdf,
-      assinaturasPdf,
-      {
-        codigo: withAssinaturas.codigo,
-        codigoValidacao: withAssinaturas.codigoValidacao,
-        codigoVerificador,
-        situacaoLabel: SITUACAO_LABELS[DocumentoSituacao.ASSINADO_VIGENTE],
-        geradoEm: new Date().toLocaleString('pt-BR'),
-        validationUrl,
-      },
-    );
-    const storedPdf = await this.storageService.persistBuffer(pdfBuffer, 'application/pdf', 'documentos');
-
-    const now = new Date();
-    const updated = await this.prisma.documento.update({
-      where: { id },
-      data: {
-        situacao: DocumentoSituacao.ASSINADO_VIGENTE,
-        conteudoTravadoEm: before.conteudoTravadoEm ?? now,
-        pdfAssinadoStorageKey: storedPdf.storageKey,
-        pdfAssinadoUrl: storedPdf.url,
-        pdfAssinadoSha256: hashArquivoFinal,
-      },
-      include: DOCUMENTO_INCLUDE,
-    });
-
-    await this.prisma.documentoAssinatura.updateMany({
-      where: { documentoId: id, invalida: false },
-      data: { pdfAssinadoSha256: hashArquivoFinal },
-    });
+    const { updated, hashArquivoFinal } = await this.regenerarPdfAssinado(id, before.conteudoTravadoEm);
 
     await this.registrarHistorico(
       id,
@@ -932,6 +897,438 @@ export class DocumentosService {
     );
 
     return this.serialize(updated);
+  }
+
+  async listMinhasPendenciasAssinatura(user: JwtPayload) {
+    const where: Prisma.DocumentoWhereInput = {
+      assinaturaPedidos: {
+        some: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
+      },
+    };
+    const [total, items] = await Promise.all([
+      this.prisma.documento.count({ where }),
+      this.prisma.documento.findMany({
+        where,
+        include: DOCUMENTO_INCLUDE,
+        orderBy: { updatedAt: 'desc' },
+        take: 50,
+      }),
+    ]);
+    return {
+      total,
+      items: items.map((item) => this.serialize(item, { fullPii: true, usuarioId: user.sub })),
+    };
+  }
+
+  async pendenciasResumo(user: JwtPayload) {
+    const pedidos = await this.prisma.documentoAssinaturaPedido.findMany({
+      where: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
+      orderBy: { requestedAt: 'desc' },
+      take: 8,
+      include: {
+        documento: {
+          select: {
+            id: true,
+            codigo: true,
+            titulo: true,
+            situacao: true,
+            secretaria: { select: { sigla: true, nome: true } },
+          },
+        },
+      },
+    });
+    const total = await this.prisma.documentoAssinaturaPedido.count({
+      where: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
+    });
+    const itens = pedidos.map((pedido) => ({
+      id: pedido.documento.id,
+      codigo: pedido.documento.codigo,
+      titulo: pedido.documento.titulo,
+      prazo: null as string | null,
+      status: pedido.documento.situacao,
+      secretaria: pedido.documento.secretaria?.sigla ?? pedido.documento.secretaria?.nome ?? null,
+      equipe: null as string | null,
+      atrasado: false,
+      href: `/documentos?id=${pedido.documento.id}&pendentes=1`,
+    }));
+    const grupos = itens.length
+      ? [{ id: 'documentos', titulo: 'Documentos para assinatura', total, itens }]
+      : [];
+    return { total, grupos };
+  }
+
+  async listSignatariosInternos(search: string | undefined, user: JwtPayload) {
+    this.assertPodeDisponibilizar(user);
+    const term = search?.trim();
+    const scope = resolveDirectSecretariaFilter(user);
+    if ('id' in scope) return [];
+    const secretariaFiltro =
+      'secretariaId' in scope && scope.secretariaId
+        ? {
+            OR: [
+              { secretariaId: typeof scope.secretariaId === 'string' ? scope.secretariaId : { in: scope.secretariaId.in } },
+              { secretariaAtivaId: typeof scope.secretariaId === 'string' ? scope.secretariaId : { in: scope.secretariaId.in } },
+            ],
+          }
+        : {};
+    const usuarios = await this.prisma.usuario.findMany({
+      where: {
+        ativo: true,
+        AND: [
+          secretariaFiltro,
+          ...(term
+            ? [
+                {
+                  OR: [
+                    { nome: { contains: term, mode: 'insensitive' as const } },
+                    { email: { contains: term, mode: 'insensitive' as const } },
+                    { cargo: { contains: term, mode: 'insensitive' as const } },
+                    { cargoRef: { nome: { contains: term, mode: 'insensitive' as const } } },
+                    { secretaria: { nome: { contains: term, mode: 'insensitive' as const } } },
+                    { secretaria: { sigla: { contains: term, mode: 'insensitive' as const } } },
+                    { perfilAtivo: { nome: { contains: term, mode: 'insensitive' as const } } },
+                  ],
+                },
+              ]
+            : []),
+        ],
+      },
+      take: 30,
+      orderBy: { nome: 'asc' },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        cargo: true,
+        cargoRef: { select: { nome: true } },
+        secretaria: { select: { id: true, nome: true, sigla: true } },
+        perfilAtivo: { select: { id: true, nome: true } },
+      },
+    });
+    return usuarios.map((item) => ({
+      id: item.id,
+      nome: item.nome,
+      email: item.email,
+      cargo: item.cargoRef?.nome || item.cargo,
+      secretaria: item.secretaria,
+      perfil: item.perfilAtivo?.nome ?? null,
+    }));
+  }
+
+  async disponibilizarAssinaturaInterna(id: string, dto: DisponibilizarAssinaturaInternaDto, user: JwtPayload) {
+    this.assertPodeDisponibilizar(user);
+    const documento = await this.requireDocumentoFull(id, user);
+    if (!documento.pdfOriginalStorageKey || documento.situacao === DocumentoSituacao.RASCUNHO) {
+      throw new BadRequestException('Disponibilize apenas documentos concluídos, com PDF original.');
+    }
+    if (
+      documento.situacao === DocumentoSituacao.CANCELADO ||
+      documento.situacao === DocumentoSituacao.SUBSTITUIDO ||
+      documento.situacao === DocumentoSituacao.INVALIDO
+    ) {
+      throw new BadRequestException('Documento não pode ser encaminhado para assinatura nesta situação.');
+    }
+    const ids = [...new Set(dto.destinatarioIds)];
+    if (!ids.length) throw new BadRequestException('Selecione ao menos um usuário.');
+    const ativos = await this.prisma.usuario.findMany({
+      where: { id: { in: ids }, ativo: true },
+      select: { id: true, nome: true },
+    });
+    if (ativos.length !== ids.length) {
+      throw new BadRequestException('Há destinatário inativo ou inexistente.');
+    }
+    const now = new Date();
+    for (const destinatarioId of ids) {
+      const aberto = await this.prisma.documentoAssinaturaPedido.findFirst({
+        where: { documentoId: id, destinatarioId, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
+        select: { id: true },
+      });
+      if (aberto) continue;
+      await this.prisma.documentoAssinaturaPedido.create({
+        data: {
+          documentoId: id,
+          destinatarioId,
+          solicitanteId: user.sub,
+          status: DocumentoAssinaturaPedidoStatus.PENDENTE,
+          requestedAt: now,
+        },
+      });
+    }
+    const nomes = ativos.map((item) => item.nome).join(', ');
+    await this.registrarHistorico(
+      id,
+      documento.situacao,
+      documento.situacao,
+      `Documento disponibilizado para assinatura interna: ${nomes}`,
+      user.sub,
+      { acao: 'disponibilizar_assinatura', destinatarioIds: ids },
+    );
+    await this.audit(user.sub, AuditAction.UPDATE, id, null, {
+      acao: 'disponibilizar_assinatura',
+      destinatarioIds: ids,
+    });
+    return this.getById(id, user);
+  }
+
+  async retirarAssinaturaInterna(pedidoId: string, user: JwtPayload) {
+    this.assertPodeDisponibilizar(user);
+    const pedido = await this.prisma.documentoAssinaturaPedido.findUnique({ where: { id: pedidoId } });
+    if (!pedido || pedido.status !== DocumentoAssinaturaPedidoStatus.PENDENTE) {
+      throw new NotFoundException('Pedido de assinatura não encontrado.');
+    }
+    await this.requireDocumentoFull(pedido.documentoId, user);
+    const updated = await this.prisma.documentoAssinaturaPedido.update({
+      where: { id: pedidoId },
+      data: { status: DocumentoAssinaturaPedidoStatus.RETIRADO, retiradoEm: new Date() },
+    });
+    await this.registrarHistorico(
+      pedido.documentoId,
+      null,
+      DocumentoAssinaturaPedidoStatus.RETIRADO,
+      'Solicitação de assinatura interna retirada.',
+      user.sub,
+      { acao: 'retirar_assinatura', pedidoId, destinatarioId: pedido.destinatarioId },
+    );
+    await this.audit(user.sub, AuditAction.UPDATE, pedido.documentoId, { status: pedido.status }, {
+      acao: 'retirar_assinatura',
+      pedidoId,
+      status: updated.status,
+    });
+    return this.getById(pedido.documentoId, user);
+  }
+
+  async recusarAssinaturaInterna(pedidoId: string, dto: RecusarAssinaturaInternaDto, user: JwtPayload) {
+    const pedido = await this.prisma.documentoAssinaturaPedido.findFirst({
+      where: { id: pedidoId, destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
+    });
+    if (!pedido) throw new NotFoundException('Pedido de assinatura não encontrado.');
+    await this.prisma.documentoAssinaturaPedido.update({
+      where: { id: pedidoId },
+      data: {
+        status: DocumentoAssinaturaPedidoStatus.CANCELADO,
+        canceladoEm: new Date(),
+        canceladoMotivo: dto.motivo?.trim() || 'Recusa do destinatário',
+      },
+    });
+    await this.registrarHistorico(
+      pedido.documentoId,
+      DocumentoAssinaturaPedidoStatus.PENDENTE,
+      DocumentoAssinaturaPedidoStatus.CANCELADO,
+      `Assinatura interna recusada${dto.motivo?.trim() ? `: ${dto.motivo.trim()}` : '.'}`,
+      user.sub,
+      { acao: 'recusar_assinatura', pedidoId },
+    );
+    await this.audit(user.sub, AuditAction.UPDATE, pedido.documentoId, null, {
+      acao: 'recusar_assinatura',
+      pedidoId,
+    });
+    return { ok: true };
+  }
+
+  async assinarInterno(
+    id: string,
+    dto: AssinarDocumentoInternoDto,
+    user: JwtPayload,
+    meta: { ip?: string | null; userAgent?: string | null },
+  ) {
+    if (!dto.confirmacao) {
+      throw new BadRequestException('Confirme a assinatura deste documento.');
+    }
+    const documento = await this.prisma.documento.findFirst({
+      where: { id },
+      include: DOCUMENTO_INCLUDE,
+    });
+    if (!documento) throw new NotFoundException('Documento não encontrado.');
+    const permitido = await this.podeAssinarInterno(documento, user);
+    if (!permitido) {
+      throw new BadRequestException(
+        'Somente o elaborador, um destinatário da solicitação ou um administrador pode assinar este documento.',
+      );
+    }
+    if (
+      documento.situacao === DocumentoSituacao.CANCELADO ||
+      documento.situacao === DocumentoSituacao.SUBSTITUIDO ||
+      documento.situacao === DocumentoSituacao.INVALIDO ||
+      documento.situacao === DocumentoSituacao.RASCUNHO ||
+      !documento.pdfOriginalStorageKey
+    ) {
+      throw new BadRequestException('Documento não pode receber assinatura interna nesta situação.');
+    }
+
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: user.sub },
+      select: {
+        id: true,
+        nome: true,
+        email: true,
+        cpf: true,
+        senhaHash: true,
+        cargo: true,
+        cargoId: true,
+        cargoRef: { select: { nome: true } },
+      },
+    });
+    if (!usuario || !verifyPassword(dto.senha, usuario.senhaHash)) {
+      throw new BadRequestException('Senha inválida.');
+    }
+
+    const cargo = usuario.cargoRef?.nome || usuario.cargo || null;
+    await this.prisma.documentoAssinatura.create({
+      data: {
+        documentoId: id,
+        assinanteNome: usuario.nome,
+        assinanteDocumento: usuario.cpf,
+        assinanteEmail: usuario.email,
+        qualificacao: cargo,
+        assinanteUsuarioId: usuario.id,
+        canal: 'interna',
+        coletadaPorId: user.sub,
+        ip: meta.ip ?? null,
+        userAgent: meta.userAgent ?? null,
+        pdfOriginalSha256: documento.pdfOriginalSha256,
+        metadata: {
+          tipo: 'interna',
+          metodo: 'usuario_senha',
+          usuarioId: usuario.id,
+          cargo,
+          cargoId: usuario.cargoId,
+          confirmacao: true,
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    await this.prisma.documentoAssinaturaPedido.updateMany({
+      where: {
+        documentoId: id,
+        destinatarioId: user.sub,
+        status: DocumentoAssinaturaPedidoStatus.PENDENTE,
+      },
+      data: { status: DocumentoAssinaturaPedidoStatus.ASSINADO, signedAt: new Date() },
+    });
+
+    const { hashArquivoFinal } = await this.regenerarPdfAssinado(id, documento.conteudoTravadoEm);
+    await this.registrarHistorico(
+      id,
+      documento.situacao,
+      DocumentoSituacao.ASSINADO_VIGENTE,
+      `Documento assinado eletronicamente por ${usuario.nome}`,
+      user.sub,
+      {
+        acao: 'assinar_interno',
+        metodo: 'usuario_senha',
+        pdfAssinadoSha256: hashArquivoFinal,
+        assinanteUsuarioId: usuario.id,
+        assinanteNome: usuario.nome,
+        assinanteEmail: usuario.email,
+        cargo,
+      },
+    );
+    await this.audit(user.sub, AuditAction.UPDATE, id, { situacao: documento.situacao }, {
+      acao: 'assinar_interno',
+      situacao: DocumentoSituacao.ASSINADO_VIGENTE,
+      pdfAssinadoSha256: hashArquivoFinal,
+      assinanteUsuarioId: usuario.id,
+    });
+    return this.getById(id, user);
+  }
+
+  private async regenerarPdfAssinado(id: string, conteudoTravadoEm: Date | null) {
+    const withAssinaturas = await this.requireDocumentoFullById(id);
+    const basePdf = await this.resolvePdfBaseParaAssinatura(withAssinaturas);
+    const assinaturasValidas = withAssinaturas.assinaturas.filter((item) => !item.invalida);
+    const assinaturasPdf = [];
+    for (const assinatura of assinaturasValidas) {
+      let imageBuffer: Buffer | null = null;
+      if (assinatura.canal !== 'interna' && assinatura.evidenciaStorageKey) {
+        const loaded = await this.storageService.readObjectBuffer(assinatura.evidenciaStorageKey, 'image/png');
+        imageBuffer = loaded?.buffer
+          ? (await shrinkImageForPdf(loaded.buffer, loaded.mimeType || 'image/jpeg')).buffer
+          : null;
+      }
+      const meta = this.asRecord(assinatura.metadata);
+      assinaturasPdf.push({
+        canal: assinatura.canal,
+        assinanteNome: assinatura.assinanteNome,
+        assinanteDocumento:
+          assinatura.canal === 'interna'
+            ? null
+            : displayAssinanteCpf({
+                cpf: assinatura.assinanteDocumento,
+                cpfNaoInformado: Boolean(meta.cpfNaoInformado),
+              }),
+        assinanteEmail:
+          assinatura.canal === 'interna'
+            ? assinatura.assinanteEmail
+            : displayAssinanteEmail({
+                email: assinatura.assinanteEmail,
+                emailNaoInformado: Boolean(meta.emailNaoInformado),
+              }),
+        qualificacao: assinatura.qualificacaoOutro?.trim() || assinatura.qualificacao,
+        coletadaEm: assinatura.coletadaEm.toISOString(),
+        imageBuffer,
+      });
+    }
+
+    const codigoVerificador = generateCodigoVerificador(withAssinaturas.codigo, withAssinaturas.codigoValidacao);
+    const validationUrl = buildPublicValidationUrl(withAssinaturas.codigoValidacao, codigoVerificador);
+    const { pdfBuffer, hashArquivoFinal } = await appendAssinaturasAoPdfOriginal(basePdf, assinaturasPdf, {
+      codigo: withAssinaturas.codigo,
+      codigoValidacao: withAssinaturas.codigoValidacao,
+      codigoVerificador,
+      situacaoLabel: SITUACAO_LABELS[DocumentoSituacao.ASSINADO_VIGENTE],
+      geradoEm: new Date().toLocaleString('pt-BR'),
+      validationUrl,
+    });
+    const storedPdf = await this.storageService.persistBuffer(pdfBuffer, 'application/pdf', 'documentos');
+    const updated = await this.prisma.documento.update({
+      where: { id },
+      data: {
+        situacao: DocumentoSituacao.ASSINADO_VIGENTE,
+        conteudoTravadoEm: conteudoTravadoEm ?? new Date(),
+        pdfAssinadoStorageKey: storedPdf.storageKey,
+        pdfAssinadoUrl: storedPdf.url,
+        pdfAssinadoSha256: hashArquivoFinal,
+      },
+      include: DOCUMENTO_INCLUDE,
+    });
+    await this.prisma.documentoAssinatura.updateMany({
+      where: { documentoId: id, invalida: false },
+      data: { pdfAssinadoSha256: hashArquivoFinal },
+    });
+    return { updated, hashArquivoFinal };
+  }
+
+  private assertPodeDisponibilizar(user: JwtPayload) {
+    if (isAdministradorSistema(user)) return;
+    if (
+      !hasAnyPermission(user, [
+        'documentos.disponibilizar_assinatura',
+        'documentos.administrar',
+        'usuarios.gerenciar',
+      ])
+    ) {
+      throw new ForbiddenException('Sem permissão para disponibilizar assinatura interna.');
+    }
+  }
+
+  private async podeAssinarInterno(
+    documento: { id: string; criadoPorId: string | null; responsavelId: string | null },
+    user: JwtPayload,
+  ) {
+    if (isAdministradorSistema(user) || hasAnyPermission(user, ['documentos.administrar', 'usuarios.gerenciar'])) {
+      return true;
+    }
+    const pedido = await this.prisma.documentoAssinaturaPedido.findFirst({
+      where: {
+        documentoId: documento.id,
+        destinatarioId: user.sub,
+        status: DocumentoAssinaturaPedidoStatus.PENDENTE,
+      },
+      select: { id: true },
+    });
+    if (pedido) return true;
+    const elaborador = documento.criadoPorId === user.sub || documento.responsavelId === user.sub;
+    return elaborador && hasAnyPermission(user, ['documentos.assinar_interno']);
   }
 
   /**
@@ -2068,6 +2465,14 @@ export class DocumentosService {
       and.push({ origem: DocumentoOrigem.AVULSO });
     }
 
+    if (query.pendentesAssinatura === '1' || query.assinatura === 'minha') {
+      and.push({
+        assinaturaPedidos: {
+          some: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
+        },
+      });
+    }
+
     const search = query.search?.trim();
     if (search) {
       and.push({
@@ -2095,6 +2500,29 @@ export class DocumentosService {
       where: { id, ...this.scopeFilter(user) },
     });
     if (!documento) throw new NotFoundException('Documento não encontrado.');
+    return documento;
+  }
+
+  /** Escopo do módulo, pedido de assinatura ou elaborador. Destinatário vê só o documento encaminhado. */
+  private async requireDocumentoVisivel(id: string, user: JwtPayload) {
+    const modulo =
+      isAdministradorSistema(user) ||
+      hasDocumentosModuloAccess(user.permissoes) ||
+      hasAnyPermission(user, ['documentos.visualizar', 'documentos.administrar']);
+    if (modulo) {
+      const noEscopo = await this.prisma.documento.findFirst({
+        where: { id, ...this.scopeFilter(user) },
+      });
+      if (noEscopo) return noEscopo;
+    }
+    const documento = await this.prisma.documento.findFirst({ where: { id } });
+    if (!documento) throw new NotFoundException('Documento não encontrado.');
+    const pedido = await this.prisma.documentoAssinaturaPedido.findFirst({
+      where: { documentoId: id, destinatarioId: user.sub },
+      select: { id: true },
+    });
+    const elaborador = documento.criadoPorId === user.sub || documento.responsavelId === user.sub;
+    if (!pedido && !elaborador) throw new NotFoundException('Documento não encontrado.');
     return documento;
   }
 
@@ -2380,7 +2808,7 @@ export class DocumentosService {
     };
   }
 
-  private serialize(documento: DocumentoLoaded | any, opts?: { fullPii?: boolean }) {
+  private serialize(documento: DocumentoLoaded | any, opts?: { fullPii?: boolean; usuarioId?: string }) {
     // Telas internas autenticadas: CPF/e-mail completos. Validação pública usa map próprio mascarado.
     const fullPii = opts?.fullPii !== false;
     const codigoVerificador = generateCodigoVerificador(
@@ -2479,6 +2907,13 @@ export class DocumentosService {
       assinaturas: (documento.assinaturas ?? [])
         .filter((item: any) => !item.invalida)
         .map((item: any) => this.mapAssinaturaApi(item, { fullPii })),
+      signatariosPendentes: (documento.assinaturaPedidos ?? []).map((pedido: any) => ({
+        id: pedido.id,
+        nome: pedido.destinatario?.nome ?? 'Usuário',
+        email: pedido.destinatario?.email ?? null,
+        requestedAt: pedido.requestedAt?.toISOString?.() ?? pedido.requestedAt,
+        meu: opts?.usuarioId ? pedido.destinatario?.id === opts.usuarioId : false,
+      })),
       createdAt: documento.createdAt?.toISOString?.() ?? documento.createdAt,
       updatedAt: documento.updatedAt?.toISOString?.() ?? documento.updatedAt,
       linkValidacao: buildPublicValidationUrl(documento.codigoValidacao, codigoVerificador),

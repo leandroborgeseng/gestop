@@ -87,6 +87,16 @@ export async function syncPermissionsCatalog(prisma: PrismaClient) {
       modulo: 'documentos',
     },
     {
+      chave: 'documentos.assinar_interno',
+      descricao: 'Assinar documento internamente com usuário e senha',
+      modulo: 'documentos',
+    },
+    {
+      chave: 'documentos.disponibilizar_assinatura',
+      descricao: 'Disponibilizar documento para assinatura interna',
+      modulo: 'documentos',
+    },
+    {
       chave: 'documentos.cancelar_assinado',
       descricao: 'Cancelar PDF assinado',
       modulo: 'documentos',

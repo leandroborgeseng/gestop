@@ -19,6 +19,8 @@ const LEGACY_DOCUMENTOS_CRIAR_AVULSO = 'documentos.criar_avulso';
 const LEGACY_DOCUMENTOS_EDITAR_VINCULO = 'documentos.editar_vinculo';
 const LEGACY_DOCUMENTOS_GERAR_PDF = 'documentos.gerar_pdf';
 const LEGACY_DOCUMENTOS_COLETAR_ASSINATURA = 'documentos.coletar_assinatura';
+const LEGACY_DOCUMENTOS_ASSINAR_INTERNO = 'documentos.assinar_interno';
+const LEGACY_DOCUMENTOS_DISPONIBILIZAR_ASSINATURA = 'documentos.disponibilizar_assinatura';
 const LEGACY_DOCUMENTOS_CANCELAR_ASSINADO = 'documentos.cancelar_assinado';
 const LEGACY_DOCUMENTOS_ADMINISTRAR = 'documentos.administrar';
 
@@ -157,6 +159,12 @@ export function deriveLegacyPermissionKeys(matrixKeys: Set<string>): Set<string>
     }
     if (matrixKeys.has(permissionMatrixKey('documentos', 'coletar_assinatura', 'executar'))) {
       legacy.add(LEGACY_DOCUMENTOS_COLETAR_ASSINATURA);
+    }
+    if (matrixKeys.has(permissionMatrixKey('documentos', 'assinar_interno', 'executar'))) {
+      legacy.add(LEGACY_DOCUMENTOS_ASSINAR_INTERNO);
+    }
+    if (matrixKeys.has(permissionMatrixKey('documentos', 'disponibilizar_assinatura', 'executar'))) {
+      legacy.add(LEGACY_DOCUMENTOS_DISPONIBILIZAR_ASSINATURA);
     }
     if (matrixKeys.has(permissionMatrixKey('documentos', 'cancelar_assinado', 'executar'))) {
       legacy.add(LEGACY_DOCUMENTOS_CANCELAR_ASSINADO);
@@ -302,6 +310,12 @@ export function expandLegacyToMatrixKeys(legacyKeys: Set<string>): Set<string> {
   }
   if (legacyKeys.has(LEGACY_DOCUMENTOS_COLETAR_ASSINATURA)) {
     matrix.add(permissionMatrixKey('documentos', 'coletar_assinatura', 'executar'));
+  }
+  if (legacyKeys.has(LEGACY_DOCUMENTOS_ASSINAR_INTERNO)) {
+    matrix.add(permissionMatrixKey('documentos', 'assinar_interno', 'executar'));
+  }
+  if (legacyKeys.has(LEGACY_DOCUMENTOS_DISPONIBILIZAR_ASSINATURA)) {
+    matrix.add(permissionMatrixKey('documentos', 'disponibilizar_assinatura', 'executar'));
   }
   if (legacyKeys.has(LEGACY_DOCUMENTOS_CANCELAR_ASSINADO)) {
     matrix.add(permissionMatrixKey('documentos', 'cancelar_assinado', 'executar'));

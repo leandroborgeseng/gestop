@@ -135,6 +135,8 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
       { id: 'editar_vinculo', label: 'Editar vínculo', actions: ['alterar'] },
       { id: 'gerar_pdf', label: 'Gerar PDF', actions: ['visualizar', 'executar'] },
       { id: 'coletar_assinatura', label: 'Coletar assinatura', actions: ['executar'] },
+      { id: 'assinar_interno', label: 'Assinar documento internamente', actions: ['executar'] },
+      { id: 'disponibilizar_assinatura', label: 'Disponibilizar para assinatura interna', actions: ['executar'] },
       { id: 'cancelar_assinado', label: 'Cancelar PDF assinado', actions: ['executar'] },
       { id: 'administrar', label: 'Administrar documentos', actions: ['alterar', 'excluir', 'executar'] },
     ],

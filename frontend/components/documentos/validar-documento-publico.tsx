@@ -249,7 +249,7 @@ export function ValidarDocumentoPublico({
                 </p>
                 {!data.possuiPdfAssinado ? (
                   <p className="text-[12px] text-[var(--ink-3)]">
-                    Este resultado refere-se ao documento sem assinatura externa vigente
+                    Este resultado refere-se ao documento sem assinatura vigente
                     {data.possuiPdfOriginal ? ' (há PDF original)' : ''}.
                   </p>
                 ) : null}
@@ -266,7 +266,12 @@ export function ValidarDocumentoPublico({
                         key={`${item.assinanteNome}-${index}`}
                         className="rounded-[10px] border border-[var(--line)] p-2"
                       >
-                        <p className="font-semibold text-[var(--ink)]">{item.assinanteNome}</p>
+                        <p className="font-semibold text-[var(--ink)]">
+                          {item.assinanteNome}
+                          <span className="ml-2 text-[11px] font-medium text-[var(--ink-3)]">
+                            {item.canal === 'interna' ? 'Assinatura interna' : 'Assinatura externa'}
+                          </span>
+                        </p>
                         <p className="text-[var(--ink-3)]">
                           {item.qualificacao ?? '—'} · CPF{' '}
                           {item.cpfNaoInformado
@@ -284,7 +289,7 @@ export function ValidarDocumentoPublico({
                     ))}
                   </ul>
                 ) : (
-                  <p className="text-[12px] text-[var(--ink-3)]">Nenhuma assinatura externa vigente</p>
+                  <p className="text-[12px] text-[var(--ink-3)]">Nenhuma assinatura vigente</p>
                 )}
               </div>
             </div>
