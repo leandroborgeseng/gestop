@@ -27,7 +27,10 @@ export function LikertScale({
 
   return (
     <div
-      className={cn('grid gap-2', niveis.length <= 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-5')}
+      className={cn(
+        'grid w-full min-w-0 gap-2',
+        niveis.length <= 4 ? 'grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-4' : 'grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-5',
+      )}
       role={preview ? undefined : 'radiogroup'}
       aria-label={preview ? undefined : 'Escala Likert'}
     >
@@ -37,8 +40,8 @@ export function LikertScale({
 
         const content = (
           <>
-            <span className="block text-[13px] font-semibold leading-tight">{nivel.label}</span>
-            <span className="mt-1 block text-[11px] font-medium opacity-80">
+            <span className="block break-words text-[13px] font-semibold leading-tight">{nivel.label}</span>
+            <span className="mt-1 block break-words text-[11px] font-medium opacity-80">
               {nivel.pontuacao}/10 · {LIKERT_CATEGORIA_LABELS[nivel.categoria]}
             </span>
           </>
@@ -49,7 +52,7 @@ export function LikertScale({
             <div
               key={nivel.id}
               className={cn(
-                'flex min-h-[4.5rem] flex-col items-center justify-center rounded-[var(--md-shape-md)] border px-2 text-center',
+                'flex min-h-[4.5rem] min-w-0 flex-col items-center justify-center rounded-[var(--md-shape-md)] border px-2 text-center',
                 tone,
               )}
             >
@@ -67,7 +70,7 @@ export function LikertScale({
             disabled={disabled}
             onClick={() => onChange?.(nivel)}
             className={cn(
-              'flex min-h-[4.5rem] flex-col items-center justify-center rounded-[var(--md-shape-md)] border px-2 text-center transition-all',
+              'flex min-h-[4.5rem] min-w-0 w-full flex-col items-center justify-center rounded-[var(--md-shape-md)] border px-2 text-center transition-all',
               isSelected
                 ? cn(tone, 'ring-2 ring-[var(--brand)] ring-offset-2 ring-offset-[var(--surface)]')
                 : 'border-[var(--line-2)] bg-[var(--surface-2)] text-[var(--ink-2)] hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]',

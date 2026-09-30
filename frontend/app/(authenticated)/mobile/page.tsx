@@ -432,7 +432,7 @@ export default function MobilePage() {
           </div>
         }
       >
-        <div className={cn(showProgramadas ? 'space-y-4 pb-32' : 'mx-auto max-w-2xl space-y-4 pb-32')}>
+        <div className={cn('w-full min-w-0 max-w-full overflow-x-hidden', showProgramadas ? 'space-y-4 pb-32' : 'mx-auto max-w-2xl space-y-4 pb-32')}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1">
               <PwaInstallBanner />
@@ -474,7 +474,7 @@ export default function MobilePage() {
                 </div>
               </section>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
                 <Chip
                   active={showProgramadas}
                   onClick={() => {
@@ -498,7 +498,7 @@ export default function MobilePage() {
               </div>
 
               {fillingFromProgramada ? (
-                <Alert variant="info">
+                <Alert variant="info" className="break-words">
                   Vistoria programada em andamento
                   {programadaCtx?.checklistNome ? ` · ${programadaCtx.checklistNome}` : ''}
                   {programadaCtx?.dataProgramada
@@ -577,11 +577,11 @@ export default function MobilePage() {
               {selectedUnit ? (
                 <Card elevation={1}>
                   <CardContent className="p-4">
-                    <p className="flex items-center gap-2 text-[15px] font-semibold text-[var(--ink)]">
-                      <MapPin className="h-4 w-4 text-[var(--brand)]" />
-                      {selectedUnit.nome}
+                    <p className="flex min-w-0 items-start gap-2 text-[15px] font-semibold text-[var(--ink)]">
+                      <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[var(--brand)]" />
+                      <span className="min-w-0 break-words">{selectedUnit.nome}</span>
                     </p>
-                    <p className="mt-1 text-[13px] text-[var(--ink-3)]">
+                    <p className="mt-1 break-words text-[13px] text-[var(--ink-3)]">
                       {formatUnidadeTipo(selectedUnit.tipo)} · {selectedUnit.secretaria.sigla} ·{' '}
                       {selectedUnit.bairro ?? 'Sem bairro'} · raio {selectedUnit.raioValidacaoMetros} m
                     </p>

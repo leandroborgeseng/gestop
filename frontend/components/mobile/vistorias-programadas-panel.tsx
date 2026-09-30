@@ -152,7 +152,7 @@ export function VistoriasProgramadasPanel({
   }
 
   return (
-    <div className="space-y-3 pb-28">
+    <div className="w-full min-w-0 max-w-full space-y-3 overflow-x-hidden pb-28">
       <div className="flex flex-wrap items-end gap-2">
         <Field label="Data inicial" className="min-w-[140px] flex-1 sm:flex-none">
           <input
@@ -274,7 +274,7 @@ export function VistoriasProgramadasPanel({
                       onMouseEnter={() => setHoveredId(item.id)}
                       onMouseLeave={() => setHoveredId(null)}
                       className={cn(
-                        'mb-0.5 flex w-full flex-col gap-1 rounded-[var(--r-md)] border border-transparent px-3 py-2.5 text-left transition-colors',
+                        'mb-0.5 flex w-full min-w-0 flex-col gap-1 rounded-[var(--r-md)] border border-transparent px-3 py-2.5 text-left transition-colors',
                         item.tipo === 'ATRASADA' && 'bg-[var(--danger-bg)]/40',
                         item.data === todayKey() && item.tipo !== 'ATRASADA' && 'bg-[var(--warn-bg)]/50',
                         isSelected
@@ -282,15 +282,15 @@ export function VistoriasProgramadasPanel({
                           : 'hover:bg-[var(--surface-2)]',
                       )}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-semibold text-[var(--ink)]">{item.unidade.nome}</span>
-                        <Badge variant={meta.badge}>{meta.label}</Badge>
+                      <div className="flex min-w-0 items-start justify-between gap-2">
+                        <span className="min-w-0 break-words text-[13px] font-semibold text-[var(--ink)]">{item.unidade.nome}</span>
+                        <Badge variant={meta.badge} className="shrink-0">{meta.label}</Badge>
                       </div>
-                      <p className="text-[12px] text-[var(--ink-3)]">
+                      <p className="break-words text-[12px] text-[var(--ink-3)]">
                         {item.unidade.endereco}
                         {item.unidade.bairro ? ` · ${item.unidade.bairro}` : ''}
                       </p>
-                      <p className="text-[12px] text-[var(--ink-2)]">
+                      <p className="break-words text-[12px] text-[var(--ink-2)]">
                         {item.checklist.nome} · {CRONOGRAMA_FREQUENCIA_LABELS[item.frequencia]}
                       </p>
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--ink-3)]">
@@ -371,8 +371,8 @@ export function VistoriasProgramadasPanel({
       >
         {confirmItem ? (
           <div className="space-y-3">
-            <p className="text-[16px] font-semibold text-[var(--ink)]">{confirmItem.unidade.nome}</p>
-            <p className="text-[13px] text-[var(--ink-3)]">
+            <p className="break-words text-[16px] font-semibold text-[var(--ink)]">{confirmItem.unidade.nome}</p>
+            <p className="break-words text-[13px] text-[var(--ink-3)]">
               {confirmItem.unidade.endereco}
               {confirmItem.unidade.bairro ? ` · ${confirmItem.unidade.bairro}` : ''}
             </p>
@@ -404,7 +404,7 @@ function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-[var(--r-md)] bg-[var(--muted-bg)] px-3 py-2">
       <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{label}</p>
-      <p className="mt-0.5 text-[13px] text-[var(--ink)]">{value}</p>
+      <p className="mt-0.5 break-words text-[13px] text-[var(--ink)]">{value}</p>
     </div>
   );
 }

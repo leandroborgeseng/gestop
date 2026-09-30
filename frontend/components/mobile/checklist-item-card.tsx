@@ -82,10 +82,10 @@ export function ChecklistItemCard({
   return (
     <Card elevation={1}>
       <CardContent className="space-y-4 p-4">
-        <Chip variant="brand">{item.codigo}</Chip>
-        <h3 className="md-title-md text-[var(--md-on-surface)]">{item.titulo}</h3>
+        <Chip variant="brand" className="max-w-full">{item.codigo}</Chip>
+        <h3 className="md-title-md break-words text-[var(--md-on-surface)]">{item.titulo}</h3>
         {item.descricao ? (
-          <p className="md-body-md text-[var(--md-on-surface-variant)]">{item.descricao}</p>
+          <p className="md-body-md break-words text-[var(--md-on-surface-variant)]">{item.descricao}</p>
         ) : null}
 
         {item.tipo === 'BOOLEANO' ? (
@@ -156,7 +156,7 @@ export function ChecklistItemCard({
                     value={current.valorTexto ?? ''}
                     onChange={(e) => onChange({ valorTexto: e.target.value })}
                     placeholder="Descreva a verificação"
-                    className="min-h-28 w-full resize-y rounded-[var(--md-shape-sm)] border border-[var(--md-outline)] bg-[var(--md-surface-container-lowest)] p-4 md-body-md focus:border-[var(--color-brand-primary)] focus:outline-none focus:ring-4 focus:ring-[color-mix(in_srgb,var(--color-brand-primary)_12%,transparent)]"
+                    className="min-h-28 w-full min-w-0 max-w-full resize-y rounded-[var(--md-shape-sm)] border border-[var(--md-outline)] bg-[var(--md-surface-container-lowest)] p-4 md-body-md focus:border-[var(--color-brand-primary)] focus:outline-none focus:ring-4 focus:ring-[color-mix(in_srgb,var(--color-brand-primary)_12%,transparent)]"
                   />
                 ) : (
                   <Input
@@ -182,14 +182,15 @@ export function ChecklistItemCard({
               ) : null}
               {item.tipo === 'MULTIPLA_ESCOLHA' ? (
                 multiplaEscolha.modoExibicao === 'LISTA' ? (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid min-w-0 grid-cols-1 gap-2">
                     {opcoesVisiveis.map((opcao, optionIndex) => (
                       <Chip
                         key={`${opcao}-${optionIndex}`}
                         active={current.valorTexto === opcao}
                         onClick={() => onChange({ valorTexto: opcao })}
+                        className="h-auto min-h-[36px] w-full max-w-full justify-start whitespace-normal py-2 text-left"
                       >
-                        {opcao}
+                        <span className="min-w-0 break-words">{opcao}</span>
                       </Chip>
                     ))}
                   </div>
@@ -228,12 +229,12 @@ export function ChecklistItemCard({
           value={current.comentario}
           onChange={(e) => onChange({ comentario: e.target.value })}
           placeholder="Observação"
-          className="min-h-28 w-full rounded-[var(--md-shape-sm)] border border-[var(--md-outline)] bg-[var(--md-surface-container-lowest)] p-4 md-body-md focus:border-[var(--color-brand-primary)] focus:outline-none focus:ring-4 focus:ring-[color-mix(in_srgb,var(--color-brand-primary)_12%,transparent)]"
+          className="min-h-28 w-full min-w-0 max-w-full rounded-[var(--md-shape-sm)] border border-[var(--md-outline)] bg-[var(--md-surface-container-lowest)] p-4 md-body-md focus:border-[var(--color-brand-primary)] focus:outline-none focus:ring-4 focus:ring-[color-mix(in_srgb,var(--color-brand-primary)_12%,transparent)]"
         />
 
         {showEvidenceUi ? (
           <div className="space-y-3">
-            <label className="flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-[var(--md-shape-md)] border border-dashed border-[var(--md-outline)] bg-[var(--md-surface-container-low)] px-3 md-label-lg text-[var(--md-on-surface-variant)] transition hover:bg-[var(--md-surface-container)]">
+            <label className="flex min-h-14 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-[var(--md-shape-md)] border border-dashed border-[var(--md-outline)] bg-[var(--md-surface-container-low)] px-3 text-center md-label-lg break-words text-[var(--md-on-surface-variant)] transition hover:bg-[var(--md-surface-container)]">
               <Camera className="h-5 w-5" />
               {attachLabel}
               <input

@@ -27,7 +27,7 @@ export function Field({
   tooltip?: string;
 }) {
   return (
-    <div className={cn('flex flex-col gap-[5px]', className)}>
+    <div className={cn('flex min-w-0 max-w-full flex-col gap-[5px]', className)}>
       <div className="flex items-center gap-1.5">
         <Label>{label}</Label>
         {tooltip ? <Hint text={tooltip} /> : null}

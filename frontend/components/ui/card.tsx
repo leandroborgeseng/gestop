@@ -9,7 +9,7 @@ export function Card({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)]',
+        'min-w-0 max-w-full overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)]',
         elevation === 0 && 'shadow-none',
         elevation === 1 && 'shadow-[var(--sh-sm)]',
         elevation === 2 && 'shadow-[var(--sh-md)]',
