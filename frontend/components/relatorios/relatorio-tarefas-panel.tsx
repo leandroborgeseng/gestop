@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { getRelatorioTarefas } from '@/lib/api';
+import { getRelatorioTarefas, getSecretarias, listEquipesExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
 import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL, type RelatorioTarefasResponse } from '@/lib/chamado-tarefa';
 
 export function RelatorioTarefasPanel() {
@@ -10,6 +10,22 @@ export function RelatorioTarefasPanel() {
   const [to, setTo] = useState('');
   const [status, setStatus] = useState('');
   const [prioridade, setPrioridade] = useState('');
+  const [secretariaId, setSecretariaId] = useState('');
+  const [equipeId, setEquipeId] = useState('');
+  const [responsavelId, setResponsavelId] = useState('');
+  const [tipoChamadoId, setTipoChamadoId] = useState('');
+  const [chamado, setChamado] = useState('');
+  const [secretarias, setSecretarias] = useState<Array<{ id: string; nome: string; sigla: string }>>([]);
+  const [equipes, setEquipes] = useState<Array<{ id: string; nome: string }>>([]);
+  const [responsaveis, setResponsaveis] = useState<Array<{ id: string; nome: string }>>([]);
+  const [tipos, setTipos] = useState<Array<{ id: string; nome: string }>>([]);
+
+  useEffect(() => {
+    getSecretarias().then(setSecretarias).catch(() => setSecretarias([]));
+    listEquipesExecucao().then(setEquipes).catch(() => setEquipes([]));
+    listUsuariosAtivosExecucao().then(setResponsaveis).catch(() => setResponsaveis([]));
+    listTiposChamadoOpcoes().then(setTipos).catch(() => setTipos([]));
+  }, []);
   const [data, setData] = useState<RelatorioTarefasResponse | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,6 +40,11 @@ export function RelatorioTarefasPanel() {
           prazoTo: to ? new Date(`${to}T23:59:59`).toISOString() : undefined,
           status: status || undefined,
           prioridade: prioridade || undefined,
+          secretariaId: secretariaId || undefined,
+          equipeId: equipeId || undefined,
+          responsavelId: responsavelId || undefined,
+          tipoChamadoId: tipoChamadoId || undefined,
+          search: chamado.trim() || undefined,
         }),
       );
     } catch (err) {
@@ -62,6 +83,31 @@ export function RelatorioTarefasPanel() {
             </option>
           ))}
         </select>
+        <select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] px-2 text-[12px]">
+          <option value="">Secretaria</option>
+          {secretarias.map((item) => (
+            <option key={item.id} value={item.id}>{item.sigla}</option>
+          ))}
+        </select>
+        <select value={equipeId} onChange={(event) => setEquipeId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] px-2 text-[12px]">
+          <option value="">Equipe</option>
+          {equipes.map((item) => (
+            <option key={item.id} value={item.id}>{item.nome}</option>
+          ))}
+        </select>
+        <select value={responsavelId} onChange={(event) => setResponsavelId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] px-2 text-[12px]">
+          <option value="">Responsável</option>
+          {responsaveis.map((item) => (
+            <option key={item.id} value={item.id}>{item.nome}</option>
+          ))}
+        </select>
+        <select value={tipoChamadoId} onChange={(event) => setTipoChamadoId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] px-2 text-[12px]">
+          <option value="">Tipo de chamado</option>
+          {tipos.map((item) => (
+            <option key={item.id} value={item.id}>{item.nome}</option>
+          ))}
+        </select>
+        <input value={chamado} onChange={(event) => setChamado(event.target.value)} placeholder="Chamado ou tarefa" className="h-9 rounded-[10px] border border-[var(--line)] px-2 text-[12px]" />
         <Button type="button" size="sm" variant="filled" disabled={loading} onClick={() => void gerar()}>
           {loading ? 'Gerando…' : 'Atualizar'}
         </Button>

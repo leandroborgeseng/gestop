@@ -6,7 +6,7 @@ import { ChamadosExecucaoMap } from '@/components/chamados/chamados-execucao-map
 import { ChamadoTarefaSheet } from '@/components/chamados/chamado-tarefa-sheet';
 import { Badge } from '@/components/ui/badge';
 import { Chip } from '@/components/ui/chip';
-import { listTarefasExecucao } from '@/lib/api';
+import { getSecretarias, listEquipesExecucao, listTarefasExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
 import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL, TAREFA_STATUS_PENDENTES, type TarefasExecucaoResponse } from '@/lib/chamado-tarefa';
 import type { ChamadoMapPoint } from '@/lib/types';
 
@@ -21,6 +21,15 @@ export function ExecucaoTarefasPanel() {
   const [historico, setHistorico] = useState(false);
   const [prazoFrom, setPrazoFrom] = useState('');
   const [prazoTo, setPrazoTo] = useState('');
+  const [secretariaId, setSecretariaId] = useState('');
+  const [equipeId, setEquipeId] = useState('');
+  const [responsavelId, setResponsavelId] = useState('');
+  const [tipoChamadoId, setTipoChamadoId] = useState('');
+  const [prioridade, setPrioridade] = useState('');
+  const [secretarias, setSecretarias] = useState<Array<{ id: string; nome: string; sigla: string }>>([]);
+  const [equipes, setEquipes] = useState<Array<{ id: string; nome: string }>>([]);
+  const [responsaveis, setResponsaveis] = useState<Array<{ id: string; nome: string }>>([]);
+  const [tipos, setTipos] = useState<Array<{ id: string; nome: string }>>([]);
   const [aberta, setAberta] = useState<string | null>(searchParams.get('tarefa'));
   const [mobile, setMobile] = useState<'lista' | 'mapa'>('lista');
 
@@ -34,6 +43,11 @@ export function ExecucaoTarefasPanel() {
       historico: historico ? '1' : undefined,
       prazoFrom: prazoFrom ? new Date(prazoFrom).toISOString() : undefined,
       prazoTo: prazoTo ? new Date(prazoTo).toISOString() : undefined,
+      secretariaId: secretariaId || undefined,
+      equipeId: equipeId || undefined,
+      responsavelId: responsavelId || undefined,
+      tipoChamadoId: tipoChamadoId || undefined,
+      prioridade: prioridade || undefined,
     })
       .then(setData)
       .catch((err) => setErro(err instanceof Error ? err.message : 'Falha ao carregar tarefas.'));
@@ -42,7 +56,14 @@ export function ExecucaoTarefasPanel() {
   useEffect(() => {
     carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, atribuidaAMim, minhasEquipes, atrasadas, historico, prazoFrom, prazoTo]);
+  }, [status, atribuidaAMim, minhasEquipes, atrasadas, historico, prazoFrom, prazoTo, secretariaId, equipeId, responsavelId, tipoChamadoId, prioridade]);
+
+  useEffect(() => {
+    getSecretarias().then(setSecretarias).catch(() => setSecretarias([]));
+    listEquipesExecucao().then(setEquipes).catch(() => setEquipes([]));
+    listUsuariosAtivosExecucao().then(setResponsaveis).catch(() => setResponsaveis([]));
+    listTiposChamadoOpcoes().then(setTipos).catch(() => setTipos([]));
+  }, []);
 
   const pontos = useMemo<ChamadoMapPoint[]>(() => {
     return (data?.items ?? [])
@@ -90,6 +111,46 @@ export function ExecucaoTarefasPanel() {
           ))}
           <option value="CONCLUIDA">Concluída</option>
           <option value="CANCELADA">Cancelada</option>
+        </select>
+        <select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
+          <option value="">Secretaria da tarefa</option>
+          {secretarias.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.sigla}
+            </option>
+          ))}
+        </select>
+        <select value={equipeId} onChange={(event) => setEquipeId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
+          <option value="">Equipe</option>
+          {equipes.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.nome}
+            </option>
+          ))}
+        </select>
+        <select value={responsavelId} onChange={(event) => setResponsavelId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
+          <option value="">Responsável</option>
+          {responsaveis.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.nome}
+            </option>
+          ))}
+        </select>
+        <select value={tipoChamadoId} onChange={(event) => setTipoChamadoId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
+          <option value="">Tipo de chamado</option>
+          {tipos.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.nome}
+            </option>
+          ))}
+        </select>
+        <select value={prioridade} onChange={(event) => setPrioridade(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
+          <option value="">Prioridade</option>
+          {Object.entries(TAREFA_PRIORIDADE_LABEL).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
         </select>
         <input type="date" value={prazoFrom} onChange={(event) => setPrazoFrom(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] px-2 text-[12px]" />
         <input type="date" value={prazoTo} onChange={(event) => setPrazoTo(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] px-2 text-[12px]" />
