@@ -1,0 +1,22 @@
+---
+description: Atualizar a documentação da aba administrativa no mesmo conjunto de mudanças do software
+alwaysApply: true
+---
+
+# Documentação administrativa
+
+Sempre que o software mudar, atualize a documentação formal da aba administrativa no mesmo conjunto de mudanças. Não deixe a documentação para um commit posterior.
+
+Dispara atualização: schema Prisma, rotas, telas, permissões, módulos, API, atores ou regras de negócio.
+
+Onde: Administração → aba Documentação (rota `/admin`).
+
+Artefatos obrigatórios:
+
+- diagrama do banco — `frontend/content/engenharia/modelo-dados.ts`
+- diagrama de casos de uso — `frontend/content/engenharia/casos-de-uso.ts`
+- matriz de rastreabilidade — `frontend/content/engenharia/matriz-rastreabilidade.ts`
+
+Atualize também a visão de arquitetura e o índice em `frontend/content/engenharia/arquitetura.ts` quando a mudança os deixar desatualizados.
+
+A fonte é o código real. Não invente tabelas, casos de uso ou linhas da matriz.
