@@ -66,6 +66,8 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
       { id: 'excluidos_visualizar', label: 'Visualizar chamados excluídos', actions: ['visualizar'] },
       { id: 'excluir_logicamente', label: 'Excluir logicamente chamado', actions: ['excluir'] },
       { id: 'restaurar_excluido', label: 'Restaurar chamado excluído', actions: ['alterar'] },
+      { id: 'tarefas', label: 'Tarefas do chamado', actions: ['visualizar', 'inserir', 'alterar', 'executar', 'excluir'] },
+      { id: 'tarefas_atribuidas', label: 'Tarefas atribuídas à minha secretaria ou equipe', actions: ['visualizar'] },
     ],
   },
   {
@@ -98,6 +100,7 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
       { id: 'anexar_evidencia', label: 'Anexar evidência', actions: ['inserir'] },
       { id: 'concluir_execucao', label: 'Concluir execução', actions: ['executar'] },
       { id: 'lancamento_manual', label: 'Lançamento manual', actions: ['executar'] },
+      { id: 'tarefas', label: 'Aba Tarefas', actions: ['visualizar', 'alterar', 'executar'] },
     ],
   },
   {

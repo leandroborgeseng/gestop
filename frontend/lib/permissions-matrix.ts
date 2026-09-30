@@ -114,6 +114,7 @@ export function screenHasVisualizarAccess(telaId: string, permissoes: string[]) 
     }
     // Novo chamado sozinho não libera o menu Chamados.
     if (telaId === 'chamados' && CHAMADOS_ABRIR_KEYS.has(key)) return false;
+    if (telaId === 'chamados' && key.includes('.tarefas')) return false;
     return true;
   });
 }
@@ -183,6 +184,29 @@ export function hasCronogramaAccess(
   }
 
   return false;
+}
+
+export function canGerirTarefasChamado(
+  permissoes: string[],
+  acao: 'visualizar' | 'inserir' | 'alterar' | 'executar' | 'excluir',
+) {
+  if (permissoes.includes('usuarios.gerenciar') || permissoes.includes('chamados.gerenciar')) return true;
+  return permissoes.includes(buildMatrixKey('chamados', 'tarefas', acao));
+}
+
+export function canVerTarefasExecucao(permissoes: string[]) {
+  if (
+    permissoes.includes('usuarios.gerenciar') ||
+    permissoes.includes('chamados.gerenciar') ||
+    permissoes.includes('chamados.executar')
+  ) {
+    return true;
+  }
+  return (
+    permissoes.includes(buildMatrixKey('execucao', 'tarefas', 'visualizar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'tarefas', 'visualizar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'tarefas_atribuidas', 'visualizar'))
+  );
 }
 
 export function canAssinarDocumentoInterno(permissoes: string[]) {

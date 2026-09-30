@@ -10,12 +10,14 @@ import {
   Inbox,
   BarChart3,
   CalendarDays,
+  ListChecks,
 } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { RelatorioTarefasPanel } from '@/components/relatorios/relatorio-tarefas-panel';
 import { Card, CardContent } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -305,6 +307,25 @@ export default function RelatoriosPage() {
             );
           })}
         </section>
+
+        <Card elevation={1} className="mt-4 overflow-hidden">
+          <CardContent className="p-5">
+            <div className="flex gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--r-md)] bg-[var(--brand-soft)] text-[var(--brand)]">
+                <ListChecks className="h-5 w-5" />
+              </span>
+              <div>
+                <h2 className="text-[15px] font-semibold text-[var(--ink)]">Tarefas de chamados</h2>
+                <p className="mt-1 text-[13px] text-[var(--ink-3)]">
+                  Abertas, impedidas, concluídas e atrasadas por secretaria, equipe, responsável e tipo. As tarefas não contam como chamados.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4">
+              <RelatorioTarefasPanel />
+            </div>
+          </CardContent>
+        </Card>
 
         <Sheet
           open={activeTipo === 'unidades' || activeTipo === 'fiscalizacoes'}

@@ -31,7 +31,10 @@ const CHAMADOS_ABRIR_ONLY_KEYS = new Set([
 
 function hasChamadosBeyondAbrir(matrixKeys: Set<string>) {
   return [...matrixKeys].some(
-    (key) => key.startsWith('matriz.chamados.') && !CHAMADOS_ABRIR_ONLY_KEYS.has(key),
+    (key) =>
+      key.startsWith('matriz.chamados.') &&
+      !CHAMADOS_ABRIR_ONLY_KEYS.has(key) &&
+      !key.startsWith('matriz.chamados.tarefas'),
   );
 }
 const LEGACY_FISCALIZACOES_EXECUTAR = 'fiscalizacoes.executar';
@@ -90,7 +93,10 @@ export function deriveLegacyPermissionKeys(matrixKeys: Set<string>): Set<string>
   ) {
     legacy.add(LEGACY_MEUS_CHAMADOS_VISUALIZAR);
   }
-  if (hasPrefix('execucao') || matrixKeys.has(permissionMatrixKey('chamados', 'execucao_manual', 'executar'))) {
+  const hasExecucaoOperacional = [...matrixKeys].some(
+    (key) => key.startsWith('matriz.execucao.') && !key.startsWith('matriz.execucao.tarefas.'),
+  );
+  if (hasExecucaoOperacional || matrixKeys.has(permissionMatrixKey('chamados', 'execucao_manual', 'executar'))) {
     legacy.add(LEGACY_CHAMADOS_EXECUTAR);
   }
   if (matrixKeys.has(permissionMatrixKey('chamados', 'editar_abertura', 'alterar'))) {

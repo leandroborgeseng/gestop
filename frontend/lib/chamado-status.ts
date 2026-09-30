@@ -454,6 +454,18 @@ export function buildChamadoTimelineFromHistorico(
       };
     }
 
+    if (tipo === 'tarefa') {
+      const resumo = typeof metadata.resumo === 'string' ? metadata.resumo : null;
+      return {
+        id: entry.id,
+        title: entry.motivo?.trim() || 'Atualização de tarefa',
+        date: formatTimelineDate(entry.createdAt),
+        sub: [entry.alteradoPor?.nome, resumo].filter(Boolean).join(' · '),
+        done: true,
+        active: false,
+      };
+    }
+
     if (tipo === 'documento_avulso') {
       const codigo =
         typeof metadata.documentoCodigo === 'string' && metadata.documentoCodigo.trim()

@@ -74,6 +74,8 @@ export function entidadeTipoParaTela(entidadeTipo: string): { telaId: string; fu
       return { telaId: 'admin', funcaoId: 'backup' };
     case 'Chamado':
       return { telaId: 'chamados', funcaoId: '_tela' };
+    case 'ChamadoTarefa':
+      return { telaId: 'chamados', funcaoId: 'tarefas' };
     case 'Documento':
       return { telaId: 'documentos', funcaoId: '_tela' };
     case 'Checklist':

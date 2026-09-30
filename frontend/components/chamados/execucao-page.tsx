@@ -2,11 +2,12 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { CirclePlay, Map as MapIcon, MapPinned, Search } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useCanGerenciarChamados } from '@/components/auth/session-context';
 import { ChamadosExecucaoList } from '@/components/chamados/chamados-execucao-list';
+import { ExecucaoTarefasPanel } from '@/components/chamados/execucao-tarefas-panel';
 import { ChamadosExecucaoMap } from '@/components/chamados/chamados-execucao-map';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
@@ -33,6 +34,8 @@ export function ExecucaoPage() {
 
 function ExecucaoPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const aba = searchParams.get('aba') === 'tarefas' ? 'tarefas' : 'chamados';
   const snackbar = useSnackbar();
   const canGerenciar = useCanGerenciarChamados();
   const backHref = useSafeBackHref(canGerenciar ? '/chamados' : '/cco');
@@ -70,9 +73,13 @@ function ExecucaoPageContent() {
   }
 
   useEffect(() => {
+    if (aba !== 'chamados') {
+      setLoading(false);
+      return;
+    }
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroHoje, filtroInicio, filtroFim]);
+  }, [aba, filtroHoje, filtroInicio, filtroFim]);
 
   const baseChamados = useMemo(() => grupos.flatMap((grupo) => grupo.chamados), [grupos]);
 
@@ -171,7 +178,16 @@ function ExecucaoPageContent() {
   );
 
   return (
-    <RequirePermissions permissions={['chamados.gerenciar', 'chamados.executar']} match="any">
+    <RequirePermissions
+      permissions={[
+        'chamados.gerenciar',
+        'chamados.executar',
+        'matriz.execucao.tarefas.visualizar',
+        'matriz.chamados.tarefas.visualizar',
+        'matriz.chamados.tarefas_atribuidas.visualizar',
+      ]}
+      match="any"
+    >
       <PageShell
         kicker="Operação de campo"
         icon={CirclePlay}
@@ -189,6 +205,17 @@ function ExecucaoPageContent() {
           ) : null
         }
       >
+        <div className="mb-3 flex shrink-0 gap-2">
+          <Chip active={aba === 'chamados'} onClick={() => router.replace('/execucao')}>
+            Chamados
+          </Chip>
+          <Chip active={aba === 'tarefas'} onClick={() => router.replace('/execucao?aba=tarefas')}>
+            Tarefas
+          </Chip>
+        </div>
+        {aba === 'tarefas' ? <ExecucaoTarefasPanel /> : null}
+        {aba === 'chamados' ? (
+        <>
         <TipBanner id="chamados-em-execucao-mapa">
           Mapa e lista sincronizados. Clique em um chamado para abrir a <b>execução de campo</b> — confirme presença no local,
           registre o serviço realizado e anexe fotos como evidência.
@@ -371,6 +398,8 @@ function ExecucaoPageContent() {
               </div>
             </div>
           </>
+        ) : null}
+        </>
         ) : null}
       </PageShell>
     </RequirePermissions>

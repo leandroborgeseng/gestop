@@ -1,3 +1,4 @@
+import type { ChamadoTarefaDetalhe, ChamadoTarefaResumo, RelatorioTarefasResponse, TarefasExecucaoResponse } from '@/lib/chamado-tarefa';
 import {
   AuthUser,
   AdminPerfil,
@@ -1687,6 +1688,7 @@ export type PendenciasResumo = {
     titulo: string;
     total: number;
     itens: PendenciaAcessoItem[];
+    verMaisHref?: string;
   }>;
 };
 
@@ -1948,6 +1950,95 @@ export function getPublicDocumentoValidacao(codigo: string, verificador?: string
   return publicRequest<DocumentoValidacaoPublica>(
     `/public/documentos/validar/${encodeURIComponent(codigo.trim().toUpperCase())}${qs ? `?${qs}` : ''}`,
   );
+}
+
+export function listTarefasDoChamado(chamadoId: string) {
+  return request<{ total: number; pendentes: number; items: ChamadoTarefaResumo[] }>(
+    `/chamado-tarefas/por-chamado/${chamadoId}`,
+  );
+}
+
+export function getChamadoTarefa(id: string) {
+  return request<ChamadoTarefaDetalhe>(`/chamado-tarefas/${id}`);
+}
+
+export function getOpcoesTarefa(secretariaId?: string) {
+  const query = secretariaId ? `?secretariaId=${encodeURIComponent(secretariaId)}` : '';
+  return request<{
+    secretarias: Array<{ id: string; nome: string; sigla: string }>;
+    equipes: Array<{
+      id: string;
+      nome: string;
+      codigo: string;
+      membros: Array<{ usuario: { id: string; nome: string; email: string } }>;
+    }>;
+  }>(`/chamado-tarefas/opcoes${query}`);
+}
+
+export function createChamadoTarefa(payload: {
+  chamadoId: string;
+  titulo: string;
+  descricao?: string;
+  prazo?: string;
+  secretariaId: string;
+  equipeId?: string;
+  responsavelId?: string;
+  prioridade?: string;
+}) {
+  return request<ChamadoTarefaResumo>('/chamado-tarefas', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateChamadoTarefa(
+  id: string,
+  payload: {
+    titulo?: string;
+    descricao?: string;
+    prazo?: string | null;
+    secretariaId?: string;
+    equipeId?: string | null;
+    responsavelId?: string | null;
+    prioridade?: string;
+    status?: string;
+    justificativa?: string;
+    conclusaoTexto?: string;
+    observacao?: string;
+  },
+) {
+  return request<ChamadoTarefaResumo>(`/chamado-tarefas/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function anexarChamadoTarefa(id: string, payload: { dataUrl: string; nome?: string }) {
+  return request<ChamadoTarefaDetalhe>(`/chamado-tarefas/${id}/anexos`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function listTarefasExecucao(params: Record<string, string | undefined>) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) query.set(key, value);
+  }
+  const qs = query.toString();
+  return request<TarefasExecucaoResponse>(`/chamado-tarefas/execucao${qs ? `?${qs}` : ''}`);
+}
+
+export function getRelatorioTarefas(params: Record<string, string | undefined>) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) query.set(key, value);
+  }
+  const qs = query.toString();
+  return request<RelatorioTarefasResponse>(`/chamado-tarefas/relatorio${qs ? `?${qs}` : ''}`);
 }
 
 export function getPublicDocumentoValidacaoPorDocumento(codigoDocumento: string, verificador: string) {

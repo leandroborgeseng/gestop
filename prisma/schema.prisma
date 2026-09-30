@@ -112,6 +112,15 @@ enum ChamadoPrioridade {
   URGENTE
 }
 
+enum ChamadoTarefaStatus {
+  NOVA
+  VISUALIZADA
+  EM_ANDAMENTO
+  IMPEDIDA
+  CONCLUIDA
+  CANCELADA
+}
+
 enum ChamadoStatus {
   ABERTO
   EM_TRIAGEM
@@ -236,6 +245,7 @@ model Secretaria {
   dashboardSnapshots DashboardSnapshot[]
   equipes           Equipe[]
   tiposChamado      TipoChamadoSecretaria[]
+  tarefas           ChamadoTarefa[] @relation("TarefaSecretaria")
 
   @@index([ativo])
 }
@@ -325,6 +335,10 @@ model Usuario {
   cronogramasResponsavel CronogramaChecagem[] @relation("CronogramaResponsavel")
   cronogramasResponsaveisPrevistos CronogramaChecagemResponsavel[]
   equipes             EquipeUsuario[]
+  tarefasResponsavel  ChamadoTarefa[] @relation("TarefaResponsavel")
+  tarefasCriadas      ChamadoTarefa[] @relation("TarefaCriadaPor")
+  tarefasConcluidas   ChamadoTarefa[] @relation("TarefaConcluidaPor")
+  tarefaAnexos        ChamadoTarefaAnexo[] @relation("TarefaAnexoCriadoPor")
 
   @@index([secretariaId])
   @@index([perfilAtivoId])
@@ -497,6 +511,7 @@ model Equipe {
   secretaria Secretaria?     @relation(fields: [secretariaId], references: [id], onDelete: SetNull)
   membros    EquipeUsuario[]
   chamados   Chamado[]
+  tarefas    ChamadoTarefa[]
 
   @@unique([secretariaId, nome])
   @@index([ativo])
@@ -873,6 +888,7 @@ model Chamado {
   evidencias      Evidencia[]
   observadores    ChamadoObservador[]
   documentos      Documento[]
+  tarefas         ChamadoTarefa[]
 
   @@index([secretariaId])
   @@index([tipoChamadoId])
@@ -905,6 +921,63 @@ model ChamadoObservador {
   @@index([usuarioId])
   @@index([chamadoId])
   @@index([createdById])
+}
+
+model ChamadoTarefa {
+  id             String              @id @default(uuid())
+  chamadoId      String
+  titulo         String
+  descricao      String?
+  prazo          DateTime?
+  secretariaId   String
+  equipeId       String?
+  responsavelId  String?
+  prioridade     ChamadoPrioridade   @default(MEDIA)
+  status         ChamadoTarefaStatus @default(NOVA)
+  justificativa  String?
+  conclusaoTexto String?
+  observacao     String?
+  visualizadaEm  DateTime?
+  concluidaEm    DateTime?
+  concluidaPorId String?
+  canceladaEm    DateTime?
+  criadaPorId    String
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  chamado      Chamado             @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  secretaria   Secretaria          @relation("TarefaSecretaria", fields: [secretariaId], references: [id], onDelete: Restrict)
+  equipe       Equipe?             @relation(fields: [equipeId], references: [id], onDelete: SetNull)
+  responsavel  Usuario?            @relation("TarefaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+  criadaPor    Usuario             @relation("TarefaCriadaPor", fields: [criadaPorId], references: [id], onDelete: Restrict)
+  concluidaPor Usuario?           @relation("TarefaConcluidaPor", fields: [concluidaPorId], references: [id], onDelete: SetNull)
+  anexos       ChamadoTarefaAnexo[]
+
+  @@index([chamadoId])
+  @@index([secretariaId])
+  @@index([equipeId])
+  @@index([responsavelId])
+  @@index([status])
+  @@index([prazo])
+  @@index([criadaPorId])
+}
+
+model ChamadoTarefaAnexo {
+  id           String   @id @default(uuid())
+  tarefaId     String
+  nome         String
+  url          String
+  storageKey   String?
+  mimeType     String?
+  tamanhoBytes Int?
+  createdAt    DateTime @default(now())
+  criadoPorId  String?
+
+  tarefa    ChamadoTarefa @relation(fields: [tarefaId], references: [id], onDelete: Cascade)
+  criadoPor Usuario?     @relation("TarefaAnexoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+
+  @@index([tarefaId])
+  @@index([criadoPorId])
 }
 
 model HistoricoStatus {
