@@ -1494,6 +1494,7 @@ export type DocumentoResumo = {
     unidadeCodigo?: string | null;
   } | null;
   checklist?: { versaoId: string; versao: number; nome?: string | null } | null;
+  respostas?: DocumentoRespostaItem[];
   enderecoTexto?: string | null;
   responsavel?: { id: string; nome: string; email?: string | null } | null;
   criadoPor?: { id: string; nome: string; email?: string | null } | null;
@@ -1524,8 +1525,31 @@ export type DocumentoResumo = {
   linkValidacao?: string;
 };
 
+export type DocumentoRespostaItem = {
+  id: string;
+  itemId: string;
+  conformidade?: string | null;
+  valorTexto?: string | null;
+  valorNumero?: number | null;
+  valorBooleano?: boolean | null;
+  comentario?: string | null;
+  respondidoEm?: string | null;
+  evidencias?: Array<{ url: string; mimeType?: string | null }>;
+  item?: {
+    id: string;
+    codigo?: string;
+    titulo: string;
+    tipo: string;
+    ordem: number;
+    obrigatorio: boolean;
+    exigeEvidencia: boolean;
+    opcoes?: unknown;
+  } | null;
+};
+
 export type DocumentoDetalhe = DocumentoResumo & {
   conteudoTravado?: boolean;
+  checklistItens?: ChecklistItem[];
   podeVerAssinaturasAnteriores?: boolean;
   assinaturasAnteriores?: DocumentoResumo['assinaturas'];
   historico: Array<{

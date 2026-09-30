@@ -612,7 +612,19 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
         <CardContent className="pt-4">
           {docsOpen ? (
             <div className="mb-4">
-              <DocumentosRelacionadosPanel chamadoId={detail.id} onClose={() => setDocsOpen(false)} />
+              <DocumentosRelacionadosPanel
+                chamadoId={detail.id}
+                vinculo={{
+                  codigo: detail.codigo,
+                  titulo: detail.titulo,
+                  secretariaId: detail.secretaria.id,
+                  unidadeId: detail.unidade?.id,
+                  enderecoTexto: detail.enderecoTexto ?? detail.unidade?.endereco ?? null,
+                  latitude: detail.latitude,
+                  longitude: detail.longitude,
+                }}
+                onClose={() => setDocsOpen(false)}
+              />
             </div>
           ) : null}
           <ol className="grid grid-cols-3 gap-2">

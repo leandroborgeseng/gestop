@@ -185,6 +185,33 @@ export function hasCronogramaAccess(
   return false;
 }
 
+export function canCriarDocumentoAvulso(permissoes: string[]) {
+  if (permissoes.includes('usuarios.gerenciar') || permissoes.includes('documentos.administrar')) return true;
+  return (
+    permissoes.includes('documentos.criar_avulso') ||
+    permissoes.includes(buildMatrixKey('documentos', 'avulso', 'inserir')) ||
+    permissoes.includes(buildMatrixKey('documentos', '_tela', 'inserir'))
+  );
+}
+
+export function canVerDocumentosRelacionados(permissoes: string[]) {
+  if (hasDocumentosModuloAccess(permissoes)) return true;
+  return (
+    permissoes.includes('documentos.gerar_pdf') ||
+    permissoes.includes('dashboard.visualizar') ||
+    permissoes.includes('chamados.gerenciar') ||
+    permissoes.includes('chamados.abrir') ||
+    permissoes.includes('meus_chamados.visualizar') ||
+    permissoes.includes('fiscalizacoes.executar') ||
+    permissoes.includes(buildMatrixKey('documentos', 'gerar_pdf', 'visualizar')) ||
+    permissoes.includes(buildMatrixKey('documentos', 'gerar_pdf', 'executar')) ||
+    permissoes.includes(buildMatrixKey('chamados', '_tela', 'visualizar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'consultar_documentos', 'visualizar')) ||
+    permissoes.includes(buildMatrixKey('meus_chamados', 'consultar_documentos', 'visualizar')) ||
+    permissoes.includes(buildMatrixKey('execucao', '_tela', 'visualizar'))
+  );
+}
+
 export function hasDocumentosModuloAccess(permissoes: string[]) {
   if (permissoes.includes('usuarios.gerenciar')) return true;
   if (permissoes.includes('documentos.visualizar') || permissoes.includes('documentos.administrar')) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FileText } from 'lucide-react';
 import { useSessionUser } from '@/components/auth/session-context';
@@ -14,8 +14,9 @@ import {
   listDocumentosPorFiscalizacao,
 } from '@/lib/api';
 import { DOCUMENTO_SITUACAO_META, DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
-import { hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
+import { canCriarDocumentoAvulso, canVerDocumentosRelacionados, hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
 import { DocumentoResumo } from '@/lib/types';
+import { NovoDocumentoAvulsoDialog, type DocumentoAvulsoVinculo } from '@/components/documentos/novo-documento-avulso-dialog';
 
 type Props = {
   chamadoId?: string;
@@ -23,6 +24,8 @@ type Props = {
   onClose?: () => void;
   /** Em Meus chamados, esconde o atalho do cadastro quando o usuário não tem o módulo Documentos. */
   ocultarCadastroSemPermissao?: boolean;
+  /** Dados do chamado para pré-preencher o documento avulso. */
+  vinculo?: Omit<DocumentoAvulsoVinculo, 'chamadoId'> | null;
 };
 
 export function DocumentosRelacionadosPanel({
@@ -30,12 +33,31 @@ export function DocumentosRelacionadosPanel({
   fiscalizacaoId,
   onClose,
   ocultarCadastroSemPermissao = false,
+  vinculo,
 }: Props) {
   const sessionUser = useSessionUser();
-  const canAbrirCadastro = hasDocumentosModuloAccess(sessionUser?.permissoes ?? []);
+  const permissoes = sessionUser?.permissoes ?? [];
+  const canAbrirCadastro = hasDocumentosModuloAccess(permissoes);
+  const canNovo =
+    Boolean(chamadoId && vinculo) && canCriarDocumentoAvulso(permissoes) && canVerDocumentosRelacionados(permissoes);
   const [items, setItems] = useState<DocumentoResumo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [novoOpen, setNovoOpen] = useState(false);
+
+  const reload = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    const loader = chamadoId
+      ? listDocumentosPorChamado(chamadoId)
+      : fiscalizacaoId
+        ? listDocumentosPorFiscalizacao(fiscalizacaoId)
+        : Promise.resolve({ total: 0, items: [] });
+    return loader
+      .then((response) => setItems(response.items))
+      .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar documentos.'))
+      .finally(() => setLoading(false));
+  }, [chamadoId, fiscalizacaoId]);
 
   useEffect(() => {
     let active = true;
@@ -70,12 +92,30 @@ export function DocumentosRelacionadosPanel({
           <FileText className="h-4 w-4 text-[var(--brand)]" />
           <h3 className="text-[14px] font-semibold text-[var(--ink)]">Documentos relacionados</h3>
         </div>
-        {onClose ? (
-          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-            Fechar
-          </Button>
-        ) : null}
+        <div className="flex items-center gap-1.5">
+          {canNovo && chamadoId && vinculo ? (
+            <Button type="button" variant="filled" size="sm" onClick={() => setNovoOpen(true)}>
+              Novo documento
+            </Button>
+          ) : null}
+          {onClose ? (
+            <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+              Fechar
+            </Button>
+          ) : null}
+        </div>
       </div>
+      {canNovo && chamadoId && vinculo ? (
+        <NovoDocumentoAvulsoDialog
+          open={novoOpen}
+          vinculo={{ ...vinculo, chamadoId }}
+          onClose={() => setNovoOpen(false)}
+          onCreated={() => {
+            setNovoOpen(false);
+            void reload();
+          }}
+        />
+      ) : null}
 
       {loading ? <LoadingState label="Carregando documentos..." /> : null}
       {error ? <ErrorState message={error} /> : null}
@@ -103,9 +143,17 @@ export function DocumentosRelacionadosPanel({
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {canAbrirCadastro ? (
-                  <Link href={`/documentos?id=${item.id}`}>
+                  <Link
+                    href={
+                      item.origem === 'AVULSO' && item.situacao === 'RASCUNHO' && !item.possuiPdfOriginal
+                        ? `/documentos?id=${item.id}&preencher=1`
+                        : `/documentos?id=${item.id}`
+                    }
+                  >
                     <Button type="button" size="sm" variant="outlined">
-                      Abrir
+                      {item.origem === 'AVULSO' && item.situacao === 'RASCUNHO' && !item.possuiPdfOriginal
+                        ? 'Preencher'
+                        : 'Abrir'}
                     </Button>
                   </Link>
                 ) : ocultarCadastroSemPermissao ? null : (

@@ -872,7 +872,19 @@ function ChamadoDetailPanel({
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
           {docsOpen ? (
-            <DocumentosRelacionadosPanel chamadoId={resumo.id} onClose={() => setDocsOpen(false)} />
+            <DocumentosRelacionadosPanel
+              chamadoId={resumo.id}
+              vinculo={{
+                codigo: resumo.codigo,
+                titulo: resumo.titulo,
+                secretariaId: resumo.secretaria.id,
+                unidadeId: resumo.unidade?.id,
+                enderecoTexto: resumo.enderecoTexto ?? resumo.unidade?.endereco ?? null,
+                latitude: resumo.latitude,
+                longitude: resumo.longitude,
+              }}
+              onClose={() => setDocsOpen(false)}
+            />
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryCard

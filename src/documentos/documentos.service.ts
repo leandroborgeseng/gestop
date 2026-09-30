@@ -200,8 +200,30 @@ export class DocumentosService {
         return bEm - aEm;
       });
 
+    const checklistItens = documento.checklistVersaoId
+      ? await this.prisma.checklistItem.findMany({
+          where: { checklistVersaoId: documento.checklistVersaoId, ativo: true },
+          orderBy: { ordem: 'asc' },
+          select: {
+            id: true,
+            ordem: true,
+            codigo: true,
+            titulo: true,
+            descricao: true,
+            tipo: true,
+            obrigatorio: true,
+            geraNaoConformidade: true,
+            exigeEvidencia: true,
+            opcoes: true,
+            categoriaVistoriaId: true,
+            ativo: true,
+          },
+        })
+      : [];
+
     return {
       ...this.serialize(documento, { fullPii: true }),
+      checklistItens,
       podeVerAssinaturasAnteriores,
       assinaturasAnteriores: podeVerAssinaturasAnteriores
         ? anteriores.map((item) => this.mapAssinaturaApi(item, { fullPii: true }))
@@ -353,7 +375,35 @@ export class DocumentosService {
       include: DOCUMENTO_INCLUDE,
     });
 
-    await this.registrarHistorico(created.id, null, DocumentoSituacao.RASCUNHO, 'Documento avulso criado', user.sub);
+    const motivoCriacao = created.chamadoId
+      ? `Documento avulso criado e vinculado ao chamado: ${created.codigo}`
+      : 'Documento avulso criado';
+    await this.registrarHistorico(created.id, null, DocumentoSituacao.RASCUNHO, motivoCriacao, user.sub, {
+      chamadoId: created.chamadoId,
+    });
+    if (created.chamadoId) {
+      const chamado = await this.prisma.chamado.findFirst({
+        where: { id: created.chamadoId, excluidoEm: null },
+        select: { id: true, status: true },
+      });
+      if (chamado) {
+        await this.prisma.historicoStatus.create({
+          data: {
+            entidadeTipo: 'Chamado',
+            entidadeId: chamado.id,
+            statusAnterior: chamado.status,
+            statusNovo: chamado.status,
+            motivo: `Documento avulso criado e vinculado ao chamado: ${created.codigo}`,
+            alteradoPorId: user.sub,
+            metadata: {
+              tipo: 'documento_avulso',
+              documentoId: created.id,
+              documentoCodigo: created.codigo,
+            },
+          },
+        });
+      }
+    }
     await this.audit(user.sub, AuditAction.CREATE, created.id, null, {
       codigo: created.codigo,
       tipo: created.tipo,
@@ -1542,50 +1592,7 @@ export class DocumentosService {
       ];
     }
 
-    const mergedByItem = new Map<
-      string,
-      {
-        itemId: string;
-        conformidade: ConformidadeStatus;
-        valorTexto: string | null;
-        comentario: string | null;
-        evidenciasCount: number;
-      }
-    >();
-    for (const existing of documento.respostas) {
-      mergedByItem.set(existing.itemId, {
-        itemId: existing.itemId,
-        conformidade: existing.conformidade ?? ConformidadeStatus.CONFORME,
-        valorTexto: this.respostaValorTexto(existing),
-        comentario: existing.comentario,
-        evidenciasCount: evidenciasPorItem[existing.itemId]?.length ?? 0,
-      });
-    }
-    for (const resposta of respostas) {
-      mergedByItem.set(resposta.itemId, {
-        itemId: resposta.itemId,
-        conformidade: resposta.conformidade ?? ConformidadeStatus.CONFORME,
-        valorTexto: this.dtoValorTexto(resposta),
-        comentario: resposta.comentario ?? null,
-        evidenciasCount: evidenciasPorItem[resposta.itemId]?.length ?? 0,
-      });
-    }
-
-    const validation = validateChecklistResponses(
-      itens.map((item) => ({
-        id: item.id,
-        titulo: item.titulo,
-        tipo: item.tipo,
-        obrigatorio: item.obrigatorio,
-        exigeEvidencia: item.exigeEvidencia,
-        opcoes: item.opcoes,
-      })),
-      [...mergedByItem.values()],
-    );
-    if (!validation.valid) {
-      throw new BadRequestException(validation.reasons.join('; '));
-    }
-
+    // Rascunho pode ser parcial. Itens obrigatórios são validados só na conclusão.
     await this.prisma.$transaction(async (tx) => {
       for (const resposta of respostas) {
         await tx.documentoResposta.upsert({
@@ -2251,13 +2258,6 @@ export class DocumentosService {
         .filter((item) => item.storageKey);
     }
     return result;
-  }
-
-  private dtoValorTexto(resposta: DocumentoRespostaItemDto) {
-    if (resposta.valorTexto?.trim()) return resposta.valorTexto.trim();
-    if (resposta.valorNumero != null) return String(resposta.valorNumero);
-    if (resposta.valorBooleano != null) return String(resposta.valorBooleano);
-    return null;
   }
 
   private respostaValorTexto(

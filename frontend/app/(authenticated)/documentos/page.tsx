@@ -21,6 +21,7 @@ import {
   toggleAssinaturaPendenteDocumento,
 } from '@/lib/api';
 import { ColetarAssinaturaDialog } from '@/components/documentos/coletar-assinatura-dialog';
+import { DocumentoAvulsoForm, DocumentoAvulsoRespostasLeitura } from '@/components/documentos/documento-avulso-form';
 import { NovoDocumentoAvulsoDialog } from '@/components/documentos/novo-documento-avulso-dialog';
 import { DOCUMENTO_SITUACAO_META, DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
 import { cn } from '@/lib/cn';
@@ -66,6 +67,13 @@ function DocumentosPageContent() {
   const [busyAction, setBusyAction] = useState(false);
   const [novoOpen, setNovoOpen] = useState(false);
   const [assinaturaOpen, setAssinaturaOpen] = useState(false);
+  const [preencherAberto, setPreencherAberto] = useState(() => searchParams.get('preencher') === '1');
+
+  useEffect(() => {
+    setPreencherAberto(searchParams.get('id') === selectedId && searchParams.get('preencher') === '1');
+    // Só ao trocar o documento. O clique em Preencher não pode ser desfeito por uma nova referência dos search params.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   function loadList() {
     setLoading(true);
@@ -301,6 +309,9 @@ function DocumentosPageContent() {
                   void runAction(() => gerarDocumentoPdfOriginal(selected.id), 'PDF original gerado.')
                 }
                 onConcluir={() => void runAction(() => concluirDocumento(selected.id), 'Documento concluído.')}
+                preencherAberto={preencherAberto && selected.id === selectedId}
+                onPreencher={() => setPreencherAberto(true)}
+                onFormSaved={() => refreshSelected()}
                 onColetar={() => setAssinaturaOpen(true)}
                 onPendente={() =>
                   void runAction(
@@ -337,6 +348,9 @@ function DocumentoDetail({
   onPdfAssinado,
   onGerarPdf,
   onConcluir,
+  preencherAberto,
+  onPreencher,
+  onFormSaved,
   onColetar,
   onPendente,
   onCancelar,
@@ -348,6 +362,9 @@ function DocumentoDetail({
   onPdfAssinado: () => void;
   onGerarPdf: () => void;
   onConcluir: () => void;
+  preencherAberto: boolean;
+  onPreencher: () => void;
+  onFormSaved: () => void | Promise<void>;
   onColetar: () => void;
   onPendente: () => void;
   onCancelar: () => void;
@@ -368,6 +385,11 @@ function DocumentoDetail({
     situacaoPermitePdf;
   const podeRecuperarPdfExecucao =
     documento.origem === 'CHAMADO_EXECUCAO' && !documento.possuiPdfOriginal && situacaoPermitePdf;
+  const podePreencherAvulso =
+    documento.origem === 'AVULSO' &&
+    documento.situacao === 'RASCUNHO' &&
+    !documento.possuiPdfOriginal &&
+    !documento.conteudoTravado;
   const podeGerarPdfOriginal =
     (!origemAutomatica &&
       !documento.possuiPdfOriginal &&
@@ -412,7 +434,12 @@ function DocumentoDetail({
       </dl>
 
       <div className="flex flex-wrap gap-1.5">
-        {!documento.possuiPdfOriginal && documento.situacao === 'RASCUNHO' ? (
+        {podePreencherAvulso ? (
+          <Button type="button" size="sm" variant="filled" disabled={busy} onClick={onPreencher}>
+            Preencher documento
+          </Button>
+        ) : null}
+        {!documento.possuiPdfOriginal && documento.situacao === 'RASCUNHO' && !podePreencherAvulso ? (
           <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onConcluir}>
             Concluir documento
           </Button>
@@ -465,6 +492,13 @@ function DocumentoDetail({
           </Button>
         ) : null}
       </div>
+
+      {podePreencherAvulso && preencherAberto ? (
+        <DocumentoAvulsoForm key={documento.id} documento={documento} onSaved={onFormSaved} />
+      ) : null}
+      {documento.origem === 'AVULSO' && !podePreencherAvulso ? (
+        <DocumentoAvulsoRespostasLeitura documento={documento} />
+      ) : null}
 
       <div>
         <p className="mb-2 text-[12px] font-semibold text-[var(--ink)]">Assinaturas vigentes</p>

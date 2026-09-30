@@ -308,6 +308,15 @@ function MeusChamadosPageContent() {
                     <DocumentosRelacionadosPanel
                       chamadoId={detail.id}
                       ocultarCadastroSemPermissao
+                      vinculo={{
+                        codigo: detail.codigo,
+                        titulo: detail.titulo,
+                        secretariaId: detail.secretaria.id,
+                        unidadeId: detail.unidade?.id,
+                        enderecoTexto: detail.enderecoTexto ?? detail.unidade?.endereco ?? null,
+                        latitude: detail.latitude,
+                        longitude: detail.longitude,
+                      }}
                       onClose={() => setDocsOpen(false)}
                     />
                   ) : null}

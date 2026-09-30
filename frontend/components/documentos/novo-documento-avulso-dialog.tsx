@@ -20,13 +20,25 @@ type ChecklistAvulsoOption = {
   secretaria?: { id: string } | null;
 };
 
+export type DocumentoAvulsoVinculo = {
+  chamadoId: string;
+  codigo: string;
+  titulo?: string | null;
+  secretariaId: string;
+  unidadeId?: string | null;
+  enderecoTexto?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
 type Props = {
   open: boolean;
   onClose: () => void;
   onCreated: (documentoId: string) => void;
+  vinculo?: DocumentoAvulsoVinculo | null;
 };
 
-export function NovoDocumentoAvulsoDialog({ open, onClose, onCreated }: Props) {
+export function NovoDocumentoAvulsoDialog({ open, onClose, onCreated, vinculo }: Props) {
   const snackbar = useSnackbar();
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -40,16 +52,23 @@ export function NovoDocumentoAvulsoDialog({ open, onClose, onCreated }: Props) {
 
   useEffect(() => {
     if (!open) return;
+    setTipo('DOCUMENTO_AVULSO');
+    setChecklistVersaoId('');
+    setTitulo(vinculo ? `${vinculo.codigo}${vinculo.titulo?.trim() ? ` — ${vinculo.titulo.trim()}` : ''}` : '');
+    setEnderecoTexto(vinculo?.enderecoTexto?.trim() ?? '');
+    setSecretariaId(vinculo?.secretariaId ?? '');
     setLoading(true);
     Promise.all([getSecretarias(), listDocumentosChecklistsAvulso()])
       .then(([secs, checks]) => {
         setSecretarias(secs);
         setChecklists(checks as ChecklistAvulsoOption[]);
-        if (!secretariaId && secs[0]?.id) setSecretariaId(secs[0].id);
+        setSecretariaId((current) => current || vinculo?.secretariaId || secs[0]?.id || '');
       })
       .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao carregar opções.', 'error'))
       .finally(() => setLoading(false));
-  }, [open]);
+    // Recarrega ao abrir ou quando o chamado vinculado muda. O objeto vinculo pode ser recriado a cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, vinculo?.chamadoId, vinculo?.secretariaId, vinculo?.codigo, vinculo?.titulo, vinculo?.enderecoTexto]);
 
   const checklistOptions = useMemo(
     () =>
@@ -73,6 +92,10 @@ export function NovoDocumentoAvulsoDialog({ open, onClose, onCreated }: Props) {
         checklistVersaoId,
         titulo: titulo.trim() || undefined,
         enderecoTexto: enderecoTexto.trim() || undefined,
+        chamadoId: vinculo?.chamadoId,
+        unidadeId: vinculo?.unidadeId || undefined,
+        latitude: vinculo?.latitude ?? undefined,
+        longitude: vinculo?.longitude ?? undefined,
         concluir,
       });
       snackbar.show(concluir ? 'Documento criado e concluído.' : 'Rascunho criado.', 'success');
@@ -92,7 +115,9 @@ export function NovoDocumentoAvulsoDialog({ open, onClose, onCreated }: Props) {
       ) : (
         <div className="space-y-4">
           <p className="text-[13px] text-[var(--ink-3)]">
-            Selecione um checklist/modelo já cadastrado. A estrutura de perguntas continua no cadastro de Checklists.
+            {vinculo
+              ? `Documento vinculado ao chamado ${vinculo.codigo}. Escolha o checklist e ajuste os dados sugeridos antes de salvar.`
+              : 'Selecione um checklist/modelo já cadastrado. A estrutura de perguntas continua no cadastro de Checklists.'}
           </p>
           <Field label="Tipo de documento">
             <Select value={tipo} onChange={(event) => setTipo(event.target.value as DocumentoTipo)}>

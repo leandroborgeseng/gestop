@@ -49,12 +49,15 @@ export function ChecklistItemCard({
   onChange,
   onEvidence,
   onRemoveEvidence,
+  ocultarConformidade = false,
 }: {
   item: ChecklistItem;
   value?: ResponseDraft;
   onChange: (patch: Partial<ResponseDraft>) => void;
   onEvidence: (event: ChangeEvent<HTMLInputElement>) => void;
   onRemoveEvidence?: (evidenceId: string) => void;
+  /** Documento avulso: sem nota, conformidade, NC ou geração de chamado. */
+  ocultarConformidade?: boolean;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const current = value ?? { conformidade: 'CONFORME', comentario: '' };
@@ -65,10 +68,11 @@ export function ChecklistItemCard({
   const selectedLikert = resolveLikertNivel(current.valorTexto);
   const textoOpcoes = parseTextoOpcoes(item.opcoes);
   const booleanoOpcoes = parseBooleanoOpcoes(item.opcoes);
-  const needsEvidence =
-    item.tipo === 'FOTO' ||
-    item.tipo === 'ASSINATURA' ||
-    (current.conformidade === 'NAO_CONFORME' && item.exigeEvidencia);
+  const needsEvidence = ocultarConformidade
+    ? item.tipo === 'FOTO' || item.tipo === 'ASSINATURA' || item.exigeEvidencia
+    : item.tipo === 'FOTO' ||
+      item.tipo === 'ASSINATURA' ||
+      (current.conformidade === 'NAO_CONFORME' && item.exigeEvidencia);
   const showEvidenceUi = needsEvidence || item.tipo === 'FOTO' || item.tipo === 'ASSINATURA';
   const attachLabel =
     item.tipo === 'ASSINATURA'
@@ -113,13 +117,9 @@ export function ChecklistItemCard({
             }}
           >
             <option value="">Selecione</option>
-            <option value="SIM">
-              Sim ({CONFORMIDADE_BINARIA_LABELS[booleanoOpcoes.simConformidade ?? 'CONFORME']})
-            </option>
-            <option value="NAO">
-              Não ({CONFORMIDADE_BINARIA_LABELS[booleanoOpcoes.naoConformidade ?? 'NAO_CONFORME']})
-            </option>
-            <option value="NAO_APLICAVEL">Não aplicável</option>
+            <option value="SIM">{ocultarConformidade ? 'Sim' : `Sim (${CONFORMIDADE_BINARIA_LABELS[booleanoOpcoes.simConformidade ?? 'CONFORME']})`}</option>
+            <option value="NAO">{ocultarConformidade ? 'Não' : `Não (${CONFORMIDADE_BINARIA_LABELS[booleanoOpcoes.naoConformidade ?? 'NAO_CONFORME']})`}</option>
+            {ocultarConformidade ? null : <option value="NAO_APLICAVEL">Não aplicável</option>}
           </Select>
         ) : item.tipo === 'ESCALA_LIKERT' ? (
           <>
@@ -136,7 +136,7 @@ export function ChecklistItemCard({
                 }
               />
             </Field>
-            {selectedLikert ? (
+            {selectedLikert && !ocultarConformidade ? (
               <p className="text-[13px] text-[var(--md-on-surface-variant)]">
                 Pontuação <strong className="text-[var(--md-on-surface)]">{selectedLikert.pontuacao}/10</strong> ·{' '}
                 categoria <strong className="text-[var(--md-on-surface)]">{LIKERT_CATEGORIA_LABELS[selectedLikert.categoria]}</strong>{' '}
@@ -144,6 +144,10 @@ export function ChecklistItemCard({
                 <strong className="text-[var(--md-on-surface)]">
                   {current.conformidade === 'NAO_CONFORME' ? 'não conforme' : 'conforme'}
                 </strong>
+              </p>
+            ) : selectedLikert ? (
+              <p className="text-[13px] text-[var(--md-on-surface-variant)]">
+                Pontuação <strong className="text-[var(--md-on-surface)]">{selectedLikert.pontuacao}/10</strong>
               </p>
             ) : null}
           </>
@@ -214,14 +218,16 @@ export function ChecklistItemCard({
                 </p>
               ) : null}
             </Field>
-            <Select
-              value={current.conformidade}
-              onChange={(e) => onChange({ conformidade: e.target.value as ResponseDraft['conformidade'] })}
-            >
-              <option value="CONFORME">Conforme</option>
-              <option value="NAO_CONFORME">Não conforme</option>
-              <option value="NAO_APLICAVEL">Não aplicável</option>
-            </Select>
+            {ocultarConformidade ? null : (
+              <Select
+                value={current.conformidade}
+                onChange={(e) => onChange({ conformidade: e.target.value as ResponseDraft['conformidade'] })}
+              >
+                <option value="CONFORME">Conforme</option>
+                <option value="NAO_CONFORME">Não conforme</option>
+                <option value="NAO_APLICAVEL">Não aplicável</option>
+              </Select>
+            )}
           </>
         )}
 
@@ -281,7 +287,7 @@ export function ChecklistItemCard({
           </div>
         ) : null}
 
-        {item.geraNaoConformidade && current.conformidade === 'NAO_CONFORME' ? (
+        {!ocultarConformidade && item.geraNaoConformidade && current.conformidade === 'NAO_CONFORME' ? (
           <div className="space-y-2 rounded-[var(--md-shape-sm)] border border-[var(--md-outline)] bg-[var(--md-surface-container-low)] p-3">
             <label className="flex cursor-pointer items-start gap-3">
               <input
@@ -301,12 +307,12 @@ export function ChecklistItemCard({
               </span>
             </label>
           </div>
-        ) : item.geraNaoConformidade ? (
+        ) : !ocultarConformidade && item.geraNaoConformidade ? (
           <p className="md-body-md text-[var(--md-on-surface-variant)]">
             Item gera chamado NC se marcado como não conforme.
           </p>
         ) : null}
-        {needsEvidence && current.conformidade === 'NAO_CONFORME' ? (
+        {!ocultarConformidade && needsEvidence && current.conformidade === 'NAO_CONFORME' ? (
           <p className="md-body-md text-amber-700">Não conformidade exige evidência fotográfica e comentário.</p>
         ) : null}
         {needsEvidence && evidencias.length === 0 ? (

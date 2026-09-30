@@ -454,6 +454,21 @@ export function buildChamadoTimelineFromHistorico(
       };
     }
 
+    if (tipo === 'documento_avulso') {
+      const codigo =
+        typeof metadata.documentoCodigo === 'string' && metadata.documentoCodigo.trim()
+          ? metadata.documentoCodigo.trim()
+          : null;
+      return {
+        id: entry.id,
+        title: entry.motivo?.trim() || (codigo ? `Documento avulso criado e vinculado ao chamado: ${codigo}` : 'Documento avulso vinculado ao chamado'),
+        date: formatTimelineDate(entry.createdAt),
+        sub: entry.alteradoPor?.nome,
+        done: true,
+        active: false,
+      };
+    }
+
     if (tipo === 'exclusao_logica' || tipo === 'restauracao_logica') {
       return {
         id: entry.id,
