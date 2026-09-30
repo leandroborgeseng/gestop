@@ -635,7 +635,8 @@ export function OperationalMapClient({
       heatCanvasRef.current = null;
     }
 
-    if (view === 'chamados' && !calor) {
+    // Modo calor: o clearLayers já removeu os pinos. Não recolocar marcadores de chamado nem de próprio.
+    if (!calor && view === 'chamados') {
       locatedChamados.forEach(({ chamado, latLng }) => {
         const marker = L.marker(latLng, {
           icon: createUnitIcon(resolveChamadoMarkerColor(chamado.slaMapa), 'normal'),
@@ -666,7 +667,7 @@ export function OperationalMapClient({
         markerByIdRef.current.set(chamado.id, marker);
         chamadoByIdRef.current.set(chamado.id, chamado);
       });
-    } else {
+    } else if (!calor) {
       locatedUnidades.forEach(({ unidade, latLng }) => {
         const marker = L.marker(latLng, {
           icon: resolveUnidadeMarkerIcon(unidade, mapMode, categoriaFiltroId, 'normal'),

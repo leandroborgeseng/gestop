@@ -8,7 +8,12 @@ import { Chip } from '@/components/ui/chip';
 import { cn } from '@/lib/cn';
 import { formatRegiaoUnidade, RegiaoUnidade } from '@/lib/regiao-unidade';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
-import { CHAMADO_STATUS_META } from '@/lib/chamado-status';
+import {
+  CHAMADO_STATUS_FINALIZADOS,
+  CHAMADO_STATUS_META,
+  CHAMADO_STATUS_NAO_FINALIZADOS,
+  chamadoStatusAtalhoAtivo,
+} from '@/lib/chamado-status';
 import {
   ChamadosMapaFilters,
   SecretariaOption,
@@ -434,6 +439,33 @@ export function CcoFiltrosPanel({
             </>
           ) : (
             <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="flex min-w-0 flex-wrap gap-1.5 sm:col-span-2 lg:col-span-3">
+                {(
+                  [
+                    { id: 'todos' as const, label: 'Todos' },
+                    { id: 'nao_finalizados' as const, label: 'Não finalizados' },
+                    { id: 'finalizados' as const, label: 'Finalizados' },
+                  ] as const
+                ).map((atalho) => (
+                  <Chip
+                    key={atalho.id}
+                    active={chamadoStatusAtalhoAtivo(chamadoFilters.status) === atalho.id}
+                    onClick={() =>
+                      onChamadoFiltersChange((prev) => ({
+                        ...prev,
+                        status:
+                          atalho.id === 'todos'
+                            ? undefined
+                            : atalho.id === 'nao_finalizados'
+                              ? [...CHAMADO_STATUS_NAO_FINALIZADOS]
+                              : [...CHAMADO_STATUS_FINALIZADOS],
+                      }))
+                    }
+                  >
+                    {atalho.label}
+                  </Chip>
+                ))}
+              </div>
               <FilterMultiSelect
                 label="Status"
                 placeholder="Selecionar status…"

@@ -12,6 +12,29 @@ export const CHAMADO_STATUS_META: Record<
   CANCELADO: { label: 'Cancelado', badge: 'muted' },
 };
 
+/** Status que ainda não encerram o chamado. Ordem segue o cadastro de CHAMADO_STATUS_META. */
+export const CHAMADO_STATUS_NAO_FINALIZADOS = Object.keys(CHAMADO_STATUS_META).filter(
+  (status) => status !== 'CONCLUIDO' && status !== 'CANCELADO',
+);
+
+export const CHAMADO_STATUS_FINALIZADOS = ['CONCLUIDO', 'CANCELADO'] as const;
+
+export function sameChamadoStatusSet(selected: string[] | undefined, expected: readonly string[]) {
+  const left = [...(selected ?? [])].sort();
+  const right = [...expected].sort();
+  return left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+export type ChamadoStatusAtalho = 'todos' | 'nao_finalizados' | 'finalizados';
+
+/** Destaque do atalho: conjunto exato, lista vazia = Todos, parcial = nenhum. */
+export function chamadoStatusAtalhoAtivo(selected: string[] | undefined): ChamadoStatusAtalho | null {
+  if (!selected?.length) return 'todos';
+  if (sameChamadoStatusSet(selected, CHAMADO_STATUS_NAO_FINALIZADOS)) return 'nao_finalizados';
+  if (sameChamadoStatusSet(selected, CHAMADO_STATUS_FINALIZADOS)) return 'finalizados';
+  return null;
+}
+
 export function chamadoStatusLabel(status: string) {
   return CHAMADO_STATUS_META[status]?.label ?? status;
 }

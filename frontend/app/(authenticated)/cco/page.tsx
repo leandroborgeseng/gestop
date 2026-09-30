@@ -30,11 +30,17 @@ import { PageShell } from '@/components/layout/page-shell';
 import { Badge } from '@/components/ui/badge';
 import { Chip } from '@/components/ui/chip';
 import { MetricSkeleton } from '@/components/ui/skeleton';
+import { CHAMADO_STATUS_NAO_FINALIZADOS } from '@/lib/chamado-status';
 
 type KpiFilter = 'none' | 'pendencias';
 type CcoTab = 'proprios' | 'chamados';
 
 const DEFAULT_TIPOS_PENDENCIA: TipoPendencia[] = ['CHAMADOS', 'NAO_CONFORMIDADES', 'VISTORIAS'];
+
+/** Primeira entrada, recarga e “Limpar filtros” da aba Chamados. */
+const DEFAULT_CHAMADO_FILTERS: ChamadosMapaFilters = {
+  status: [...CHAMADO_STATUS_NAO_FINALIZADOS],
+};
 
 export default function CcoPage() {
   return (
@@ -54,7 +60,7 @@ function CcoPageContent() {
       tiposPendencia: [...DEFAULT_TIPOS_PENDENCIA],
     };
   });
-  const [chamadoFilters, setChamadoFilters] = useState<ChamadosMapaFilters>({});
+  const [chamadoFilters, setChamadoFilters] = useState<ChamadosMapaFilters>(DEFAULT_CHAMADO_FILTERS);
   const [kpiFilter, setKpiFilter] = useState<KpiFilter>('none');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -256,7 +262,7 @@ function CcoPageContent() {
 
   function clearFilters() {
     if (tab === 'chamados') {
-      setChamadoFilters({});
+      setChamadoFilters(DEFAULT_CHAMADO_FILTERS);
       return;
     }
     setFilters({
