@@ -254,8 +254,8 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'assinar-interno',
         nome: 'Assinar internamente',
         atores: ['administrador', 'gestor', 'equipe'],
-        descricao: 'O destinatário assina o pedido pendente. O aviso também aparece ao entrar.',
-        rotas: ['/documentos', '/login', 'GET /documentos/minhas-pendencias-assinatura', 'POST /documentos/:id/assinatura-interna'],
+        descricao: 'O destinatário assina o pedido pendente. O modal de pendências abre no login e no botão do topo, com atalho por grupo e Abrir em cada item.',
+        rotas: ['/documentos', '/login', 'GET /documentos/pendencias-resumo', 'POST /documentos/:id/assinatura-interna'],
       },
       {
         id: 'validar-documento',

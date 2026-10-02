@@ -17,7 +17,7 @@ export function ExecucaoTarefasPanel() {
   const [data, setData] = useState<TarefasExecucaoResponse | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [status, setStatus] = useState('');
-  const [atribuidaAMim, setAtribuidaAMim] = useState(false);
+  const [atribuidaAMim, setAtribuidaAMim] = useState(searchParams.get('atribuidaAMim') === '1');
   const [minhasEquipes, setMinhasEquipes] = useState(false);
   const [atrasadas, setAtrasadas] = useState(false);
   const [historico, setHistorico] = useState(false);
@@ -55,6 +55,12 @@ export function ExecucaoTarefasPanel() {
       .then(setData)
       .catch((err) => setErro(err instanceof Error ? err.message : 'Falha ao carregar tarefas.'));
   }
+
+  useEffect(() => {
+    if (searchParams.get('atribuidaAMim') === '1') setAtribuidaAMim(true);
+    const tarefa = searchParams.get('tarefa');
+    if (tarefa) setAberta(tarefa);
+  }, [searchParams]);
 
   useEffect(() => {
     carregar();

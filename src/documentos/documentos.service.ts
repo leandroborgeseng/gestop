@@ -1079,7 +1079,7 @@ export class DocumentosService {
     const tarefasBrutas = await this.prisma.chamadoTarefa.findMany({
       where: {
         responsavelId: user.sub,
-        status: { in: [ChamadoTarefaStatus.NOVA, ChamadoTarefaStatus.VISUALIZADA, ChamadoTarefaStatus.EM_ANDAMENTO, ChamadoTarefaStatus.IMPEDIDA] },
+        status: { in: [ChamadoTarefaStatus.NOVA, ChamadoTarefaStatus.VISUALIZADA, ChamadoTarefaStatus.EM_ANDAMENTO] },
         chamado: { excluidoEm: null },
       },
       take: 40,
@@ -1134,10 +1134,10 @@ export class DocumentosService {
         ? { id: 'documentos', titulo: 'Documentos para assinatura', total, itens: documentos.slice(0, 8), verMaisHref: '/documentos?pendentes=1' }
         : null,
       tarefas.length
-        ? { id: 'tarefas', titulo: 'Tarefas pendentes', total: tarefas.length, itens: tarefas.slice(0, 8), verMaisHref: '/execucao?aba=tarefas' }
+        ? { id: 'tarefas', titulo: 'Tarefas pendentes', total: tarefas.length, itens: tarefas.slice(0, 8), verMaisHref: '/execucao?aba=tarefas&atribuidaAMim=1' }
         : null,
       chamados.length
-        ? { id: 'chamados', titulo: 'Chamados sob minha responsabilidade', total: chamados.length, itens: chamados.slice(0, 8), verMaisHref: '/chamados' }
+        ? { id: 'chamados', titulo: 'Chamados sob minha responsabilidade', total: chamados.length, itens: chamados.slice(0, 8), verMaisHref: '/chamados?atribuicao=MIM' }
         : null,
     ].filter((grupo): grupo is NonNullable<typeof grupo> => grupo != null);
     const totalGeral = grupos.reduce((sum, grupo) => sum + grupo.total, 0);

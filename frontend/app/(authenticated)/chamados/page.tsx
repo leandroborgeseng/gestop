@@ -129,6 +129,10 @@ function ChamadosPageContent() {
   useEffect(() => {
     const value = searchParams.get('search');
     if (value) setSearch(value);
+    const atribuicao = searchParams.get('atribuicao');
+    if (atribuicao === 'MIM' || atribuicao === 'MINHA_EQUIPE') {
+      setFiltros((current) => (current.atribuicao === atribuicao ? current : { ...current, atribuicao }));
+    }
   }, [searchParams]);
 
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('id'));
