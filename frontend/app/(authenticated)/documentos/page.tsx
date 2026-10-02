@@ -25,7 +25,7 @@ import {
 } from '@/lib/api';
 import { AssinarInternoDialog, DisponibilizarAssinaturaDialog, SignatariosInternosPendentes } from '@/components/documentos/assinatura-interna-dialogs';
 import { ColetarAssinaturaDialog } from '@/components/documentos/coletar-assinatura-dialog';
-import { DocumentoAvulsoForm, DocumentoAvulsoRespostasLeitura } from '@/components/documentos/documento-avulso-form';
+import { DocumentoPreencherDialog, DocumentoRespostasDialog } from '@/components/documentos/documento-consulta-dialogs';
 import { NovoDocumentoAvulsoDialog } from '@/components/documentos/novo-documento-avulso-dialog';
 import { ChamadosRelacionadosField, type ChamadoRelacionadoChip } from '@/components/documentos/chamados-relacionados-field';
 import { DOCUMENTO_SITUACAO_META, DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
@@ -90,6 +90,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
   const [assinarInternoOpen, setAssinarInternoOpen] = useState(false);
   const [disponibilizarOpen, setDisponibilizarOpen] = useState(false);
   const [preencherAberto, setPreencherAberto] = useState(() => searchParams.get('preencher') === '1');
+  const [respostasAbertas, setRespostasAbertas] = useState(false);
 
   useEffect(() => {
     setPreencherAberto(searchParams.get('id') === selectedId && searchParams.get('preencher') === '1');
@@ -358,6 +359,10 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
                 preencherAberto={preencherAberto && selected.id === selectedId}
                 onPreencher={() => setPreencherAberto(true)}
                 onFormSaved={() => refreshSelected()}
+                respostasAbertas={respostasAbertas}
+                onVerRespostas={() => setRespostasAbertas(true)}
+                onFecharRespostas={() => setRespostasAbertas(false)}
+                onFecharPreencher={() => setPreencherAberto(false)}
                 onColetar={() => setAssinaturaOpen(true)}
                 onAssinarInterno={() => setAssinarInternoOpen(true)}
                 onDisponibilizar={() => setDisponibilizarOpen(true)}
@@ -399,6 +404,10 @@ function DocumentoDetail({
   preencherAberto,
   onPreencher,
   onFormSaved,
+  respostasAbertas,
+  onVerRespostas,
+  onFecharRespostas,
+  onFecharPreencher,
   onColetar,
   onAssinarInterno,
   onDisponibilizar,
@@ -416,6 +425,10 @@ function DocumentoDetail({
   preencherAberto: boolean;
   onPreencher: () => void;
   onFormSaved: () => void | Promise<void>;
+  respostasAbertas: boolean;
+  onVerRespostas: () => void;
+  onFecharRespostas: () => void;
+  onFecharPreencher: () => void;
   onColetar: () => void;
   onAssinarInterno: () => void;
   onDisponibilizar: () => void;
@@ -569,12 +582,22 @@ function DocumentoDetail({
         />
       ) : null}
 
-      {gestaoDocumentos && podePreencherAvulso && preencherAberto ? (
-        <DocumentoAvulsoForm key={documento.id} documento={documento} onSaved={onFormSaved} />
+      {(documento.respostas ?? []).length || (documento.checklistItens ?? []).length ? (
+        <Button type="button" size="sm" variant="outlined" onClick={onVerRespostas}>
+          Ver respostas do documento
+        </Button>
       ) : null}
-      {documento.origem === 'AVULSO' && !podePreencherAvulso ? (
-        <DocumentoAvulsoRespostasLeitura documento={documento} />
+      {preencherAberto && podePreencherAvulso ? (
+        <DocumentoPreencherDialog
+          documento={documento}
+          onClose={onFecharPreencher}
+          onSaved={async (info) => {
+            await onFormSaved();
+            if (info?.concluido) onFecharPreencher();
+          }}
+        />
       ) : null}
+      {respostasAbertas ? <DocumentoRespostasDialog documento={documento} onClose={onFecharRespostas} /> : null}
 
       <div>
         <p className="mb-2 text-[12px] font-semibold text-[var(--ink)]">Assinaturas vigentes</p>

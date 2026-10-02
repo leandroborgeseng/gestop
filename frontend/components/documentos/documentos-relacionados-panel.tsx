@@ -10,13 +10,24 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import {
   downloadDocumentoPdfAssinado,
   downloadDocumentoPdfOriginal,
+  getDocumento,
   listDocumentosPorChamado,
   listDocumentosPorFiscalizacao,
 } from '@/lib/api';
 import { DOCUMENTO_SITUACAO_META, DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
-import { canCriarDocumentoAvulso, canVerDocumentosRelacionados, hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
-import { DocumentoResumo } from '@/lib/types';
+import {
+  canAssinarDocumentoInterno,
+  canCriarDocumentoAvulso,
+  canDisponibilizarAssinaturaInterna,
+  canVerDocumentosRelacionados,
+  hasDocumentosModuloAccess,
+} from '@/lib/permissions-matrix';
+import { DocumentoDetalhe, DocumentoResumo } from '@/lib/types';
 import { NovoDocumentoAvulsoDialog, type DocumentoAvulsoVinculo } from '@/components/documentos/novo-documento-avulso-dialog';
+import { DocumentoPreencherDialog, DocumentoRespostasDialog } from '@/components/documentos/documento-consulta-dialogs';
+import { AssinarInternoDialog, DisponibilizarAssinaturaDialog } from '@/components/documentos/assinatura-interna-dialogs';
+import { ColetarAssinaturaDialog } from '@/components/documentos/coletar-assinatura-dialog';
+import { useSnackbar } from '@/components/ui/snackbar';
 
 type Props = {
   chamadoId?: string;
@@ -44,6 +55,23 @@ export function DocumentosRelacionadosPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [novoOpen, setNovoOpen] = useState(false);
+  const [detalhe, setDetalhe] = useState<DocumentoDetalhe | null>(null);
+  const [modo, setModo] = useState<'preencher' | 'ver' | 'assinar' | 'encaminhar' | 'coletar' | null>(null);
+  const snackbar = useSnackbar();
+  const podePreencher = hasDocumentosModuloAccess(permissoes) || canCriarDocumentoAvulso(permissoes);
+  const podeAssinar = canAssinarDocumentoInterno(permissoes);
+  const podeEncaminhar = canDisponibilizarAssinaturaInterna(permissoes);
+  const podeColetar = hasDocumentosModuloAccess(permissoes);
+
+  async function abrirDocumento(id: string, proximo: NonNullable<typeof modo>) {
+    try {
+      const documento = await getDocumento(id);
+      setDetalhe(documento);
+      setModo(proximo);
+    } catch (err) {
+      snackbar.show(err instanceof Error ? err.message : 'Falha ao abrir o documento.', 'error');
+    }
+  }
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -142,31 +170,31 @@ export function DocumentosRelacionadosPanel({
                 <Badge variant={situacao.badge}>{situacao.label}</Badge>
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
+                {item.origem === 'AVULSO' && item.situacao === 'RASCUNHO' && !item.possuiPdfOriginal ? (
+                  podePreencher ? (
+                    <Button type="button" size="sm" variant="filled" onClick={() => void abrirDocumento(item.id, 'preencher')}>
+                      Preencher
+                    </Button>
+                  ) : (
+                    <Button type="button" size="sm" variant="outlined" disabled title="Sem permissão para preencher o documento">
+                      Preencher
+                    </Button>
+                  )
+                ) : null}
                 {canAbrirCadastro ? (
-                  <Link
-                    href={
-                      item.origem === 'AVULSO' && item.situacao === 'RASCUNHO' && !item.possuiPdfOriginal
-                        ? `/documentos?id=${item.id}&preencher=1`
-                        : `/documentos?id=${item.id}`
-                    }
-                  >
+                  <Link href={`/documentos?id=${item.id}`}>
                     <Button type="button" size="sm" variant="outlined">
-                      {item.origem === 'AVULSO' && item.situacao === 'RASCUNHO' && !item.possuiPdfOriginal
-                        ? 'Preencher'
-                        : 'Abrir'}
+                      Abrir
                     </Button>
                   </Link>
                 ) : ocultarCadastroSemPermissao ? null : (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outlined"
-                    disabled
-                    title="Sem permissão para abrir o cadastro do documento"
-                  >
+                  <Button type="button" size="sm" variant="outlined" disabled title="Sem permissão para abrir o cadastro do documento">
                     Abrir
                   </Button>
                 )}
+                <Button type="button" size="sm" variant="ghost" onClick={() => void abrirDocumento(item.id, 'ver')}>
+                  Ver respostas do documento
+                </Button>
                 {item.possuiPdfOriginal ? (
                   <Button
                     type="button"
@@ -187,6 +215,21 @@ export function DocumentosRelacionadosPanel({
                     PDF assinado
                   </Button>
                 ) : null}
+                {item.possuiPdfOriginal && item.situacao !== 'RASCUNHO' && item.situacao !== 'CANCELADO' && podeAssinar ? (
+                  <Button type="button" size="sm" variant="ghost" onClick={() => void abrirDocumento(item.id, 'assinar')}>
+                    Assinar com usuário e senha
+                  </Button>
+                ) : null}
+                {item.possuiPdfOriginal && item.situacao !== 'RASCUNHO' && item.situacao !== 'CANCELADO' && podeEncaminhar ? (
+                  <Button type="button" size="sm" variant="ghost" onClick={() => void abrirDocumento(item.id, 'encaminhar')}>
+                    Encaminhar para assinatura
+                  </Button>
+                ) : null}
+                {item.possuiPdfOriginal && item.situacao !== 'CANCELADO' && podeColetar ? (
+                  <Button type="button" size="sm" variant="ghost" onClick={() => void abrirDocumento(item.id, 'coletar')}>
+                    Coletar nova assinatura
+                  </Button>
+                ) : null}
               </div>
               {!canAbrirCadastro && !ocultarCadastroSemPermissao ? (
                 <p className="mt-1.5 text-[11px] text-[var(--ink-3)]">
@@ -197,6 +240,28 @@ export function DocumentosRelacionadosPanel({
           );
         })}
       </ul>
+      <DocumentoPreencherDialog
+        documento={modo === 'preencher' ? detalhe : null}
+        onClose={() => setModo(null)}
+        onSaved={async (info) => {
+          await reload();
+          if (info?.concluido) setModo(null);
+          else if (detalhe) {
+            const atualizado = await getDocumento(detalhe.id).catch(() => null);
+            if (atualizado) setDetalhe(atualizado);
+          }
+        }}
+      />
+      <DocumentoRespostasDialog documento={modo === 'ver' ? detalhe : null} onClose={() => setModo(null)} />
+      {detalhe && modo === 'assinar' ? (
+        <AssinarInternoDialog open documentoId={detalhe.id} onClose={() => setModo(null)} onDone={() => { setModo(null); void reload(); }} />
+      ) : null}
+      {detalhe && modo === 'encaminhar' ? (
+        <DisponibilizarAssinaturaDialog open documento={detalhe} onClose={() => setModo(null)} onDone={() => { setModo(null); void reload(); }} />
+      ) : null}
+      {detalhe && modo === 'coletar' ? (
+        <ColetarAssinaturaDialog open documento={detalhe} onClose={() => setModo(null)} onDone={() => { setModo(null); void reload(); }} />
+      ) : null}
     </div>
   );
 }

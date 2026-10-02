@@ -2,6 +2,8 @@
 
 import { ChangeEvent, useMemo, useState } from 'react';
 import { CabecalhoSecao } from '@/components/checklists/cabecalho-secao';
+import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
+import { baixarStorageAutenticado } from '@/lib/storage-url';
 import { ChecklistItemCard } from '@/components/mobile/checklist-item-card';
 import { Button } from '@/components/ui/button';
 import { useSnackbar } from '@/components/ui/snackbar';
@@ -58,9 +60,11 @@ function itemHasAnswer(item: ChecklistItem, draft?: ResponseDraft) {
 export function DocumentoAvulsoForm({
   documento,
   onSaved,
+  ocultarTitulo = false,
 }: {
   documento: DocumentoDetalhe;
-  onSaved: () => void | Promise<void>;
+  onSaved: (info?: { concluido?: boolean }) => void | Promise<void>;
+  ocultarTitulo?: boolean;
 }) {
   const snackbar = useSnackbar();
   const itens = useMemo(
@@ -158,7 +162,7 @@ export function DocumentoAvulsoForm({
       }
       snackbar.show(concluir ? 'Documento concluído.' : 'Rascunho salvo.', 'success');
       setPendingIds([]);
-      await onSaved();
+      await onSaved(concluir ? { concluido: true } : undefined);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Falha ao salvar o documento.';
       if (concluir) {
@@ -181,13 +185,20 @@ export function DocumentoAvulsoForm({
 
   return (
     <div className="space-y-3">
-      <div>
-        <h3 className="text-[14px] font-semibold text-[var(--ink)]">Preencher documento</h3>
-        <p className="text-[12px] text-[var(--ink-3)]">
-          Responda os itens na ordem do modelo. O rascunho pode ser salvo sem completar os obrigatórios. A conclusão
-          destaca o que ainda falta.
+      {ocultarTitulo ? null : (
+        <div>
+          <h3 className="text-[14px] font-semibold text-[var(--ink)]">Preencher documento</h3>
+          <p className="text-[12px] text-[var(--ink-3)]">
+            Responda os itens na ordem do modelo. O rascunho pode ser salvo sem completar os obrigatórios. A conclusão
+            destaca o que ainda falta.
+          </p>
+        </div>
+      )}
+      {pendingIds.length ? (
+        <p className="rounded-[10px] bg-red-50 px-3 py-2 text-[12px] font-semibold text-[var(--danger)]">
+          Preencha os itens obrigatórios destacados.
         </p>
-      </div>
+      ) : null}
       {itens.map((item, index) => {
         const pending = pendingIds.includes(item.id);
         return (
@@ -218,7 +229,7 @@ export function DocumentoAvulsoForm({
           </div>
         );
       })}
-      <div className="flex flex-wrap gap-2">
+      <div className="sticky bottom-0 flex flex-wrap gap-2 bg-[var(--canvas)] py-2">
         <Button type="button" variant="outlined" size="sm" disabled={busy != null} onClick={() => void salvar(false)}>
           {busy === 'salvar' ? 'Salvando…' : 'Salvar rascunho'}
         </Button>
@@ -265,6 +276,32 @@ export function DocumentoAvulsoRespostasLeitura({ documento }: { documento: Docu
             </p>
             {resposta?.comentario?.trim() ? (
               <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p>
+            ) : null}
+            {(resposta?.evidencias ?? []).length ? (
+              <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {(resposta?.evidencias ?? []).map((evidencia, evidenciaIndex) => {
+                  const mime = evidencia.mimeType ?? '';
+                  const nome = mime === 'application/pdf' || evidencia.url.toLowerCase().includes('.pdf') ? 'Anexo PDF' : 'Evidência';
+                  if (mime.startsWith('image/') || (!mime && !evidencia.url.toLowerCase().includes('.pdf'))) {
+                    return (
+                      <li key={`${item.id}-${evidenciaIndex}`}>
+                        <ZoomableAuthenticatedImage src={evidencia.url} alt={nome} className="h-24 w-full object-cover" />
+                      </li>
+                    );
+                  }
+                  return (
+                    <li key={`${item.id}-${evidenciaIndex}`} className="col-span-2">
+                      <button
+                        type="button"
+                        className="text-[12px] font-semibold text-[var(--brand)] underline"
+                        onClick={() => void baixarStorageAutenticado(evidencia.url, nome)}
+                      >
+                        {nome} · Abrir
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
             ) : null}
           </li>
         ))}
