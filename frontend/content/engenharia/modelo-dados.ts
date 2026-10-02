@@ -291,8 +291,8 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
       },
       {
         nome: 'ChecklistItem',
-        resumo: 'Pergunta da versão: texto, número, foto, escala Likert, assinatura, entre outros tipos.',
-        campos: ['ordem', 'codigo', 'titulo', 'tipo (ChecklistItemTipo)', 'obrigatorio', 'geraNaoConformidade', 'exigeEvidencia'],
+        resumo: 'Pergunta da versão. O código fica interno. A seção agrupa perguntas consecutivas. Múltipla escolha guarda em opcoes se a seleção é única ou múltipla.',
+        campos: ['ordem', 'codigo (interno)', 'secao', 'titulo', 'tipo (ChecklistItemTipo)', 'obrigatorio', 'opcoes (Json)'],
         relacoes: ['N:1 ChecklistVersao, CategoriaVistoria', '1:N RespostaChecklist, DocumentoResposta, NaoConformidade'],
       },
       {

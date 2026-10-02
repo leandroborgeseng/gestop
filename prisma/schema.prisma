@@ -623,6 +623,8 @@ model ChecklistItem {
   checklistVersaoId   String
   ordem               Int
   codigo              String
+  /// Agrupamento livre e repetível. Não substitui o código interno.
+  secao               String?
   titulo              String
   descricao           String?
   tipo                ChecklistItemTipo

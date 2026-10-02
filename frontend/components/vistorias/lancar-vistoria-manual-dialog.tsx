@@ -11,6 +11,7 @@ import {
   validateItemResponse,
 } from '@/components/mobile/checklist-item-card';
 import { getPublishedVersion } from '@/components/checklists/checklist-shared';
+import { CabecalhoSecao } from '@/components/checklists/cabecalho-secao';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
@@ -411,15 +412,17 @@ export function LancarVistoriaManualDialog({
                 <p className="text-[12px] font-semibold text-[var(--ink-2)]">
                   Respostas ({selectedVersion.itens.length} itens)
                 </p>
-                {selectedVersion.itens.map((item) => (
+                {selectedVersion.itens.map((item, index) => (
+                  <div key={item.id} className="space-y-2">
+                  <CabecalhoSecao atual={item.secao} anterior={selectedVersion.itens[index - 1]?.secao} />
                   <ChecklistItemCard
-                    key={item.id}
                     item={item}
                     value={responses[item.id]}
                     onChange={(patch) => updateResponse(item.id, patch)}
                     onEvidence={(event) => void handleEvidence(item.id, event)}
                     onRemoveEvidence={(evidenceId) => handleRemoveEvidence(item.id, evidenceId)}
                   />
+                  </div>
                 ))}
               </section>
             ) : null}

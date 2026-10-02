@@ -643,6 +643,7 @@ export type ChecklistItem = {
   id: string;
   ordem: number;
   codigo: string;
+  secao?: string | null;
   titulo: string;
   descricao?: string | null;
   tipo: ChecklistItemTipo;
@@ -980,6 +981,7 @@ export type ChamadoExecucaoDetalhe = ChamadoDetalhe & {
       id: string;
       ordem: number;
       codigo: string;
+      secao?: string | null;
       titulo: string;
       tipo: string;
       obrigatorio: boolean;
@@ -1540,6 +1542,7 @@ export type DocumentoRespostaItem = {
   item?: {
     id: string;
     codigo?: string;
+    secao?: string | null;
     titulo: string;
     tipo: string;
     ordem: number;

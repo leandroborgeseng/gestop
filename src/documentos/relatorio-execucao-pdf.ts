@@ -22,6 +22,7 @@ export type RelatorioExecucaoPdfAnexo = {
 
 export type RelatorioExecucaoPdfResposta = {
   codigo: string;
+  secao?: string | null;
   titulo: string;
   tipo?: string | null;
   respostaTexto: string;
@@ -205,13 +206,23 @@ export function buildRelatorioExecucaoPdf(input: RelatorioExecucaoPdfInput): Pro
       y = ensureSpace(doc, y, 28, marginTop);
       doc.font('Helvetica-Bold').fontSize(11).fillColor(BRAND).text('Checklist preenchido na execução', left, y);
       y = doc.y + 8;
+      let secaoAtual = '';
       for (const resposta of input.respostas) {
+        const secao = resposta.secao?.trim() ?? '';
+        if (secao && secao !== secaoAtual) {
+          secaoAtual = secao;
+          y = ensureSpace(doc, y, 24, marginTop);
+          doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND).text(secao, left, y, { width });
+          y = doc.y + 4;
+        } else if (!secao) {
+          secaoAtual = '';
+        }
         y = ensureSpace(doc, y, 36, marginTop);
         doc
           .font('Helvetica-Bold')
           .fontSize(9)
           .fillColor(TEXT)
-          .text(`${resposta.codigo} · ${resposta.titulo}`, left, y, { width });
+          .text(secao ? resposta.titulo : `${resposta.codigo} · ${resposta.titulo}`, left, y, { width });
         y = doc.y + 2;
         doc
           .font('Helvetica')

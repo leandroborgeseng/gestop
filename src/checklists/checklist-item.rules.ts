@@ -12,6 +12,7 @@ type MultiplaEscolhaOpcoes = {
   opcoes: string[];
   notas?: Array<number | null>;
   modoExibicao: 'SELECT' | 'LISTA';
+  selecao: 'UNICA' | 'MULTIPLA';
 };
 
 type TextoOpcoes = {
@@ -41,7 +42,7 @@ function isNotaInRange(nota: number): boolean {
 function parseMultiplaEscolhaOpcoes(opcoes: unknown): MultiplaEscolhaOpcoes {
   if (Array.isArray(opcoes)) {
     const values = opcoes.map(String).map((value) => value.trim()).filter(Boolean);
-    return { opcoes: values.length >= 2 ? values : [], modoExibicao: 'SELECT' };
+    return { opcoes: values.length >= 2 ? values : [], modoExibicao: 'SELECT', selecao: 'UNICA' };
   }
 
   if (opcoes && typeof opcoes === 'object') {
@@ -61,11 +62,12 @@ function parseMultiplaEscolhaOpcoes(opcoes: unknown): MultiplaEscolhaOpcoes {
     return {
       opcoes: values,
       modoExibicao: raw.modoExibicao === 'LISTA' ? 'LISTA' : 'SELECT',
+      selecao: raw.selecao === 'MULTIPLA' ? 'MULTIPLA' : 'UNICA',
       ...(notasRaw ? { notas: notas ?? values.map(() => null) } : {}),
     };
   }
 
-  return { opcoes: [], modoExibicao: 'SELECT' };
+  return { opcoes: [], modoExibicao: 'SELECT', selecao: 'UNICA' };
 }
 
 function parseTextoOpcoes(opcoes: unknown): TextoOpcoes {
@@ -107,6 +109,7 @@ export function normalizeChecklistItemOpcoes(
     const result: MultiplaEscolhaOpcoes = {
       opcoes: config.opcoes,
       modoExibicao: config.modoExibicao,
+      selecao: config.selecao === 'MULTIPLA' ? 'MULTIPLA' : 'UNICA',
     };
     if (config.notas && !options?.omitirAvaliacao) {
       result.notas = config.notas;
@@ -247,6 +250,72 @@ export function assertValidChecklistVersionItems(
 
 export function getMultiplaEscolhaValues(opcoes: unknown): string[] {
   return parseMultiplaEscolhaOpcoes(opcoes).opcoes;
+}
+
+export function selecaoDaMultipla(opcoes: unknown): 'UNICA' | 'MULTIPLA' {
+  return parseMultiplaEscolhaOpcoes(opcoes).selecao === 'MULTIPLA' ? 'MULTIPLA' : 'UNICA';
+}
+
+export function parseValoresMultiplaEscolha(valor: string | null | undefined): string[] {
+  const texto = valor?.trim() ?? '';
+  if (!texto) return [];
+  if (texto.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(texto) as unknown;
+      if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
+        return parsed.map((item) => item.trim()).filter(Boolean);
+      }
+    } catch {
+      // Resposta antiga ou texto comum.
+    }
+  }
+  return [texto];
+}
+
+export function apresentarValorTexto(valor: string) {
+  const texto = valor.trim();
+  if (!texto.startsWith('[')) return texto;
+  try {
+    const parsed = JSON.parse(texto) as unknown;
+    if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
+      const valores = parsed.map((item) => item.trim()).filter(Boolean);
+      return valores.length ? valores.join(', ') : texto;
+    }
+  } catch {
+    // Mantém o texto original.
+  }
+  return texto;
+}
+
+export function serializarValoresMultiplaEscolha(valores: string[]) {
+  const unicos = [...new Set(valores.map((item) => item.trim()).filter(Boolean))];
+  if (unicos.length <= 1) return unicos[0] ?? '';
+  return JSON.stringify(unicos);
+}
+
+export function prepararItensChecklist(itens: ChecklistItemDto[]): ChecklistItemDto[] {
+  const used = new Set<string>();
+  const ordered = itens
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => a.item.ordem - b.item.ordem || a.index - b.index);
+  return ordered.map(({ item }, index) => {
+    let codigo = item.codigo?.trim() ? normalizeItemCode(item.codigo) : '';
+    if (!codigo || codigo.length < 2 || used.has(codigo)) {
+      let n = index + 1;
+      codigo = `ITEM_${n}`;
+      while (used.has(codigo)) {
+        n += 1;
+        codigo = `ITEM_${n}`;
+      }
+    }
+    used.add(codigo);
+    return {
+      ...item,
+      ordem: index + 1,
+      codigo,
+      secao: item.secao?.trim() || null,
+    };
+  });
 }
 
 export function getLikertValues(opcoes: unknown): string[] {

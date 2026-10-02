@@ -309,7 +309,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'checklists',
         nome: 'Modelar checklists',
         atores: ['administrador', 'gestor'],
-        descricao: 'Criar o formulário, versionar e publicar.',
+        descricao: 'Criar o formulário, ordenar as perguntas pelas setas, agrupar por seção e publicar. Múltipla escolha pode aceitar uma ou várias opções.',
         rotas: ['/checklists', '/checklists/[id]', 'POST /checklists', 'POST /checklists/:id/versions', 'POST /checklists/versions/:versionId/publish'],
       },
       {

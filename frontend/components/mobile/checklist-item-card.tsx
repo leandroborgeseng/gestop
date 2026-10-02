@@ -19,6 +19,8 @@ import {
   parseBooleanoOpcoes,
   parseMultiplaEscolhaOpcoes,
   parseTextoOpcoes,
+  parseValoresMultiplaEscolha,
+  serializarValoresMultiplaEscolha,
 } from '@/lib/checklist-item-opcoes';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { Card, CardContent } from '@/components/ui/card';
@@ -64,6 +66,14 @@ export function ChecklistItemCard({
   const evidencias = getResponseEvidencias(current);
   const multiplaEscolha = parseMultiplaEscolhaOpcoes(item.opcoes);
   const opcoesVisiveis = multiplaEscolha.opcoes.map((opcao) => opcao.trim()).filter(Boolean);
+  const selecaoMultipla = multiplaEscolha.selecao === 'MULTIPLA';
+  const selecionadas = parseValoresMultiplaEscolha(current.valorTexto);
+  function alternarOpcao(opcao: string) {
+    const next = selecionadas.includes(opcao)
+      ? selecionadas.filter((atual) => atual !== opcao)
+      : [...selecionadas, opcao];
+    onChange({ valorTexto: serializarValoresMultiplaEscolha(next) });
+  }
   const likertConfig = parseLikertConfig(item.opcoes);
   const selectedLikert = resolveLikertNivel(current.valorTexto);
   const textoOpcoes = parseTextoOpcoes(item.opcoes);
@@ -86,7 +96,6 @@ export function ChecklistItemCard({
   return (
     <Card elevation={1}>
       <CardContent className="space-y-4 p-4">
-        <Chip variant="brand" className="max-w-full">{item.codigo}</Chip>
         <h3 className="md-title-md break-words text-[var(--md-on-surface)]">{item.titulo}</h3>
         {item.descricao ? (
           <p className="md-body-md break-words text-[var(--md-on-surface-variant)]">{item.descricao}</p>
@@ -185,7 +194,45 @@ export function ChecklistItemCard({
                 />
               ) : null}
               {item.tipo === 'MULTIPLA_ESCOLHA' ? (
-                multiplaEscolha.modoExibicao === 'LISTA' ? (
+                selecaoMultipla && multiplaEscolha.modoExibicao === 'SELECT' ? (
+                  <div className="space-y-2">
+                    <Select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) alternarOpcao(e.target.value);
+                      }}
+                    >
+                      <option value="">Adicionar opção</option>
+                      {opcoesVisiveis
+                        .filter((opcao) => !selecionadas.includes(opcao))
+                        .map((opcao) => (
+                          <option key={opcao} value={opcao}>
+                            {opcao}
+                          </option>
+                        ))}
+                    </Select>
+                    <div className="flex flex-wrap gap-1.5">
+                      {selecionadas.map((opcao) => (
+                        <Chip key={opcao} active onClick={() => alternarOpcao(opcao)}>
+                          {opcao}
+                        </Chip>
+                      ))}
+                    </div>
+                  </div>
+                ) : selecaoMultipla ? (
+                  <div className="grid min-w-0 grid-cols-1 gap-2">
+                    {opcoesVisiveis.map((opcao) => (
+                      <label key={opcao} className="flex min-h-11 items-center gap-2 text-[14px]">
+                        <input
+                          type="checkbox"
+                          checked={selecionadas.includes(opcao)}
+                          onChange={() => alternarOpcao(opcao)}
+                        />
+                        <span className="min-w-0 break-words">{opcao}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : multiplaEscolha.modoExibicao === 'LISTA' ? (
                   <div className="grid min-w-0 grid-cols-1 gap-2">
                     {opcoesVisiveis.map((opcao, optionIndex) => (
                       <Chip

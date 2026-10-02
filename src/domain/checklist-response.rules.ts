@@ -1,5 +1,10 @@
 import { ChecklistItemTipo, ConformidadeStatus } from '@prisma/client';
-import { getLikertValues, getMultiplaEscolhaValues } from '../checklists/checklist-item.rules';
+import {
+  getLikertValues,
+  getMultiplaEscolhaValues,
+  parseValoresMultiplaEscolha,
+  selecaoDaMultipla,
+} from '../checklists/checklist-item.rules';
 import { resolveLikertNivel } from './likert-scale';
 import { validateNonConformityEvidence } from './rules';
 
@@ -43,14 +48,25 @@ export function validateChecklistItemResponse(
 
   if (!response) return { valid: true, reasons };
 
-  if (VALUE_TYPES.includes(item.tipo) && !response.valorTexto?.trim()) {
+  if (
+    VALUE_TYPES.includes(item.tipo) &&
+    item.tipo !== ChecklistItemTipo.MULTIPLA_ESCOLHA &&
+    !response.valorTexto?.trim()
+  ) {
     reasons.push(`Informe a resposta do item: ${item.titulo}.`);
   }
 
   if (item.tipo === ChecklistItemTipo.MULTIPLA_ESCOLHA) {
     const opcoes = getMultiplaEscolhaValues(item.opcoes);
-    const valor = response.valorTexto?.trim() ?? '';
-    if (valor && !opcoes.includes(valor)) {
+    const valores = parseValoresMultiplaEscolha(response.valorTexto);
+    const multipla = selecaoDaMultipla(item.opcoes);
+    if (item.obrigatorio && valores.length === 0) {
+      reasons.push(`Informe a resposta do item: ${item.titulo}.`);
+    }
+    if (!multipla && valores.length > 1) {
+      reasons.push(`Selecione apenas uma opcao no item: ${item.titulo}.`);
+    }
+    if (valores.some((valor) => !opcoes.includes(valor))) {
       reasons.push(`Resposta invalida para o item: ${item.titulo}.`);
     }
   }

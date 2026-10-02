@@ -1,4 +1,5 @@
 import type { ChecklistItem } from '@/lib/types';
+import { parseValoresMultiplaEscolha } from '@/lib/checklist-item-opcoes';
 import { resolveLikertNivel } from '@/lib/likert-scale';
 
 export type EvidenceDraft = {
@@ -68,7 +69,10 @@ export function validateItemResponse(item: ChecklistItem, response?: ResponseDra
     if (needsValue && item.tipo === 'ESCALA_LIKERT' && !resolveLikertNivel(response.valorTexto)) {
       return `Selecione um nível na escala: ${item.titulo}.`;
     }
-    if (needsValue && item.tipo !== 'ESCALA_LIKERT' && !response.valorTexto?.trim()) {
+    if (needsValue && item.tipo === 'MULTIPLA_ESCOLHA' && parseValoresMultiplaEscolha(response.valorTexto).length === 0) {
+      return `Informe a resposta do item: ${item.titulo}.`;
+    }
+    if (needsValue && item.tipo !== 'ESCALA_LIKERT' && item.tipo !== 'MULTIPLA_ESCOLHA' && !response.valorTexto?.trim()) {
       return `Informe a resposta do item: ${item.titulo}.`;
     }
   }

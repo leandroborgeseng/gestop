@@ -17,6 +17,7 @@ import { VistoriasProgramadasPanel } from '@/components/mobile/vistorias-program
 import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
 import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
 import { getPublishedVersion } from '@/components/checklists/checklist-shared';
+import { CabecalhoSecao } from '@/components/checklists/cabecalho-secao';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Alert } from '@/components/ui/alert';
@@ -606,15 +607,17 @@ export default function MobilePage() {
 
               {selectedVersion ? (
                 <section className="space-y-3">
-                  {selectedVersion.itens.map((item) => (
+                  {selectedVersion.itens.map((item, index) => (
+                    <div key={item.id} className="space-y-2">
+                    <CabecalhoSecao atual={item.secao} anterior={selectedVersion.itens[index - 1]?.secao} />
                     <ChecklistItemCard
-                      key={item.id}
                       item={item}
                       value={responses[item.id]}
                       onChange={(patch) => updateResponse(item.id, patch)}
                       onEvidence={(event) => void handleEvidence(item.id, event)}
                       onRemoveEvidence={(evidenceId) => handleRemoveEvidence(item.id, evidenceId)}
                     />
+                    </div>
                   ))}
                 </section>
               ) : null}

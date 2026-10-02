@@ -3,7 +3,7 @@
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { ClipboardList, GitBranch, Minus, Plus } from 'lucide-react';
+import { ChevronDown, ChevronUp, ClipboardList, GitBranch, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Chip } from '@/components/ui/chip';
@@ -39,6 +39,7 @@ import {
   LIKERT_NIVEIS_ORDEM,
   LIKERT_NIVEIS_PADRAO,
   MULTIPLA_ESCOLHA_MODO_LABELS,
+  MULTIPLA_SELECAO_LABELS,
   parseBooleanoOpcoes,
   parseLikertConfig,
   parseMultiplaEscolhaOpcoes,
@@ -79,6 +80,7 @@ export type ItemDraft = {
   draftKey: string;
   ordem: number;
   codigo: string;
+  secao: string;
   titulo: string;
   tipo: ChecklistItemTipo;
   obrigatorio: boolean;
@@ -639,8 +641,8 @@ export function ItemsReadonlyPanel({
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className="md-label-lg text-[var(--md-on-surface-variant)]">#{item.ordem}</span>
+                {item.secao?.trim() ? <Chip variant="default">{item.secao}</Chip> : null}
                 <span className="md-title-md text-[var(--md-on-surface)]">{item.titulo}</span>
-                <Chip variant="default">{item.codigo}</Chip>
                 <Chip variant="default">{TIPO_ITEM_LABEL[item.tipo] ?? item.tipo}</Chip>
               </div>
               <p className="md-body-md mt-2 text-[var(--md-on-surface-variant)]">
@@ -731,6 +733,7 @@ export function VersionEditor({
           draftKey: item.id,
           ordem: item.ordem,
           codigo: item.codigo,
+          secao: item.secao ?? '',
           titulo: item.titulo,
           tipo: item.tipo,
           obrigatorio: item.obrigatorio,
@@ -744,12 +747,31 @@ export function VersionEditor({
   const [editorError, setEditorError] = useState<string | null>(null);
 
   function prepareItems() {
-    return items.map(({ draftKey: _draftKey, ...item }) => ({
-      ...item,
-      geraNaoConformidade: semAvaliacao ? false : item.geraNaoConformidade,
-      categoriaVistoriaId: semAvaliacao ? '' : item.categoriaVistoriaId,
-      opcoes: serializeItemOpcoes(item.tipo, item.opcoes, { semAvaliacao: isDocumentoAvulso }),
-    }));
+    const used = new Set<string>();
+    return items.map((item, index) => {
+      let codigo = item.codigo.trim().toUpperCase().replace(/\s+/g, '-');
+      if (!codigo || codigo.length < 2 || used.has(codigo)) {
+        let n = index + 1;
+        codigo = `ITEM_${n}`;
+        while (used.has(codigo)) {
+          n += 1;
+          codigo = `ITEM_${n}`;
+        }
+      }
+      used.add(codigo);
+      return {
+        ordem: index + 1,
+        codigo,
+        secao: item.secao.trim(),
+        titulo: item.titulo,
+        tipo: item.tipo,
+        obrigatorio: item.obrigatorio,
+        geraNaoConformidade: semAvaliacao ? false : item.geraNaoConformidade,
+        exigeEvidencia: item.exigeEvidencia,
+        categoriaVistoriaId: semAvaliacao ? '' : item.categoriaVistoriaId,
+        opcoes: serializeItemOpcoes(item.tipo, item.opcoes, { semAvaliacao: isDocumentoAvulso }),
+      };
+    });
   }
 
   function validateItems(prepared: Array<Omit<ItemDraft, 'draftKey'>>) {
@@ -760,7 +782,6 @@ export function VersionEditor({
       });
       if (opcoesError) return opcoesError;
       if (!item.titulo.trim()) return `Item #${item.ordem}: informe o título.`;
-      if (!item.codigo.trim()) return `Item #${item.ordem}: informe o código.`;
       if (!semAvaliacao && !item.categoriaVistoriaId?.trim()) {
         return `Item #${item.ordem}: selecione a categoria de vistoria.`;
       }
@@ -800,6 +821,23 @@ export function VersionEditor({
     ]);
   }
 
+  function moverItem(index: number, direcao: -1 | 1) {
+    setItems((current) => {
+      const alvo = index + direcao;
+      if (alvo < 0 || alvo >= current.length) return current;
+      const next = current.slice();
+      const [item] = next.splice(index, 1);
+      next.splice(alvo, 0, item);
+      return next.map((entry, posicao) => ({ ...entry, ordem: posicao + 1 }));
+    });
+  }
+
+  function removerItem(index: number) {
+    setItems((current) =>
+      current.filter((_, posicao) => posicao !== index).map((entry, posicao) => ({ ...entry, ordem: posicao + 1 })),
+    );
+  }
+
   return (
     <Card elevation={1}>
       <CardHeader className="flex-row flex-wrap items-center justify-between gap-3 space-y-0">
@@ -824,15 +862,39 @@ export function VersionEditor({
         {items.map((item, index) => (
           <div key={item.draftKey} className="space-y-3 rounded-[var(--md-shape-md)] bg-[var(--md-surface-container-low)] p-4">
             <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-              <Field label="Ordem">
+              <div className="flex items-end gap-1">
+                <Field label="Ordem" className="w-16">
+                  <Input value={index + 1} readOnly aria-readonly="true" />
+                </Field>
+                <Button
+                  type="button"
+                  variant="tonal"
+                  size="sm"
+                  className="mb-0.5 h-11 w-11 shrink-0"
+                  disabled={index === 0}
+                  aria-label="Mover pergunta para cima"
+                  onClick={() => moverItem(index, -1)}
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="tonal"
+                  size="sm"
+                  className="mb-0.5 h-11 w-11 shrink-0"
+                  disabled={index === items.length - 1}
+                  aria-label="Mover pergunta para baixo"
+                  onClick={() => moverItem(index, 1)}
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+              <Field label="Seção">
                 <Input
-                  type="number"
-                  value={item.ordem}
-                  onChange={(e) => updateItem(items, setItems, index, { ordem: Number(e.target.value) })}
+                  value={item.secao}
+                  placeholder="Ex.: Dados pessoais"
+                  onChange={(e) => updateItem(items, setItems, index, { secao: e.target.value })}
                 />
-              </Field>
-              <Field label="Código">
-                <Input value={item.codigo} onChange={(e) => updateItem(items, setItems, index, { codigo: e.target.value })} />
               </Field>
               <Field label="Título" className="lg:col-span-2">
                 <Input value={item.titulo} onChange={(e) => updateItem(items, setItems, index, { titulo: e.target.value })} />
@@ -891,7 +953,7 @@ export function VersionEditor({
                 />
                 Exige evidência
               </label>
-              <Button variant="text" size="sm" className="text-red-700" onClick={() => setItems((current) => current.filter((_, i) => i !== index))}>
+              <Button variant="text" size="sm" className="text-red-700" onClick={() => removerItem(index)}>
                 Remover
               </Button>
             </div>
@@ -1025,6 +1087,24 @@ function MultiplaEscolhaEditor({
         <Plus className="h-4 w-4" />
         Cadastrar mais opções
       </Button>
+      <Field label="Forma de seleção" className="mt-3 max-w-md">
+        <Select
+          value={config.selecao === 'MULTIPLA' ? 'MULTIPLA' : 'UNICA'}
+          onChange={(e) =>
+            onChange({
+              ...config,
+              ...(simplified ? {} : { notas }),
+              selecao: e.target.value === 'MULTIPLA' ? 'MULTIPLA' : 'UNICA',
+            })
+          }
+        >
+          {(Object.keys(MULTIPLA_SELECAO_LABELS) as Array<keyof typeof MULTIPLA_SELECAO_LABELS>).map((selecao) => (
+            <option key={selecao} value={selecao}>
+              {MULTIPLA_SELECAO_LABELS[selecao]}
+            </option>
+          ))}
+        </Select>
+      </Field>
       <Field label="Modo de exibição" className="mt-3 max-w-md">
         <Select
           value={config.modoExibicao}
@@ -1270,7 +1350,8 @@ function emptyItem(ordem: number, categoriaVistoriaId = '', forChamado = false):
   return {
     draftKey: createDraftKey(),
     ordem,
-    codigo: `ITEM-${ordem}`,
+    codigo: '',
+    secao: '',
     titulo: '',
     tipo: 'BOOLEANO',
     obrigatorio: true,

@@ -24,6 +24,7 @@ import { buildRelatorioExecucaoPdf } from '../documentos/relatorio-execucao-pdf'
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { apresentarValorTexto, getMultiplaEscolhaValues, parseValoresMultiplaEscolha, selecaoDaMultipla } from '../checklists/checklist-item.rules';
 import {
   andChamadoAtivo,
   andChamadoComExcluidos,
@@ -2257,6 +2258,7 @@ export class ChamadosService {
       }
       respostas.push({
         codigo: item.codigo,
+        secao: 'secao' in item && typeof item.secao === 'string' ? item.secao : null,
         titulo: item.titulo,
         tipo: item.tipo,
         respostaTexto: this.formatExecucaoRespostaTexto(item),
@@ -2316,7 +2318,7 @@ export class ChamadosService {
     if (item.naoSeAplica) return 'Não se aplica';
     if (item.valorBooleano != null) return item.valorBooleano ? 'Sim' : 'Não';
     if (item.valorNumero != null) return String(item.valorNumero);
-    return item.valorTexto?.trim() || '—';
+    return item.valorTexto?.trim() ? apresentarValorTexto(item.valorTexto) : '—';
   }
 
   private async resolveExecucaoAnexoFromUrl(url: string, legenda: string) {
@@ -3283,6 +3285,7 @@ export class ChamadosService {
         id: item.id,
         ordem: item.ordem,
         codigo: item.codigo,
+        secao: item.secao,
         titulo: item.titulo,
         tipo: item.tipo,
         obrigatorio: item.obrigatorio,
@@ -3327,6 +3330,7 @@ export class ChamadosService {
         normalized.push({
           itemId: item.id,
           codigo: item.codigo,
+          secao: item.secao,
           titulo: item.titulo,
           tipo: item.tipo,
           naoSeAplica: true,
@@ -3350,14 +3354,24 @@ export class ChamadosService {
       const valorBooleano = resposta.valorBooleano ?? null;
       const evidenciaUrls = (resposta.evidenciaUrls ?? []).map((url) => url.trim()).filter(Boolean);
 
+      const valoresMultipla = item.tipo === 'MULTIPLA_ESCOLHA' ? parseValoresMultiplaEscolha(valorTexto) : [];
       const hasValue =
         valorBooleano != null ||
-        Boolean(valorTexto) ||
+        (item.tipo === 'MULTIPLA_ESCOLHA' ? valoresMultipla.length > 0 : Boolean(valorTexto)) ||
         valorNumero != null ||
         evidenciaUrls.length > 0;
 
       if (item.obrigatorio && !hasValue) {
         throw new BadRequestException(`Responda a pergunta obrigatoria: ${item.titulo}`);
+      }
+      if (item.tipo === 'MULTIPLA_ESCOLHA' && valoresMultipla.length) {
+        const permitidas = getMultiplaEscolhaValues(item.opcoes);
+        if (selecaoDaMultipla(item.opcoes) === 'UNICA' && valoresMultipla.length > 1) {
+          throw new BadRequestException(`Selecione apenas uma opcao: ${item.titulo}`);
+        }
+        if (valoresMultipla.some((valor) => !permitidas.includes(valor))) {
+          throw new BadRequestException(`Resposta invalida para: ${item.titulo}`);
+        }
       }
 
       if (item.exigeEvidencia && evidenciaUrls.length === 0) {
@@ -3367,6 +3381,7 @@ export class ChamadosService {
       normalized.push({
         itemId: item.id,
         codigo: item.codigo,
+        secao: item.secao,
         titulo: item.titulo,
         tipo: item.tipo,
         naoSeAplica: false,

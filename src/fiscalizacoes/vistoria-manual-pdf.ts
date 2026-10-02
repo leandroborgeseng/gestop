@@ -40,6 +40,7 @@ function resolveLogoPath() {
 export type VistoriaManualPdfItem = {
   ordem: number;
   codigo: string;
+  secao?: string | null;
   titulo: string;
   descricao?: string | null;
   tipo: string;
@@ -481,7 +482,17 @@ function drawUnidadePage(
   }
 
   y = drawSectionTitle(doc, 'Perguntas do checklist (marque com caneta)', y);
+  let secaoAtual = '';
   input.itens.forEach((item, index) => {
+    const secao = item.secao?.trim() ?? '';
+    if (secao && secao !== secaoAtual) {
+      secaoAtual = secao;
+      y = ensureSpace(doc, y, 22);
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND_PRIMARY).text(secao, left, y, { width });
+      y = doc.y + 6;
+    } else if (!secao) {
+      secaoAtual = '';
+    }
     y = drawPergunta(doc, item, index, y);
   });
 

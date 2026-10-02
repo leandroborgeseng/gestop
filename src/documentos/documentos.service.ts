@@ -45,6 +45,7 @@ import {
   verifyCodigoVerificador,
 } from './documentos-validation';
 import { buildRelatorioExecucaoPdf } from './relatorio-execucao-pdf';
+import { apresentarValorTexto } from '../checklists/checklist-item.rules';
 import { tarefaAtrasada } from '../chamados/chamado-tarefa.regras';
 import { extractStorageKeyFromUrl } from '../storage/storage-url';
 import { isPdfRenderableImage } from '../fiscalizacoes/vistoria-realizada-pdf';
@@ -101,6 +102,7 @@ const DOCUMENTO_INCLUDE = {
         select: {
           id: true,
           codigo: true,
+          secao: true,
           titulo: true,
           tipo: true,
           ordem: true,
@@ -253,6 +255,7 @@ export class DocumentosService {
             id: true,
             ordem: true,
             codigo: true,
+            secao: true,
             titulo: true,
             descricao: true,
             tipo: true,
@@ -346,6 +349,7 @@ export class DocumentosService {
               select: {
                 id: true,
                 codigo: true,
+                secao: true,
                 titulo: true,
                 descricao: true,
                 tipo: true,
@@ -2459,6 +2463,7 @@ export class DocumentosService {
 
       respostasPdf.push({
         codigo: resposta.item?.codigo ?? resposta.itemId.slice(0, 8),
+        secao: resposta.item?.secao ?? null,
         titulo: resposta.item?.titulo ?? 'Item',
         tipo: resposta.item?.tipo ?? 'TEXTO',
         respostaTexto: this.formatRespostaTexto(resposta),
@@ -3105,7 +3110,7 @@ export class DocumentosService {
   private respostaValorTexto(
     resposta: Pick<DocumentoResposta, 'valorTexto' | 'valorNumero' | 'valorBooleano'>,
   ) {
-    if (resposta.valorTexto?.trim()) return resposta.valorTexto.trim();
+    if (resposta.valorTexto?.trim()) return apresentarValorTexto(resposta.valorTexto);
     if (resposta.valorNumero != null) return String(resposta.valorNumero);
     if (resposta.valorBooleano != null) return String(resposta.valorBooleano);
     return null;
@@ -3117,7 +3122,7 @@ export class DocumentosService {
       'valorTexto' | 'valorNumero' | 'valorBooleano' | 'conformidade'
     >,
   ) {
-    if (resposta.valorTexto?.trim()) return resposta.valorTexto.trim();
+    if (resposta.valorTexto?.trim()) return apresentarValorTexto(resposta.valorTexto);
     if (resposta.valorNumero != null) return String(resposta.valorNumero);
     if (resposta.valorBooleano === true) return 'Sim';
     if (resposta.valorBooleano === false) return 'Não';
@@ -3302,6 +3307,7 @@ export class DocumentosService {
           ? {
               id: item.item.id,
               codigo: item.item.codigo,
+              secao: item.item.secao,
               titulo: item.item.titulo,
               tipo: item.item.tipo,
               ordem: item.item.ordem,

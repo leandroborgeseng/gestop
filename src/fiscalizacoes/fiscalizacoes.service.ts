@@ -574,6 +574,7 @@ export class FiscalizacoesService {
       itens: versao.itens.map((item) => ({
         ordem: item.ordem,
         codigo: item.codigo,
+        secao: item.secao,
         titulo: item.titulo,
         descricao: item.descricao,
         tipo: item.tipo,

@@ -2,6 +2,8 @@ export type ChecklistTextoFormato = 'CURTO' | 'LONGO';
 
 export type ChecklistMultiplaEscolhaModo = 'SELECT' | 'LISTA';
 
+export type ChecklistSelecao = 'UNICA' | 'MULTIPLA';
+
 export type ChecklistConformidadeBinaria = 'CONFORME' | 'NAO_CONFORME';
 
 export type ChecklistTextoOpcoes = {
@@ -12,6 +14,7 @@ export type ChecklistMultiplaEscolhaOpcoes = {
   opcoes: string[];
   notas?: Array<number | null>;
   modoExibicao: ChecklistMultiplaEscolhaModo;
+  selecao: ChecklistSelecao;
 };
 
 export type ChecklistBooleanoOpcoes = {
@@ -59,6 +62,11 @@ export const MULTIPLA_ESCOLHA_MODO_LABELS: Record<ChecklistMultiplaEscolhaModo, 
   LISTA: 'Todas as opções na tela',
 };
 
+export const MULTIPLA_SELECAO_LABELS: Record<ChecklistSelecao, string> = {
+  UNICA: 'Selecionar apenas uma opção',
+  MULTIPLA: 'Permitir selecionar mais de uma opção',
+};
+
 export const CONFORMIDADE_BINARIA_LABELS: Record<ChecklistConformidadeBinaria, string> = {
   CONFORME: 'Conforme',
   NAO_CONFORME: 'Não conforme',
@@ -91,7 +99,11 @@ function alignNotas(opcoes: string[], notas: Array<number | null> | undefined): 
 
 export function defaultOpcoesForTipo(tipo: string): unknown {
   if (tipo === 'MULTIPLA_ESCOLHA') {
-    return { opcoes: ['', ''], modoExibicao: 'SELECT' satisfies ChecklistMultiplaEscolhaModo };
+    return {
+      opcoes: ['', ''],
+      modoExibicao: 'SELECT' satisfies ChecklistMultiplaEscolhaModo,
+      selecao: 'UNICA' satisfies ChecklistSelecao,
+    };
   }
   if (tipo === 'ESCALA_LIKERT') {
     return { niveis: [...LIKERT_NIVEIS_PADRAO] };
@@ -143,6 +155,7 @@ export function parseMultiplaEscolhaOpcoes(opcoes: unknown): ChecklistMultiplaEs
     return {
       opcoes: values.length >= 2 ? values : ['', ''],
       modoExibicao: 'SELECT',
+      selecao: 'UNICA',
     };
   }
 
@@ -155,11 +168,12 @@ export function parseMultiplaEscolhaOpcoes(opcoes: unknown): ChecklistMultiplaEs
     return {
       opcoes: filled,
       modoExibicao,
+      selecao: raw.selecao === 'MULTIPLA' ? 'MULTIPLA' : 'UNICA',
       notas: alignNotas(filled, notasRaw),
     };
   }
 
-  return { opcoes: ['', ''], modoExibicao: 'SELECT' };
+  return { opcoes: ['', ''], modoExibicao: 'SELECT', selecao: 'UNICA' };
 }
 
 export function serializeItemOpcoes(tipo: string, opcoes: unknown, options?: { semAvaliacao?: boolean }): unknown {
@@ -175,6 +189,7 @@ export function serializeItemOpcoes(tipo: string, opcoes: unknown, options?: { s
     const result: ChecklistMultiplaEscolhaOpcoes = {
       opcoes: paired.map((entry) => entry.opcao),
       modoExibicao: config.modoExibicao,
+      selecao: config.selecao === 'MULTIPLA' ? 'MULTIPLA' : 'UNICA',
     };
 
     if (config.notas != null && !options?.semAvaliacao) {
@@ -215,7 +230,8 @@ export function formatOpcoesResumo(tipo: string, opcoes: unknown): string | null
     const config = parseMultiplaEscolhaOpcoes(opcoes);
     const count = config.opcoes.map((value) => value.trim()).filter(Boolean).length;
     const comNotas = config.notas?.some((nota) => nota != null) ? ' · com notas' : '';
-    return `${count} opção(ões) · ${MULTIPLA_ESCOLHA_MODO_LABELS[config.modoExibicao]}${comNotas}`;
+    const selecao = config.selecao === 'MULTIPLA' ? 'várias opções' : 'uma opção';
+    return `${count} opção(ões) · ${selecao} · ${MULTIPLA_ESCOLHA_MODO_LABELS[config.modoExibicao]}${comNotas}`;
   }
 
   if (tipo === 'TEXTO') {
@@ -303,4 +319,42 @@ export function validateItemOpcoes(
   }
 
   return null;
+}
+
+export function parseValoresMultiplaEscolha(valor: string | null | undefined): string[] {
+  const texto = valor?.trim() ?? '';
+  if (!texto) return [];
+  if (texto.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(texto) as unknown;
+      if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
+        return parsed.map((item) => item.trim()).filter(Boolean);
+      }
+    } catch {
+      // Resposta antiga em texto simples.
+    }
+  }
+  return [texto];
+}
+
+export function apresentarValorTexto(valor: string | null | undefined) {
+  const texto = valor?.trim() ?? '';
+  if (!texto) return '';
+  if (!texto.startsWith('[')) return texto;
+  try {
+    const parsed = JSON.parse(texto) as unknown;
+    if (Array.isArray(parsed) && parsed.every((item) => typeof item === 'string')) {
+      const valores = parsed.map((item) => item.trim()).filter(Boolean);
+      return valores.length ? valores.join(', ') : texto;
+    }
+  } catch {
+    // Mantém o texto.
+  }
+  return texto;
+}
+
+export function serializarValoresMultiplaEscolha(valores: string[]) {
+  const unicos = [...new Set(valores.map((item) => item.trim()).filter(Boolean))];
+  if (unicos.length <= 1) return unicos[0] ?? '';
+  return JSON.stringify(unicos);
 }

@@ -6,6 +6,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
   MinLength,
   ValidateNested,
@@ -61,9 +62,15 @@ export class ChecklistItemDto {
   @Min(1)
   ordem!: number;
 
+  @IsOptional()
   @IsString()
-  @MinLength(2)
-  codigo!: string;
+  @MaxLength(40)
+  codigo?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  secao?: string | null;
 
   @IsString()
   @MinLength(2)

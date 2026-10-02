@@ -3,6 +3,7 @@ import { AuditAction, ChecklistEscopo, ChecklistFinalidade, ChecklistVersaoStatu
 import { JwtPayload } from '../auth/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { assertChecklistAcao, assertChecklistNoEscopo } from './checklist-acesso';
+import { prepararItensChecklist } from './checklist-item.rules';
 import { ChecklistDto, ChecklistVersionDto } from './checklists.dto';
 import {
   assertDraftEditable,
@@ -217,6 +218,7 @@ export class ChecklistsService {
             sourceVersion?.itens.map((item) => ({
               ordem: item.ordem,
               codigo: item.codigo,
+              secao: item.secao,
               titulo: item.titulo,
               descricao: item.descricao,
               tipo: item.tipo,
@@ -265,14 +267,15 @@ export class ChecklistsService {
       (version.checklist.finalidades ?? []).includes(ChecklistFinalidade.CHAMADO);
     const documentoAvulso = isDocumentoAvulsoExclusivo(version.checklist);
 
+    const dtoPreparado: ChecklistVersionDto = { ...dto, itens: prepararItensChecklist(dto.itens) };
     try {
-      assertValidChecklistVersion(dto, { finalidadeChamado, finalidadeDocumentoAvulso: documentoAvulso });
+      assertValidChecklistVersion(dtoPreparado, { finalidadeChamado, finalidadeDocumentoAvulso: documentoAvulso });
     } catch (error) {
       throw new BadRequestException(error instanceof Error ? error.message : 'Itens invalidos');
     }
 
     const semAvaliacaoVistoria = finalidadeChamado || documentoAvulso;
-    const normalizedItens = dto.itens.map((item) => ({
+    const normalizedItens = dtoPreparado.itens.map((item) => ({
       ...item,
       geraNaoConformidade: semAvaliacaoVistoria ? false : item.geraNaoConformidade,
       categoriaVistoriaId: semAvaliacaoVistoria ? null : item.categoriaVistoriaId?.trim() || null,
@@ -288,7 +291,8 @@ export class ChecklistsService {
           itens: {
             create: normalizedItens.map((item) => ({
               ordem: item.ordem,
-              codigo: normalizeItemCode(item.codigo),
+              codigo: normalizeItemCode(item.codigo ?? ''),
+              secao: item.secao?.trim() || null,
               titulo: item.titulo.trim(),
               descricao: item.descricao?.trim(),
               tipo: item.tipo,

@@ -1,7 +1,13 @@
 'use client';
 
+import { CabecalhoSecao } from '@/components/checklists/cabecalho-secao';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
+import {
+  parseMultiplaEscolhaOpcoes,
+  parseValoresMultiplaEscolha,
+  serializarValoresMultiplaEscolha,
+} from '@/lib/checklist-item-opcoes';
 import { ChamadoExecucaoDetalhe } from '@/lib/types';
 
 export type ChecklistRespostaDraft = {
@@ -15,14 +21,6 @@ export type ChecklistRespostaDraft = {
 };
 
 type Item = NonNullable<ChamadoExecucaoDetalhe['checklistComplementar']>['itens'][number];
-
-function parseOpcoes(opcoes: unknown): string[] {
-  if (Array.isArray(opcoes)) return opcoes.map(String);
-  if (opcoes && typeof opcoes === 'object' && Array.isArray((opcoes as { opcoes?: unknown }).opcoes)) {
-    return ((opcoes as { opcoes: unknown[] }).opcoes).map(String);
-  }
-  return [];
-}
 
 export function ChamadoExecucaoChecklistSection({
   checklist,
@@ -57,9 +55,10 @@ export function ChamadoExecucaoChecklistSection({
       </div>
 
       <div className="space-y-3">
-        {checklist.itens.map((item) => (
+        {checklist.itens.map((item, index) => (
+          <div key={item.id} className="space-y-2">
+            <CabecalhoSecao atual={item.secao} anterior={checklist.itens[index - 1]?.secao} />
           <ChecklistPergunta
-            key={item.id}
             item={item}
             draft={
               respostas[item.id] ?? {
@@ -71,6 +70,7 @@ export function ChamadoExecucaoChecklistSection({
             disabled={disabled}
             onChange={(patch) => update(item.id, patch)}
           />
+          </div>
         ))}
       </div>
     </div>
@@ -88,7 +88,10 @@ function ChecklistPergunta({
   disabled?: boolean;
   onChange: (patch: Partial<ChecklistRespostaDraft>) => void;
 }) {
-  const opcoes = parseOpcoes(item.opcoes);
+  const config = parseMultiplaEscolhaOpcoes(item.opcoes);
+  const opcoes = config.opcoes.map((opcao) => opcao.trim()).filter(Boolean);
+  const selecionadas = parseValoresMultiplaEscolha(draft.valorTexto);
+  const selecaoMultipla = config.selecao === 'MULTIPLA';
 
   return (
     <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] p-3">
@@ -98,10 +101,9 @@ function ChecklistPergunta({
             {item.titulo}
             {item.obrigatorio ? <span className="text-[var(--danger)]"> *</span> : null}
           </p>
-          <p className="mt-0.5 text-[11px] text-[var(--ink-3)]">
-            {item.codigo}
-            {item.exigeEvidencia ? ' · Exige evidência' : ''}
-          </p>
+          {item.exigeEvidencia ? (
+            <p className="mt-0.5 text-[11px] text-[var(--ink-3)]">Exige evidência</p>
+          ) : null}
         </div>
         <label className="inline-flex items-center gap-1.5 text-[12px] text-[var(--ink-2)]">
           <input
@@ -148,18 +150,93 @@ function ChecklistPergunta({
           ) : null}
 
           {item.tipo === 'MULTIPLA_ESCOLHA' ? (
-            <Select
-              value={draft.valorTexto ?? ''}
-              disabled={disabled}
-              onChange={(event) => onChange({ valorTexto: event.target.value })}
-            >
-              <option value="">Selecione</option>
-              {opcoes.map((opcao) => (
-                <option key={opcao} value={opcao}>
-                  {opcao}
-                </option>
-              ))}
-            </Select>
+            selecaoMultipla && config.modoExibicao === 'LISTA' ? (
+              <div className="grid gap-2">
+                {opcoes.map((opcao) => (
+                  <label key={opcao} className="flex min-h-11 items-center gap-2 text-[13px]">
+                    <input
+                      type="checkbox"
+                      disabled={disabled}
+                      checked={selecionadas.includes(opcao)}
+                      onChange={() => {
+                        const next = selecionadas.includes(opcao)
+                          ? selecionadas.filter((atual) => atual !== opcao)
+                          : [...selecionadas, opcao];
+                        onChange({ valorTexto: serializarValoresMultiplaEscolha(next) });
+                      }}
+                    />
+                    {opcao}
+                  </label>
+                ))}
+              </div>
+            ) : selecaoMultipla ? (
+              <div className="space-y-2">
+                <Select
+                  value=""
+                  disabled={disabled}
+                  onChange={(event) => {
+                    const opcao = event.target.value;
+                    if (!opcao || selecionadas.includes(opcao)) return;
+                    onChange({ valorTexto: serializarValoresMultiplaEscolha([...selecionadas, opcao]) });
+                  }}
+                >
+                  <option value="">Adicionar opção</option>
+                  {opcoes.filter((opcao) => !selecionadas.includes(opcao)).map((opcao) => (
+                    <option key={opcao} value={opcao}>
+                      {opcao}
+                    </option>
+                  ))}
+                </Select>
+                <div className="flex flex-wrap gap-1.5">
+                  {selecionadas.map((opcao) => (
+                    <button
+                      key={opcao}
+                      type="button"
+                      disabled={disabled}
+                      className="rounded-full border border-[var(--brand)] bg-[var(--brand-soft)] px-2 py-1 text-[12px]"
+                      onClick={() =>
+                        onChange({
+                          valorTexto: serializarValoresMultiplaEscolha(selecionadas.filter((atual) => atual !== opcao)),
+                        })
+                      }
+                    >
+                      {opcao} ×
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : config.modoExibicao === 'LISTA' ? (
+              <div className="flex flex-wrap gap-2">
+                {opcoes.map((opcao) => (
+                  <button
+                    key={opcao}
+                    type="button"
+                    disabled={disabled}
+                    className={`rounded-[var(--r-sm)] border px-3 py-1.5 text-[12px] font-semibold ${
+                      draft.valorTexto === opcao
+                        ? 'border-[var(--brand)] bg-[var(--brand-soft)] text-[var(--brand-hover)]'
+                        : 'border-[var(--line)] text-[var(--ink-2)]'
+                    }`}
+                    onClick={() => onChange({ valorTexto: opcao })}
+                  >
+                    {opcao}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <Select
+                value={draft.valorTexto ?? ''}
+                disabled={disabled}
+                onChange={(event) => onChange({ valorTexto: event.target.value })}
+              >
+                <option value="">Selecione</option>
+                {opcoes.map((opcao) => (
+                  <option key={opcao} value={opcao}>
+                    {opcao}
+                  </option>
+                ))}
+              </Select>
+            )
           ) : null}
 
           {item.tipo === 'TEXTO' || item.tipo === 'DATA' ? (
@@ -221,7 +298,9 @@ export function validateChecklistRespostasDraft(
 
     const hasValue =
       draft?.valorBooleano != null ||
-      Boolean(draft?.valorTexto?.trim()) ||
+      (item.tipo === 'MULTIPLA_ESCOLHA'
+        ? parseValoresMultiplaEscolha(draft?.valorTexto).length > 0
+        : Boolean(draft?.valorTexto?.trim())) ||
       draft?.valorNumero != null ||
       (draft?.evidenciaUrls?.length ?? 0) > 0;
 

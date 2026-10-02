@@ -1,6 +1,7 @@
 'use client';
 
 import { ChangeEvent, useMemo, useState } from 'react';
+import { CabecalhoSecao } from '@/components/checklists/cabecalho-secao';
 import { ChecklistItemCard } from '@/components/mobile/checklist-item-card';
 import { Button } from '@/components/ui/button';
 import { useSnackbar } from '@/components/ui/snackbar';
@@ -11,6 +12,7 @@ import {
   validateItemResponse,
   type ResponseDraft,
 } from '@/lib/checklist-response-draft';
+import { apresentarValorTexto, parseValoresMultiplaEscolha } from '@/lib/checklist-item-opcoes';
 import type { ChecklistItem, DocumentoDetalhe } from '@/lib/types';
 
 function fileToDataUrl(file: File) {
@@ -46,6 +48,7 @@ function itemHasAnswer(item: ChecklistItem, draft?: ResponseDraft) {
   if (!draft) return false;
   if (item.tipo === 'BOOLEANO') return draft.valorBooleano != null;
   if (item.tipo === 'FOTO' || item.tipo === 'ASSINATURA') return getResponseEvidencias(draft).length > 0;
+  if (item.tipo === 'MULTIPLA_ESCOLHA') return parseValoresMultiplaEscolha(draft.valorTexto).length > 0;
   if (draft.valorTexto?.trim()) return true;
   if (draft.comentario?.trim()) return true;
   if (item.exigeEvidencia && getResponseEvidencias(draft).length > 0) return true;
@@ -185,13 +188,14 @@ export function DocumentoAvulsoForm({
           destaca o que ainda falta.
         </p>
       </div>
-      {itens.map((item) => {
+      {itens.map((item, index) => {
         const pending = pendingIds.includes(item.id);
         return (
           <div
             key={item.id}
             className={pending ? 'rounded-[16px] ring-2 ring-[var(--danger)]' : undefined}
           >
+            <CabecalhoSecao atual={item.secao} anterior={itens[index - 1]?.secao} />
             {pending ? (
               <p className="mb-1 text-[12px] font-semibold text-[var(--danger)]">Item obrigatório pendente</p>
             ) : null}
@@ -238,6 +242,7 @@ export function DocumentoAvulsoRespostasLeitura({ documento }: { documento: Docu
           id: resposta.itemId,
           titulo: resposta.item?.titulo ?? 'Item',
           obrigatorio: resposta.item?.obrigatorio ?? false,
+          secao: resposta.item?.secao ?? null,
         },
         resposta,
       }));
@@ -246,14 +251,15 @@ export function DocumentoAvulsoRespostasLeitura({ documento }: { documento: Docu
     <div className="space-y-2">
       <h3 className="text-[14px] font-semibold text-[var(--ink)]">Respostas</h3>
       <ul className="space-y-2">
-        {rows.map(({ item, resposta }) => (
+        {rows.map(({ item, resposta }, index) => (
           <li key={item.id} className="rounded-[12px] border border-[var(--line)] bg-[var(--canvas-2)] px-3 py-2">
+            <CabecalhoSecao atual={item.secao} anterior={rows[index - 1]?.item.secao} />
             <p className="text-[13px] font-medium text-[var(--ink)]">
               {item.titulo}
               {item.obrigatorio ? <span className="text-[var(--danger)]"> *</span> : null}
             </p>
             <p className="mt-0.5 text-[12px] text-[var(--ink-2)]">
-              {resposta?.valorTexto?.trim() ||
+              {apresentarValorTexto(resposta?.valorTexto) ||
                 (resposta?.valorNumero != null ? String(resposta.valorNumero) : '') ||
                 (resposta?.valorBooleano === true ? 'Sim' : resposta?.valorBooleano === false ? 'Não' : '—')}
             </p>
