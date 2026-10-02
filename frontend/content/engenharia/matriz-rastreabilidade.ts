@@ -99,7 +99,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/chamados',
     api: 'ChamadosController: GET /chamados, PUT /:id/status, /triagem, /atribuicao, /planejamento, /abertura, /observadores, POST /:id/historico, POST /:id/notificar-equipe',
     tabelas: 'Chamado, HistoricoStatus, Equipe, EquipeUsuario, Usuario, ChamadoObservador, TipoChamado',
-    permissao: 'chamados.gerenciar. Edição da abertura também aceita chamados.editar_abertura. Escopo pela secretaria ativa.',
+    permissao: 'chamados.gerenciar. Edição da abertura também aceita chamados.editar_abertura. Escopo pela secretaria ativa. A busca da lista consulta o conjunto do escopo, não só a página visível.',
   },
   {
     id: 'meus',

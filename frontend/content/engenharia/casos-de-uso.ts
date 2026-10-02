@@ -116,7 +116,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'triar',
         nome: 'Triar e atribuir',
         atores: ['administrador', 'gestor'],
-        descricao: 'Mudar status, triagem, atribuição, planejamento, abertura, observadores e aviso à equipe.',
+        descricao: 'Mudar status, triagem, atribuição, planejamento, abertura, observadores e aviso à equipe. A lista e o detalhe rolam por dentro, na mesma altura. A busca por código, descrição ou unidade só dispara no botão Pesquisar ou no Enter.',
         rotas: ['/chamados', 'GET /chamados', 'PUT /chamados/:id/triagem', 'PUT /chamados/:id/atribuicao', 'PUT /chamados/:id/planejamento'],
       },
       {

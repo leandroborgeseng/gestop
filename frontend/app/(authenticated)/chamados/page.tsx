@@ -68,6 +68,8 @@ const TRIAGEM_PRIORIDADES = ['BAIXA', 'MEDIA', 'ALTA', 'URGENTE'] as const;
 const TRIAGEM_PAGE_SIZE = 50;
 const TRIAGEM_ALL_WARN = 500;
 const TRIAGEM_ALL_MAX = 5000;
+const ALTURA_PAINEL_CHAMADOS =
+  'h-[min(560px,calc(100dvh-14rem-env(safe-area-inset-bottom)))] max-h-[min(560px,calc(100dvh-14rem-env(safe-area-inset-bottom)))] min-h-[320px] lg:h-[min(860px,calc(100dvh-9.5rem))] lg:max-h-[min(860px,calc(100dvh-9.5rem))]';
 
 const DEFAULT_FILTROS: ChamadosFiltrosValue = {
   statuses: 'TODOS',
@@ -123,12 +125,16 @@ function ChamadosPageContent() {
   const [filtros, setFiltros] = useState<ChamadosFiltrosValue>(DEFAULT_FILTROS);
   const [view, setView] = useState<ChamadosView>('triagem');
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
+  const [searchDraft, setSearchDraft] = useState(() => searchParams.get('search') ?? '');
   const [exibirExcluidos, setExibirExcluidos] = useState(false);
   const podeVerExcluidos = canVisualizarChamadosExcluidos(sessionUser);
 
   useEffect(() => {
     const value = searchParams.get('search');
-    if (value) setSearch(value);
+    if (value) {
+      setSearch(value);
+      setSearchDraft(value);
+    }
     const atribuicao = searchParams.get('atribuicao');
     if (atribuicao === 'MIM' || atribuicao === 'MINHA_EQUIPE') {
       setFiltros((current) => (current.atribuicao === atribuicao ? current : { ...current, atribuicao }));
@@ -480,17 +486,44 @@ function ChamadosPageContent() {
 
         {view === 'triagem' && !loading ? (
           <div className="grid min-h-0 flex-1 gap-3.5 xl:grid-cols-[minmax(320px,388px)_1fr] xl:items-stretch">
-            <section className="flex max-h-[min(360px,42vh)] min-h-[220px] flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] xl:h-[min(720px,calc(100dvh-220px))] xl:max-h-[min(720px,calc(100dvh-220px))]">
+            <section className={cn('flex flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]', ALTURA_PAINEL_CHAMADOS)}>
               <div className="shrink-0 border-b border-[var(--line-2)] p-3.5">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
+                <div className="flex items-center gap-2">
                   <input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
+                    value={searchDraft}
+                    onChange={(event) => setSearchDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault();
+                        setSearch(searchDraft.trim());
+                      }
+                    }}
                     placeholder="Buscar por código, descrição ou unidade…"
-                    className="h-[38px] w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
+                    className="h-[38px] min-w-0 flex-1 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
                   />
+                  <Button
+                    type="button"
+                    variant="filled"
+                    size="md"
+                    className="shrink-0 gap-1.5 px-3"
+                    onClick={() => setSearch(searchDraft.trim())}
+                  >
+                    <Search className="h-4 w-4" />
+                    Pesquisar
+                  </Button>
                 </div>
+                {search || searchDraft ? (
+                  <button
+                    type="button"
+                    className="mt-2 text-[12px] font-semibold text-[var(--brand)]"
+                    onClick={() => {
+                      setSearchDraft('');
+                      setSearch('');
+                    }}
+                  >
+                    Limpar busca
+                  </button>
+                ) : null}
                 {podeVerExcluidos ? (
                   <label className="mt-2 flex items-center gap-2 text-[12px] text-[var(--ink-3)]">
                     <input
@@ -598,7 +631,7 @@ function ChamadosPageContent() {
               </div>
             </section>
 
-            <section className="min-h-[320px] overflow-hidden xl:h-[min(720px,calc(100dvh-220px))] xl:overflow-y-auto">
+            <section className={cn('flex min-h-0 flex-col overflow-hidden', ALTURA_PAINEL_CHAMADOS)}>
               <ChamadoDetailPanel
                 resumo={selected}
                 detail={detail?.id === selected?.id ? detail : null}
