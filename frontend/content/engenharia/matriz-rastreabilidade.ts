@@ -259,7 +259,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Disponibilizar e assinar internamente',
     ator: 'Gestor (disponibiliza); destinatário interno (assina)',
     tela: '/documentos, aviso em /login',
-    api: 'DocumentosController: GET /minhas-pendencias-assinatura, GET /signatarios-internos, POST /:id/disponibilizar-assinatura, POST /:id/assinatura-interna, POST pedidos-assinatura/:id/retirar|recusar',
+    api: 'DocumentosController: GET /pendencias-resumo, GET /minhas-pendencias-assinatura, GET /signatarios-internos, POST /:id/disponibilizar-assinatura, POST /:id/assinatura-interna, POST pedidos-assinatura/:id/retirar|recusar',
     tabelas: 'DocumentoAssinaturaPedido, DocumentoAssinatura, Documento, Usuario',
     permissao: 'documentos.disponibilizar_assinatura ou documentos.assinar_interno (e as chaves de matriz correspondentes). Administrador e documentos.administrar também passam.',
   },
