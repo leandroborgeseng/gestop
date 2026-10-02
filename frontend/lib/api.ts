@@ -1730,8 +1730,12 @@ export function disponibilizarAssinaturaInterna(id: string, destinatarioIds: str
   });
 }
 
-export function retirarPedidoAssinatura(pedidoId: string) {
-  return request<DocumentoDetalhe>(`/documentos/pedidos-assinatura/${pedidoId}/retirar`, { method: 'POST' });
+export function retirarPedidoAssinatura(pedidoId: string, motivo?: string) {
+  return request<DocumentoDetalhe>(`/documentos/pedidos-assinatura/${pedidoId}/retirar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ motivo }),
+  });
 }
 
 export function recusarPedidoAssinatura(pedidoId: string, motivo?: string) {

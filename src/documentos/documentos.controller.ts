@@ -204,8 +204,12 @@ export class DocumentosController {
     'documentos.administrar',
     'usuarios.gerenciar',
   )
-  retirarPedido(@Param('pedidoId') pedidoId: string, @CurrentUser() user: JwtPayload) {
-    return this.documentosService.retirarAssinaturaInterna(pedidoId, user);
+  retirarPedido(
+    @Param('pedidoId') pedidoId: string,
+    @Body() body: RecusarAssinaturaInternaDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.documentosService.retirarAssinaturaInterna(pedidoId, user, body?.motivo);
   }
 
   @Post('pedidos-assinatura/:pedidoId/recusar')

@@ -192,3 +192,78 @@ export function DisponibilizarAssinaturaDialog({
     </Sheet>
   );
 }
+
+export function SignatariosInternosPendentes({
+  itens,
+  podeCancelar,
+  onChanged,
+}: {
+  itens: Array<{ id: string; nome: string; email?: string | null; requestedAt?: string; solicitanteNome?: string | null }>;
+  podeCancelar: boolean;
+  onChanged: () => void;
+}) {
+  const snackbar = useSnackbar();
+  const [alvo, setAlvo] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function cancelar(pedidoId: string) {
+    setBusy(true);
+    try {
+      await retirarPedidoAssinatura(pedidoId, motivo.trim() || undefined);
+      snackbar.show('Disponibilização cancelada.', 'success');
+      setAlvo(null);
+      setMotivo('');
+      onChanged();
+    } catch (err) {
+      snackbar.show(err instanceof Error ? err.message : 'Falha ao cancelar a disponibilização.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="rounded-[12px] border border-amber-300 bg-amber-50 p-3">
+      <h3 className="text-[13px] font-semibold text-amber-950">Signatários internos pendentes</h3>
+      <p className="mt-1 text-[12px] text-amber-900">
+        A situação permanece Assinatura pendente enquanto houver alguém nesta lista. Cancele a disponibilização para retirar um signatário.
+      </p>
+      <ul className="mt-2 space-y-2">
+        {itens.map((item) => (
+          <li key={item.id} className="rounded-[10px] bg-white px-3 py-2 text-[12px]">
+            <p className="font-medium text-[var(--ink)]">{item.nome}</p>
+            <p className="text-[var(--ink-3)]">
+              {[item.email, item.requestedAt ? new Date(item.requestedAt).toLocaleString('pt-BR') : null, item.solicitanteNome ? `encaminhado por ${item.solicitanteNome}` : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+            {podeCancelar ? (
+              alvo === item.id ? (
+                <div className="mt-2 space-y-2">
+                  <textarea
+                    value={motivo}
+                    onChange={(event) => setMotivo(event.target.value)}
+                    placeholder="Justificativa (opcional)"
+                    className="min-h-16 w-full rounded-[10px] border border-[var(--line)] p-2"
+                  />
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" variant="filled" disabled={busy} onClick={() => void cancelar(item.id)}>
+                      Confirmar cancelamento
+                    </Button>
+                    <Button type="button" size="sm" variant="text" disabled={busy} onClick={() => setAlvo(null)}>
+                      Voltar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button type="button" size="sm" variant="outlined" className="mt-2" onClick={() => { setAlvo(item.id); setMotivo(''); }}>
+                  Cancelar disponibilização
+                </Button>
+              )
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}

@@ -128,6 +128,7 @@ const DOCUMENTO_INCLUDE = {
       status: true,
       requestedAt: true,
       destinatario: { select: { id: true, nome: true, email: true } },
+      solicitante: { select: { id: true, nome: true } },
     },
   },
 } satisfies Prisma.DocumentoInclude;
@@ -979,12 +980,26 @@ export class DocumentosService {
       },
     });
 
-    const { updated, hashArquivoFinal } = await this.regenerarPdfAssinado(id, before.conteudoTravadoEm);
+    const pendentesInternos = await this.contarPedidosPendentes(id);
+    const manual = this.asRecord(before.metadata).assinaturaPendenteManual === true;
+    const situacaoFinal =
+      pendentesInternos > 0 || manual ? DocumentoSituacao.ASSINATURA_PENDENTE : DocumentoSituacao.ASSINADO_VIGENTE;
+    const { updated, hashArquivoFinal } = await this.regenerarPdfAssinado(id, before.conteudoTravadoEm, situacaoFinal);
+    if (before.situacao === DocumentoSituacao.ASSINATURA_PENDENTE && situacaoFinal !== DocumentoSituacao.ASSINATURA_PENDENTE) {
+      await this.registrarHistorico(
+        id,
+        before.situacao,
+        situacaoFinal,
+        'Baixa automática da assinatura pendente.',
+        user.sub,
+        { acao: 'baixa_assinatura_pendente' },
+      );
+    }
 
     await this.registrarHistorico(
       id,
       before.situacao,
-      DocumentoSituacao.ASSINADO_VIGENTE,
+      situacaoFinal,
       `Assinatura coletada: ${dto.assinanteNome.trim()}${
         identificacaoMeta.cpfNaoInformado || identificacaoMeta.emailNaoInformado
           ? ' (identificação parcial)'
@@ -1011,7 +1026,7 @@ export class DocumentosService {
       id,
       { situacao: before.situacao },
       {
-        situacao: DocumentoSituacao.ASSINADO_VIGENTE,
+        situacao: situacaoFinal,
         assinanteNome: dto.assinanteNome.trim(),
         pdfAssinadoSha256: hashArquivoFinal,
         ...identificacaoMeta,
@@ -1242,14 +1257,16 @@ export class DocumentosService {
       });
     }
     const nomes = ativos.map((item) => item.nome).join(', ');
+    const contexto = await this.contextoAtuacaoDocumento(user);
     await this.registrarHistorico(
       id,
       documento.situacao,
       documento.situacao,
       `Documento disponibilizado para assinatura interna: ${nomes}`,
       user.sub,
-      { acao: 'disponibilizar_assinatura', destinatarioIds: ids },
+      { acao: 'disponibilizar_assinatura', destinatarioIds: ids, ...contexto },
     );
+    await this.sincronizarSituacaoAssinatura(id, user.sub, 'Assinatura pendente criada pelo encaminhamento interno.');
     await this.audit(user.sub, AuditAction.UPDATE, id, null, {
       acao: 'disponibilizar_assinatura',
       destinatarioIds: ids,
@@ -1257,24 +1274,38 @@ export class DocumentosService {
     return this.getById(id, user);
   }
 
-  async retirarAssinaturaInterna(pedidoId: string, user: JwtPayload) {
+  async retirarAssinaturaInterna(pedidoId: string, user: JwtPayload, motivo?: string) {
     this.assertPodeDisponibilizar(user);
-    const pedido = await this.prisma.documentoAssinaturaPedido.findUnique({ where: { id: pedidoId } });
+    const pedido = await this.prisma.documentoAssinaturaPedido.findUnique({
+      where: { id: pedidoId },
+      include: { destinatario: { select: { nome: true } } },
+    });
     if (!pedido || pedido.status !== DocumentoAssinaturaPedidoStatus.PENDENTE) {
       throw new NotFoundException('Pedido de assinatura não encontrado.');
     }
-    await this.requireDocumentoFull(pedido.documentoId, user);
+    const documento = await this.requireDocumentoFull(pedido.documentoId, user);
+    const justificativa = motivo?.trim() || '';
     const updated = await this.prisma.documentoAssinaturaPedido.update({
       where: { id: pedidoId },
-      data: { status: DocumentoAssinaturaPedidoStatus.RETIRADO, retiradoEm: new Date() },
+      data: {
+        status: DocumentoAssinaturaPedidoStatus.RETIRADO,
+        retiradoEm: new Date(),
+        canceladoMotivo: justificativa || null,
+      },
     });
+    const contexto = await this.contextoAtuacaoDocumento(user);
     await this.registrarHistorico(
       pedido.documentoId,
-      null,
-      DocumentoAssinaturaPedidoStatus.RETIRADO,
-      'Solicitação de assinatura interna retirada.',
+      documento.situacao,
+      documento.situacao,
+      `Disponibilização cancelada para ${pedido.destinatario.nome}${justificativa ? `: ${justificativa}` : '.'}`,
       user.sub,
-      { acao: 'retirar_assinatura', pedidoId, destinatarioId: pedido.destinatarioId },
+      { acao: 'retirar_assinatura', pedidoId, destinatarioId: pedido.destinatarioId, justificativa: justificativa || null, ...contexto },
+    );
+    await this.sincronizarSituacaoAssinatura(
+      pedido.documentoId,
+      user.sub,
+      'Baixa automática da assinatura pendente: não há signatário interno pendente.',
     );
     await this.audit(user.sub, AuditAction.UPDATE, pedido.documentoId, { status: pedido.status }, {
       acao: 'retirar_assinatura',
@@ -1309,6 +1340,11 @@ export class DocumentosService {
       acao: 'recusar_assinatura',
       pedidoId,
     });
+    await this.sincronizarSituacaoAssinatura(
+      pedido.documentoId,
+      user.sub,
+      'Baixa automática da assinatura pendente: não há signatário interno pendente.',
+    );
     return { ok: true };
   }
 
@@ -1393,11 +1429,25 @@ export class DocumentosService {
       data: { status: DocumentoAssinaturaPedidoStatus.ASSINADO, signedAt: new Date() },
     });
 
-    const { hashArquivoFinal } = await this.regenerarPdfAssinado(id, documento.conteudoTravadoEm);
+    const pendentesRestantes = await this.contarPedidosPendentes(id);
+    const manual = this.asRecord(documento.metadata).assinaturaPendenteManual === true;
+    const situacaoFinal =
+      pendentesRestantes > 0 || manual ? DocumentoSituacao.ASSINATURA_PENDENTE : DocumentoSituacao.ASSINADO_VIGENTE;
+    const { hashArquivoFinal } = await this.regenerarPdfAssinado(id, documento.conteudoTravadoEm, situacaoFinal);
+    if (documento.situacao === DocumentoSituacao.ASSINATURA_PENDENTE && situacaoFinal !== DocumentoSituacao.ASSINATURA_PENDENTE) {
+      await this.registrarHistorico(
+        id,
+        documento.situacao,
+        situacaoFinal,
+        'Baixa automática da assinatura pendente.',
+        user.sub,
+        { acao: 'baixa_assinatura_pendente', ...(await this.contextoAtuacaoDocumento(user)) },
+      );
+    }
     await this.registrarHistorico(
       id,
       documento.situacao,
-      DocumentoSituacao.ASSINADO_VIGENTE,
+      situacaoFinal,
       `Documento assinado eletronicamente por ${usuario.nome}`,
       user.sub,
       {
@@ -1412,14 +1462,18 @@ export class DocumentosService {
     );
     await this.audit(user.sub, AuditAction.UPDATE, id, { situacao: documento.situacao }, {
       acao: 'assinar_interno',
-      situacao: DocumentoSituacao.ASSINADO_VIGENTE,
+      situacao: situacaoFinal,
       pdfAssinadoSha256: hashArquivoFinal,
       assinanteUsuarioId: usuario.id,
     });
     return this.getById(id, user);
   }
 
-  private async regenerarPdfAssinado(id: string, conteudoTravadoEm: Date | null) {
+  private async regenerarPdfAssinado(
+    id: string,
+    conteudoTravadoEm: Date | null,
+    situacao: DocumentoSituacao = DocumentoSituacao.ASSINADO_VIGENTE,
+  ) {
     const withAssinaturas = await this.requireDocumentoFullById(id);
     const basePdf = await this.resolvePdfBaseParaAssinatura(withAssinaturas);
     const assinaturasValidas = withAssinaturas.assinaturas.filter((item) => !item.invalida);
@@ -1470,7 +1524,7 @@ export class DocumentosService {
     const updated = await this.prisma.documento.update({
       where: { id },
       data: {
-        situacao: DocumentoSituacao.ASSINADO_VIGENTE,
+        situacao,
         conteudoTravadoEm: conteudoTravadoEm ?? new Date(),
         pdfAssinadoStorageKey: storedPdf.storageKey,
         pdfAssinadoUrl: storedPdf.url,
@@ -1641,6 +1695,58 @@ export class DocumentosService {
     return this.serialize(updated);
   }
 
+  private async contarPedidosPendentes(documentoId: string) {
+    return this.prisma.documentoAssinaturaPedido.count({
+      where: { documentoId, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
+    });
+  }
+
+  /** Mantém Assinatura pendente enquanto houver pedido interno ou marcação manual. */
+  private async sincronizarSituacaoAssinatura(id: string, userId: string, motivoQuandoMuda: string) {
+    const documento = await this.requireDocumentoFullById(id);
+    if (
+      documento.situacao === DocumentoSituacao.CANCELADO ||
+      documento.situacao === DocumentoSituacao.SUBSTITUIDO ||
+      documento.situacao === DocumentoSituacao.INVALIDO ||
+      documento.situacao === DocumentoSituacao.RASCUNHO
+    ) {
+      return documento.situacao;
+    }
+    const pendentes = await this.contarPedidosPendentes(id);
+    const manual = this.asRecord(documento.metadata).assinaturaPendenteManual === true;
+    const desejada =
+      pendentes > 0 || manual
+        ? DocumentoSituacao.ASSINATURA_PENDENTE
+        : documento.pdfAssinadoStorageKey
+          ? DocumentoSituacao.ASSINADO_VIGENTE
+          : documento.situacao === DocumentoSituacao.ASSINATURA_PENDENTE
+            ? DocumentoSituacao.SEM_ASSINATURA_EXTERNA
+            : documento.situacao;
+    if (desejada === documento.situacao) return documento.situacao;
+    await this.prisma.documento.update({ where: { id }, data: { situacao: desejada } });
+    await this.registrarHistorico(id, documento.situacao, desejada, motivoQuandoMuda, userId, {
+      acao: desejada === DocumentoSituacao.ASSINATURA_PENDENTE ? 'assinatura_pendente_automatica' : 'baixa_assinatura_pendente',
+      pedidosPendentes: pendentes,
+      manual,
+    });
+    return desejada;
+  }
+
+  private async contextoAtuacaoDocumento(user: JwtPayload) {
+    const [perfil, secretaria] = await Promise.all([
+      user.perfilAtivoId
+        ? this.prisma.perfil.findUnique({ where: { id: user.perfilAtivoId }, select: { nome: true } })
+        : Promise.resolve(null),
+      user.secretariaId
+        ? this.prisma.secretaria.findUnique({ where: { id: user.secretariaId }, select: { sigla: true, nome: true } })
+        : Promise.resolve(null),
+    ]);
+    return {
+      perfilAtivo: perfil?.nome ?? user.perfis?.[0] ?? null,
+      secretariaAtiva: secretaria ? `${secretaria.sigla} — ${secretaria.nome}` : null,
+    };
+  }
+
   /**
    * Alterna marcação operacional de assinatura pendente (não invalida assinaturas nem PDF).
    */
@@ -1666,19 +1772,28 @@ export class DocumentosService {
     let nextSituacao: DocumentoSituacao;
     let motivo: string;
 
+    const meta = this.asRecord(before.metadata);
+    const pendentesInternos = await this.contarPedidosPendentes(id);
     if (before.situacao === DocumentoSituacao.ASSINATURA_PENDENTE) {
+      if (pendentesInternos > 0) {
+        throw new BadRequestException(
+          'Não é possível desmarcar enquanto houver signatário interno pendente. Cancele a disponibilização.',
+        );
+      }
       nextSituacao = temAssinaturaVigente
         ? DocumentoSituacao.ASSINADO_VIGENTE
         : DocumentoSituacao.SEM_ASSINATURA_EXTERNA;
       motivo = 'Pendência de assinatura removida';
+      meta.assinaturaPendenteManual = false;
     } else {
       nextSituacao = DocumentoSituacao.ASSINATURA_PENDENTE;
       motivo = 'Assinatura marcada como pendente';
+      meta.assinaturaPendenteManual = true;
     }
 
     const updated = await this.prisma.documento.update({
       where: { id },
-      data: { situacao: nextSituacao },
+      data: { situacao: nextSituacao, metadata: meta as Prisma.InputJsonValue },
       include: DOCUMENTO_INCLUDE,
     });
 
@@ -3326,6 +3441,7 @@ export class DocumentosService {
         nome: pedido.destinatario?.nome ?? 'Usuário',
         email: pedido.destinatario?.email ?? null,
         requestedAt: pedido.requestedAt?.toISOString?.() ?? pedido.requestedAt,
+        solicitanteNome: pedido.solicitante?.nome ?? null,
         meu: opts?.usuarioId ? pedido.destinatario?.id === opts.usuarioId : false,
       })),
       createdAt: documento.createdAt?.toISOString?.() ?? documento.createdAt,

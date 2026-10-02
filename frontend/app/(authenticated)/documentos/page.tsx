@@ -23,7 +23,7 @@ import {
   listMinhasPendenciasAssinatura,
   toggleAssinaturaPendenteDocumento,
 } from '@/lib/api';
-import { AssinarInternoDialog, DisponibilizarAssinaturaDialog } from '@/components/documentos/assinatura-interna-dialogs';
+import { AssinarInternoDialog, DisponibilizarAssinaturaDialog, SignatariosInternosPendentes } from '@/components/documentos/assinatura-interna-dialogs';
 import { ColetarAssinaturaDialog } from '@/components/documentos/coletar-assinatura-dialog';
 import { DocumentoAvulsoForm, DocumentoAvulsoRespostasLeitura } from '@/components/documentos/documento-avulso-form';
 import { NovoDocumentoAvulsoDialog } from '@/components/documentos/novo-documento-avulso-dialog';
@@ -545,7 +545,7 @@ function DocumentoDetail({
           <Copy className="h-3.5 w-3.5" />
           Copiar link de validação
         </Button>
-        {gestaoDocumentos ? (
+        {gestaoDocumentos && (documento.signatariosPendentes ?? []).length === 0 ? (
           <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onPendente}>
             {documento.situacao === 'ASSINATURA_PENDENTE'
               ? 'Desmarcar assinatura pendente'
@@ -562,9 +562,11 @@ function DocumentoDetail({
       </div>
 
       {(documento.signatariosPendentes ?? []).length ? (
-        <p className="text-[12px] text-[var(--ink-3)]">
-          Signatários internos pendentes: {documento.signatariosPendentes?.map((item) => item.nome).join(', ')}
-        </p>
+        <SignatariosInternosPendentes
+          itens={documento.signatariosPendentes ?? []}
+          podeCancelar={Boolean(documento.podeDisponibilizarAssinatura)}
+          onChanged={onFormSaved}
+        />
       ) : null}
 
       {gestaoDocumentos && podePreencherAvulso && preencherAberto ? (

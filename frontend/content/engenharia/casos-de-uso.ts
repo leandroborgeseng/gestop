@@ -247,7 +247,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'disponibilizar-assinatura',
         nome: 'Disponibilizar assinatura interna',
         atores: ['administrador', 'gestor'],
-        descricao: 'Enviar o documento a um signatário interno e, se preciso, retirar ou recusar o pedido.',
+        descricao: 'Enviar o documento a um signatário interno marca Assinatura pendente enquanto houver pedido. Cada disponibilização pode ser cancelada sem afetar as outras.',
         rotas: ['/documentos', 'POST /documentos/:id/disponibilizar-assinatura', 'POST /documentos/pedidos-assinatura/:pedidoId/retirar'],
       },
       {

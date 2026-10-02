@@ -1526,7 +1526,14 @@ export type DocumentoResumo = {
   createdAt: string;
   updatedAt: string;
   linkValidacao?: string;
-  signatariosPendentes?: Array<{ id: string; nome: string; email?: string | null; requestedAt?: string; meu?: boolean }>;
+  signatariosPendentes?: Array<{
+    id: string;
+    nome: string;
+    email?: string | null;
+    requestedAt?: string;
+    solicitanteNome?: string | null;
+    meu?: boolean;
+  }>;
 };
 
 export type DocumentoRespostaItem = {
