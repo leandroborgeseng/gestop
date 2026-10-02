@@ -233,8 +233,8 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'documento-avulso',
         nome: 'Criar documento avulso',
         atores: ['administrador', 'gestor'],
-        descricao: 'Montar documento fora da vistoria, com checklist de finalidade avulsa.',
-        rotas: ['/documentos', 'POST /documentos/avulso', 'GET /documentos/checklists-avulso'],
+        descricao: 'Montar documento fora da vistoria, com checklist de finalidade avulsa, e vincular zero ou mais chamados enquanto estiver em rascunho.',
+        rotas: ['/documentos', 'POST /documentos/avulso', 'GET /documentos/checklists-avulso', 'GET /documentos/chamados-busca', 'PATCH /documentos/:id/vinculos'],
       },
       {
         id: 'assinatura-externa',

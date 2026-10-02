@@ -140,6 +140,11 @@ export class CreateDocumentoAvulsoDto {
   chamadoId?: string;
 
   @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  chamadoIds?: string[];
+
+  @IsOptional()
   @IsUUID()
   fiscalizacaoId?: string;
 
@@ -186,6 +191,11 @@ export class UpdateDocumentoVinculosDto {
   @IsOptional()
   @IsUUID()
   chamadoId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  chamadoIds?: string[];
 
   @IsOptional()
   @IsUUID()

@@ -23,7 +23,7 @@ import {
 import { JwtPayload } from '../auth/jwt';
 import { verifyPassword } from '../auth/password';
 import { hasAnyPermission, isAdministradorSistema } from '../auth/permissions';
-import { resolveDirectSecretariaFilter } from '../auth/secretaria-scope';
+import { resolveChamadoSecretariaFilter, resolveDirectSecretariaFilter } from '../auth/secretaria-scope';
 import { validateChecklistResponses } from '../domain/checklist-response.rules';
 import { resolveMeusChamadosTimelineCaps } from '../chamados/meus-chamados-timeline.permissions';
 import { PrismaService } from '../prisma/prisma.service';
@@ -68,7 +68,15 @@ import {
 const DOCUMENTO_INCLUDE = {
   secretaria: { select: { id: true, nome: true, sigla: true } },
   unidade: { select: { id: true, nome: true, codigoPatrimonial: true, endereco: true } },
-  chamado: { select: { id: true, codigo: true, status: true, excluidoEm: true } },
+  chamado: { select: { id: true, codigo: true, titulo: true, status: true, excluidoEm: true } },
+  chamadosVinculados: {
+    orderBy: { createdAt: 'asc' as const },
+    select: {
+      chamadoId: true,
+      createdAt: true,
+      chamado: { select: { id: true, codigo: true, titulo: true, status: true, excluidoEm: true } },
+    },
+  },
   fiscalizacao: {
     select: {
       id: true,
@@ -260,6 +268,8 @@ export class DocumentosService {
 
     return {
       ...this.serialize(documento, { fullPii: true, usuarioId: user.sub }),
+      podeEditarChamados:
+        documento.origem === DocumentoOrigem.AVULSO && this.podeVincularChamadosAvulso(documento, user),
       checklistItens,
       podeAssinarInterno: await this.podeAssinarInterno(documento, user),
       podeDisponibilizarAssinatura:
@@ -389,6 +399,8 @@ export class DocumentosService {
       checklistVersao.checklist.nome ||
       TIPO_LABELS[dto.tipo] ||
       'Documento avulso';
+    const chamadoIds = this.normalizarChamadoIds(dto.chamadoIds, dto.chamadoId);
+    const chamadosVinculo = await this.assertChamadosVinculaveis(chamadoIds, user);
 
     const created = await this.prisma.documento.create({
       data: {
@@ -401,7 +413,7 @@ export class DocumentosService {
         descricao: dto.descricao?.trim() || null,
         secretariaId,
         unidadeId: dto.unidadeId || null,
-        chamadoId: dto.chamadoId || null,
+        chamadoId: chamadosVinculo[0]?.id ?? null,
         fiscalizacaoId: dto.fiscalizacaoId || null,
         checklistVersaoId: checklistVersao.id,
         enderecoTexto: dto.enderecoTexto?.trim() || null,
@@ -412,38 +424,32 @@ export class DocumentosService {
         metadata: {
           codigoVerificador,
         } as Prisma.InputJsonValue,
+        ...(chamadosVinculo.length
+          ? {
+              chamadosVinculados: {
+                create: chamadosVinculo.map((chamado) => ({
+                  chamadoId: chamado.id,
+                  createdById: user.sub,
+                })),
+              },
+            }
+          : {}),
       },
       include: DOCUMENTO_INCLUDE,
     });
 
-    const motivoCriacao = created.chamadoId
-      ? `Documento avulso criado e vinculado ao chamado: ${created.codigo}`
+    const contexto = await this.contextoAtuacao(user);
+    const motivoCriacao = chamadosVinculo.length
+      ? `Documento avulso criado e vinculado aos chamados: ${chamadosVinculo.map((item) => item.codigo).join(', ')}`
       : 'Documento avulso criado';
     await this.registrarHistorico(created.id, null, DocumentoSituacao.RASCUNHO, motivoCriacao, user.sub, {
-      chamadoId: created.chamadoId,
+      tipo: 'documento_vinculo',
+      acao: 'criacao',
+      chamadoIds: chamadosVinculo.map((item) => item.id),
+      ...contexto,
     });
-    if (created.chamadoId) {
-      const chamado = await this.prisma.chamado.findFirst({
-        where: { id: created.chamadoId, excluidoEm: null },
-        select: { id: true, status: true },
-      });
-      if (chamado) {
-        await this.prisma.historicoStatus.create({
-          data: {
-            entidadeTipo: 'Chamado',
-            entidadeId: chamado.id,
-            statusAnterior: chamado.status,
-            statusNovo: chamado.status,
-            motivo: `Documento avulso criado e vinculado ao chamado: ${created.codigo}`,
-            alteradoPorId: user.sub,
-            metadata: {
-              tipo: 'documento_avulso',
-              documentoId: created.id,
-              documentoCodigo: created.codigo,
-            },
-          },
-        });
-      }
+    for (const chamado of chamadosVinculo) {
+      await this.registrarVinculoNaTimeline(chamado, created, user, 'vinculado', contexto);
     }
     await this.audit(user.sub, AuditAction.CREATE, created.id, null, {
       codigo: created.codigo,
@@ -728,28 +734,70 @@ export class DocumentosService {
   }
 
   async updateVinculos(id: string, dto: UpdateDocumentoVinculosDto, user: JwtPayload) {
-    this.assertPermission(user, ['documentos.editar_vinculo', 'documentos.administrar']);
     const before = await this.requireDocumentoFull(id, user);
+    const alteraChamadosAvulso =
+      before.origem === DocumentoOrigem.AVULSO &&
+      (dto.chamadoIds !== undefined || dto.chamadoId !== undefined);
+    const somenteChamadosAvulso =
+      alteraChamadosAvulso &&
+      dto.unidadeId === undefined &&
+      dto.fiscalizacaoId === undefined &&
+      dto.enderecoTexto === undefined;
+    if (somenteChamadosAvulso) {
+      this.assertPodeVincularChamadosAvulso(before, user);
+    } else {
+      this.assertPermission(user, ['documentos.editar_vinculo', 'documentos.administrar']);
+    }
 
     const previous = {
       unidadeId: before.unidadeId,
       chamadoId: before.chamadoId,
+      chamadoIds: this.idsChamadosDoDocumento(before),
       fiscalizacaoId: before.fiscalizacaoId,
       enderecoTexto: before.enderecoTexto,
     };
+
+    let chamadoIdsNovos = previous.chamadoIds;
+    if (before.origem === DocumentoOrigem.AVULSO && (dto.chamadoIds !== undefined || dto.chamadoId !== undefined)) {
+      chamadoIdsNovos = this.normalizarChamadoIds(
+        dto.chamadoIds,
+        dto.chamadoId === undefined ? undefined : dto.chamadoId,
+      );
+    } else if (before.origem !== DocumentoOrigem.AVULSO && dto.chamadoId !== undefined) {
+      chamadoIdsNovos = dto.chamadoId ? [dto.chamadoId] : [];
+    }
+    const chamadosNovos = await this.assertChamadosVinculaveis(chamadoIdsNovos, user);
+    const chamadoIdSincronizado =
+      before.origem === DocumentoOrigem.AVULSO
+        ? (chamadosNovos[0]?.id ?? null)
+        : dto.chamadoId === undefined
+          ? before.chamadoId
+          : dto.chamadoId;
+
     const next = {
       unidadeId: dto.unidadeId === undefined ? before.unidadeId : dto.unidadeId,
-      chamadoId: dto.chamadoId === undefined ? before.chamadoId : dto.chamadoId,
+      chamadoId: chamadoIdSincronizado,
+      chamadoIds: chamadosNovos.map((item) => item.id),
       fiscalizacaoId: dto.fiscalizacaoId === undefined ? before.fiscalizacaoId : dto.fiscalizacaoId,
       enderecoTexto:
         dto.enderecoTexto === undefined ? before.enderecoTexto : dto.enderecoTexto?.trim() || null,
     };
 
+    const chamadosMudaram = !mesmosIds(previous.chamadoIds, next.chamadoIds);
+    if (chamadosMudaram && before.origem !== DocumentoOrigem.AVULSO && dto.chamadoIds !== undefined) {
+      throw new BadRequestException(
+        'O vínculo de origem de documentos de vistoria ou execução não é alterado por esta lista.',
+      );
+    }
+    if (chamadosMudaram) {
+      await this.substituirChamadosVinculados(id, chamadosNovos.map((item) => item.id), user.sub);
+    }
+
     const updated = await this.prisma.documento.update({
       where: { id },
       data: {
         unidadeId: dto.unidadeId === undefined ? undefined : dto.unidadeId,
-        chamadoId: dto.chamadoId === undefined ? undefined : dto.chamadoId,
+        chamadoId: chamadosMudaram || dto.chamadoId !== undefined ? chamadoIdSincronizado : undefined,
         fiscalizacaoId: dto.fiscalizacaoId === undefined ? undefined : dto.fiscalizacaoId,
         enderecoTexto: dto.enderecoTexto === undefined ? undefined : dto.enderecoTexto?.trim() || null,
         metadata: {
@@ -766,20 +814,87 @@ export class DocumentosService {
       include: DOCUMENTO_INCLUDE,
     });
 
+    const contexto = await this.contextoAtuacao(user);
+    const depoisConclusao = before.situacao !== DocumentoSituacao.RASCUNHO;
     await this.registrarHistorico(
       id,
       before.situacao,
       updated.situacao,
-      dto.justificativa?.trim() || 'Vínculos do documento atualizados',
+      dto.justificativa?.trim() ||
+        (chamadosMudaram ? this.motivoDiffChamados(before.codigo, previous.chamadoIds, chamadosNovos) : 'Vínculos do documento atualizados'),
       user.sub,
-      { anterior: previous, novo: next },
+      {
+        tipo: 'documento_vinculo',
+        acao: chamadosMudaram ? 'atualizacao' : 'vinculos',
+        anterior: previous,
+        novo: next,
+        depoisConclusao,
+        ...contexto,
+      },
     );
-    await this.audit(user.sub, AuditAction.UPDATE, id, previous, {
-      ...next,
-      justificativa: dto.justificativa?.trim() || null,
-    });
+    if (chamadosMudaram) {
+      await this.registrarDiffChamadosNaTimeline(before, updated, previous.chamadoIds, chamadosNovos, user, contexto);
+    }
+    await this.audit(
+      user.sub,
+      AuditAction.UPDATE,
+      id,
+      previous,
+      {
+        ...next,
+        justificativa: dto.justificativa?.trim() || null,
+      },
+      depoisConclusao ? { ...contexto, descricao: 'Vínculo de chamados alterado após a conclusão do documento' } : undefined,
+    );
 
-    return this.serialize(updated);
+    return this.serialize(updated, { usuarioId: user.sub });
+  }
+
+  async buscarChamadosParaVinculo(q: string | undefined, user: JwtPayload) {
+    this.assertPodeBuscarChamados(user);
+    const termo = q?.trim() ?? '';
+    if (termo.length < 2) return { items: [] };
+    const where: Prisma.ChamadoWhereInput = {
+      AND: [
+        this.whereChamadoVinculavel(user),
+        {
+          OR: [
+            { codigo: { contains: termo, mode: 'insensitive' } },
+            { titulo: { contains: termo, mode: 'insensitive' } },
+            { descricao: { contains: termo, mode: 'insensitive' } },
+            { enderecoTexto: { contains: termo, mode: 'insensitive' } },
+            { tipoChamado: { nome: { contains: termo, mode: 'insensitive' } } },
+            { unidade: { nome: { contains: termo, mode: 'insensitive' } } },
+            { unidade: { codigoPatrimonial: { contains: termo, mode: 'insensitive' } } },
+          ],
+        },
+      ],
+    };
+    const items = await this.prisma.chamado.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: {
+        id: true,
+        codigo: true,
+        titulo: true,
+        descricao: true,
+        enderecoTexto: true,
+        tipoChamado: { select: { nome: true } },
+        unidade: { select: { nome: true, codigoPatrimonial: true } },
+      },
+    });
+    return {
+      items: items.map((item) => ({
+        id: item.id,
+        codigo: item.codigo,
+        titulo: item.titulo,
+        descricao: item.descricao,
+        tipo: item.tipoChamado?.nome ?? null,
+        endereco: item.enderecoTexto,
+        unidade: item.unidade ? `${item.unidade.codigoPatrimonial} · ${item.unidade.nome}` : null,
+      })),
+    };
   }
 
   async coletarAssinatura(id: string, dto: ColetarAssinaturaDto, user: JwtPayload) {
@@ -1901,6 +2016,9 @@ export class DocumentosService {
       secretaria: { select: { sigla: true, nome: true } },
       unidade: { select: { nome: true, codigoPatrimonial: true } },
       chamado: { select: { codigo: true, excluidoEm: true } },
+      chamadosVinculados: {
+        select: { chamado: { select: { codigo: true, excluidoEm: true } } },
+      },
       fiscalizacao: {
         select: {
           id: true,
@@ -1939,6 +2057,7 @@ export class DocumentosService {
       secretaria: { sigla: string; nome: string };
       unidade: { nome: string; codigoPatrimonial: string } | null;
       chamado: { codigo: string; excluidoEm?: Date | null } | null;
+      chamadosVinculados?: Array<{ chamado: { codigo: string; excluidoEm?: Date | null } | null }>;
       fiscalizacao: {
         id: string;
         concluidaEm: Date | null;
@@ -1967,7 +2086,7 @@ export class DocumentosService {
       titulo: documento.titulo,
       secretaria: documento.secretaria,
       unidade: documento.unidade,
-      chamadoCodigo: documento.chamado?.excluidoEm ? null : documento.chamado?.codigo ?? null,
+      chamadoCodigo: codigosChamadosPublicos(documento),
       vistoriaLabel: documento.fiscalizacao
         ? `${documento.fiscalizacao.unidade?.codigoPatrimonial ?? ''} ${documento.fiscalizacao.unidade?.nome ?? 'Vistoria'}`.trim()
         : null,
@@ -2397,7 +2516,7 @@ export class DocumentosService {
         ? `${documento.unidade.codigoPatrimonial ?? ''} ${documento.unidade.nome}`.trim()
         : null,
       endereco: documento.enderecoTexto || documento.unidade?.endereco || null,
-      chamadoCodigo: documento.chamado?.excluidoEm ? null : documento.chamado?.codigo ?? null,
+      chamadoCodigo: this.chamadosDoDocumento(documento).map((item) => item.codigo).join(', ') || null,
       vistoriaLabel: documento.fiscalizacao
         ? `Vistoria ${documento.fiscalizacao.id.slice(0, 8)}`
         : null,
@@ -2500,10 +2619,19 @@ export class DocumentosService {
     if (query.secretariaId) and.push({ secretariaId: query.secretariaId });
     if (query.unidadeId) and.push({ unidadeId: query.unidadeId });
     if (query.chamadoId) {
-      and.push({ chamadoId: query.chamadoId });
+      and.push({
+        OR: [
+          { chamadoId: query.chamadoId },
+          { chamadosVinculados: { some: { chamadoId: query.chamadoId } } },
+        ],
+      });
     } else {
       and.push({
-        OR: [{ chamadoId: null }, { chamado: { is: { excluidoEm: null } } }],
+        OR: [
+          { AND: [{ chamadoId: null }, { chamadosVinculados: { none: {} } }] },
+          { chamado: { is: { excluidoEm: null } } },
+          { chamadosVinculados: { some: { chamado: { is: { excluidoEm: null } } } } },
+        ],
       });
     }
     if (query.fiscalizacaoId) and.push({ fiscalizacaoId: query.fiscalizacaoId });
@@ -2550,6 +2678,9 @@ export class DocumentosService {
           { titulo: { contains: search, mode: 'insensitive' } },
           { enderecoTexto: { contains: search, mode: 'insensitive' } },
           { chamado: { codigo: { contains: search, mode: 'insensitive' } } },
+          { chamado: { titulo: { contains: search, mode: 'insensitive' } } },
+          { chamadosVinculados: { some: { chamado: { codigo: { contains: search, mode: 'insensitive' } } } } },
+          { chamadosVinculados: { some: { chamado: { titulo: { contains: search, mode: 'insensitive' } } } } },
           { unidade: { nome: { contains: search, mode: 'insensitive' } } },
           { unidade: { codigoPatrimonial: { contains: search, mode: 'insensitive' } } },
         ],
@@ -2715,6 +2846,12 @@ export class DocumentosService {
     entidadeId: string,
     valorAntigo: unknown,
     valorNovo: unknown,
+    extra?: {
+      perfilAtivoNome?: string | null;
+      secretariaAtivaId?: string | null;
+      secretariaAtivaSigla?: string | null;
+      descricao?: string;
+    },
   ) {
     await this.prisma.logAuditoria.create({
       data: {
@@ -2724,8 +2861,217 @@ export class DocumentosService {
         entidadeId,
         valorAntigo: (valorAntigo ?? undefined) as Prisma.InputJsonValue | undefined,
         valorNovo: (valorNovo ?? undefined) as Prisma.InputJsonValue | undefined,
+        perfilAtivoNome: extra?.perfilAtivoNome ?? null,
+        secretariaAtivaId: extra?.secretariaAtivaId ?? null,
+        secretariaAtivaSigla: extra?.secretariaAtivaSigla ?? null,
+        descricao: extra?.descricao ?? null,
+        tela: extra ? 'documentos' : null,
+        funcao: extra ? 'editar_vinculo' : null,
       },
     });
+  }
+
+  private normalizarChamadoIds(chamadoIds?: string[] | null, chamadoId?: string | null) {
+    const ids = [...(chamadoIds ?? [])];
+    if (chamadoId) ids.push(chamadoId);
+    return [...new Set(ids.map((item) => item.trim()).filter(Boolean))];
+  }
+
+  private whereChamadoVinculavel(user: JwtPayload): Prisma.ChamadoWhereInput {
+    if (isAdministradorSistema(user) || user.permissoes.includes('documentos.administrar')) {
+      return { excluidoEm: null };
+    }
+    return { excluidoEm: null, ...resolveChamadoSecretariaFilter(user) };
+  }
+
+  private assertPodeBuscarChamados(user: JwtPayload) {
+    if (isAdministradorSistema(user)) return;
+    this.assertPermission(user, [
+      'documentos.visualizar',
+      'documentos.criar_avulso',
+      'documentos.editar_vinculo',
+      'documentos.administrar',
+    ]);
+  }
+
+  private podeVincularChamadosAvulso(
+    documento: { situacao: DocumentoSituacao; origem: DocumentoOrigem },
+    user: JwtPayload,
+  ) {
+    if (documento.origem !== DocumentoOrigem.AVULSO) return false;
+    if (isAdministradorSistema(user) || user.permissoes.includes('documentos.administrar') || user.permissoes.includes('usuarios.gerenciar')) {
+      return true;
+    }
+    if (documento.situacao === DocumentoSituacao.RASCUNHO) {
+      return (
+        user.permissoes.includes('documentos.criar_avulso') ||
+        user.permissoes.includes('documentos.editar_vinculo')
+      );
+    }
+    return user.permissoes.includes('documentos.editar_vinculo');
+  }
+
+  private assertPodeVincularChamadosAvulso(
+    documento: { situacao: DocumentoSituacao; origem: DocumentoOrigem },
+    user: JwtPayload,
+  ) {
+    if (this.podeVincularChamadosAvulso(documento, user)) return;
+    if (documento.situacao !== DocumentoSituacao.RASCUNHO) {
+      throw new ForbiddenException('Após a conclusão, só um perfil com permissão de editar vínculo pode alterar os chamados.');
+    }
+    throw new ForbiddenException('Sem permissão para vincular chamados a este documento.');
+  }
+
+  private async assertChamadosVinculaveis(ids: string[], user: JwtPayload) {
+    if (!ids.length) return [] as Array<{ id: string; codigo: string; titulo: string | null; status: ChamadoStatus }>;
+    const encontrados = await this.prisma.chamado.findMany({
+      where: { id: { in: ids }, ...this.whereChamadoVinculavel(user) },
+      select: { id: true, codigo: true, titulo: true, status: true },
+    });
+    if (encontrados.length !== ids.length) {
+      throw new BadRequestException('Não é possível vincular um chamado que você não pode visualizar.');
+    }
+    const porId = new Map(encontrados.map((item) => [item.id, item]));
+    return ids.map((id) => porId.get(id)!);
+  }
+
+  private idsChamadosDoDocumento(documento: {
+    chamadoId?: string | null;
+    chamado?: { id: string; excluidoEm?: Date | null } | null;
+    chamadosVinculados?: Array<{ chamadoId: string; chamado?: { excluidoEm?: Date | null } | null }>;
+  }) {
+    const ids: string[] = [];
+    for (const vinculo of documento.chamadosVinculados ?? []) {
+      if (vinculo.chamado?.excluidoEm) continue;
+      ids.push(vinculo.chamadoId);
+    }
+    if (!ids.length && documento.chamadoId && !documento.chamado?.excluidoEm) ids.push(documento.chamadoId);
+    return [...new Set(ids)];
+  }
+
+  private chamadosDoDocumento(documento: any) {
+    const vistos = new Map<string, { id: string; codigo: string; titulo: string | null; status: string }>();
+    for (const vinculo of documento.chamadosVinculados ?? []) {
+      const chamado = vinculo.chamado;
+      if (!chamado || chamado.excluidoEm) continue;
+      vistos.set(chamado.id, {
+        id: chamado.id,
+        codigo: chamado.codigo,
+        titulo: chamado.titulo ?? null,
+        status: chamado.status,
+      });
+    }
+    if (documento.chamado && !documento.chamado.excluidoEm && !vistos.has(documento.chamado.id)) {
+      vistos.set(documento.chamado.id, {
+        id: documento.chamado.id,
+        codigo: documento.chamado.codigo,
+        titulo: documento.chamado.titulo ?? null,
+        status: documento.chamado.status,
+      });
+    }
+    return [...vistos.values()];
+  }
+
+  private chamadoPrincipal(documento: any) {
+    const lista = this.chamadosDoDocumento(documento);
+    const primeiro = lista[0];
+    if (!primeiro) return null;
+    return { id: primeiro.id, codigo: primeiro.codigo, status: primeiro.status };
+  }
+
+  private async substituirChamadosVinculados(documentoId: string, chamadoIds: string[], userId: string) {
+    await this.prisma.documentoChamado.deleteMany({ where: { documentoId } });
+    if (!chamadoIds.length) return;
+    await this.prisma.documentoChamado.createMany({
+      data: chamadoIds.map((chamadoId) => ({ documentoId, chamadoId, createdById: userId })),
+    });
+  }
+
+  private motivoDiffChamados(
+    codigo: string,
+    antes: string[],
+    depois: Array<{ id: string; codigo: string }>,
+  ) {
+    const novos = new Set(depois.map((item) => item.id));
+    const antigos = new Set(antes);
+    const adicionados = depois.filter((item) => !antigos.has(item.id)).map((item) => item.codigo);
+    const removidos = antes.filter((id) => !novos.has(id));
+    const partes = [`Vínculos do documento ${codigo} atualizados`];
+    if (adicionados.length) partes.push(`adicionados: ${adicionados.join(', ')}`);
+    if (removidos.length) partes.push(`removidos: ${removidos.length}`);
+    return partes.join('. ');
+  }
+
+  private async registrarDiffChamadosNaTimeline(
+    before: { id: string; codigo: string },
+    updated: { id: string; codigo: string },
+    antes: string[],
+    depois: Array<{ id: string; codigo: string; status: ChamadoStatus }>,
+    user: JwtPayload,
+    contexto: { perfilAtivoNome: string | null; secretariaAtivaId: string | null; secretariaAtivaSigla: string | null },
+  ) {
+    const novos = new Set(depois.map((item) => item.id));
+    const antigos = new Set(antes);
+    for (const chamado of depois) {
+      if (antigos.has(chamado.id)) continue;
+      await this.registrarVinculoNaTimeline(chamado, updated, user, 'vinculado', contexto);
+    }
+    const removidos = antes.filter((id) => !novos.has(id));
+    if (!removidos.length) return;
+    const chamadosRemovidos = await this.prisma.chamado.findMany({
+      where: { id: { in: removidos } },
+      select: { id: true, codigo: true, status: true },
+    });
+    for (const chamado of chamadosRemovidos) {
+      await this.registrarVinculoNaTimeline(chamado, before, user, 'removido', contexto);
+    }
+  }
+
+  private async registrarVinculoNaTimeline(
+    chamado: { id: string; status: ChamadoStatus; codigo?: string },
+    documento: { id: string; codigo: string },
+    user: JwtPayload,
+    acao: 'vinculado' | 'removido',
+    contexto: { perfilAtivoNome: string | null; secretariaAtivaId: string | null; secretariaAtivaSigla: string | null },
+  ) {
+    const motivo =
+      acao === 'vinculado'
+        ? `Documento ${documento.codigo} vinculado ao chamado`
+        : `Vínculo do documento ${documento.codigo} removido do chamado`;
+    await this.prisma.historicoStatus.create({
+      data: {
+        entidadeTipo: 'Chamado',
+        entidadeId: chamado.id,
+        statusAnterior: chamado.status,
+        statusNovo: chamado.status,
+        motivo,
+        alteradoPorId: user.sub,
+        metadata: {
+          tipo: 'documento_vinculo',
+          acao,
+          documentoId: documento.id,
+          documentoCodigo: documento.codigo,
+          usuarioNome: user.nome,
+          ...contexto,
+        },
+      },
+    });
+  }
+
+  private async contextoAtuacao(user: JwtPayload) {
+    const [perfil, secretaria] = await Promise.all([
+      user.perfilAtivoId
+        ? this.prisma.perfil.findUnique({ where: { id: user.perfilAtivoId }, select: { nome: true } })
+        : Promise.resolve(null),
+      user.secretariaId
+        ? this.prisma.secretaria.findUnique({ where: { id: user.secretariaId }, select: { id: true, sigla: true } })
+        : Promise.resolve(null),
+    ]);
+    return {
+      perfilAtivoNome: perfil?.nome ?? user.perfis?.[0] ?? null,
+      secretariaAtivaId: secretaria?.id ?? user.secretariaId ?? null,
+      secretariaAtivaSigla: secretaria?.sigla ?? null,
+    };
   }
 
   private asRecord(value: unknown): Record<string, unknown> {
@@ -2909,14 +3255,8 @@ export class DocumentosService {
       descricao: documento.descricao,
       secretaria: documento.secretaria ?? null,
       unidade: documento.unidade ?? null,
-      chamado:
-        documento.chamado && !documento.chamado.excluidoEm
-          ? {
-              id: documento.chamado.id,
-              codigo: documento.chamado.codigo,
-              status: documento.chamado.status,
-            }
-          : null,
+      chamado: this.chamadoPrincipal(documento),
+      chamados: this.chamadosDoDocumento(documento),
       fiscalizacao: documento.fiscalizacao
         ? {
             id: documento.fiscalizacao.id,
@@ -2987,6 +3327,25 @@ export class DocumentosService {
       linkValidacao: buildPublicValidationUrl(documento.codigoValidacao, codigoVerificador),
     };
   }
+}
+
+function mesmosIds(a: string[], b: string[]) {
+  if (a.length !== b.length) return false;
+  const right = new Set(b);
+  return a.every((item) => right.has(item));
+}
+
+function codigosChamadosPublicos(documento: {
+  chamado?: { codigo: string; excluidoEm?: Date | null } | null;
+  chamadosVinculados?: Array<{ chamado: { codigo: string; excluidoEm?: Date | null } | null }>;
+}) {
+  const codigos: string[] = [];
+  for (const vinculo of documento.chamadosVinculados ?? []) {
+    if (!vinculo.chamado || vinculo.chamado.excluidoEm) continue;
+    if (!codigos.includes(vinculo.chamado.codigo)) codigos.push(vinculo.chamado.codigo);
+  }
+  if (!codigos.length && documento.chamado && !documento.chamado.excluidoEm) codigos.push(documento.chamado.codigo);
+  return codigos.length ? codigos.join(', ') : null;
 }
 
 function ordenarPendencias<T extends { atrasado: boolean; prazo: string | null; createdAt: string }>(a: T, b: T) {

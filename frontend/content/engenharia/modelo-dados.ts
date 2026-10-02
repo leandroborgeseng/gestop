@@ -213,7 +213,7 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
         relacoes: [
           'N:1 Secretaria, UnidadePublica, TipoChamado, Equipe, Usuario (responsável, registrador e exclusão)',
           'N:1 NaoConformidade (opcional, única)',
-          '1:N Evidencia, ChamadoObservador, Documento, ChamadoTarefa',
+          '1:N Evidencia, ChamadoObservador, Documento, DocumentoChamado, ChamadoTarefa',
         ],
       },
       {
@@ -374,10 +374,17 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
         resumo: 'Peça com código público e código de validação. PDFs original e assinado ficam no armazenamento, com hash.',
         campos: ['codigo (único)', 'codigoValidacao (único)', 'tipo', 'situacao', 'origem', 'titulo', 'pdfOriginalSha256', 'pdfAssinadoSha256'],
         relacoes: [
-          'N:1 Secretaria, UnidadePublica, Chamado, Fiscalizacao, ChecklistVersao, Usuario',
+          'N:1 Secretaria, UnidadePublica, Chamado (origem de vistoria ou execução), Fiscalizacao, ChecklistVersao, Usuario',
+          'N:N Chamado via DocumentoChamado (documento avulso)',
           'N:1 Documento (substituidoPor)',
           '1:N DocumentoAssinatura, DocumentoAssinaturaPedido, DocumentoResposta',
         ],
+      },
+      {
+        nome: 'DocumentoChamado',
+        resumo: 'Vínculo de um documento avulso com um ou mais chamados. O chamadoId de Documento continua sendo a origem dos documentos de vistoria e execução.',
+        campos: ['documentoId', 'chamadoId', 'createdById'],
+        relacoes: ['N:1 Documento', 'N:1 Chamado', 'N:1 Usuario (quem vinculou)'],
       },
       {
         nome: 'DocumentoResposta',
@@ -403,7 +410,9 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
       { de: 'DocumentoResposta', para: 'Documento', rotulo: 'documento' },
       { de: 'DocumentoAssinatura', para: 'Documento', rotulo: 'documento' },
       { de: 'DocumentoAssinaturaPedido', para: 'Documento', rotulo: 'documento' },
-      { de: 'Documento', para: 'Chamado', rotulo: 'chamado' },
+      { de: 'Documento', para: 'Chamado', rotulo: 'origem' },
+      { de: 'DocumentoChamado', para: 'Documento', rotulo: 'documento' },
+      { de: 'DocumentoChamado', para: 'Chamado', rotulo: 'chamado' },
       { de: 'Documento', para: 'Fiscalizacao', rotulo: 'vistoria' },
       { de: 'Documento', para: 'Secretaria', rotulo: 'secretaria' },
       { de: 'DocumentoAssinaturaPedido', para: 'Usuario', rotulo: 'destinatário' },

@@ -396,6 +396,19 @@ export function buildChamadoTimelineFromHistorico(
       };
     }
 
+    if (tipo === 'documento_vinculo' || tipo === 'documento_avulso') {
+      const perfil = typeof metadata.perfilAtivoNome === 'string' ? metadata.perfilAtivoNome : null;
+      const secretaria = typeof metadata.secretariaAtivaSigla === 'string' ? metadata.secretariaAtivaSigla : null;
+      return {
+        id: entry.id,
+        title: entry.motivo || 'Documento vinculado',
+        date: formatTimelineDate(entry.createdAt),
+        sub: [entry.alteradoPor?.nome, perfil, secretaria].filter(Boolean).join(' · ') || undefined,
+        done: true,
+        active: false,
+      };
+    }
+
     if (tipo === 'observador_adicionado' || tipo === 'observador_removido') {
       const nome =
         typeof metadata.observadorNome === 'string' && metadata.observadorNome.trim()

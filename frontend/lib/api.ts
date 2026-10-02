@@ -1781,6 +1781,22 @@ export function listDocumentosChecklistsAvulso() {
   >('/documentos/checklists-avulso');
 }
 
+export function buscarChamadosParaDocumento(q: string) {
+  const query = new URLSearchParams();
+  if (q.trim()) query.set('q', q.trim());
+  return request<{
+    items: Array<{
+      id: string;
+      codigo: string;
+      titulo?: string | null;
+      descricao?: string | null;
+      tipo?: string | null;
+      endereco?: string | null;
+      unidade?: string | null;
+    }>;
+  }>(`/documentos/chamados-busca?${query.toString()}`);
+}
+
 export function createDocumentoAvulso(payload: {
   tipo: string;
   titulo?: string;
@@ -1789,6 +1805,7 @@ export function createDocumentoAvulso(payload: {
   checklistVersaoId: string;
   unidadeId?: string;
   chamadoId?: string;
+  chamadoIds?: string[];
   fiscalizacaoId?: string;
   enderecoTexto?: string;
   latitude?: number;
@@ -1892,6 +1909,7 @@ export function updateDocumentoVinculos(
   payload: {
     unidadeId?: string | null;
     chamadoId?: string | null;
+    chamadoIds?: string[];
     fiscalizacaoId?: string | null;
     enderecoTexto?: string | null;
     justificativa?: string;

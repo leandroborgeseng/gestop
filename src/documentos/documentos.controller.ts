@@ -61,6 +61,17 @@ export class DocumentosController {
     return this.documentosService.listSignatariosInternos(search, user);
   }
 
+  @Get('chamados-busca')
+  @RequireAnyPermissions(
+    'documentos.visualizar',
+    'documentos.criar_avulso',
+    'documentos.editar_vinculo',
+    'documentos.administrar',
+  )
+  buscarChamados(@CurrentUser() user: JwtPayload, @Query('q') q?: string) {
+    return this.documentosService.buscarChamadosParaVinculo(q, user);
+  }
+
   @Get('checklists-avulso')
   @RequireAnyPermissions(
     'documentos.visualizar',

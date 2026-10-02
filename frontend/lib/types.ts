@@ -1486,6 +1486,7 @@ export type DocumentoResumo = {
   secretaria?: { id: string; nome: string; sigla: string } | null;
   unidade?: { id: string; nome: string; codigoPatrimonial: string; endereco?: string | null } | null;
   chamado?: { id: string; codigo: string; status: string } | null;
+  chamados?: Array<{ id: string; codigo: string; titulo?: string | null; status?: string }>;
   fiscalizacao?: {
     id: string;
     status: string;
@@ -1549,6 +1550,7 @@ export type DocumentoRespostaItem = {
 };
 
 export type DocumentoDetalhe = DocumentoResumo & {
+  podeEditarChamados?: boolean;
   conteudoTravado?: boolean;
   checklistItens?: ChecklistItem[];
   podeAssinarInterno?: boolean;

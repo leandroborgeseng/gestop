@@ -339,6 +339,7 @@ model Usuario {
   tarefasCriadas      ChamadoTarefa[] @relation("TarefaCriadaPor")
   tarefasConcluidas   ChamadoTarefa[] @relation("TarefaConcluidaPor")
   tarefaAnexos        ChamadoTarefaAnexo[] @relation("TarefaAnexoCriadoPor")
+  documentosChamadosCriados DocumentoChamado[] @relation("DocumentoChamadoCriadoPor")
 
   @@index([secretariaId])
   @@index([perfilAtivoId])
@@ -888,6 +889,7 @@ model Chamado {
   evidencias      Evidencia[]
   observadores    ChamadoObservador[]
   documentos      Documento[]
+  documentosVinculados DocumentoChamado[]
   tarefas         ChamadoTarefa[]
 
   @@index([secretariaId])
@@ -1046,6 +1048,7 @@ model Documento {
   assinaturas     DocumentoAssinatura[]
   assinaturaPedidos DocumentoAssinaturaPedido[]
   respostas       DocumentoResposta[]
+  chamadosVinculados DocumentoChamado[]
 
   @@index([secretariaId])
   @@index([unidadeId])
@@ -1059,6 +1062,22 @@ model Documento {
   @@index([origem])
   @@index([createdAt])
   @@index([codigoValidacao])
+}
+
+/// Vínculo N:N de documento avulso com chamados. O chamadoId do Documento permanece como origem de vistoria/execução.
+model DocumentoChamado {
+  documentoId String
+  chamadoId   String
+  createdAt   DateTime @default(now())
+  createdById String?
+
+  documento Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+  chamado   Chamado   @relation(fields: [chamadoId], references: [id], onDelete: Cascade)
+  createdBy Usuario?  @relation("DocumentoChamadoCriadoPor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@id([documentoId, chamadoId])
+  @@index([chamadoId])
+  @@index([createdById])
 }
 
 model DocumentoResposta {

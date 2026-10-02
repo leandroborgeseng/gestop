@@ -19,6 +19,7 @@ import {
   gerarDocumentoPdfOriginal,
   getDocumento,
   listDocumentos,
+  updateDocumentoVinculos,
   listMinhasPendenciasAssinatura,
   toggleAssinaturaPendenteDocumento,
 } from '@/lib/api';
@@ -26,6 +27,7 @@ import { AssinarInternoDialog, DisponibilizarAssinaturaDialog } from '@/componen
 import { ColetarAssinaturaDialog } from '@/components/documentos/coletar-assinatura-dialog';
 import { DocumentoAvulsoForm, DocumentoAvulsoRespostasLeitura } from '@/components/documentos/documento-avulso-form';
 import { NovoDocumentoAvulsoDialog } from '@/components/documentos/novo-documento-avulso-dialog';
+import { ChamadosRelacionadosField, type ChamadoRelacionadoChip } from '@/components/documentos/chamados-relacionados-field';
 import { DOCUMENTO_SITUACAO_META, DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
 import { cn } from '@/lib/cn';
 import { hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
@@ -306,7 +308,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
                             <p className="mt-0.5 text-[13px] font-medium text-[var(--ink)]">{item.titulo}</p>
                             <p className="text-[12px] text-[var(--ink-3)]">
                               {DOCUMENTO_TIPO_LABELS[item.tipo as DocumentoTipo]}
-                              {item.chamado ? ` · ${item.chamado.codigo}` : ''}
+                              {rotuloChamados(item) ? ` · ${rotuloChamados(item)}` : ''}
                               {item.unidade ? ` · ${item.unidade.nome}` : ''}
                             </p>
                           </div>
@@ -469,7 +471,7 @@ function DocumentoDetail({
         <Detail label="Origem" value={documento.origem} />
         <Detail label="Secretaria" value={documento.secretaria ? `${documento.secretaria.sigla} · ${documento.secretaria.nome}` : '—'} />
         <Detail label="Próprio" value={documento.unidade ? `${documento.unidade.codigoPatrimonial} · ${documento.unidade.nome}` : '—'} />
-        <Detail label="Chamado" value={documento.chamado?.codigo ?? '—'} />
+        <DocumentoChamadosBloco documento={documento} onSaved={onFormSaved} />
         <Detail
           label="Vistoria"
           value={
@@ -721,6 +723,76 @@ function DocumentoDetail({
           </ol>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function rotuloChamados(item: { chamado?: { codigo: string } | null; chamados?: Array<{ codigo: string }> }) {
+  const codigos = item.chamados?.length ? item.chamados.map((chamado) => chamado.codigo) : item.chamado ? [item.chamado.codigo] : [];
+  return codigos.join(', ');
+}
+
+function DocumentoChamadosBloco({
+  documento,
+  onSaved,
+}: {
+  documento: DocumentoDetalhe;
+  onSaved: () => void | Promise<void>;
+}) {
+  const snackbar = useSnackbar();
+  const lista: ChamadoRelacionadoChip[] = documento.chamados?.length
+    ? documento.chamados
+    : documento.chamado
+      ? [{ id: documento.chamado.id, codigo: documento.chamado.codigo }]
+      : [];
+  const [chamados, setChamados] = useState<ChamadoRelacionadoChip[]>(lista);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setChamados(lista);
+    // Recarrega a seleção quando o documento muda.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documento.id, documento.updatedAt]);
+
+  async function salvar() {
+    setBusy(true);
+    try {
+      await updateDocumentoVinculos(documento.id, { chamadoIds: chamados.map((item) => item.id) });
+      snackbar.show('Chamados relacionados atualizados.', 'success');
+      await onSaved();
+    } catch (err) {
+      snackbar.show(err instanceof Error ? err.message : 'Falha ao atualizar os chamados.', 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (documento.origem !== 'AVULSO') {
+    return <Detail label="Chamado" value={lista.map((item) => item.codigo).join(', ') || '—'} />;
+  }
+
+  return (
+    <div className="sm:col-span-2">
+      <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Chamados relacionados</p>
+      {documento.podeEditarChamados ? (
+        <div className="mt-2 space-y-2">
+          <ChamadosRelacionadosField value={chamados} onChange={setChamados} disabled={busy} />
+          <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={() => void salvar()}>
+            Salvar chamados
+          </Button>
+        </div>
+      ) : lista.length ? (
+        <ul className="mt-1 space-y-1 text-[13px] text-[var(--ink)]">
+          {lista.map((item) => (
+            <li key={item.id}>
+              <span className="font-semibold">{item.codigo}</span>
+              {item.titulo ? ` · ${item.titulo}` : ''}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-1 text-[13px] text-[var(--ink)]">Nenhum chamado relacionado.</p>
+      )}
     </div>
   );
 }

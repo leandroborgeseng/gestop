@@ -10,6 +10,7 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { LoadingState } from '@/components/ui-states';
 import { createDocumentoAvulso, getSecretarias, listDocumentosChecklistsAvulso } from '@/lib/api';
+import { ChamadosRelacionadosField, type ChamadoRelacionadoChip } from '@/components/documentos/chamados-relacionados-field';
 import { DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
 import type { DocumentoTipo, SecretariaOption } from '@/lib/types';
 
@@ -49,6 +50,7 @@ export function NovoDocumentoAvulsoDialog({ open, onClose, onCreated, vinculo }:
   const [checklistVersaoId, setChecklistVersaoId] = useState('');
   const [titulo, setTitulo] = useState('');
   const [enderecoTexto, setEnderecoTexto] = useState('');
+  const [chamados, setChamados] = useState<ChamadoRelacionadoChip[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -57,6 +59,11 @@ export function NovoDocumentoAvulsoDialog({ open, onClose, onCreated, vinculo }:
     setTitulo(vinculo ? `${vinculo.codigo}${vinculo.titulo?.trim() ? ` — ${vinculo.titulo.trim()}` : ''}` : '');
     setEnderecoTexto(vinculo?.enderecoTexto?.trim() ?? '');
     setSecretariaId(vinculo?.secretariaId ?? '');
+    setChamados(
+      vinculo
+        ? [{ id: vinculo.chamadoId, codigo: vinculo.codigo, titulo: vinculo.titulo }]
+        : [],
+    );
     setLoading(true);
     Promise.all([getSecretarias(), listDocumentosChecklistsAvulso()])
       .then(([secs, checks]) => {
@@ -92,7 +99,7 @@ export function NovoDocumentoAvulsoDialog({ open, onClose, onCreated, vinculo }:
         checklistVersaoId,
         titulo: titulo.trim() || undefined,
         enderecoTexto: enderecoTexto.trim() || undefined,
-        chamadoId: vinculo?.chamadoId,
+        chamadoIds: chamados.map((item) => item.id),
         unidadeId: vinculo?.unidadeId || undefined,
         latitude: vinculo?.latitude ?? undefined,
         longitude: vinculo?.longitude ?? undefined,
@@ -151,6 +158,7 @@ export function NovoDocumentoAvulsoDialog({ open, onClose, onCreated, vinculo }:
           <Field label="Endereço / local (opcional)">
             <Input value={enderecoTexto} onChange={(event) => setEnderecoTexto(event.target.value)} />
           </Field>
+          <ChamadosRelacionadosField value={chamados} onChange={setChamados} disabled={busy} />
           <div className="flex flex-wrap gap-2 pt-2">
             <Button type="button" variant="filled" disabled={busy} onClick={() => void handleCreate(false)}>
               Salvar rascunho
