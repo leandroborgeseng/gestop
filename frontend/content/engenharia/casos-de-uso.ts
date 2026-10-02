@@ -240,7 +240,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'assinatura-externa',
         nome: 'Coletar assinatura externa',
         atores: ['administrador', 'gestor', 'equipe'],
-        descricao: 'Registrar a assinatura de quem não é usuário, ou marcar pendência e cancelar a assinada.',
+        descricao: 'Registrar a assinatura de quem não é usuário, ou marcar pendência e cancelar a assinada. Erros de validação, inclusive a justificativa de CPF ou e-mail ausente, aparecem dentro do modal e acima do overlay.',
         rotas: ['/documentos', 'POST /documentos/:id/assinatura', 'POST /documentos/:id/assinatura-pendente', 'POST /documentos/:id/cancelar-assinado'],
       },
       {

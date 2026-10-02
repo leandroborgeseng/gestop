@@ -19,12 +19,14 @@ export function Field({
   className,
   hint,
   tooltip,
+  error,
 }: {
   label: string;
   children: React.ReactNode;
   className?: string;
   hint?: string;
   tooltip?: string;
+  error?: string;
 }) {
   return (
     <div className={cn('flex min-w-0 max-w-full flex-col gap-[5px]', className)}>
@@ -33,7 +35,8 @@ export function Field({
         {tooltip ? <Hint text={tooltip} /> : null}
       </div>
       {children}
-      {hint ? <p className="text-[11.5px] text-[var(--ink-3)]">{hint}</p> : null}
+      {error ? <p className="text-[12px] text-[var(--danger)]">{error}</p> : null}
+      {hint && !error ? <p className="text-[11.5px] text-[var(--ink-3)]">{hint}</p> : null}
     </div>
   );
 }

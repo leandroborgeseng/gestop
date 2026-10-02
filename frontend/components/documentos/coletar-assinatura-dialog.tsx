@@ -69,6 +69,8 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
   const [justificativaIdentificacao, setJustificativaIdentificacao] = useState('');
   const [qualificacao, setQualificacao] = useState(QUALIFICACOES[0]);
   const [qualificacaoOutro, setQualificacaoOutro] = useState('');
+  const [erro, setErro] = useState<string | null>(null);
+  const [campoErro, setCampoErro] = useState<'nome' | 'cpf' | 'email' | 'justificativa' | 'qualificacao' | null>(null);
   const { mobile, portrait } = useIsPortraitMobile();
 
   const temAssinaturaVigente = Boolean(documento.possuiPdfAssinado);
@@ -215,38 +217,46 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
     prepareCanvas();
   }
 
-  function validarDadosAssinante(): string | null {
-    if (nome.trim().length < 2) return 'Informe o nome completo do assinante.';
+  function validarDadosAssinante(): { mensagem: string; campo: 'nome' | 'cpf' | 'email' | 'justificativa' | 'qualificacao' } | null {
+    if (nome.trim().length < 2) return { mensagem: 'Informe o nome completo do assinante.', campo: 'nome' };
     if (!cpfNaoInformado && cpf.replace(/\D/g, '').length < 11) {
-      return 'Informe um CPF válido ou marque que o CPF não foi informado.';
+      return { mensagem: 'Informe um CPF válido ou marque que o CPF não foi informado.', campo: 'cpf' };
     }
     if (!emailNaoInformado && !email.includes('@')) {
-      return 'Informe um e-mail válido ou marque que o e-mail não foi informado.';
+      return { mensagem: 'Informe um e-mail válido ou marque que o e-mail não foi informado.', campo: 'email' };
     }
     if ((cpfNaoInformado || emailNaoInformado) && justificativaIdentificacao.trim().length < 5) {
-      return 'Informe a justificativa da ausência de CPF e/ou e-mail (mín. 5 caracteres).';
+      return { mensagem: 'Informe a justificativa da ausência de CPF e/ou e-mail.', campo: 'justificativa' };
     }
     if (qualificacao === 'Outro' && !qualificacaoOutro.trim()) {
-      return 'Informe a qualificação.';
+      return { mensagem: 'Informe a qualificação.', campo: 'qualificacao' };
     }
     return null;
   }
 
+  function publicarErro(item: { mensagem: string; campo: 'nome' | 'cpf' | 'email' | 'justificativa' | 'qualificacao' }) {
+    setErro(item.mensagem);
+    setCampoErro(item.campo);
+    snackbar.show(item.mensagem, 'error');
+  }
+
   function irParaAssinatura() {
-    const erro = validarDadosAssinante();
-    if (erro) {
-      snackbar.show(erro, 'error');
+    const falha = validarDadosAssinante();
+    if (falha) {
+      publicarErro(falha);
       return;
     }
+    setErro(null);
+    setCampoErro(null);
     setStep('assinatura');
   }
 
   async function salvar() {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const erro = validarDadosAssinante();
-    if (erro) {
-      snackbar.show(erro, 'error');
+    const falha = validarDadosAssinante();
+    if (falha) {
+      publicarErro(falha);
       setStep('dados');
       return;
     }
@@ -273,7 +283,22 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
       onDone();
       onClose();
     } catch (err) {
-      snackbar.show(err instanceof Error ? err.message : 'Falha ao coletar assinatura.', 'error');
+      const raw = err instanceof Error ? err.message : 'Falha ao coletar assinatura.';
+      const justificativa = raw.toLowerCase().includes('justificativa');
+      const mensagem = justificativa ? 'Informe a justificativa da ausência de CPF e/ou e-mail.' : raw;
+      const campo = justificativa
+        ? 'justificativa'
+        : raw.toLowerCase().includes('cpf')
+          ? 'cpf'
+          : raw.toLowerCase().includes('e-mail') || raw.toLowerCase().includes('email')
+            ? 'email'
+            : raw.toLowerCase().includes('nome')
+              ? 'nome'
+              : null;
+      setErro(mensagem);
+      setCampoErro(campo);
+      if (campo) setStep('dados');
+      snackbar.show(mensagem, 'error');
     } finally {
       setBusy(false);
     }
@@ -337,6 +362,11 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
           (assinaturaStep || conferenciaStep) && mobile && 'h-[calc(100dvh-7.5rem)] max-h-none',
         )}
       >
+        {erro ? (
+          <p role="alert" className="shrink-0 rounded-[10px] border border-[var(--danger)] px-3 py-2 text-[13px] font-medium text-[var(--danger)]">
+            {erro}
+          </p>
+        ) : null}
         {step === 'conferencia' ? (
           <>
             <div className="shrink-0 rounded-[12px] border border-[var(--line)] bg-[var(--canvas-2)] p-3 text-[12px] text-[var(--ink-2)]">
@@ -444,15 +474,32 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
               CPF e e-mail são recomendados para reforçar a identificação da assinatura externa. A assinatura
               pode ser registrada sem esses dados quando a pessoa não informar ou não possuir a informação.
             </p>
-            <Field label="Nome completo">
-              <Input value={nome} onChange={(event) => setNome(event.target.value)} />
+            <Field label="Nome completo" error={campoErro === 'nome' ? erro ?? undefined : undefined}>
+              <Input
+                value={nome}
+                onChange={(event) => {
+                  setNome(event.target.value);
+                  if (campoErro === 'nome') {
+                    setCampoErro(null);
+                    setErro(null);
+                  }
+                }}
+                className={campoErro === 'nome' ? 'border-[var(--danger)]' : undefined}
+              />
             </Field>
-            <Field label="CPF">
+            <Field label="CPF" error={campoErro === 'cpf' ? erro ?? undefined : undefined}>
               <Input
                 value={cpf}
-                onChange={(event) => setCpf(event.target.value)}
+                onChange={(event) => {
+                  setCpf(event.target.value);
+                  if (campoErro === 'cpf') {
+                    setCampoErro(null);
+                    setErro(null);
+                  }
+                }}
                 placeholder="000.000.000-00"
                 disabled={cpfNaoInformado}
+                className={campoErro === 'cpf' ? 'border-[var(--danger)]' : undefined}
               />
             </Field>
             <label className="flex items-center gap-2 text-[12px] text-[var(--ink-2)]">
@@ -466,12 +513,19 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
               />
               CPF não informado pelo assinante
             </label>
-            <Field label="E-mail">
+            <Field label="E-mail" error={campoErro === 'email' ? erro ?? undefined : undefined}>
               <Input
                 type="email"
                 value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  if (campoErro === 'email') {
+                    setCampoErro(null);
+                    setErro(null);
+                  }
+                }}
                 disabled={emailNaoInformado}
+                className={campoErro === 'email' ? 'border-[var(--danger)]' : undefined}
               />
             </Field>
             <label className="flex items-center gap-2 text-[12px] text-[var(--ink-2)]">
@@ -489,12 +543,20 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
               <Field
                 label="Justificativa da identificação"
                 hint="Obrigatória quando CPF e/ou e-mail não forem informados"
+                error={campoErro === 'justificativa' ? 'Informe a justificativa da ausência de CPF e/ou e-mail.' : undefined}
               >
                 <Input
                   value={justificativaIdentificacao}
-                  onChange={(event) => setJustificativaIdentificacao(event.target.value)}
+                  onChange={(event) => {
+                    setJustificativaIdentificacao(event.target.value);
+                    if (campoErro === 'justificativa') {
+                      setCampoErro(null);
+                      setErro(null);
+                    }
+                  }}
                   placeholder="Ex.: Assinante recusou informar CPF"
                   list="justificativas-identificacao"
+                  className={campoErro === 'justificativa' ? 'border-[var(--danger)]' : undefined}
                 />
                 <datalist id="justificativas-identificacao">
                   <option value="Assinante recusou informar CPF" />
@@ -514,8 +576,18 @@ export function ColetarAssinaturaDialog({ open, documento, onClose, onDone }: Pr
               </Select>
             </Field>
             {qualificacao === 'Outro' ? (
-              <Field label="Qualificação (outro)">
-                <Input value={qualificacaoOutro} onChange={(event) => setQualificacaoOutro(event.target.value)} />
+              <Field label="Qualificação (outro)" error={campoErro === 'qualificacao' ? erro ?? undefined : undefined}>
+                <Input
+                  value={qualificacaoOutro}
+                  onChange={(event) => {
+                    setQualificacaoOutro(event.target.value);
+                    if (campoErro === 'qualificacao') {
+                      setCampoErro(null);
+                      setErro(null);
+                    }
+                  }}
+                  className={campoErro === 'qualificacao' ? 'border-[var(--danger)]' : undefined}
+                />
               </Field>
             ) : null}
             <div className="flex flex-wrap gap-2">

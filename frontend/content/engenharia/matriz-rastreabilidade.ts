@@ -252,7 +252,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/documentos',
     api: 'DocumentosController: POST /documentos/:id/assinatura, /assinatura-pendente, /cancelar-assinado',
     tabelas: 'Documento, DocumentoAssinatura',
-    permissao: 'documentos.coletar_assinatura ou documentos.administrar. Cancelamento: documentos.cancelar_assinado.',
+    permissao: 'documentos.coletar_assinatura ou documentos.administrar. Cancelamento: documentos.cancelar_assinado. Aviso e erro de campo ficam na frente do modal.',
   },
   {
     id: 'ass-int',

@@ -934,7 +934,7 @@ export class DocumentosService {
     }
     if ((cpfNaoInformado || emailNaoInformado) && !(dto.justificativaIdentificacao?.trim().length)) {
       throw new BadRequestException(
-        'Informe a justificativa quando CPF e/ou e-mail não forem informados pelo assinante.',
+        'Informe a justificativa da ausência de CPF e/ou e-mail.',
       );
     }
     if (cpfInformado && dto.assinanteDocumento!.replace(/\D/g, '').length < 11) {
