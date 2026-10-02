@@ -18,8 +18,52 @@ import { permissionMatrixKey } from '../domain/permissions-catalog';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { normalizarMimeAnexo, validarBufferAnexo } from './anexos-midia';
+import { buildCsv } from '../relatorios/relatorios.csv';
+import { buildTablePdf } from '../relatorios/relatorios.pdf';
+import { buildXlsx } from '../relatorios/relatorios.xlsx';
 import { situacaoPrazoTarefa, TAREFA_STATUS_FINAIS, TAREFA_STATUS_PENDENTES, tarefaAtrasada } from './chamado-tarefa.regras';
 import { AnexoChamadoTarefaDto, CreateChamadoTarefaDto, UpdateChamadoTarefaDto } from './chamado-tarefas.dto';
+
+const TAREFA_EXPORT_HEADERS = [
+  'Número do chamado',
+  'Título do chamado',
+  'Tipo',
+  'Título da tarefa',
+  'Descrição',
+  'Status',
+  'Prioridade',
+  'Prazo',
+  'Situação do prazo',
+  'Secretaria',
+  'Equipe',
+  'Responsável',
+  'Criação',
+  'Conclusão ou cancelamento',
+  'Observação ou conclusão',
+];
+
+const TAREFA_STATUS_ROTULO: Record<string, string> = {
+  NOVA: 'Nova',
+  VISUALIZADA: 'Visualizada',
+  EM_ANDAMENTO: 'Em andamento',
+  IMPEDIDA: 'Impedida',
+  CONCLUIDA: 'Concluída',
+  CANCELADA: 'Cancelada',
+};
+
+const TAREFA_PRIORIDADE_ROTULO: Record<string, string> = {
+  BAIXA: 'Baixa',
+  MEDIA: 'Média',
+  ALTA: 'Alta',
+  URGENTE: 'Urgente',
+};
+
+function dataBr(value?: Date | string | null, comHora = false) {
+  if (!value) return '';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return comHora ? date.toLocaleString('pt-BR') : date.toLocaleDateString('pt-BR');
+}
 
 const TAREFA_INCLUDE = {
   secretaria: { select: { id: true, nome: true, sigla: true } },
@@ -287,21 +331,7 @@ export class ChamadoTarefasService {
 
   async relatorio(query: Record<string, string | undefined>, user: JwtPayload) {
     if (!this.podeVerRelatorio(user)) throw new ForbiddenException('Sem permissão para o relatório de tarefas.');
-    const where = this.whereRelatorio(query, user);
-    const equipes = await this.equipeIdsDoUsuario(user.sub);
-    const items = await this.prisma.chamadoTarefa.findMany({
-      where,
-      include: TAREFA_INCLUDE,
-      orderBy: [{ prazo: 'asc' }, { createdAt: 'desc' }],
-      take: 500,
-    });
-    const linhas = items.map((item) => {
-      const row = this.serialize(item, user, equipes);
-      return {
-        ...row,
-        situacaoPrazo: situacaoPrazoTarefa({ status: item.status, prazo: item.prazo, concluidaEm: item.concluidaEm }),
-      };
-    });
+    const linhas = await this.carregarLinhas(query, user, 500);
     const por = (chave: (item: (typeof linhas)[number]) => string) => {
       const map = new Map<string, number>();
       for (const item of linhas) {
@@ -325,6 +355,124 @@ export class ChamadoTarefasService {
       },
       items: linhas,
     };
+  }
+
+  exportarCsv(query: Record<string, string | undefined>, user: JwtPayload) {
+    return this.linhasExportacao(query, user).then((rows) => buildCsv(TAREFA_EXPORT_HEADERS, rows));
+  }
+
+  exportarXlsx(query: Record<string, string | undefined>, user: JwtPayload) {
+    return this.linhasExportacao(query, user).then((rows) => buildXlsx('Tarefas de chamados', TAREFA_EXPORT_HEADERS, rows));
+  }
+
+  exportarPdf(query: Record<string, string | undefined>, user: JwtPayload) {
+    return this.linhasExportacao(query, user).then((rows) => {
+      const simples = query.capa === 'simples';
+      const filtros = this.resumoFiltros(query);
+      return buildTablePdf({
+        title: simples ? 'Tarefas de chamados' : 'SIGMA — Tarefas de chamados',
+        subtitle: simples
+          ? `Dados exibidos conforme os filtros aplicados · ${new Date().toLocaleString('pt-BR')}`
+          : [`Gerado em ${new Date().toLocaleString('pt-BR')}`, filtros || 'Sem filtros adicionais'].join(' · '),
+        headers: TAREFA_EXPORT_HEADERS,
+        rows: rows.map((row) => row.map((cell) => String(cell ?? ''))),
+        wrapFully: true,
+        plain: simples,
+      });
+    });
+  }
+
+  private async linhasExportacao(query: Record<string, string | undefined>, user: JwtPayload) {
+    if (!this.podeVerRelatorio(user)) throw new ForbiddenException('Sem permissão para o relatório de tarefas.');
+    const limite = query.capa === 'simples' ? 500 : 2000;
+    const linhas = await this.carregarLinhas(query, user, limite);
+    return linhas.map((item) => this.linhaExportacao(item));
+  }
+
+  private async carregarLinhas(query: Record<string, string | undefined>, user: JwtPayload, limite: number) {
+    const where = this.whereRelatorio(query, user);
+    const equipes = await this.equipeIdsDoUsuario(user.sub);
+    const items = await this.prisma.chamadoTarefa.findMany({
+      where,
+      include: TAREFA_INCLUDE,
+      orderBy: [{ prazo: 'asc' }, { createdAt: 'desc' }],
+      take: limite,
+    });
+    return items
+      .filter((item) => this.casaSituacaoFina(item, query.situacaoPrazo))
+      .map((item) => {
+        const row = this.serialize(item, user, equipes);
+        return {
+          ...row,
+          situacaoPrazo: situacaoPrazoTarefa({ status: item.status, prazo: item.prazo, concluidaEm: item.concluidaEm }),
+          canceladaEm: item.canceladaEm?.toISOString() ?? null,
+        };
+      });
+  }
+
+  private linhaExportacao(item: {
+    chamado: { codigo: string; titulo: string | null; descricao: string; tipoChamado: { nome: string } | null };
+    titulo: string;
+    descricao: string | null;
+    status: string;
+    prioridade: string;
+    prazo: string | null;
+    situacaoPrazo: string;
+    secretaria: { sigla: string } | null;
+    equipe: { nome: string } | null;
+    responsavel: { nome: string } | null;
+    createdAt: string;
+    concluidaEm: string | null;
+    canceladaEm: string | null;
+    conclusaoTexto: string | null;
+    justificativa: string | null;
+    observacao: string | null;
+  }) {
+    const encerramento = item.status === 'CANCELADA' ? dataBr(item.canceladaEm, true) : dataBr(item.concluidaEm, true);
+    const texto = [item.conclusaoTexto, item.justificativa, item.observacao].filter((parte) => parte?.trim()).join(' · ');
+    const descricao = (item.descricao ?? '').replace(/\s+/g, ' ').trim().slice(0, 180);
+    return [
+      item.chamado.codigo,
+      item.chamado.titulo || item.chamado.descricao.slice(0, 120),
+      item.chamado.tipoChamado?.nome ?? '',
+      item.titulo,
+      descricao,
+      TAREFA_STATUS_ROTULO[item.status] ?? item.status,
+      TAREFA_PRIORIDADE_ROTULO[item.prioridade] ?? item.prioridade,
+      dataBr(item.prazo),
+      item.situacaoPrazo,
+      item.secretaria?.sigla ?? '',
+      item.equipe?.nome ?? '',
+      item.responsavel?.nome ?? '',
+      dataBr(item.createdAt, true),
+      encerramento,
+      texto,
+    ];
+  }
+
+  private resumoFiltros(query: Record<string, string | undefined>) {
+    const partes: string[] = [];
+    if (query.from || query.to) partes.push(`Período: ${query.from || '…'} a ${query.to || '…'}`);
+    if (query.prazoFrom || query.prazoTo) partes.push(`Prazo: ${query.prazoFrom || '…'} a ${query.prazoTo || '…'}`);
+    if (query.status) partes.push(`Status: ${TAREFA_STATUS_ROTULO[query.status] ?? query.status}`);
+    if (query.prioridade) partes.push(`Prioridade: ${TAREFA_PRIORIDADE_ROTULO[query.prioridade] ?? query.prioridade}`);
+    if (query.numero) partes.push(`Chamado: ${query.numero}`);
+    if (query.texto) partes.push(`Texto: ${query.texto}`);
+    if (query.situacaoPrazo) partes.push(`Situação do prazo: ${query.situacaoPrazo}`);
+    if (query.atrasadas === '1') partes.push('Atrasadas');
+    if (query.concluidas === '1') partes.push('Concluídas');
+    if (query.canceladas === '1') partes.push('Canceladas');
+    return partes.join(' · ');
+  }
+
+  private casaSituacaoFina(
+    item: { status: string; prazo: Date | null; concluidaEm: Date | null },
+    situacao?: string,
+  ) {
+    if (situacao !== 'CONCLUIDA_NO_PRAZO' && situacao !== 'CONCLUIDA_COM_ATRASO') return true;
+    if (!item.prazo || !item.concluidaEm) return false;
+    const atrasou = item.concluidaEm.getTime() > item.prazo.getTime();
+    return situacao === 'CONCLUIDA_COM_ATRASO' ? atrasou : !atrasou;
   }
 
   private whereExecucao(query: Record<string, string | undefined>, user: JwtPayload): Prisma.ChamadoTarefaWhereInput {
@@ -372,6 +520,35 @@ export class ChamadoTarefasService {
         },
       });
     }
+    if (query.from || query.to) {
+      and.push({
+        createdAt: {
+          ...(query.from ? { gte: new Date(query.from) } : {}),
+          ...(query.to ? { lte: new Date(query.to.length <= 10 ? `${query.to}T23:59:59.999` : query.to) } : {}),
+        },
+      });
+    }
+    if (query.numero?.trim()) {
+      and.push({ chamado: { codigo: { contains: query.numero.trim(), mode: 'insensitive' } } });
+    }
+    if (query.texto?.trim()) {
+      const texto = query.texto.trim();
+      and.push({
+        OR: [
+          { titulo: { contains: texto, mode: 'insensitive' } },
+          { descricao: { contains: texto, mode: 'insensitive' } },
+          { chamado: { titulo: { contains: texto, mode: 'insensitive' } } },
+          { chamado: { descricao: { contains: texto, mode: 'insensitive' } } },
+        ],
+      });
+    }
+    if (query.concluidas === '1' || query.canceladas === '1') {
+      const statuses: ChamadoTarefaStatus[] = [];
+      if (query.concluidas === '1') statuses.push(ChamadoTarefaStatus.CONCLUIDA);
+      if (query.canceladas === '1') statuses.push(ChamadoTarefaStatus.CANCELADA);
+      and.push({ status: { in: statuses } });
+    }
+    this.applySituacaoPrazo(and, query.situacaoPrazo);
     const search = query.search?.trim();
     if (search) {
       and.push({
@@ -382,6 +559,20 @@ export class ChamadoTarefasService {
         ],
       });
     }
+  }
+
+  private applySituacaoPrazo(and: Prisma.ChamadoTarefaWhereInput[], situacao?: string) {
+    if (!situacao) return;
+    const agora = new Date();
+    const aberta: Prisma.ChamadoTarefaWhereInput = {
+      status: { notIn: [ChamadoTarefaStatus.CONCLUIDA, ChamadoTarefaStatus.CANCELADA] },
+    };
+    if (situacao === 'SEM_PRAZO') and.push({ prazo: null });
+    else if (situacao === 'NO_PRAZO') and.push(aberta, { prazo: { gte: agora } });
+    else if (situacao === 'ATRASADA') and.push(aberta, { prazo: { lt: agora } });
+    else if (situacao === 'CONCLUIDA_NO_PRAZO' || situacao === 'CONCLUIDA_COM_ATRASO') {
+      and.push({ status: ChamadoTarefaStatus.CONCLUIDA, prazo: { not: null }, concluidaEm: { not: null } });
+    } else if (situacao === 'CANCELADA') and.push({ status: ChamadoTarefaStatus.CANCELADA });
   }
 
   private async detalhe(tarefa: TarefaLoaded, user: JwtPayload, equipes?: Set<string>) {

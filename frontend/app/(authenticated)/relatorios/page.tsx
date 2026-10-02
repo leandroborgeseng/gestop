@@ -17,7 +17,6 @@ import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { RelatorioTarefasPanel } from '@/components/relatorios/relatorio-tarefas-panel';
 import { Card, CardContent } from '@/components/ui/card';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -26,6 +25,7 @@ import { Sheet } from '@/components/ui/sheet';
 import {
   downloadRelatorioCsv,
   downloadRelatorioPdf,
+  downloadRelatorioTarefas,
   downloadRelatorioXlsx,
   getOpcoesFiltroUnidades,
   getSecretarias,
@@ -34,6 +34,7 @@ import {
   listUsuariosAtivosExecucao,
 } from '@/lib/api';
 import { CHAMADO_STATUS_META } from '@/lib/chamado-status';
+import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL } from '@/lib/chamado-tarefa';
 import { CRONOGRAMA_FREQUENCIAS, CRONOGRAMA_FREQUENCIA_LABELS } from '@/lib/cronograma';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import {
@@ -44,7 +45,7 @@ import {
   UsuarioExecucaoOpcao,
 } from '@/lib/types';
 
-type RelatorioTipo = 'unidades' | 'fiscalizacoes' | 'chamados' | 'chamados-produtividade' | 'cronograma-cobertura';
+type RelatorioTipo = 'unidades' | 'fiscalizacoes' | 'chamados' | 'chamados-produtividade' | 'cronograma-cobertura' | 'tarefas-chamados';
 type RelatorioFormato = 'csv' | 'pdf' | 'xlsx';
 
 const PRIORIDADES = [
@@ -96,7 +97,23 @@ const RELATORIOS: Array<{
     hint: 'Lista próprios ativos e indica se possuem cronograma de vistoria vinculado, com responsáveis previstos.',
     icon: CalendarDays,
   },
+  {
+    tipo: 'tarefas-chamados',
+    title: 'Tarefas de chamados',
+    modalTitle: 'Gerar relatório de tarefas de chamados',
+    hint: 'Relação de tarefas vinculadas a chamados, com status, prazo, responsáveis, equipes e situação.',
+    icon: ListChecks,
+  },
 ];
+
+const SITUACOES_PRAZO = [
+  { value: 'SEM_PRAZO', label: 'Sem prazo' },
+  { value: 'NO_PRAZO', label: 'No prazo' },
+  { value: 'ATRASADA', label: 'Atrasada' },
+  { value: 'CONCLUIDA_NO_PRAZO', label: 'Concluída no prazo' },
+  { value: 'CONCLUIDA_COM_ATRASO', label: 'Concluída com atraso' },
+  { value: 'CANCELADA', label: 'Cancelada' },
+] as const;
 
 type BaseModalState = {
   secretariaId: string;
@@ -145,6 +162,35 @@ const EMPTY_PROD: ProdutividadeModalState = {
   tipoChamadoId: '',
 };
 
+type TarefasModalState = BaseModalState & {
+  status: string;
+  prioridade: string;
+  equipeId: string;
+  responsavelId: string;
+  tipoChamadoId: string;
+  numero: string;
+  texto: string;
+  situacaoPrazo: string;
+  atrasadas: boolean;
+  concluidas: boolean;
+  canceladas: boolean;
+};
+
+const EMPTY_TAREFAS: TarefasModalState = {
+  ...EMPTY_BASE,
+  status: '',
+  prioridade: '',
+  equipeId: '',
+  responsavelId: '',
+  tipoChamadoId: '',
+  numero: '',
+  texto: '',
+  situacaoPrazo: '',
+  atrasadas: false,
+  concluidas: false,
+  canceladas: false,
+};
+
 const EMPTY_COBERTURA: CoberturaModalState = {
   secretariaId: '',
   tipo: '',
@@ -170,6 +216,7 @@ export default function RelatoriosPage() {
   const [chamadosModal, setChamadosModal] = useState<ChamadosModalState>(EMPTY_CHAMADOS);
   const [prodModal, setProdModal] = useState<ProdutividadeModalState>(EMPTY_PROD);
   const [coberturaModal, setCoberturaModal] = useState<CoberturaModalState>(EMPTY_COBERTURA);
+  const [tarefasModal, setTarefasModal] = useState<TarefasModalState>(EMPTY_TAREFAS);
 
   useEffect(() => {
     getSecretarias().then(setSecretarias).catch(() => setSecretarias([]));
@@ -181,7 +228,11 @@ export default function RelatoriosPage() {
     listUsuariosAtivosExecucao().then(setResponsaveis).catch(() => setResponsaveis([]));
   }, []);
 
-  async function exportar(tipo: RelatorioTipo, formato: RelatorioFormato, params: Record<string, string>) {
+  async function exportar(
+    tipo: Exclude<RelatorioTipo, 'tarefas-chamados'>,
+    formato: RelatorioFormato,
+    params: Record<string, string>,
+  ) {
     setLoading(`${tipo}-${formato}`);
     setError(null);
     try {
@@ -203,6 +254,8 @@ export default function RelatoriosPage() {
       setProdModal({ ...EMPTY_PROD });
     } else if (tipo === 'cronograma-cobertura') {
       setCoberturaModal({ ...EMPTY_COBERTURA });
+    } else if (tipo === 'tarefas-chamados') {
+      setTarefasModal({ ...EMPTY_TAREFAS });
     } else {
       setSimplesModal({ ...EMPTY_BASE });
     }
@@ -240,6 +293,34 @@ export default function RelatoriosPage() {
     if (prodModal.to) params.to = prodModal.to;
     if (prodModal.tipoChamadoId) params.tipoChamadoId = prodModal.tipoChamadoId;
     await exportar('chamados-produtividade', prodModal.formato, params);
+  }
+
+  async function gerarTarefas() {
+    const params: Record<string, string | undefined> = { capa: 'formal' };
+    if (tarefasModal.secretariaId) params.secretariaId = tarefasModal.secretariaId;
+    if (tarefasModal.from) params.from = tarefasModal.from;
+    if (tarefasModal.to) params.to = tarefasModal.to;
+    if (tarefasModal.status) params.status = tarefasModal.status;
+    if (tarefasModal.prioridade) params.prioridade = tarefasModal.prioridade;
+    if (tarefasModal.equipeId) params.equipeId = tarefasModal.equipeId;
+    if (tarefasModal.responsavelId) params.responsavelId = tarefasModal.responsavelId;
+    if (tarefasModal.tipoChamadoId) params.tipoChamadoId = tarefasModal.tipoChamadoId;
+    if (tarefasModal.numero.trim()) params.numero = tarefasModal.numero.trim();
+    if (tarefasModal.texto.trim()) params.texto = tarefasModal.texto.trim();
+    if (tarefasModal.situacaoPrazo) params.situacaoPrazo = tarefasModal.situacaoPrazo;
+    if (tarefasModal.atrasadas) params.atrasadas = '1';
+    if (tarefasModal.concluidas) params.concluidas = '1';
+    if (tarefasModal.canceladas) params.canceladas = '1';
+    setLoading(`tarefas-chamados-${tarefasModal.formato}`);
+    setError(null);
+    try {
+      await downloadRelatorioTarefas(tarefasModal.formato, params);
+      setActiveTipo(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao exportar relatório.');
+    } finally {
+      setLoading(null);
+    }
   }
 
   async function gerarCobertura() {
@@ -307,25 +388,6 @@ export default function RelatoriosPage() {
             );
           })}
         </section>
-
-        <Card elevation={1} className="mt-4 overflow-hidden">
-          <CardContent className="p-5">
-            <div className="flex gap-4">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--r-md)] bg-[var(--brand-soft)] text-[var(--brand)]">
-                <ListChecks className="h-5 w-5" />
-              </span>
-              <div>
-                <h2 className="text-[15px] font-semibold text-[var(--ink)]">Tarefas de chamados</h2>
-                <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                  Abertas, impedidas, concluídas e atrasadas por secretaria, equipe, responsável e tipo. As tarefas não contam como chamados.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4">
-              <RelatorioTarefasPanel />
-            </div>
-          </CardContent>
-        </Card>
 
         <Sheet
           open={activeTipo === 'unidades' || activeTipo === 'fiscalizacoes'}
@@ -698,6 +760,117 @@ export default function RelatoriosPage() {
             Lista todos os próprios ativos da secretaria e indica se possuem cronograma de vistoria vinculado.
             Responsáveis previstos são de acompanhamento; a execução da vistoria segue as permissões do sistema.
           </p>
+        </Sheet>
+
+        <Sheet
+          open={activeTipo === 'tarefas-chamados'}
+          onClose={closeModal}
+          title="Gerar relatório de tarefas de chamados"
+          footer={
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button variant="outlined" onClick={closeModal}>
+                Cancelar
+              </Button>
+              <Button variant="filled" disabled={isLoading} onClick={() => void gerarTarefas()}>
+                {isLoading ? 'Gerando...' : 'Gerar relatório'}
+              </Button>
+            </div>
+          }
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Data inicial">
+              <Input type="date" value={tarefasModal.from} onChange={(e) => setTarefasModal((prev) => ({ ...prev, from: e.target.value }))} />
+            </Field>
+            <Field label="Data final">
+              <Input type="date" value={tarefasModal.to} onChange={(e) => setTarefasModal((prev) => ({ ...prev, to: e.target.value }))} />
+            </Field>
+            <Field label="Status">
+              <Select value={tarefasModal.status} onChange={(e) => setTarefasModal((prev) => ({ ...prev, status: e.target.value }))}>
+                <option value="">Todos</option>
+                {Object.entries(TAREFA_STATUS_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Prioridade">
+              <Select value={tarefasModal.prioridade} onChange={(e) => setTarefasModal((prev) => ({ ...prev, prioridade: e.target.value }))}>
+                <option value="">Todas</option>
+                {Object.entries(TAREFA_PRIORIDADE_LABEL).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Secretaria da tarefa">
+              <Select value={tarefasModal.secretariaId} onChange={(e) => setTarefasModal((prev) => ({ ...prev, secretariaId: e.target.value }))}>
+                <option value="">Todas</option>
+                {secretarias.map((item) => (
+                  <option key={item.id} value={item.id}>{formatSecretariaLabel(item)}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Equipe">
+              <Select value={tarefasModal.equipeId} onChange={(e) => setTarefasModal((prev) => ({ ...prev, equipeId: e.target.value }))}>
+                <option value="">Todas</option>
+                {equipes.map((item) => (
+                  <option key={item.id} value={item.id}>{item.nome}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Responsável">
+              <Select value={tarefasModal.responsavelId} onChange={(e) => setTarefasModal((prev) => ({ ...prev, responsavelId: e.target.value }))}>
+                <option value="">Todos</option>
+                {responsaveis.map((item) => (
+                  <option key={item.id} value={item.id}>{item.nome}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Tipo de chamado">
+              <Select value={tarefasModal.tipoChamadoId} onChange={(e) => setTarefasModal((prev) => ({ ...prev, tipoChamadoId: e.target.value }))}>
+                <option value="">Todos</option>
+                {tiposChamado.map((item) => (
+                  <option key={item.id} value={item.id}>{item.nome}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Número do chamado">
+              <Input value={tarefasModal.numero} onChange={(e) => setTarefasModal((prev) => ({ ...prev, numero: e.target.value }))} />
+            </Field>
+            <Field label="Título ou descrição">
+              <Input value={tarefasModal.texto} onChange={(e) => setTarefasModal((prev) => ({ ...prev, texto: e.target.value }))} />
+            </Field>
+            <Field label="Situação do prazo">
+              <Select value={tarefasModal.situacaoPrazo} onChange={(e) => setTarefasModal((prev) => ({ ...prev, situacaoPrazo: e.target.value }))}>
+                <option value="">Todas</option>
+                {SITUACOES_PRAZO.map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Formato">
+              <Select
+                value={tarefasModal.formato}
+                onChange={(e) => setTarefasModal((prev) => ({ ...prev, formato: e.target.value as RelatorioFormato }))}
+              >
+                <option value="pdf">PDF</option>
+                <option value="csv">CSV</option>
+                <option value="xlsx">Excel (XLSX)</option>
+              </Select>
+            </Field>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-4 text-[13px] text-[var(--ink-2)]">
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={tarefasModal.atrasadas} onChange={(e) => setTarefasModal((prev) => ({ ...prev, atrasadas: e.target.checked }))} />
+              Atrasadas
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={tarefasModal.concluidas} onChange={(e) => setTarefasModal((prev) => ({ ...prev, concluidas: e.target.checked }))} />
+              Concluídas
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={tarefasModal.canceladas} onChange={(e) => setTarefasModal((prev) => ({ ...prev, canceladas: e.target.checked }))} />
+              Canceladas
+            </label>
+          </div>
         </Sheet>
       </PageShell>
     </RequirePermissions>

@@ -13,6 +13,8 @@ export type PdfTableOptions = {
   wrapFully?: boolean;
   /** Linhas de totalização exibidas após a tabela. */
   summaryLines?: string[];
+  /** Exportação simples: sem logo nem capa institucional. */
+  plain?: boolean;
 };
 
 const BRAND_PRIMARY = '#0066cc';
@@ -180,7 +182,19 @@ export function buildTablePdf(options: PdfTableOptions): Promise<Buffer> {
     doc.on('error', reject);
 
     const subtitle = options.subtitle ?? `Gerado em ${new Date().toLocaleString('pt-BR')}`;
-    drawInstitutionalHeader(doc, options.title, subtitle, options.rows.length);
+    if (options.plain) {
+      const left = doc.page.margins.left;
+      doc.font('Helvetica-Bold').fontSize(11).fillColor(TEXT_PRIMARY).text(options.title, left, doc.page.margins.top);
+      doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED).text(subtitle, left, doc.y + 2);
+      doc
+        .font('Helvetica')
+        .fontSize(8)
+        .fillColor(TEXT_MUTED)
+        .text(`Total de registros: ${options.rows.length}`, left, doc.y + 2);
+      doc.moveDown(0.6);
+    } else {
+      drawInstitutionalHeader(doc, options.title, subtitle, options.rows.length);
+    }
 
     const usableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const columnWidths = resolveColumnWidths(usableWidth, options.headers.length, options.columnWeights);

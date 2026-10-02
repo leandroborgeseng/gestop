@@ -1460,18 +1460,16 @@ export function getAlertasOperacionais() {
   return request<AlertasOperacionais>('/monitoramento/alertas');
 }
 
-async function downloadRelatorio(
+async function downloadArquivo(
   formato: 'csv' | 'pdf' | 'xlsx',
-  tipo: 'unidades' | 'chamados' | 'fiscalizacoes' | 'chamados-produtividade' | 'cronograma-cobertura',
-  params: Record<string, string> = {},
+  urlPath: string,
+  fallbackName: string,
 ) {
   const token = getStoredAuth()?.accessToken;
-  const query = new URLSearchParams(params);
-  const suffix = query.toString() ? `?${query.toString()}` : '';
 
   let response: Response;
   try {
-    response = await fetch(`${API_BASE_URL}/relatorios/export/${tipo}.${formato}${suffix}`, {
+    response = await fetch(`${API_BASE_URL}${urlPath}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
   } catch (error) {
@@ -1520,14 +1518,35 @@ async function downloadRelatorio(
     type: response.headers.get('content-type') ?? mimeTypes[formato],
   });
   const filename =
-    response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] ??
-    `sigma-${tipo}.${formato}`;
+    response.headers.get('content-disposition')?.match(/filename="(.+)"/)?.[1] ?? fallbackName;
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+async function downloadRelatorio(
+  formato: 'csv' | 'pdf' | 'xlsx',
+  tipo: 'unidades' | 'chamados' | 'fiscalizacoes' | 'chamados-produtividade' | 'cronograma-cobertura',
+  params: Record<string, string> = {},
+) {
+  const query = new URLSearchParams(params);
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return downloadArquivo(formato, `/relatorios/export/${tipo}.${formato}${suffix}`, `sigma-${tipo}.${formato}`);
+}
+
+export function downloadRelatorioTarefas(
+  formato: 'csv' | 'pdf' | 'xlsx',
+  params: Record<string, string | undefined>,
+) {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) query.set(key, value);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+  return downloadArquivo(formato, `/chamado-tarefas/relatorio.${formato}${suffix}`, `sigma-tarefas-chamados.${formato}`);
 }
 
 export function downloadRelatorioCsv(

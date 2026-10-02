@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { getRelatorioTarefas, getSecretarias, listEquipesExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
+import { downloadRelatorioTarefas, getRelatorioTarefas, getSecretarias, listEquipesExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
 import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL, type RelatorioTarefasResponse } from '@/lib/chamado-tarefa';
 
 export function RelatorioTarefasPanel() {
@@ -29,28 +29,48 @@ export function RelatorioTarefasPanel() {
   const [data, setData] = useState<RelatorioTarefasResponse | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [exportando, setExportando] = useState<string | null>(null);
+  const [aplicado, setAplicado] = useState<Record<string, string | undefined> | null>(null);
+
+  function filtrosAtuais() {
+    return {
+      prazoFrom: from ? new Date(from).toISOString() : undefined,
+      prazoTo: to ? new Date(`${to}T23:59:59`).toISOString() : undefined,
+      status: status || undefined,
+      prioridade: prioridade || undefined,
+      secretariaId: secretariaId || undefined,
+      equipeId: equipeId || undefined,
+      responsavelId: responsavelId || undefined,
+      tipoChamadoId: tipoChamadoId || undefined,
+      search: chamado.trim() || undefined,
+      capa: 'simples',
+    };
+  }
 
   async function gerar() {
     setLoading(true);
     setErro(null);
+    const params = filtrosAtuais();
     try {
-      setData(
-        await getRelatorioTarefas({
-          prazoFrom: from ? new Date(from).toISOString() : undefined,
-          prazoTo: to ? new Date(`${to}T23:59:59`).toISOString() : undefined,
-          status: status || undefined,
-          prioridade: prioridade || undefined,
-          secretariaId: secretariaId || undefined,
-          equipeId: equipeId || undefined,
-          responsavelId: responsavelId || undefined,
-          tipoChamadoId: tipoChamadoId || undefined,
-          search: chamado.trim() || undefined,
-        }),
-      );
+      setData(await getRelatorioTarefas(params));
+      setAplicado(params);
     } catch (err) {
       setErro(err instanceof Error ? err.message : 'Falha ao gerar o relatório.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function exportar(formato: 'csv' | 'pdf' | 'xlsx') {
+    if (!aplicado) return;
+    setExportando(formato);
+    setErro(null);
+    try {
+      await downloadRelatorioTarefas(formato, aplicado);
+    } catch (err) {
+      setErro(err instanceof Error ? err.message : 'Falha ao exportar.');
+    } finally {
+      setExportando(null);
     }
   }
 
@@ -132,7 +152,23 @@ export function RelatorioTarefasPanel() {
         </div>
       ) : null}
       {data ? (
-        <div className="max-h-[60dvh] overflow-auto">
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[12px] text-[var(--ink-3)]">Exportar dados exibidos</span>
+            {(['xlsx', 'csv', 'pdf'] as const).map((formato) => (
+              <Button
+                key={formato}
+                type="button"
+                size="sm"
+                variant="outlined"
+                disabled={Boolean(exportando)}
+                onClick={() => void exportar(formato)}
+              >
+                {exportando === formato ? 'Exportando…' : formato.toUpperCase()}
+              </Button>
+            ))}
+          </div>
+          <div className="max-h-[360px] overflow-auto">
           <table className="w-full min-w-[880px] text-left text-[12px]">
             <thead className="text-[var(--ink-3)]">
               <tr>
@@ -146,7 +182,7 @@ export function RelatorioTarefasPanel() {
                 <th className="p-2">Secretaria</th>
                 <th className="p-2">Equipe</th>
                 <th className="p-2">Responsável</th>
-                <th className="p-2">Prazo</th>
+                <th className="p-2">Situação</th>
               </tr>
             </thead>
             <tbody>
@@ -167,6 +203,7 @@ export function RelatorioTarefasPanel() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       ) : (
         <p className="text-[13px] text-[var(--ink-3)]">As tarefas não entram na contagem de chamados. Atualize para ver o relatório.</p>

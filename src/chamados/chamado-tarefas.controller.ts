@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, Param, Patch, Post, Query, StreamableFile, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -25,6 +25,34 @@ export class ChamadoTarefasController {
   @Get('relatorio')
   relatorio(@CurrentUser() user: JwtPayload, @Query() query: Record<string, string | undefined>) {
     return this.tarefas.relatorio(query, user);
+  }
+
+  @Get('relatorio.csv')
+  @Header('Content-Type', 'text/csv; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="sigma-tarefas-chamados.csv"')
+  exportCsv(@CurrentUser() user: JwtPayload, @Query() query: Record<string, string | undefined>) {
+    return this.tarefas.exportarCsv(query, user);
+  }
+
+  @Get('relatorio.pdf')
+  async exportPdf(@CurrentUser() user: JwtPayload, @Query() query: Record<string, string | undefined>) {
+    const buffer = await this.tarefas.exportarPdf(query, user);
+    const nome = query.capa === 'simples' ? 'sigma-tarefas-exibidas.pdf' : 'sigma-tarefas-chamados.pdf';
+    return new StreamableFile(buffer, {
+      type: 'application/pdf',
+      disposition: `attachment; filename="${nome}"`,
+      length: buffer.length,
+    });
+  }
+
+  @Get('relatorio.xlsx')
+  async exportXlsx(@CurrentUser() user: JwtPayload, @Query() query: Record<string, string | undefined>) {
+    const buffer = await this.tarefas.exportarXlsx(query, user);
+    return new StreamableFile(buffer, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="sigma-tarefas-chamados.xlsx"',
+      length: buffer.length,
+    });
   }
 
   @Get('por-chamado/:chamadoId')

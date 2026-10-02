@@ -20,6 +20,7 @@ import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { MetricCard } from '@/components/metric-card';
 import { DashboardAnalysisCard } from '@/components/dashboard/dashboard-analysis-card';
+import { RelatorioTarefasPanel } from '@/components/relatorios/relatorio-tarefas-panel';
 import { PushNotificationsPanel } from '@/components/dashboard/push-notifications-panel';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -382,6 +383,18 @@ export default function DashboardPage() {
                 items={analise?.produtividadeVistoriasPorUsuario ?? []}
                 emptyLabel="Sem vistorias no período"
               />
+            </section>
+
+            <section className="mb-8">
+              <h2 className="text-[15px] font-semibold text-[var(--ink)]">Tarefas de chamados</h2>
+              <p className="mt-1 mb-3 text-[13px] text-[var(--ink-3)]">
+                Acompanhamento gerencial, com filtros próprios. A grade rola por dentro e não altera a contagem de chamados.
+              </p>
+              <Card elevation={1}>
+                <CardContent className="p-4">
+                  <RelatorioTarefasPanel />
+                </CardContent>
+              </Card>
             </section>
 
             <div className="mb-4 border-t border-[var(--line)] pt-6">
