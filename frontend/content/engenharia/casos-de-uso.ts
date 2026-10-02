@@ -151,14 +151,14 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'atribuir-tarefa',
         nome: 'Atribuir tarefa',
         atores: ['administrador', 'gestor'],
-        descricao: 'Criar e ajustar tarefa do chamado, com secretaria, equipe, responsável e anexo.',
+        descricao: 'Criar tarefa do chamado (status Nova). Alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige permissão específica de alterar dados.',
         rotas: ['/chamados', 'GET /chamado-tarefas/por-chamado/:chamadoId', 'POST /chamado-tarefas', 'POST /chamado-tarefas/:id/anexos'],
       },
       {
         id: 'tratar-tarefa',
         nome: 'Tratar tarefa atribuída',
         atores: ['equipe', 'gestor'],
-        descricao: 'Ver tarefas na execução e avançar o status (visualizada, em andamento, impedida, concluída).',
+        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Impedida não é mais atribuída; registros antigos continuam consultáveis.',
         rotas: ['/execucao', 'GET /chamado-tarefas/execucao', 'PATCH /chamado-tarefas/:id'],
       },
       {

@@ -1,5 +1,6 @@
 import { ChamadoPrioridade, ChamadoTarefaStatus } from '@prisma/client';
-import { IsDateString, IsEnum, IsOptional, IsString, IsUUID, MinLength } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsArray, IsDateString, IsEnum, IsOptional, IsString, IsUUID, MinLength, ValidateNested } from 'class-validator';
 
 export class CreateChamadoTarefaDto {
   @IsUUID()
@@ -31,6 +32,16 @@ export class CreateChamadoTarefaDto {
   @IsOptional()
   @IsEnum(ChamadoPrioridade)
   prioridade?: ChamadoPrioridade;
+}
+
+export class AnexoChamadoTarefaDto {
+  @IsString()
+  @MinLength(20)
+  dataUrl!: string;
+
+  @IsOptional()
+  @IsString()
+  nome?: string;
 }
 
 export class UpdateChamadoTarefaDto {
@@ -78,14 +89,10 @@ export class UpdateChamadoTarefaDto {
   @IsOptional()
   @IsString()
   observacao?: string;
-}
-
-export class AnexoChamadoTarefaDto {
-  @IsString()
-  @MinLength(20)
-  dataUrl!: string;
 
   @IsOptional()
-  @IsString()
-  nome?: string;
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AnexoChamadoTarefaDto)
+  anexos?: AnexoChamadoTarefaDto[];
 }

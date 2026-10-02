@@ -9,7 +9,7 @@ export const TAREFA_STATUS_LABEL: Record<ChamadoTarefaStatus, string> = {
   CANCELADA: 'Cancelada',
 };
 
-export const TAREFA_STATUS_PENDENTES: ChamadoTarefaStatus[] = ['NOVA', 'VISUALIZADA', 'EM_ANDAMENTO', 'IMPEDIDA'];
+export const TAREFA_STATUS_PENDENTES: ChamadoTarefaStatus[] = ['NOVA', 'VISUALIZADA', 'EM_ANDAMENTO'];
 
 export const TAREFA_PRIORIDADE_LABEL: Record<string, string> = {
   BAIXA: 'Baixa',
@@ -38,6 +38,11 @@ export type ChamadoTarefaResumo = {
   criadaPor: { id: string; nome: string } | null;
   concluidaPor: { id: string; nome: string } | null;
   anexos: Array<{ id: string; nome: string; url: string; mimeType: string | null; tamanhoBytes: number | null; createdAt: string }>;
+  podeAlterarDados?: boolean;
+  podeAndamento?: boolean;
+  podeConcluir?: boolean;
+  podeCancelar?: boolean;
+  podeVerHistorico?: boolean;
   podeTratar: boolean;
   chamado: {
     id: string;
@@ -65,12 +70,17 @@ export type ChamadoTarefaDetalhe = ChamadoTarefaResumo & {
     statusNovo: string;
     createdAt: string;
     alteradoPor: { id: string; nome: string } | null;
+    acao?: string | null;
+    perfil?: string | null;
+    secretaria?: string | null;
+    temAnexos?: boolean;
+    anexoIds?: string[];
   }>;
 };
 
 export type TarefasExecucaoResponse = {
   total: number;
-  contadores: { novas: number; emAndamento: number; impedidas: number; atrasadas: number };
+  contadores: { novas: number; emAndamento: number; atrasadas: number };
   items: ChamadoTarefaResumo[];
 };
 

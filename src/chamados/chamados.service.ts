@@ -34,8 +34,6 @@ import {
 } from './chamado-visibilidade';
 import {
   extensaoDeMime,
-  MAX_ANEXOS_ABERTURA,
-  MAX_TOTAL_ANEXOS_ABERTURA_BYTES,
   metadataAbertura,
   normalizarAnexosAbertura,
   origemEvidencia,
@@ -2365,26 +2363,23 @@ export class ChamadosService {
     assertChamadoSecretariaAccess(user, chamado);
 
     const anexosInput = dto.anexos ?? [];
-    if (anexosInput.length > MAX_ANEXOS_ABERTURA) {
-      throw new BadRequestException(`É possível anexar no máximo ${MAX_ANEXOS_ABERTURA} arquivos.`);
-    }
+    const normalizados = normalizarAnexosAbertura({ anexos: anexosInput });
     const evidenciaIds: string[] = [];
     const storedKeys: string[] = [];
-    let totalBytes = 0;
 
     try {
-      for (const anexo of anexosInput) {
-        const stored = await this.storageService.persistAberturaAnexo(anexo.dataUrl.trim(), anexo.mimeType);
+      for (const anexo of normalizados) {
+        const stored = await this.storageService.persistAberturaAnexo(anexo.dataUrl, anexo.mimeType);
         storedKeys.push(stored.storageKey);
-        totalBytes += stored.tamanhoBytes;
-        if (totalBytes > MAX_TOTAL_ANEXOS_ABERTURA_BYTES) {
-          throw new BadRequestException('O total dos anexos passa de 20 MB.');
-        }
-        const isImage = (stored.mimeType ?? anexo.mimeType ?? '').startsWith('image/');
         const evidencia = await this.prisma.evidencia.create({
           data: {
             chamadoId: id,
-            tipo: isImage ? EvidenciaTipo.FOTO : EvidenciaTipo.DOCUMENTO,
+            tipo:
+              anexo.categoria === 'video'
+                ? EvidenciaTipo.VIDEO
+                : anexo.categoria === 'pdf'
+                  ? EvidenciaTipo.DOCUMENTO
+                  : EvidenciaTipo.FOTO,
             url: stored.url,
             storageKey: stored.storageKey,
             mimeType: stored.mimeType,
@@ -3610,7 +3605,12 @@ export class ChamadosService {
           nome: meta.nomeOriginal || 'Anexo da abertura',
           mimeType,
           extensao: meta.extensao || extensaoDeMime(mimeType),
-          categoria: meta.categoria === 'pdf' || mimeType === 'application/pdf' ? 'pdf' as const : 'imagem' as const,
+          categoria:
+            meta.categoria === 'pdf' || mimeType === 'application/pdf'
+              ? ('pdf' as const)
+              : meta.categoria === 'video' || mimeType.startsWith('video/')
+                ? ('video' as const)
+                : ('imagem' as const),
           url: resolveStoragePublicUrl(storageKey, item.url) ?? item.url,
           tamanhoBytes: item.tamanhoBytes ?? null,
           enviadoEm: item.capturadaEm instanceof Date ? item.capturadaEm.toISOString() : item.capturadaEm,
@@ -3682,7 +3682,12 @@ export class ChamadosService {
     await tx.evidencia.createMany({
       data: anexos.map((arquivo, index) => ({
         chamadoId,
-        tipo: arquivo.categoria === 'pdf' ? EvidenciaTipo.DOCUMENTO : EvidenciaTipo.FOTO,
+        tipo:
+          arquivo.categoria === 'video'
+            ? EvidenciaTipo.VIDEO
+            : arquivo.categoria === 'pdf'
+              ? EvidenciaTipo.DOCUMENTO
+              : EvidenciaTipo.FOTO,
         url: arquivo.url,
         storageKey: arquivo.storageKey,
         mimeType: arquivo.mimeType,

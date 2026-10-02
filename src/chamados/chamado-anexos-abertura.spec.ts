@@ -27,6 +27,14 @@ describe('normalizarAnexosAbertura', () => {
     expect(anexos[0]?.mimeType).toBe('image/png');
   });
 
+  it('aceita vídeo da lista única', () => {
+    const anexos = normalizarAnexosAbertura({
+      anexos: [{ dataUrl: dataUrl('video/mp4', 24), nome: 'trecho.mp4' }],
+    });
+    expect(anexos[0]?.categoria).toBe('video');
+    expect(anexos[0]?.extensao).toBe('mp4');
+  });
+
   it('recusa formato fora da lista', () => {
     expect(() =>
       normalizarAnexosAbertura({ anexos: [{ dataUrl: dataUrl('image/gif', 8), nome: 'animacao.gif' }] }),

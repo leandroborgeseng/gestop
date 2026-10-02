@@ -224,13 +224,13 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
       },
       {
         nome: 'ChamadoTarefa',
-        resumo: 'Pendência atribuída dentro do chamado, com status próprio e prazo.',
-        campos: ['titulo', 'prazo', 'prioridade', 'status (ChamadoTarefaStatus)', 'justificativa', 'conclusaoTexto', 'concluidaEm'],
+        resumo: 'Pendência atribuída dentro do chamado. Status de rotina: Nova, Visualizada, Em andamento, Concluída e Cancelada. Impedida permanece só em registros antigos.',
+        campos: ['titulo', 'descricao', 'prazo', 'prioridade', 'status (ChamadoTarefaStatus)', 'justificativa', 'conclusaoTexto', 'observacao', 'concluidaEm', 'visualizadaEm'],
         relacoes: ['N:1 Chamado, Secretaria, Equipe, Usuario (responsável, criador e quem concluiu)', '1:N ChamadoTarefaAnexo'],
       },
       {
         nome: 'ChamadoTarefaAnexo',
-        resumo: 'Arquivo da tarefa. O binário fica no armazenamento; aqui ficam URL, chave e metadados.',
+        resumo: 'Arquivo da tarefa (imagem, PDF ou vídeo da lista única de anexos). O binário fica no armazenamento autenticado; o evento do histórico guarda os ids.',
         campos: ['nome', 'url', 'storageKey', 'mimeType', 'tamanhoBytes'],
         relacoes: ['N:1 ChamadoTarefa', 'N:1 Usuario (criadoPor)'],
       },

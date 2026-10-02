@@ -1,4 +1,5 @@
-export const TAREFA_STATUS_PENDENTES = ['NOVA', 'VISUALIZADA', 'EM_ANDAMENTO', 'IMPEDIDA'] as const;
+/** Rotina ativa. IMPEDIDA permanece no enum só para registros antigos. */
+export const TAREFA_STATUS_PENDENTES = ['NOVA', 'VISUALIZADA', 'EM_ANDAMENTO'] as const;
 export const TAREFA_STATUS_FINAIS = ['CONCLUIDA', 'CANCELADA'] as const;
 
 export function tarefaAtrasada(status: string, prazo: Date | null | undefined, now = new Date()) {

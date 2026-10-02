@@ -29,7 +29,7 @@ export const BLOCOS_ARQUITETURA: BlocoArquitetura[] = [
   {
     id: 'evidencias',
     nome: 'Armazenamento de evidências',
-    papel: 'Fotos, anexos de tarefa, PDFs e assinaturas guardam url e storageKey. Com driver local, a API entrega o arquivo em GET /storage. Backup S3 é outro fluxo e não substitui esse armazenamento.',
+    papel: 'Abertura, histórico do chamado e anexos de tarefa aceitam JPG, JPEG, PNG, WEBP, PDF, MP4, MOV, M4V, 3GP e WEBM. O binário fica no armazenamento; GET /storage exige sessão. Backup S3 é outro fluxo.',
     onde: 'src/storage. Modelos Evidencia, Chamado, ChamadoTarefaAnexo, Documento e DocumentoAssinatura.',
   },
 ];

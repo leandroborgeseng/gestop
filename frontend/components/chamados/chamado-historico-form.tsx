@@ -41,7 +41,7 @@ export function ChamadoHistoricoForm({
       nome: item.nome,
       mimeType: item.mimeType,
       dataUrl: item.dataUrl,
-      categoria: item.mimeType === 'application/pdf' ? 'pdf' : 'imagem',
+      categoria: item.mimeType.startsWith('video/') ? 'video' : item.mimeType === 'application/pdf' ? 'pdf' : 'imagem',
     }));
     for (const file of Array.from(files)) {
       const mensagem = mensagemArquivoAbertura(file, atuais);
@@ -61,7 +61,13 @@ export function ChamadoHistoricoForm({
       aceitos.push(anexo);
       atuais = [
         ...atuais,
-        { id: file.name, nome: file.name, mimeType, dataUrl, categoria: mimeType === 'application/pdf' ? 'pdf' : 'imagem' },
+        {
+          id: file.name,
+          nome: file.name,
+          mimeType,
+          dataUrl,
+          categoria: mimeType.startsWith('video/') ? 'video' : mimeType === 'application/pdf' ? 'pdf' : 'imagem',
+        },
       ];
     }
     if (aceitos.length) setAnexos((current) => [...current, ...aceitos]);

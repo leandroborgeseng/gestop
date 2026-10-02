@@ -469,11 +469,14 @@ export function buildChamadoTimelineFromHistorico(
 
     if (tipo === 'tarefa') {
       const resumo = typeof metadata.resumo === 'string' ? metadata.resumo : null;
+      const perfil = typeof metadata.perfilAtivo === 'string' ? metadata.perfilAtivo : null;
+      const secretaria = typeof metadata.secretariaAtiva === 'string' ? metadata.secretariaAtiva : null;
+      const temAnexos = metadata.temAnexos === true;
       return {
         id: entry.id,
         title: entry.motivo?.trim() || 'Atualização de tarefa',
         date: formatTimelineDate(entry.createdAt),
-        sub: [entry.alteradoPor?.nome, resumo].filter(Boolean).join(' · '),
+        sub: [entry.alteradoPor?.nome, perfil, secretaria, resumo, temAnexos ? 'Há anexos' : null].filter(Boolean).join(' · '),
         done: true,
         active: false,
       };

@@ -16,7 +16,18 @@ export type StoredObject = {
 };
 
 const ALLOWED_EVIDENCE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
-const ALLOWED_ABERTURA_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+const ALLOWED_ABERTURA_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'application/pdf',
+  'video/mp4',
+  'video/quicktime',
+  'video/webm',
+  'video/3gpp',
+  'video/3gpp2',
+  'video/x-m4v',
+]);
 
 @Injectable()
 export class StorageService {
@@ -32,7 +43,7 @@ export class StorageService {
     throw new BadRequestException('Envie a evidencia como upload (data URL). URLs externas nao sao aceitas.');
   }
 
-  /** Anexo da abertura do chamado: imagens JPG/PNG/WEBP ou PDF. */
+  /** Anexo da abertura e do histórico: imagens, PDF e vídeo da lista única. */
   async persistAberturaAnexo(url: string, mimeType?: string | null): Promise<StoredObject> {
     if (!url.startsWith('data:')) {
       throw new BadRequestException('Envie o anexo como arquivo. Endereços externos não são aceitos.');
@@ -203,11 +214,13 @@ function parseDataUrl(url: string, fallbackMimeType?: string | null, allowed = A
   }
 
   let mimeType = (match[1] || fallbackMimeType || 'application/octet-stream').toLowerCase();
-  if (mimeType === 'image/jpg') mimeType = 'image/jpeg';
+  if (mimeType === 'image/jpg' || mimeType === 'image/pjpeg') mimeType = 'image/jpeg';
+  if (mimeType === 'video/m4v') mimeType = 'video/x-m4v';
+  if (mimeType === 'video/mov') mimeType = 'video/quicktime';
   if (!allowed.has(mimeType)) {
     throw new BadRequestException(
       allowed === ALLOWED_ABERTURA_MIMES
-        ? 'Formato não permitido. Use JPG, JPEG, PNG, WEBP ou PDF.'
+        ? 'Formato não permitido. Formatos permitidos: JPG, JPEG, PNG, WEBP, PDF, MP4, MOV, M4V, 3GP e WEBM.'
         : `Tipo de arquivo nao permitido: ${mimeType}`,
     );
   }
@@ -240,6 +253,17 @@ function extensionFromMime(mimeType: string) {
       return '.heic';
     case 'application/pdf':
       return '.pdf';
+    case 'video/mp4':
+      return '.mp4';
+    case 'video/quicktime':
+      return '.mov';
+    case 'video/webm':
+      return '.webm';
+    case 'video/3gpp':
+    case 'video/3gpp2':
+      return '.3gp';
+    case 'video/x-m4v':
+      return '.m4v';
     default:
       return '.bin';
   }
@@ -252,6 +276,11 @@ function mimeFromExtension(storageKey: string) {
   if (lower.endsWith('.webp')) return 'image/webp';
   if (lower.endsWith('.heic')) return 'image/heic';
   if (lower.endsWith('.pdf')) return 'application/pdf';
+  if (lower.endsWith('.mp4')) return 'video/mp4';
+  if (lower.endsWith('.mov')) return 'video/quicktime';
+  if (lower.endsWith('.webm')) return 'video/webm';
+  if (lower.endsWith('.m4v')) return 'video/x-m4v';
+  if (lower.endsWith('.3gp')) return 'video/3gpp';
   return null;
 }
 

@@ -2024,9 +2024,10 @@ export function updateChamadoTarefa(
     justificativa?: string;
     conclusaoTexto?: string;
     observacao?: string;
+    anexos?: Array<{ dataUrl: string; nome?: string }>;
   },
 ) {
-  return request<ChamadoTarefaResumo>(`/chamado-tarefas/${id}`, {
+  return request<ChamadoTarefaDetalhe>(`/chamado-tarefas/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

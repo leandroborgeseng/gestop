@@ -1,26 +1,28 @@
 import { BadRequestException } from '@nestjs/common';
+import {
+  CategoriaAnexo,
+  FORMATOS_ANEXO_TEXTO,
+  MAX_TOTAL_ANEXOS_COM_VIDEO_BYTES,
+  MAX_TOTAL_ANEXOS_SEM_VIDEO_BYTES,
+  infoMimeAnexo,
+  mensagemTamanhoAnexo,
+  normalizarMimeAnexo,
+} from './anexos-midia';
 
-/** Mesmo teto por arquivo já usado na abertura (8 MB). */
+/** Mesmo teto por arquivo já usado na abertura (8 MB) para imagem e PDF. */
 export const MAX_ANEXOS_ABERTURA = 8;
 export const MAX_ANEXO_ABERTURA_BYTES = 8 * 1024 * 1024;
 /** Soma cabe no corpo JSON da API sem estourar o limite da requisição. */
-export const MAX_TOTAL_ANEXOS_ABERTURA_BYTES = 20 * 1024 * 1024;
+export const MAX_TOTAL_ANEXOS_ABERTURA_BYTES = MAX_TOTAL_ANEXOS_SEM_VIDEO_BYTES;
 
-export const ANEXOS_ABERTURA_FORMATOS = 'JPG, JPEG, PNG, WEBP e PDF';
-
-const MIME_ABERTURA: Record<string, { extensao: string; categoria: 'imagem' | 'pdf' }> = {
-  'image/jpeg': { extensao: 'jpg', categoria: 'imagem' },
-  'image/png': { extensao: 'png', categoria: 'imagem' },
-  'image/webp': { extensao: 'webp', categoria: 'imagem' },
-  'application/pdf': { extensao: 'pdf', categoria: 'pdf' },
-};
+export const ANEXOS_ABERTURA_FORMATOS = FORMATOS_ANEXO_TEXTO;
 
 export type AnexoAberturaNormalizado = {
   dataUrl: string;
   mimeType: string;
   nome: string;
   extensao: string;
-  categoria: 'imagem' | 'pdf';
+  categoria: CategoriaAnexo;
   tamanhoBytes: number;
 };
 
@@ -39,6 +41,7 @@ export function normalizarAnexosAbertura(input: {
   }
 
   let total = 0;
+  let temVideo = false;
   return informados.map((item, index) => {
     const dataUrl = item.dataUrl?.trim() ?? '';
     if (!dataUrl) {
@@ -46,16 +49,18 @@ export function normalizarAnexosAbertura(input: {
     }
 
     const lido = lerDataUrl(dataUrl, item.mimeType);
-    const permitido = MIME_ABERTURA[lido.mimeType];
+    const permitido = infoMimeAnexo(lido.mimeType);
     if (!permitido) {
-      throw new BadRequestException(`Formato não permitido. Use ${ANEXOS_ABERTURA_FORMATOS}.`);
+      throw new BadRequestException(`Formato não permitido. Formatos permitidos: ${ANEXOS_ABERTURA_FORMATOS}.`);
     }
-    if (lido.tamanhoBytes > MAX_ANEXO_ABERTURA_BYTES) {
-      throw new BadRequestException('Cada arquivo pode ter no máximo 8 MB.');
+    if (lido.tamanhoBytes > (permitido.categoria === 'video' ? 25 * 1024 * 1024 : MAX_ANEXO_ABERTURA_BYTES)) {
+      throw new BadRequestException(mensagemTamanhoAnexo(permitido.categoria));
     }
+    if (permitido.categoria === 'video') temVideo = true;
     total += lido.tamanhoBytes;
-    if (total > MAX_TOTAL_ANEXOS_ABERTURA_BYTES) {
-      throw new BadRequestException('O total dos anexos passa de 20 MB.');
+    const teto = temVideo ? MAX_TOTAL_ANEXOS_COM_VIDEO_BYTES : MAX_TOTAL_ANEXOS_ABERTURA_BYTES;
+    if (total > teto) {
+      throw new BadRequestException(temVideo ? 'O total dos anexos passa de 30 MB.' : 'O total dos anexos passa de 20 MB.');
     }
 
     return {
@@ -76,8 +81,8 @@ function lerDataUrl(dataUrl: string, mimeInformado?: string) {
     throw new BadRequestException('Anexo inválido. Envie o arquivo novamente.');
   }
 
-  let mime = dataUrl.slice('data:'.length, indice).split(';')[0]?.trim().toLowerCase() || mimeInformado?.trim().toLowerCase() || '';
-  if (mime === 'image/jpg') mime = 'image/jpeg';
+  const bruto = dataUrl.slice('data:'.length, indice).split(';')[0]?.trim() || mimeInformado?.trim() || '';
+  const mime = normalizarMimeAnexo(bruto);
 
   const base64 = dataUrl.slice(indice + marker.length).replace(/\s/g, '');
   const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
@@ -93,7 +98,7 @@ export function origemEvidencia(metadata: unknown) {
 
 export function metadataAbertura(metadata: unknown) {
   const registro = metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>) : {};
-  const categoria = registro.categoria === 'pdf' ? 'pdf' : 'imagem';
+  const categoria = registro.categoria === 'pdf' ? 'pdf' : registro.categoria === 'video' ? 'video' : 'imagem';
   return {
     nomeOriginal: typeof registro.nomeOriginal === 'string' ? registro.nomeOriginal : '',
     extensao: typeof registro.extensao === 'string' ? registro.extensao : '',
@@ -104,10 +109,7 @@ export function metadataAbertura(metadata: unknown) {
 }
 
 export function extensaoDeMime(mimeType: string) {
-  if (mimeType === 'image/png') return 'png';
-  if (mimeType === 'image/webp') return 'webp';
-  if (mimeType === 'application/pdf') return 'pdf';
-  return 'jpg';
+  return infoMimeAnexo(mimeType)?.extensao ?? 'jpg';
 }
 
 function nomeSeguro(nome: string | undefined, extensao: string, index: number) {

@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { ChevronDown } from 'lucide-react';
 import { ChamadosExecucaoMap } from '@/components/chamados/chamados-execucao-map';
 import { ChamadoTarefaSheet } from '@/components/chamados/chamado-tarefa-sheet';
 import { Badge } from '@/components/ui/badge';
 import { Chip } from '@/components/ui/chip';
+import { cn } from '@/lib/cn';
 import { getSecretarias, listEquipesExecucao, listTarefasExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
 import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL, TAREFA_STATUS_PENDENTES, type TarefasExecucaoResponse } from '@/lib/chamado-tarefa';
 import type { ChamadoMapPoint } from '@/lib/types';
@@ -32,6 +34,7 @@ export function ExecucaoTarefasPanel() {
   const [tipos, setTipos] = useState<Array<{ id: string; nome: string }>>([]);
   const [aberta, setAberta] = useState<string | null>(searchParams.get('tarefa'));
   const [mobile, setMobile] = useState<'lista' | 'mapa'>('lista');
+  const [filtrosAbertos, setFiltrosAbertos] = useState(false);
 
   function carregar() {
     setErro(null);
@@ -81,79 +84,158 @@ export function ExecucaoTarefasPanel() {
       }));
   }, [data]);
 
+  const resumoFiltros = useMemo(() => {
+    const partes: string[] = [];
+    if (status === 'IMPEDIDA') partes.push('Status: Impedida (histórico)');
+    else if (status) partes.push(`Status: ${TAREFA_STATUS_LABEL[status as keyof typeof TAREFA_STATUS_LABEL] ?? status}`);
+    else if (historico) partes.push('Status: histórico');
+    else partes.push('Status: não finalizados');
+    const secretaria = secretarias.find((item) => item.id === secretariaId);
+    if (secretaria) partes.push(`Secretaria: ${secretaria.sigla}`);
+    const equipe = equipes.find((item) => item.id === equipeId);
+    if (equipe) partes.push(`Equipe: ${equipe.nome}`);
+    const responsavel = responsaveis.find((item) => item.id === responsavelId);
+    if (responsavel) partes.push(`Responsável: ${responsavel.nome}`);
+    const tipo = tipos.find((item) => item.id === tipoChamadoId);
+    if (tipo) partes.push(`Tipo: ${tipo.nome}`);
+    if (prioridade) partes.push(`Prioridade: ${TAREFA_PRIORIDADE_LABEL[prioridade] ?? prioridade}`);
+    if (atribuidaAMim) partes.push('Atribuídas a mim');
+    if (minhasEquipes) partes.push('Minhas equipes');
+    if (atrasadas) partes.push('Atrasadas');
+    if (prazoFrom || prazoTo) partes.push('Prazo');
+    return partes.length ? partes.join(' · ') : 'Nenhum filtro ativo';
+  }, [
+    atrasadas,
+    atribuidaAMim,
+    equipeId,
+    equipes,
+    historico,
+    minhasEquipes,
+    prazoFrom,
+    prazoTo,
+    prioridade,
+    responsavelId,
+    responsaveis,
+    secretariaId,
+    secretarias,
+    status,
+    tipoChamadoId,
+    tipos,
+  ]);
+
+  const campo = 'h-9 w-full rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]';
+
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         <Badge variant="neutral">{data?.contadores.novas ?? 0} novas</Badge>
         <Badge variant="warning">{data?.contadores.emAndamento ?? 0} em andamento</Badge>
-        <Badge variant="danger">{data?.contadores.impedidas ?? 0} impedidas</Badge>
         <Badge variant="danger">{data?.contadores.atrasadas ?? 0} atrasadas</Badge>
       </div>
-      <div className="flex flex-wrap items-end gap-2">
-        <Chip active={atribuidaAMim} onClick={() => setAtribuidaAMim((value) => !value)}>
-          Atribuídas a mim
-        </Chip>
-        <Chip active={minhasEquipes} onClick={() => setMinhasEquipes((value) => !value)}>
-          Minhas equipes
-        </Chip>
-        <Chip active={atrasadas} onClick={() => setAtrasadas((value) => !value)}>
-          Atrasadas
-        </Chip>
-        <Chip active={historico} onClick={() => setHistorico((value) => !value)}>
-          Histórico
-        </Chip>
-        <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
-          <option value="">Status não finalizados</option>
-          {TAREFA_STATUS_PENDENTES.map((item) => (
-            <option key={item} value={item}>
-              {TAREFA_STATUS_LABEL[item]}
-            </option>
-          ))}
-          <option value="CONCLUIDA">Concluída</option>
-          <option value="CANCELADA">Cancelada</option>
-        </select>
-        <select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
-          <option value="">Secretaria da tarefa</option>
-          {secretarias.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.sigla}
-            </option>
-          ))}
-        </select>
-        <select value={equipeId} onChange={(event) => setEquipeId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
-          <option value="">Equipe</option>
-          {equipes.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.nome}
-            </option>
-          ))}
-        </select>
-        <select value={responsavelId} onChange={(event) => setResponsavelId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
-          <option value="">Responsável</option>
-          {responsaveis.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.nome}
-            </option>
-          ))}
-        </select>
-        <select value={tipoChamadoId} onChange={(event) => setTipoChamadoId(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
-          <option value="">Tipo de chamado</option>
-          {tipos.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.nome}
-            </option>
-          ))}
-        </select>
-        <select value={prioridade} onChange={(event) => setPrioridade(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]">
-          <option value="">Prioridade</option>
-          {Object.entries(TAREFA_PRIORIDADE_LABEL).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-        <input type="date" value={prazoFrom} onChange={(event) => setPrazoFrom(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] px-2 text-[12px]" />
-        <input type="date" value={prazoTo} onChange={(event) => setPrazoTo(event.target.value)} className="h-9 rounded-[10px] border border-[var(--line)] px-2 text-[12px]" />
+      <div className="overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)]">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
+          onClick={() => setFiltrosAbertos((current) => !current)}
+          aria-expanded={filtrosAbertos}
+        >
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-[var(--ink)]">Filtros de tarefas</p>
+            {!filtrosAbertos ? <p className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{resumoFiltros}</p> : null}
+          </div>
+          <ChevronDown className={cn('h-4 w-4 shrink-0 text-[var(--ink-3)] transition-transform', filtrosAbertos ? 'rotate-180' : '')} />
+        </button>
+        {filtrosAbertos ? (
+          <div className="space-y-3 border-t border-[var(--line-2)] px-3.5 py-3.5">
+            <div className="flex flex-wrap gap-1.5">
+              <Chip active={atribuidaAMim} onClick={() => setAtribuidaAMim((value) => !value)}>
+                Atribuídas a mim
+              </Chip>
+              <Chip active={minhasEquipes} onClick={() => setMinhasEquipes((value) => !value)}>
+                Minhas equipes
+              </Chip>
+              <Chip active={atrasadas} onClick={() => setAtrasadas((value) => !value)}>
+                Atrasadas
+              </Chip>
+              <Chip active={historico} onClick={() => setHistorico((value) => !value)}>
+                Histórico
+              </Chip>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <FiltroRotulo label="Status">
+                <select value={status} onChange={(event) => setStatus(event.target.value)} className={campo}>
+                  <option value="">Não finalizados</option>
+                  {TAREFA_STATUS_PENDENTES.map((item) => (
+                    <option key={item} value={item}>
+                      {TAREFA_STATUS_LABEL[item]}
+                    </option>
+                  ))}
+                  <option value="CONCLUIDA">Concluída</option>
+                  <option value="CANCELADA">Cancelada</option>
+                  <option value="IMPEDIDA">Impedida (histórico)</option>
+                </select>
+              </FiltroRotulo>
+              <FiltroRotulo label="Secretaria da tarefa">
+                <select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} className={campo}>
+                  <option value="">Todas</option>
+                  {secretarias.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.sigla}
+                    </option>
+                  ))}
+                </select>
+              </FiltroRotulo>
+              <FiltroRotulo label="Equipe">
+                <select value={equipeId} onChange={(event) => setEquipeId(event.target.value)} className={campo}>
+                  <option value="">Todas</option>
+                  {equipes.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.nome}
+                    </option>
+                  ))}
+                </select>
+              </FiltroRotulo>
+              <FiltroRotulo label="Responsável">
+                <select value={responsavelId} onChange={(event) => setResponsavelId(event.target.value)} className={campo}>
+                  <option value="">Todos</option>
+                  {responsaveis.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.nome}
+                    </option>
+                  ))}
+                </select>
+              </FiltroRotulo>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+              <FiltroRotulo label="Tipo de chamado">
+                <select value={tipoChamadoId} onChange={(event) => setTipoChamadoId(event.target.value)} className={campo}>
+                  <option value="">Todos</option>
+                  {tipos.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.nome}
+                    </option>
+                  ))}
+                </select>
+              </FiltroRotulo>
+              <FiltroRotulo label="Prioridade">
+                <select value={prioridade} onChange={(event) => setPrioridade(event.target.value)} className={campo}>
+                  <option value="">Todas</option>
+                  {Object.entries(TAREFA_PRIORIDADE_LABEL).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </FiltroRotulo>
+              <FiltroRotulo label="Data inicial">
+                <input type="date" value={prazoFrom} onChange={(event) => setPrazoFrom(event.target.value)} className={campo} />
+              </FiltroRotulo>
+              <FiltroRotulo label="Data final">
+                <input type="date" value={prazoTo} onChange={(event) => setPrazoTo(event.target.value)} className={campo} />
+              </FiltroRotulo>
+            </div>
+          </div>
+        ) : null}
       </div>
       {erro ? <p className="text-[13px] text-[var(--danger)]">{erro}</p> : null}
       <div className="flex gap-2 xl:hidden">
@@ -206,5 +288,14 @@ export function ExecucaoTarefasPanel() {
       </div>
       <ChamadoTarefaSheet tarefaId={aberta} onClose={() => setAberta(null)} onChanged={carregar} />
     </div>
+  );
+}
+
+function FiltroRotulo({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1 block text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{label}</span>
+      {children}
+    </label>
   );
 }

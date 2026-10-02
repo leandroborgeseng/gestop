@@ -205,6 +205,11 @@ export function canVerTarefasExecucao(permissoes: string[]) {
   return (
     permissoes.includes(buildMatrixKey('execucao', 'tarefas', 'visualizar')) ||
     permissoes.includes(buildMatrixKey('chamados', 'tarefas', 'visualizar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'tarefas', 'alterar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'tarefas', 'executar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'tarefas_andamento', 'executar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'tarefas_concluir', 'executar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'tarefas_historico', 'visualizar')) ||
     permissoes.includes(buildMatrixKey('chamados', 'tarefas_atribuidas', 'visualizar'))
   );
 }

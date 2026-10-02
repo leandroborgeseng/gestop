@@ -893,7 +893,7 @@ export type ChamadoAnexoAbertura = {
   nome: string;
   mimeType?: string | null;
   extensao?: string | null;
-  categoria: 'imagem' | 'pdf';
+  categoria: 'imagem' | 'pdf' | 'video';
   url: string;
   tamanhoBytes?: number | null;
   enviadoEm?: string | null;

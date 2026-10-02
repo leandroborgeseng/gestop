@@ -3,6 +3,7 @@
 import { Camera, FileUp, X } from 'lucide-react';
 import {
   ANEXOS_ABERTURA_ACCEPT,
+  ANEXOS_ABERTURA_FORMATOS,
   ANEXOS_ABERTURA_IMAGEM_ACCEPT,
   AnexoAberturaDraft,
   categoriaDoMime,
@@ -64,7 +65,7 @@ export function ChamadoAnexosAberturaField({
   return (
     <div>
       <p className="text-[13px] font-semibold text-[var(--ink)]">Fotos e documentos anexados na abertura (opcional)</p>
-      <p className="mt-1 text-[12px] text-[var(--ink-3)]">Formatos permitidos: JPG, JPEG, PNG, WEBP e PDF.</p>
+      <p className="mt-1 text-[12px] text-[var(--ink-3)]">Formatos permitidos: {ANEXOS_ABERTURA_FORMATOS}.</p>
       <p className="text-[12px] text-[var(--ink-3)]">Até 8 arquivos, 8 MB cada, somando no máximo 20 MB.</p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <label className="inline-flex cursor-pointer items-center gap-2 rounded-[var(--r-md)] border border-dashed border-[var(--line)] px-3 py-2.5 text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--surface-2)]">

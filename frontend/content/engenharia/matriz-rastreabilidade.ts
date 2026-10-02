@@ -144,7 +144,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/chamados (painel da tarefa)',
     api: 'ChamadoTarefasController: GET /chamado-tarefas/por-chamado/:chamadoId, GET /opcoes, POST /chamado-tarefas, PATCH /:id, POST /:id/anexos',
     tabelas: 'ChamadoTarefa, ChamadoTarefaAnexo, Chamado, Secretaria, Equipe, Usuario',
-    permissao: 'chamados.gerenciar ou matriz.chamados.tarefas (visualizar, inserir, alterar, excluir). Serviço ChamadoTarefasService.',
+    permissao: 'matriz.chamados.tarefas: visualizar, inserir (criar), alterar (dados de abertura), executar (andamento e conclusão, compatível), excluir (cancelar). Funções extras: tarefas_andamento, tarefas_concluir e tarefas_historico. Administrador do Sistema ignora a matriz. Responsável ou membro da equipe não ganha alterar dados.',
   },
   {
     id: 'tarefas-exec',
@@ -153,7 +153,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/execucao (aba tarefas)',
     api: 'ChamadoTarefasController: GET /chamado-tarefas/execucao, PATCH /chamado-tarefas/:id',
     tabelas: 'ChamadoTarefa, EquipeUsuario, Usuario',
-    permissao: 'chamados.executar ou matriz.chamados.tarefas_atribuidas.visualizar, matriz.execucao.tarefas.visualizar/executar.',
+    permissao: 'As mesmas chaves de chamados.tarefas, mais matriz.execucao.tarefas e chamados.tarefas_atribuidas.visualizar. Filtros da aba ficam na sanfona Filtros de tarefas.',
   },
   {
     id: 'tarefas-rel',

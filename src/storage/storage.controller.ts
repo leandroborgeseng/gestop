@@ -43,6 +43,18 @@ function mimeTypeFromPath(path: string) {
       return 'image/webp';
     case '.heic':
       return 'image/heic';
+    case '.pdf':
+      return 'application/pdf';
+    case '.mp4':
+      return 'video/mp4';
+    case '.mov':
+      return 'video/quicktime';
+    case '.webm':
+      return 'video/webm';
+    case '.m4v':
+      return 'video/x-m4v';
+    case '.3gp':
+      return 'video/3gpp';
     default:
       return 'application/octet-stream';
   }

@@ -12,7 +12,7 @@ export type ChamadoAnexoAberturaView = {
   id: string;
   nome: string;
   mimeType?: string | null;
-  categoria: 'imagem' | 'pdf';
+  categoria: 'imagem' | 'pdf' | 'video';
   url: string;
 };
 
@@ -31,6 +31,7 @@ export function ChamadoAnexosAberturaView({
         ? [{ id: 'foto-abertura', nome: 'Foto da abertura', categoria: 'imagem' as const, url: fotoUrl }]
         : [];
   const pdfs = (anexos ?? []).filter((item) => item.categoria === 'pdf' && item.url);
+  const videos = (anexos ?? []).filter((item) => item.categoria === 'video' && item.url);
   const [aberta, setAberta] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -56,7 +57,7 @@ export function ChamadoAnexosAberturaView({
     };
   }, [aberta, imagens.length]);
 
-  if (!imagens.length && !pdfs.length) return null;
+  if (!imagens.length && !pdfs.length && !videos.length) return null;
 
   const umaImagem = imagens.length === 1;
   const duasImagens = imagens.length === 2;
@@ -97,6 +98,23 @@ export function ChamadoAnexosAberturaView({
           ))}
         </div>
       ) : null}
+      {videos.length ? (
+        <ul className="mt-3 space-y-2">
+          {videos.map((video) => (
+            <li key={video.id}>
+              <button
+                type="button"
+                onClick={() => void abrirPdf(video.url, video.nome)}
+                className="flex w-full items-center gap-2 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] px-3 py-2 text-left text-[13px] font-semibold text-[var(--ink)] hover:border-[var(--brand)]"
+              >
+                <span className="min-w-0 flex-1 truncate">{video.nome}</span>
+                <span className="text-[11px] font-semibold text-[var(--brand)]">Abrir</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
       {pdfs.length ? (
         <ul className="mt-3 space-y-2">
           {pdfs.map((pdf) => (
