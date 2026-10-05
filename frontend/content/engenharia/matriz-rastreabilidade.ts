@@ -252,7 +252,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/documentos, painel Documentos relacionados em /chamados e /meus-chamados',
     api: 'DocumentosController: POST /documentos/:id/assinatura, /assinatura-pendente, /cancelar-assinado',
     tabelas: 'Documento, DocumentoAssinatura',
-    permissao: 'documentos.coletar_assinatura (legado) ou matriz.documentos.coletar_assinatura.executar; documentos.administrar e usuarios.gerenciar também passam. No chamado o botão some sem essa permissão — acesso ao módulo Documentos não basta. O POST continua barrando no controller e no service. Cancelamento: documentos.cancelar_assinado. Aviso e erro de campo ficam na frente do modal.',
+    permissao: 'documentos.coletar_assinatura (legado) ou matriz.documentos.coletar_assinatura.executar; documentos.administrar também passa. Administrador do Sistema passa no PermissionsGuard. usuarios.gerenciar sozinho toma 403 no POST (o botão do chamado não aparece). Cancelamento: documentos.cancelar_assinado.',
   },
   {
     id: 'ass-int',

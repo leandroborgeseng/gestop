@@ -240,14 +240,14 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'assinatura-externa',
         nome: 'Coletar assinatura externa',
         atores: ['administrador', 'gestor', 'equipe'],
-        descricao: 'Registrar a assinatura de quem não é usuário, ou marcar pendência e cancelar a assinada. Erros de validação, inclusive a justificativa de CPF ou e-mail ausente, aparecem dentro do modal e acima do overlay. No chamado, o botão Coletar nova assinatura só aparece com documentos.coletar_assinatura (ou administrar); acesso ao módulo Documentos não basta.',
+        descricao: 'Registrar a assinatura de quem não é usuário, ou marcar pendência e cancelar a assinada. Erros de validação, inclusive a justificativa de CPF ou e-mail ausente, aparecem dentro do modal e acima do overlay. No chamado, o botão Coletar nova assinatura só aparece quando o PermissionsGuard deixaria passar: documentos.coletar_assinatura (ou matriz executar), documentos.administrar, ou Administrador do Sistema. usuarios.gerenciar sozinho não basta.',
         rotas: ['/documentos', '/chamados', 'POST /documentos/:id/assinatura', 'POST /documentos/:id/assinatura-pendente', 'POST /documentos/:id/cancelar-assinado'],
       },
       {
         id: 'disponibilizar-assinatura',
         nome: 'Disponibilizar assinatura interna',
         atores: ['administrador', 'gestor'],
-        descricao: 'Enviar o documento a um signatário interno marca Assinatura pendente enquanto houver pedido. Cada disponibilização pode ser cancelada sem afetar as outras. O card de documentos relacionados no chamado lista os pendentes (nome e e-mail, se houver).',
+        descricao: 'Enviar o documento a um signatário interno marca Assinatura pendente enquanto houver pedido. Cada disponibilização pode ser cancelada sem afetar as outras. O card de documentos relacionados no chamado lista os signatários internos pendentes (DocumentoAssinaturaPedido; destinatário é usuário do SIGMA).',
         rotas: ['/documentos', '/chamados', 'POST /documentos/:id/disponibilizar-assinatura', 'POST /documentos/pedidos-assinatura/:pedidoId/retirar', 'GET /documentos/por-chamado/:chamadoId'],
       },
       {

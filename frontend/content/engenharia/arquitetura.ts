@@ -11,7 +11,7 @@ export const BLOCOS_ARQUITETURA: BlocoArquitetura[] = [
   {
     id: 'frontend',
     nome: 'Frontend Next.js',
-    papel: 'App Router com telas autenticadas, rotas públicas de chamado e validação de documento, e a área administrativa. O painel de documentos do chamado usa canColetarAssinatura / resolvePodeColetar, não só o acesso ao módulo.',
+    papel: 'App Router com telas autenticadas, rotas públicas de chamado e validação de documento, e a área administrativa. O botão Coletar no chamado usa canColetarAssinatura, alinhado ao PermissionsGuard (não basta usuarios.gerenciar).',
     onde: 'frontend/app. Sessão e menu em frontend/lib/navigation.ts e frontend/lib/permissions-matrix.ts.',
   },
   {
