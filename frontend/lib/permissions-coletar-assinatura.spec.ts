@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ADMINISTRADOR_SISTEMA_NOME, buildMatrixKey, canColetarAssinatura } from './permissions-matrix';
+import { ADMINISTRADOR_SISTEMA_NOME, buildMatrixKey, canColetarAssinatura, isAdministradorSistemaAtivo } from './permissions-matrix';
 
 describe('canColetarAssinatura (helper real, paridade com o guard)', () => {
   it('retorna false para usuarios.gerenciar sem ser Administrador do Sistema', () => {
@@ -36,5 +36,17 @@ describe('canColetarAssinatura (helper real, paridade com o guard)', () => {
 
   it('retorna true para Administrador do Sistema mesmo sem a chave', () => {
     expect(canColetarAssinatura([], { perfis: [ADMINISTRADOR_SISTEMA_NOME] })).toBe(true);
+  });
+
+  it('o bypass de admin equivale a isAdministradorSistemaAtivo (perfil ativo tem prioridade)', () => {
+    const casos: Array<{ perfilAtivo?: { nome: string } | null; perfis?: string[] }> = [
+      { perfilAtivo: { nome: ADMINISTRADOR_SISTEMA_NOME }, perfis: ['Gestor'] },
+      { perfilAtivo: null, perfis: [ADMINISTRADOR_SISTEMA_NOME] },
+      { perfilAtivo: { nome: 'Gestor' }, perfis: [ADMINISTRADOR_SISTEMA_NOME] },
+      { perfis: ['Gestor'] },
+    ];
+    for (const user of casos) {
+      expect(canColetarAssinatura([], user)).toBe(isAdministradorSistemaAtivo(user));
+    }
   });
 });

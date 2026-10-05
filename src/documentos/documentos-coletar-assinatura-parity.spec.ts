@@ -7,7 +7,16 @@ import { expandSessionPermissionKeys, hasAnyPermission, REQUIRED_ANY_PERMISSIONS
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { JwtPayload } from '../auth/jwt';
 import { DocumentosController } from './documentos.controller';
-import { canColetarAssinatura } from '../domain/can-coletar-assinatura';
+
+async function canColetarAssinaturaFront(
+  permissoes: string[],
+  user?: JwtPayload,
+) {
+  // Spec-only: o helper mora no frontend (imagem Docker / tracing não incluem src/).
+  // tsconfig da raiz é Node16/CJS; extensão .js é o que o tsc resolve para o .ts (vitest também).
+  const { canColetarAssinatura } = await import('../../frontend/lib/can-coletar-assinatura.js');
+  return canColetarAssinatura(permissoes, user);
+}
 
 const COLETAR_HANDLERS = [
   DocumentosController.prototype.coletarAssinatura,
@@ -121,8 +130,8 @@ describe('paridade canColetarAssinatura × PermissionsGuard (coletar assinatura)
     expect(expanded.has('documentos.coletar_assinatura')).toBe(false);
   });
 
-  it.each(TABELA)('$nome: front e guard coincidem (esperado $esperado)', ({ user, esperado }) => {
-    const front = canColetarAssinatura(user.permissoes, user);
+  it.each(TABELA)('$nome: front e guard coincidem (esperado $esperado)', async ({ user, esperado }) => {
+    const front = await canColetarAssinaturaFront(user.permissoes, user);
     const any = hasAnyPermission(user, ['documentos.coletar_assinatura', 'documentos.administrar']);
     const guardAssinatura = guardAllows(user, DocumentosController.prototype.coletarAssinatura);
     const guardPendente = guardAllows(user, DocumentosController.prototype.togglePendente);
