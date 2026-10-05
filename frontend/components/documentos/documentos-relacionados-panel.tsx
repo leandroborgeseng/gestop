@@ -17,12 +17,18 @@ import {
 import { DOCUMENTO_SITUACAO_META, DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
 import {
   canAssinarDocumentoInterno,
-  canColetarAssinatura,
   canCriarDocumentoAvulso,
   canDisponibilizarAssinaturaInterna,
   canVerDocumentosRelacionados,
   hasDocumentosModuloAccess,
 } from '@/lib/permissions-matrix';
+import {
+  assinaturasVigentesDoCard,
+  resolvePodeColetar,
+  rotuloAssinaturaVigente,
+  rotuloSignatarioPendente,
+  signatariosPendentesDoCard,
+} from '@/components/documentos/documentos-relacionados-acoes';
 import { DocumentoDetalhe, DocumentoResumo } from '@/lib/types';
 import { NovoDocumentoAvulsoDialog, type DocumentoAvulsoVinculo } from '@/components/documentos/novo-documento-avulso-dialog';
 import { DocumentoPreencherDialog, DocumentoRespostasDialog } from '@/components/documentos/documento-consulta-dialogs';
@@ -62,7 +68,7 @@ export function DocumentosRelacionadosPanel({
   const podePreencher = hasDocumentosModuloAccess(permissoes) || canCriarDocumentoAvulso(permissoes);
   const podeAssinar = canAssinarDocumentoInterno(permissoes);
   const podeEncaminhar = canDisponibilizarAssinaturaInterna(permissoes);
-  const podeColetar = canColetarAssinatura(permissoes);
+  const podeColetar = resolvePodeColetar(permissoes);
 
   async function abrirDocumento(id: string, proximo: NonNullable<typeof modo>) {
     try {
@@ -155,6 +161,8 @@ export function DocumentosRelacionadosPanel({
       <ul className="space-y-2">
         {items.map((item) => {
           const situacao = DOCUMENTO_SITUACAO_META[item.situacao];
+          const pendentes = signatariosPendentesDoCard(item);
+          const assinados = assinaturasVigentesDoCard(item);
           return (
             <li
               key={item.id}
@@ -167,16 +175,27 @@ export function DocumentosRelacionadosPanel({
                   <p className="text-[12px] text-[var(--ink-3)]">
                     {DOCUMENTO_TIPO_LABELS[item.tipo]} · {new Date(item.createdAt).toLocaleString('pt-BR')}
                   </p>
-                  {(item.signatariosPendentes ?? []).length > 0 ? (
+                  {pendentes.length > 0 ? (
                     <div className="mt-2 space-y-1">
                       <p className="text-[11px] font-medium text-[var(--ink-2)]">
                         Signatários pendentes:
                       </p>
                       <ul className="space-y-0.5">
-                        {item.signatariosPendentes?.map((sig) => (
+                        {pendentes.map((sig) => (
                           <li key={sig.id} className="text-[11px] text-[var(--ink-3)]">
-                            • {sig.nome}
-                            {sig.email ? ` (${sig.email})` : ''}
+                            • {rotuloSignatarioPendente(sig)}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {assinados.length > 0 ? (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-[11px] font-medium text-[var(--ink-2)]">Assinados:</p>
+                      <ul className="space-y-0.5">
+                        {assinados.map((sig) => (
+                          <li key={sig.id} className="text-[11px] text-[var(--ink-3)]">
+                            • {rotuloAssinaturaVigente(sig)}
                           </li>
                         ))}
                       </ul>
