@@ -1,38 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { apresentarValorTexto } from './checklist-item.rules';
+import { resolveRespostaTexto, deveExibirCabecalhoSecao, tituloPerguntaChecklist } from './checklist-resposta-apresentacao';
 
-describe('apresentarValorTexto (277 - múltipla escolha múltipla)', () => {
-  it('apresenta resposta múltipla nova (array JSON) como lista separada por vírgula', () => {
-    expect(apresentarValorTexto('["A","B","C"]')).toBe('A, B, C');
-    expect(apresentarValorTexto('["Opção 1","Opção 2"]')).toBe('Opção 1, Opção 2');
+describe('resolveRespostaTexto (caminho real do PDF de vistoria)', () => {
+  it('formata múltipla nova gravada como JSON array', () => {
+    expect(resolveRespostaTexto({ valorTexto: '["Bom","Ótimo"]' })).toBe('Bom, Ótimo');
   });
 
-  it('apresenta resposta única antiga (texto simples) sem alteração', () => {
-    expect(apresentarValorTexto('Opção A')).toBe('Opção A');
-    expect(apresentarValorTexto('Texto livre da resposta')).toBe('Texto livre da resposta');
+  it('preserva única antiga gravada como string simples', () => {
+    expect(resolveRespostaTexto({ valorTexto: 'Regular' })).toBe('Regular');
   });
 
-  it('apresenta resposta vazia como string vazia', () => {
-    expect(apresentarValorTexto('')).toBe('');
-    expect(apresentarValorTexto('  ')).toBe('');
+  it('trata resposta vazia', () => {
+    expect(resolveRespostaTexto({ valorTexto: '' })).toBe('—');
+    expect(resolveRespostaTexto({ valorTexto: '  ' })).toBe('—');
+    expect(resolveRespostaTexto({})).toBe('—');
   });
 
-  it('apresenta array com espaços extras removidos', () => {
-    expect(apresentarValorTexto('[" A "," B "," C "]')).toBe('A, B, C');
+  it('formata booleano, número e conformidade', () => {
+    expect(resolveRespostaTexto({ valorBooleano: true })).toBe('Sim');
+    expect(resolveRespostaTexto({ valorNumero: 3 })).toBe('3');
+    expect(resolveRespostaTexto({ conformidade: 'CONFORME' })).toBe('Conforme');
+  });
+});
+
+describe('título e seção (279)', () => {
+  it('nunca inclui código no título visível', () => {
+    expect(tituloPerguntaChecklist('Estado do piso', 'ZZ-COD-002')).toBe('Estado do piso');
+    expect(tituloPerguntaChecklist('Estado do piso', 'ZZ-COD-002')).not.toContain('ZZ-COD-002');
   });
 
-  it('apresenta array com valores vazios filtrados', () => {
-    expect(apresentarValorTexto('["A","","C"]')).toBe('A, C');
-    expect(apresentarValorTexto('["",""]')).toBe('["",""]');
-  });
-
-  it('mantém texto quando JSON é inválido', () => {
-    expect(apresentarValorTexto('["A","B')).toBe('["A","B');
-    expect(apresentarValorTexto('[invalid json]')).toBe('[invalid json]');
-  });
-
-  it('mantém texto quando não é array de strings', () => {
-    expect(apresentarValorTexto('[1,2,3]')).toBe('[1,2,3]');
-    expect(apresentarValorTexto('{"a":"b"}')).toBe('{"a":"b"}');
+  it('exibe cabeçalho só na primeira pergunta do grupo consecutivo', () => {
+    expect(deveExibirCabecalhoSecao('Infraestrutura básica', '')).toBe(true);
+    expect(deveExibirCabecalhoSecao('Infraestrutura básica', 'Infraestrutura básica')).toBe(false);
+    expect(deveExibirCabecalhoSecao('Equipamentos e mobiliário', 'Infraestrutura básica')).toBe(true);
+    expect(deveExibirCabecalhoSecao(null, 'Infraestrutura básica')).toBe(false);
+    expect(deveExibirCabecalhoSecao('', '')).toBe(false);
   });
 });
