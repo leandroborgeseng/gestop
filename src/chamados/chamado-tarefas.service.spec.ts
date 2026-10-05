@@ -840,6 +840,29 @@ describe('ChamadoTarefasService — permissões 269', () => {
     expect(prisma.historicoStatus.findMany).not.toHaveBeenCalled();
   });
 
+  it('chamados.gerenciar sem tarefas_historico.visualizar não devolve histórico', async () => {
+    mockTarefa();
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-tarefa',
+        motivo: 'Criação',
+        statusAnterior: null,
+        statusNovo: 'NOVA',
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+        metadata: { acao: 'criada', anexoIds: ['anexo-hist'] },
+      },
+    ]);
+    const user = userComPermissoes(['chamados.gerenciar']);
+
+    const resultado = await service.getById('tarefa-1', user);
+
+    expect(user.perfis).not.toContain('Administrador do Sistema');
+    expect(resultado.podeVerHistorico).toBe(false);
+    expect(resultado.historico).toEqual([]);
+    expect(prisma.historicoStatus.findMany).not.toHaveBeenCalled();
+  });
+
   it('designado sem tarefas_historico.visualizar vê anexos e não vê histórico', async () => {
     mockTarefa({
       responsavelId: 'user-resp',

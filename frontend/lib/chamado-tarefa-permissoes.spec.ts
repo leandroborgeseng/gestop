@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
@@ -14,6 +16,8 @@ import {
   TAREFA_BOTAO_CONCLUIR,
   TAREFA_SECAO_ANEXOS,
 } from './chamado-tarefa-permissoes';
+
+const sheetSrc = readFileSync(join(__dirname, '../components/chamados/chamado-tarefa-sheet.tsx'), 'utf8');
 
 const ANEXO = { id: 'a1', nome: 'foto.jpg' };
 
@@ -99,5 +103,20 @@ describe('render das ações de tarefa', () => {
     expect(html).toContain(TAREFA_BOTAO_CONCLUIR);
     expect(html).toContain(TAREFA_ABA_HISTORICO);
     expect(html).not.toContain(TAREFA_SECAO_ANEXOS);
+  });
+
+  it('com podeVerHistorico false, a seção de histórico não é renderizada', () => {
+    expect(sheetSrc).toContain('if (!tarefa.podeVerHistorico) return null;');
+
+    const html = renderToStaticMarkup(
+      createElement(ChamadoTarefaHistoricoCabecalho, {
+        podeVerHistorico: false,
+      }),
+    );
+
+    expect(html).toBe('');
+    expect(html).not.toContain(TAREFA_ABA_HISTORICO);
+    expect(html).not.toContain('Nenhum registro ainda');
+    expect(html).not.toContain('Criação');
   });
 });

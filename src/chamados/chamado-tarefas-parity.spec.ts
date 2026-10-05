@@ -100,7 +100,11 @@ describe('paridade front × guard das ações de tarefa', () => {
     expect(TAREFA_PERM.historico).toBe(permissionMatrixKey('chamados', 'tarefas_historico', 'visualizar'));
     expect(serviceSrc).toContain("chave('chamados', 'tarefas_historico', 'visualizar')");
     expect(serviceSrc).toContain('podeVerHistorico: this.podeVerHistorico(user)');
+    expect(serviceSrc).toMatch(
+      /private podeVerHistorico\(user: JwtPayload\) \{\s*return this\.tem\(user, \[\], \[this\.chave\('chamados', 'tarefas_historico', 'visualizar'\)\]\);/,
+    );
     expect(sheetSrc).toContain('tarefa.podeVerHistorico');
+    expect(sheetSrc).toContain('if (!tarefa.podeVerHistorico) return null;');
     expect(viewSrc).toContain('TAREFA_ABA_HISTORICO');
     expect(TAREFA_ABA_HISTORICO).toBe('Histórico da tarefa');
     expect(podeVerHistoricoTarefaPorChaves([TAREFA_PERM.historico])).toBe(true);
