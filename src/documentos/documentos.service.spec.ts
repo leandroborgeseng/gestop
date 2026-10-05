@@ -118,7 +118,7 @@ describe('DocumentosService apresenta respostas formatadas', () => {
       codigo: 'DOC-AV',
       codigoValidacao: 'VAL',
       tipo: DocumentoTipo.DOCUMENTO_AVULSO,
-      situacao: DocumentoSituacao.CONCLUIDO,
+      situacao: DocumentoSituacao.GERADO,
       origem: DocumentoOrigem.AVULSO,
       titulo: 'Documento avulso',
       createdAt: new Date('2026-10-05T14:30:00.000Z'),
