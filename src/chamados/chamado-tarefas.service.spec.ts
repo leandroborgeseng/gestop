@@ -783,7 +783,7 @@ describe('ChamadoTarefasService — permissões 269', () => {
     expect(prisma.chamadoTarefa.update).not.toHaveBeenCalled();
   });
 
-  it('sem tarefas_historico.visualizar não devolve histórico nem anexos', async () => {
+  it('não designado sem tarefas_historico.visualizar não devolve histórico nem anexos', async () => {
     mockTarefa();
     prisma.historicoStatus.findMany.mockResolvedValue([
       {
@@ -801,8 +801,36 @@ describe('ChamadoTarefasService — permissões 269', () => {
     const resultado = await service.getById('tarefa-1', user);
 
     expect(resultado.podeVerHistorico).toBe(false);
+    expect(resultado.podeVerAnexos).toBe(false);
     expect(resultado.historico).toEqual([]);
     expect(resultado.anexos).toEqual([]);
+    expect(prisma.historicoStatus.findMany).not.toHaveBeenCalled();
+  });
+
+  it('designado sem tarefas_historico.visualizar vê anexos e não vê histórico', async () => {
+    mockTarefa({
+      responsavelId: 'user-resp',
+      responsavel: { id: 'user-resp', nome: 'Responsável da tarefa', email: 'resp@test.com' },
+    });
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-tarefa',
+        motivo: 'Criação',
+        statusAnterior: null,
+        statusNovo: 'NOVA',
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+        metadata: { acao: 'criada', anexoIds: ['anexo-hist'] },
+      },
+    ]);
+
+    const resultado = await service.getById('tarefa-1', userResponsavelTarefa());
+
+    expect(resultado.podeVerHistorico).toBe(false);
+    expect(resultado.podeVerAnexos).toBe(true);
+    expect(resultado.historico).toEqual([]);
+    expect(resultado.anexos).toHaveLength(1);
+    expect(resultado.anexos[0]?.nome).toBe('foto.jpg');
     expect(prisma.historicoStatus.findMany).not.toHaveBeenCalled();
   });
 
@@ -827,6 +855,7 @@ describe('ChamadoTarefasService — permissões 269', () => {
     const resultado = await service.getById('tarefa-1', user);
 
     expect(resultado.podeVerHistorico).toBe(true);
+    expect(resultado.podeVerAnexos).toBe(true);
     expect(resultado.historico).toHaveLength(1);
     expect(resultado.historico[0]?.motivo).toBe('Criação');
     expect(resultado.anexos).toHaveLength(1);
@@ -851,6 +880,7 @@ describe('ChamadoTarefasService — permissões 269', () => {
     expect(detalhe.podeAlterarDados).toBe(true);
     expect(detalhe.podeCancelar).toBe(true);
     expect(detalhe.podeVerHistorico).toBe(true);
+    expect(detalhe.podeVerAnexos).toBe(true);
     expect(detalhe.historico).toHaveLength(1);
     expect(detalhe.anexos).toHaveLength(1);
 

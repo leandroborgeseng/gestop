@@ -1,17 +1,17 @@
 # Mutações 269 (não commitadas no código)
 
-As quatro mutações abaixo foram aplicadas localmente, fizeram o teste indicado ficar vermelho e foram revertidas. O código da branch permanece sem elas.
+As cinco mutações abaixo foram aplicadas localmente, fizeram o teste indicado ficar vermelho e foram revertidas. O código da branch permanece sem elas.
 
 ## M1 — `podeVerHistorico` volta a `true` fixo
 
 - Arquivo: `src/chamados/chamado-tarefas.service.ts` (`serialize`)
 - Alteração: `podeVerHistorico: this.podeVerHistorico(user)` → `podeVerHistorico: true`.
-- Teste vermelho: `sem tarefas_historico.visualizar não devolve histórico nem anexos`
+- Teste vermelho: `não designado sem tarefas_historico.visualizar não devolve histórico nem anexos`
 
 Saída:
 
 ```
-FAIL  src/chamados/chamado-tarefas.service.spec.ts > ChamadoTarefasService — permissões 269 > sem tarefas_historico.visualizar não devolve histórico nem anexos
+FAIL  src/chamados/chamado-tarefas.service.spec.ts > ChamadoTarefasService — permissões 269 > não designado sem tarefas_historico.visualizar não devolve histórico nem anexos
 AssertionError: expected true to be false // Object.is equality
 
 - Expected
@@ -82,8 +82,33 @@ AssertionError: expected '<div><div class="flex flex-wrap gap-2…' not to conta
 Expected: "Alterar dados da tarefa"
 Received: "<div>…<button type="button" …>Alterar dados da tarefa</button></div></div>"
 
- ❯ frontend/lib/chamado-tarefa-permissoes.spec.ts:64:22
-     64|     expect(html).not.toContain(TAREFA_BOTAO_ALTERAR_DADOS);
+ ❯ frontend/lib/chamado-tarefa-permissoes.spec.ts:56:22
+     56|     expect(html).not.toContain(TAREFA_BOTAO_ALTERAR_DADOS);
 ```
 
 A paridade quebra: a API pode recusar (403) e a UI ainda oferece o botão.
+
+## M5 — esconde os anexos do designado
+
+- Arquivo: `src/chamados/chamado-tarefas.service.ts` (`podeVerAnexos`)
+- Alteração: `return this.podeVerHistorico(user) || designadoTarefa(...)` → `return this.podeVerHistorico(user)`.
+- Teste vermelho: `designado sem tarefas_historico.visualizar vê anexos e não vê histórico`
+
+Saída:
+
+```
+FAIL  src/chamados/chamado-tarefas.service.spec.ts > ChamadoTarefasService — permissões 269 > designado sem tarefas_historico.visualizar vê anexos e não vê histórico
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/chamados/chamado-tarefas.service.spec.ts:830:37
+    829|     expect(resultado.podeVerHistorico).toBe(false);
+    830|     expect(resultado.podeVerAnexos).toBe(true);
+```
+
+Sem o `designadoTarefa` na regra de anexos, o responsável deixa de receber `podeVerAnexos` e a lista de arquivos.

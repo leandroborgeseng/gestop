@@ -9,7 +9,7 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { getChamadoLeituraViaTarefa, getChamadoTarefa, getOpcoesTarefa, updateChamadoTarefa } from '@/lib/api';
 import { ChamadoTarefaChamadoLeituraView } from '@/components/chamados/chamado-tarefa-chamado-leitura';
-import { ChamadoTarefaBarraAcoes, ChamadoTarefaHistoricoCabecalho } from '@/components/chamados/chamado-tarefa-permissoes-view';
+import { ChamadoTarefaBarraAcoes, ChamadoTarefaAnexosCabecalho, ChamadoTarefaHistoricoCabecalho } from '@/components/chamados/chamado-tarefa-permissoes-view';
 import {
   ANEXOS_ABERTURA_ACCEPT,
   ANEXOS_ABERTURA_FORMATOS,
@@ -392,6 +392,21 @@ export function ChamadoTarefaSheet({
                 </Button>
               </div>
             </div>
+          ) : null}
+
+          {tarefa.podeVerAnexos && !tarefa.podeVerHistorico ? (
+            <section className="space-y-2 border-t border-[var(--line)] pt-3">
+              <ChamadoTarefaAnexosCabecalho visivel />
+              {tarefa.anexos.length ? (
+                <ul className="space-y-2">
+                  {tarefa.anexos.map((anexo) => (
+                    <AnexoLinha key={anexo.id} anexo={anexo} />
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-[12px] text-[var(--ink-3)]">Nenhum anexo.</p>
+              )}
+            </section>
           ) : null}
 
           <ChamadoTarefaHistoricoView tarefa={tarefa} />

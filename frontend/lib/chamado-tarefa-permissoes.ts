@@ -5,6 +5,7 @@ export const TAREFA_BOTAO_ANDAMENTO = 'Registrar andamento';
 export const TAREFA_BOTAO_CONCLUIR = 'Concluir tarefa';
 export const TAREFA_BOTAO_CANCELAR = 'Cancelar tarefa';
 export const TAREFA_ABA_HISTORICO = 'Histórico da tarefa';
+export const TAREFA_SECAO_ANEXOS = 'Anexos da tarefa';
 
 export const TAREFA_PERM = {
   visualizar: 'matriz.chamados.tarefas.visualizar',
@@ -29,7 +30,8 @@ export type TarefaAcaoParidadeId =
   | 'andamento'
   | 'concluir'
   | 'cancelar'
-  | 'historico';
+  | 'historico'
+  | 'anexos';
 
 export type TarefaAcaoParidade = {
   id: TarefaAcaoParidadeId;
@@ -41,6 +43,7 @@ export type TarefaAcaoParidade = {
     | 'podeConcluir'
     | 'podeCancelar'
     | 'podeVerHistorico'
+    | 'podeVerAnexos'
     | null;
   chavesEspecificas: string[];
   legado: string[];
@@ -129,6 +132,16 @@ export const TAREFA_PARIDADE: TarefaAcaoParidade[] = [
     sobreposicoes: [],
     designadoBasta: false,
   },
+  {
+    id: 'anexos',
+    rotulo: TAREFA_SECAO_ANEXOS,
+    botao: TAREFA_SECAO_ANEXOS,
+    flagApi: 'podeVerAnexos',
+    chavesEspecificas: [TAREFA_PERM.historico],
+    legado: [],
+    sobreposicoes: [],
+    designadoBasta: true,
+  },
 ];
 
 export function temChaveTarefa(permissoes: readonly string[], chaves: readonly string[]) {
@@ -151,6 +164,16 @@ export function podeCancelarTarefaPorChaves(permissoes: readonly string[]) {
 
 export function podeVerHistoricoTarefaPorChaves(permissoes: readonly string[]) {
   return temChaveTarefa(permissoes, [TAREFA_PERM.historico]);
+}
+
+export function podeVerAnexosTarefa({
+  permissoes,
+  designado,
+}: {
+  permissoes: readonly string[];
+  designado: boolean;
+}) {
+  return designado || podeVerHistoricoTarefaPorChaves(permissoes);
 }
 
 export function podeAndamentoTarefaPorChaves(permissoes: readonly string[]) {

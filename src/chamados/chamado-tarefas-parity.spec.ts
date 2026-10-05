@@ -1,19 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { PERMISSIONS_CATALOG, permissionMatrixKey } from '../domain/permissions-catalog';
 import { TAREFAS_CANCELAR_KEY, TAREFAS_CANCELAR_LEGADO_KEY } from '../domain/permissions-matrix';
-import {
-  TAREFA_ABA_HISTORICO,
-  TAREFA_BOTAO_ALTERAR_DADOS,
-  TAREFA_BOTAO_CANCELAR,
-  TAREFA_PARIDADE,
-  TAREFA_PERM,
-  chavesQueLiberam,
-  podeAlterarDadosTarefaPorChaves,
-  podeCancelarTarefaPorChaves,
-  podeVerHistoricoTarefaPorChaves,
-} from '../../frontend/lib/chamado-tarefa-permissoes';
 
 const serviceSrc = readFileSync(join(__dirname, 'chamado-tarefas.service.ts'), 'utf8');
 const controllerSrc = readFileSync(join(__dirname, 'chamado-tarefas.controller.ts'), 'utf8');
@@ -23,6 +12,18 @@ const viewSrc = readFileSync(
   'utf8',
 );
 
+const ACOES_COM_BOTAO = ['alterarDados', 'andamento', 'concluir', 'cancelar', 'historico', 'anexos'] as const;
+
+let helper: Awaited<ReturnType<typeof carregarHelper>>;
+
+async function carregarHelper() {
+  return import('../../frontend/lib/chamado-tarefa-permissoes.js');
+}
+
+beforeAll(async () => {
+  helper = await carregarHelper();
+});
+
 function funcaoChamados(id: string) {
   const tela = PERMISSIONS_CATALOG.find((item) => item.id === 'chamados');
   return tela?.functions.find((item) => item.id === id);
@@ -30,6 +31,7 @@ function funcaoChamados(id: string) {
 
 describe('paridade front × guard das ações de tarefa', () => {
   it('catálogo rotula alterar dados e expõe cancelar fora da coluna excluir', () => {
+    const { TAREFA_BOTAO_ALTERAR_DADOS, TAREFA_BOTAO_CANCELAR, TAREFA_PERM } = helper;
     const tarefas = funcaoChamados('tarefas');
     const cancelar = funcaoChamados('tarefas_cancelar');
     expect(tarefas?.actionLabels?.alterar).toBe(TAREFA_BOTAO_ALTERAR_DADOS);
@@ -47,13 +49,14 @@ describe('paridade front × guard das ações de tarefa', () => {
     expect(serviceSrc).toContain("throw new ForbiddenException('Sem permissão para cancelar a tarefa.')");
   });
 
-  it.each(TAREFA_PARIDADE.filter((acao) => acao.botao && acao.flagApi))(
-    '$id: botão/aba do front só aparece com a flag da API',
-    (acao) => {
-      expect(sheetSrc + viewSrc).toContain(acao.flagApi!);
-      expect(viewSrc).toContain(
-        acao.id === 'historico'
-          ? 'TAREFA_ABA_HISTORICO'
+  it.each(ACOES_COM_BOTAO)('%s: botão/aba do front só aparece com a flag da API', (id) => {
+    const acao = helper.TAREFA_PARIDADE.find((item) => item.id === id)!;
+    expect(sheetSrc + viewSrc).toContain(acao.flagApi!);
+    expect(viewSrc).toContain(
+      acao.id === 'historico'
+        ? 'TAREFA_ABA_HISTORICO'
+        : acao.id === 'anexos'
+          ? 'TAREFA_SECAO_ANEXOS'
           : acao.id === 'alterarDados'
             ? 'TAREFA_BOTAO_ALTERAR_DADOS'
             : acao.id === 'cancelar'
@@ -61,14 +64,17 @@ describe('paridade front × guard das ações de tarefa', () => {
               : acao.id === 'andamento'
                 ? 'TAREFA_BOTAO_ANDAMENTO'
                 : 'TAREFA_BOTAO_CONCLUIR',
-      );
-      if (acao.id === 'alterarDados' || acao.id === 'cancelar' || acao.id === 'historico') {
-        expect(acao.designadoBasta).toBe(false);
-      }
-    },
-  );
+    );
+    if (acao.id === 'alterarDados' || acao.id === 'cancelar' || acao.id === 'historico') {
+      expect(acao.designadoBasta).toBe(false);
+    }
+    if (acao.id === 'anexos') {
+      expect(acao.designadoBasta).toBe(true);
+    }
+  });
 
   it('alterar dados: helper, serviço e ficha usam a mesma chave específica', () => {
+    const { TAREFA_PERM, podeAlterarDadosTarefaPorChaves } = helper;
     expect(TAREFA_PERM.alterarDados).toBe(permissionMatrixKey('chamados', 'tarefas', 'alterar'));
     expect(serviceSrc).toContain("chave('chamados', 'tarefas', 'alterar')");
     expect(viewSrc).toContain('podeAlterarDados');
@@ -79,6 +85,7 @@ describe('paridade front × guard das ações de tarefa', () => {
   });
 
   it('cancelar: aceita a chave nova e a legada tarefas.excluir', () => {
+    const { TAREFA_PERM, podeCancelarTarefaPorChaves } = helper;
     expect(serviceSrc).toContain("chave('chamados', 'tarefas_cancelar', 'executar')");
     expect(serviceSrc).toContain("chave('chamados', 'tarefas', 'excluir')");
     expect(viewSrc).toContain('podeCancelar');
@@ -89,6 +96,7 @@ describe('paridade front × guard das ações de tarefa', () => {
   });
 
   it('histórico: helper e serviço usam tarefas_historico.visualizar; sem a chave a aba some', () => {
+    const { TAREFA_PERM, TAREFA_ABA_HISTORICO, podeVerHistoricoTarefaPorChaves } = helper;
     expect(TAREFA_PERM.historico).toBe(permissionMatrixKey('chamados', 'tarefas_historico', 'visualizar'));
     expect(serviceSrc).toContain("chave('chamados', 'tarefas_historico', 'visualizar')");
     expect(serviceSrc).toContain('podeVerHistorico: this.podeVerHistorico(user)');
@@ -99,7 +107,28 @@ describe('paridade front × guard das ações de tarefa', () => {
     expect(podeVerHistoricoTarefaPorChaves([TAREFA_PERM.visualizar])).toBe(false);
   });
 
+  it('anexos: designado ou chave de histórico; a seção aparece sem a aba de histórico', () => {
+    const { TAREFA_PERM, podeVerAnexosTarefa } = helper;
+    expect(serviceSrc).toContain('podeVerAnexos');
+    expect(serviceSrc).toContain('designadoTarefa(tarefa, user, equipesDoUsuario)');
+    expect(sheetSrc).toContain('podeVerAnexos');
+    expect(sheetSrc).toContain('!tarefa.podeVerHistorico');
+    expect(viewSrc).toContain('TAREFA_SECAO_ANEXOS');
+    expect(podeVerAnexosTarefa({ permissoes: [], designado: true })).toBe(true);
+    expect(podeVerAnexosTarefa({ permissoes: [TAREFA_PERM.historico], designado: false })).toBe(true);
+    expect(podeVerAnexosTarefa({ permissoes: [TAREFA_PERM.visualizar], designado: false })).toBe(false);
+  });
+
   it('tabela de paridade: chaves específicas + legado + sobreposições batem com o serviço', () => {
+    const {
+      TAREFA_PARIDADE,
+      TAREFA_PERM,
+      TAREFA_BOTAO_ALTERAR_DADOS,
+      TAREFA_BOTAO_CANCELAR,
+      TAREFA_ABA_HISTORICO,
+      TAREFA_SECAO_ANEXOS,
+      chavesQueLiberam,
+    } = helper;
     const linhas = TAREFA_PARIDADE.map((acao) => ({
       acao: acao.id,
       rotulo: acao.rotulo,
@@ -210,6 +239,17 @@ describe('paridade front × guard das ações de tarefa', () => {
         legado: [],
         sobreposicoes: [],
         designadoBasta: false,
+        chavesQueLiberam: [TAREFA_PERM.historico],
+      },
+      {
+        acao: 'anexos',
+        rotulo: TAREFA_SECAO_ANEXOS,
+        flag: 'podeVerAnexos',
+        botao: TAREFA_SECAO_ANEXOS,
+        especificas: [TAREFA_PERM.historico],
+        legado: [],
+        sobreposicoes: [],
+        designadoBasta: true,
         chavesQueLiberam: [TAREFA_PERM.historico],
       },
     ]);

@@ -8,6 +8,7 @@ import {
   TAREFA_BOTAO_ANDAMENTO,
   TAREFA_BOTAO_CANCELAR,
   TAREFA_BOTAO_CONCLUIR,
+  TAREFA_SECAO_ANEXOS,
 } from '../../lib/chamado-tarefa-permissoes';
 
 export function ChamadoTarefaBarraAcoes({
@@ -55,5 +56,38 @@ export function ChamadoTarefaHistoricoCabecalho({ podeVerHistorico }: { podeVerH
   if (!podeVerHistorico) return null;
   return (
     <h4 className="text-[12px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{TAREFA_ABA_HISTORICO}</h4>
+  );
+}
+
+export function ChamadoTarefaAnexosCabecalho({ visivel }: { visivel?: boolean }) {
+  if (!visivel) return null;
+  return (
+    <h4 className="text-[12px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{TAREFA_SECAO_ANEXOS}</h4>
+  );
+}
+
+export function ChamadoTarefaAnexosSecao({
+  visivel,
+  anexos = [],
+}: {
+  visivel?: boolean;
+  anexos?: Array<{ id: string; nome: string }>;
+}) {
+  if (!visivel) return null;
+  return (
+    <section className="space-y-2 border-t border-[var(--line)] pt-3">
+      <ChamadoTarefaAnexosCabecalho visivel />
+      {anexos.length ? (
+        <ul className="space-y-1">
+          {anexos.map((anexo) => (
+            <li key={anexo.id} className="text-[12px] text-[var(--ink-2)]">
+              {anexo.nome}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[12px] text-[var(--ink-3)]">Nenhum anexo.</p>
+      )}
+    </section>
   );
 }

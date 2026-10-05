@@ -710,7 +710,7 @@ export class ChamadoTarefasService {
       responsavel: tarefa.responsavel,
       criadaPor: tarefa.criadaPor,
       concluidaPor: tarefa.concluidaPor,
-      anexos: this.podeVerHistorico(user)
+      anexos: this.podeVerAnexos(tarefa, user, equipesDoUsuario)
         ? tarefa.anexos.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() }))
         : [],
       podeAlterarDados: this.podeAlterar(user) && !encerradaTarefa(tarefa.status),
@@ -718,6 +718,7 @@ export class ChamadoTarefasService {
       podeConcluir: (this.podeConcluir(user) || designadoTarefa(tarefa, user, equipesDoUsuario)) && !encerradaTarefa(tarefa.status),
       podeCancelar: this.podeCancelar(user) && !encerradaTarefa(tarefa.status),
       podeVerHistorico: this.podeVerHistorico(user),
+      podeVerAnexos: this.podeVerAnexos(tarefa, user, equipesDoUsuario),
       podeTratar:
         (!encerradaTarefa(tarefa.status) &&
           (designadoTarefa(tarefa, user, equipesDoUsuario) || this.podeAlterar(user) || this.podeAndamento(user) || this.podeConcluir(user))) ||
@@ -1053,6 +1054,10 @@ export class ChamadoTarefasService {
 
   private podeVerHistorico(user: JwtPayload) {
     return this.tem(user, [], [this.chave('chamados', 'tarefas_historico', 'visualizar')]);
+  }
+
+  private podeVerAnexos(tarefa: TarefaLoaded, user: JwtPayload, equipesDoUsuario: Set<string>) {
+    return this.podeVerHistorico(user) || designadoTarefa(tarefa, user, equipesDoUsuario);
   }
 
   private podeCancelar(user: JwtPayload) {
