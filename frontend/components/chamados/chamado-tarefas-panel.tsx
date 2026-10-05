@@ -10,7 +10,13 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { useSessionUser } from '@/components/auth/session-context';
 import { ChamadoTarefaSheet } from '@/components/chamados/chamado-tarefa-sheet';
 import { createChamadoTarefa, getOpcoesTarefa, listTarefasDoChamado } from '@/lib/api';
-import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL, type ChamadoTarefaResumo } from '@/lib/chamado-tarefa';
+import {
+  agruparTarefasDoChamado,
+  formatarDataCriacaoTarefa,
+  TAREFA_PRIORIDADE_LABEL,
+  TAREFA_STATUS_LABEL,
+  type ChamadoTarefaResumo,
+} from '@/lib/chamado-tarefa';
 import { canGerirTarefasChamado } from '@/lib/permissions-matrix';
 import {
   ANEXOS_ABERTURA_ACCEPT,
@@ -89,9 +95,7 @@ export function ChamadoTarefasPanel({
 
 function TarefasList({ items, onOpen }: { items: ChamadoTarefaResumo[]; onOpen: (id: string) => void }) {
   const [mostrarEncerradas, setMostrarEncerradas] = useState(false);
-
-  const abertas = items.filter((item) => item.status !== 'CONCLUIDA' && item.status !== 'CANCELADA');
-  const encerradas = items.filter((item) => item.status === 'CONCLUIDA' || item.status === 'CANCELADA');
+  const { abertas, encerradas } = agruparTarefasDoChamado(items);
 
   if (items.length === 0) {
     return (
@@ -149,9 +153,7 @@ function TarefaCard({ item, onOpen }: { item: ChamadoTarefaResumo; onOpen: (id: 
           {item.prazo ? ` · Prazo: ${new Date(item.prazo).toLocaleDateString('pt-BR')}` : ''}
           {item.atrasada ? ' · Atrasada' : ''}
         </span>
-        <span className="mt-0.5 block text-[11px] text-[var(--ink-4)]">
-          Criada em {new Date(item.createdAt).toLocaleDateString('pt-BR')} às {new Date(item.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-        </span>
+        <span className="mt-0.5 block text-[11px] text-[var(--ink-4)]">{formatarDataCriacaoTarefa(item.createdAt)}</span>
       </button>
     </li>
   );

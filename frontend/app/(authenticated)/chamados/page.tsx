@@ -40,7 +40,7 @@ import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { ListPagination } from '@/components/ui/list-pagination';
-import { downloadChamadoPdf, excluirChamadoLogicamente, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTiposChamadoOpcoes, notificarChamadoEquipe, restaurarChamadoExcluido, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
+import { downloadChamadoPdf, excluirChamadoLogicamente, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTarefasDoChamado, listTiposChamadoOpcoes, notificarChamadoEquipe, restaurarChamadoExcluido, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
 import { cn } from '@/lib/cn';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import { toInputDate } from '@/lib/cronograma';
@@ -900,6 +900,7 @@ function ChamadoDetailPanel({
               </Button>
               <Badge variant={prioridadeVariant(resumo.prioridade)}>{resumo.prioridade}</Badge>
               <Badge variant={st.badge}>{st.label}</Badge>
+              {tarefasPendentes > 0 ? <Badge variant="warning">Tarefas pendentes · {tarefasPendentes}</Badge> : null}
               {resumo.excluidoEm ? <Badge variant="danger">Excluído</Badge> : null}
             </div>
           </div>

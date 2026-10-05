@@ -151,7 +151,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'atribuir-tarefa',
         nome: 'Atribuir tarefa',
         atores: ['administrador', 'gestor'],
-        descricao: 'Criar tarefa do chamado (status Nova). Alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige permissão específica de alterar dados.',
+        descricao: 'Criar tarefa do chamado (status Nova), com anexos opcionais no POST de criação (mesmo armazenamento das demais mídias). O painel lista abertas primeiro e recolhe Encerradas (N). O cabeçalho do chamado mostra Tarefas pendentes. Alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige permissão específica de alterar dados.',
         rotas: ['/chamados', 'GET /chamado-tarefas/por-chamado/:chamadoId', 'POST /chamado-tarefas', 'POST /chamado-tarefas/:id/anexos'],
       },
       {
