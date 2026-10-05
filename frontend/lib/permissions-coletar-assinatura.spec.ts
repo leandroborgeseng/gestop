@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildMatrixKey, canColetarAssinatura } from './permissions-matrix';
+import { ADMINISTRADOR_SISTEMA_NOME, buildMatrixKey, canColetarAssinatura } from './permissions-matrix';
 
-describe('canColetarAssinatura (helper real)', () => {
-  it('retorna true para usuarios.gerenciar', () => {
-    expect(canColetarAssinatura(['usuarios.gerenciar'])).toBe(true);
+describe('canColetarAssinatura (helper real, paridade com o guard)', () => {
+  it('retorna false para usuarios.gerenciar sem ser Administrador do Sistema', () => {
+    expect(canColetarAssinatura(['usuarios.gerenciar'], { perfis: ['Gestor'] })).toBe(false);
   });
 
   it('retorna true para documentos.administrar', () => {
@@ -28,5 +28,9 @@ describe('canColetarAssinatura (helper real)', () => {
         buildMatrixKey('documentos', 'consultar', 'visualizar'),
       ]),
     ).toBe(false);
+  });
+
+  it('retorna true para Administrador do Sistema mesmo sem a chave', () => {
+    expect(canColetarAssinatura([], { perfis: [ADMINISTRADOR_SISTEMA_NOME] })).toBe(true);
   });
 });

@@ -1,10 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { FileText } from 'lucide-react';
 import { useSessionUser } from '@/components/auth/session-context';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import {
@@ -14,7 +12,6 @@ import {
   listDocumentosPorChamado,
   listDocumentosPorFiscalizacao,
 } from '@/lib/api';
-import { DOCUMENTO_SITUACAO_META, DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
 import {
   canAssinarDocumentoInterno,
   canCriarDocumentoAvulso,
@@ -22,18 +19,12 @@ import {
   canVerDocumentosRelacionados,
   hasDocumentosModuloAccess,
 } from '@/lib/permissions-matrix';
-import {
-  assinaturasVigentesDoCard,
-  resolvePodeColetar,
-  rotuloAssinaturaVigente,
-  rotuloSignatarioPendente,
-  signatariosPendentesDoCard,
-} from '@/components/documentos/documentos-relacionados-acoes';
 import { DocumentoDetalhe, DocumentoResumo } from '@/lib/types';
 import { NovoDocumentoAvulsoDialog, type DocumentoAvulsoVinculo } from '@/components/documentos/novo-documento-avulso-dialog';
 import { DocumentoPreencherDialog, DocumentoRespostasDialog } from '@/components/documentos/documento-consulta-dialogs';
 import { AssinarInternoDialog, DisponibilizarAssinaturaDialog } from '@/components/documentos/assinatura-interna-dialogs';
 import { ColetarAssinaturaDialog } from '@/components/documentos/coletar-assinatura-dialog';
+import { DocumentoRelacionadoCard } from '@/components/documentos/documento-relacionado-card';
 import { useSnackbar } from '@/components/ui/snackbar';
 
 type Props = {
@@ -68,7 +59,6 @@ export function DocumentosRelacionadosPanel({
   const podePreencher = hasDocumentosModuloAccess(permissoes) || canCriarDocumentoAvulso(permissoes);
   const podeAssinar = canAssinarDocumentoInterno(permissoes);
   const podeEncaminhar = canDisponibilizarAssinaturaInterna(permissoes);
-  const podeColetar = resolvePodeColetar(permissoes);
 
   async function abrirDocumento(id: string, proximo: NonNullable<typeof modo>) {
     try {
@@ -159,121 +149,22 @@ export function DocumentosRelacionadosPanel({
       ) : null}
 
       <ul className="space-y-2">
-        {items.map((item) => {
-          const situacao = DOCUMENTO_SITUACAO_META[item.situacao];
-          const pendentes = signatariosPendentesDoCard(item);
-          const assinados = assinaturasVigentesDoCard(item);
-          return (
-            <li
-              key={item.id}
-              className="rounded-[12px] border border-[var(--line)] bg-[var(--canvas)] p-3"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div className="flex-1">
-                  <p className="mono text-[12px] font-semibold text-[var(--brand-hover)]">{item.codigo}</p>
-                  <p className="mt-0.5 text-[13px] font-medium text-[var(--ink)]">{item.titulo}</p>
-                  <p className="text-[12px] text-[var(--ink-3)]">
-                    {DOCUMENTO_TIPO_LABELS[item.tipo]} · {new Date(item.createdAt).toLocaleString('pt-BR')}
-                  </p>
-                  {pendentes.length > 0 ? (
-                    <div className="mt-2 space-y-1">
-                      <p className="text-[11px] font-medium text-[var(--ink-2)]">
-                        Signatários pendentes:
-                      </p>
-                      <ul className="space-y-0.5">
-                        {pendentes.map((sig) => (
-                          <li key={sig.id} className="text-[11px] text-[var(--ink-3)]">
-                            • {rotuloSignatarioPendente(sig)}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                  {assinados.length > 0 ? (
-                    <div className="mt-2 space-y-1">
-                      <p className="text-[11px] font-medium text-[var(--ink-2)]">Assinados:</p>
-                      <ul className="space-y-0.5">
-                        {assinados.map((sig) => (
-                          <li key={sig.id} className="text-[11px] text-[var(--ink-3)]">
-                            • {rotuloAssinaturaVigente(sig)}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
-                <Badge variant={situacao.badge}>{situacao.label}</Badge>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {item.origem === 'AVULSO' && item.situacao === 'RASCUNHO' && !item.possuiPdfOriginal ? (
-                  podePreencher ? (
-                    <Button type="button" size="sm" variant="filled" onClick={() => void abrirDocumento(item.id, 'preencher')}>
-                      Preencher
-                    </Button>
-                  ) : (
-                    <Button type="button" size="sm" variant="outlined" disabled title="Sem permissão para preencher o documento">
-                      Preencher
-                    </Button>
-                  )
-                ) : null}
-                {canAbrirCadastro ? (
-                  <Link href={`/documentos?id=${item.id}`}>
-                    <Button type="button" size="sm" variant="outlined">
-                      Abrir
-                    </Button>
-                  </Link>
-                ) : ocultarCadastroSemPermissao ? null : (
-                  <Button type="button" size="sm" variant="outlined" disabled title="Sem permissão para abrir o cadastro do documento">
-                    Abrir
-                  </Button>
-                )}
-                <Button type="button" size="sm" variant="ghost" onClick={() => void abrirDocumento(item.id, 'ver')}>
-                  Ver respostas do documento
-                </Button>
-                {item.possuiPdfOriginal ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => void downloadDocumentoPdfOriginal(item.id, item.codigo)}
-                  >
-                    PDF original
-                  </Button>
-                ) : null}
-                {item.possuiPdfAssinado ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => void downloadDocumentoPdfAssinado(item.id, item.codigo)}
-                  >
-                    PDF assinado
-                  </Button>
-                ) : null}
-                {item.possuiPdfOriginal && item.situacao !== 'RASCUNHO' && item.situacao !== 'CANCELADO' && podeAssinar ? (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => void abrirDocumento(item.id, 'assinar')}>
-                    Assinar com usuário e senha
-                  </Button>
-                ) : null}
-                {item.possuiPdfOriginal && item.situacao !== 'RASCUNHO' && item.situacao !== 'CANCELADO' && podeEncaminhar ? (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => void abrirDocumento(item.id, 'encaminhar')}>
-                    Encaminhar para assinatura
-                  </Button>
-                ) : null}
-                {item.possuiPdfOriginal && item.situacao !== 'CANCELADO' && podeColetar ? (
-                  <Button type="button" size="sm" variant="ghost" onClick={() => void abrirDocumento(item.id, 'coletar')}>
-                    Coletar nova assinatura
-                  </Button>
-                ) : null}
-              </div>
-              {!canAbrirCadastro && !ocultarCadastroSemPermissao ? (
-                <p className="mt-1.5 text-[11px] text-[var(--ink-3)]">
-                  Sem permissão para abrir o cadastro do documento
-                </p>
-              ) : null}
-            </li>
-          );
-        })}
+        {items.map((item) => (
+          <DocumentoRelacionadoCard
+            key={item.id}
+            item={item}
+            permissoes={permissoes}
+            user={sessionUser}
+            podePreencher={podePreencher}
+            podeAssinar={podeAssinar}
+            podeEncaminhar={podeEncaminhar}
+            canAbrirCadastro={canAbrirCadastro}
+            ocultarCadastroSemPermissao={ocultarCadastroSemPermissao}
+            onAcao={(id, modo) => void abrirDocumento(id, modo)}
+            onPdfOriginal={(id, codigo) => void downloadDocumentoPdfOriginal(id, codigo)}
+            onPdfAssinado={(id, codigo) => void downloadDocumentoPdfAssinado(id, codigo)}
+          />
+        ))}
       </ul>
       <DocumentoPreencherDialog
         documento={modo === 'preencher' ? detalhe : null}

@@ -1,11 +1,19 @@
 import { canColetarAssinatura } from '@/lib/permissions-matrix';
 import type { DocumentoResumo } from '@/lib/types';
 
-/** Mesma regra do backend: `documentos.coletar_assinatura` / matriz / administrar. */
-export function resolvePodeColetar(permissoes: string[]) {
-  return canColetarAssinatura(permissoes);
+/** Mesma regra do PermissionsGuard de POST /documentos/:id/assinatura. */
+export function resolvePodeColetar(
+  permissoes: string[],
+  user?: { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null,
+) {
+  return canColetarAssinatura(permissoes, user);
 }
 
+/**
+ * Pedidos de assinatura interna ainda PENDENTE.
+ * O backend só serializa `DocumentoAssinaturaPedido` (destinatário = Usuario do SIGMA);
+ * assinatura externa desenhada vai em `assinaturas`, não neste bloco.
+ */
 export function signatariosPendentesDoCard(
   item: Pick<DocumentoResumo, 'signatariosPendentes'>,
 ) {

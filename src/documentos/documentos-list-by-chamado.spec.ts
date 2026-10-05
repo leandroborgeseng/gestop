@@ -94,7 +94,7 @@ describe('DocumentosService.listByChamado', () => {
     service = new DocumentosService(prisma as never, storage as never);
   });
 
-  it('devolve signatários pendentes no payload da listagem do chamado', async () => {
+  it('devolve signatários internos pendentes (pedidos a Usuario), não a assinatura externa', async () => {
     prisma.documento.count.mockResolvedValue(1);
     prisma.documento.findMany.mockResolvedValue([documentoPrisma()]);
 
@@ -110,6 +110,9 @@ describe('DocumentosService.listByChamado', () => {
         meu: false,
       }),
     ]);
+    expect(result.items[0].signatariosPendentes.map((item: { nome: string }) => item.nome)).not.toContain(
+      'Terceiro',
+    );
     expect(result.items[0].assinaturas).toEqual([
       expect.objectContaining({ id: 'ass-1', assinanteNome: 'Terceiro' }),
     ]);
