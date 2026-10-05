@@ -168,8 +168,10 @@ export class ChamadoTarefasService {
       },
       include: TAREFA_INCLUDE,
     });
-    await this.registrarTrilha(criada, user, 'criada', criadoResumo(criada));
-    return this.serialize(criada, user, await this.equipeIdsDoUsuario(user.sub));
+    const anexoIds = await this.gravarAnexos(criada.id, dto.anexos ?? [], user);
+    const atual = anexoIds.length ? await this.requireTarefa(criada.id) : criada;
+    await this.registrarTrilha(atual, user, 'criada', criadoResumo(atual), undefined, anexoIds);
+    return this.serialize(atual, user, await this.equipeIdsDoUsuario(user.sub));
   }
 
   async getById(id: string, user: JwtPayload) {

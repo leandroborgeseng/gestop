@@ -730,6 +730,7 @@ function ChamadoDetailPanel({
   const [pdfBusy, setPdfBusy] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
   const [tarefasOpen, setTarefasOpen] = useState(false);
+  const [tarefasPendentes, setTarefasPendentes] = useState(0);
   const [motivo, setMotivo] = useState('');
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
   const [pendingEquipePlanejamentoId, setPendingEquipePlanejamentoId] = useState('');
@@ -754,6 +755,9 @@ function ChamadoDetailPanel({
     setPendingTipoId(resumo.tipoChamado?.id ?? '');
     setPendingPrioridadeTriagem(resumo.prioridade);
     setTriagemMotivo('');
+    listTarefasDoChamado(resumo.id)
+      .then((data) => setTarefasPendentes(data.pendentes))
+      .catch(() => setTarefasPendentes(0));
   }, [resumo?.id, resumo?.status, resumo?.impedimentoMotivo, resumo?.equipe?.id, resumo?.responsavel?.id, resumo?.previstaExecucaoEm, resumo?.tipoChamado?.id, resumo?.prioridade]);
 
   if (!resumo) {
@@ -888,6 +892,11 @@ function ChamadoDetailPanel({
               >
                 <ClipboardList className="h-3.5 w-3.5" />
                 Tarefas
+                {tarefasPendentes > 0 ? (
+                  <span className="ml-1.5 inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--brand)] px-1.5 text-[11px] font-semibold text-white">
+                    {tarefasPendentes}
+                  </span>
+                ) : null}
               </Button>
               <Badge variant={prioridadeVariant(resumo.prioridade)}>{resumo.prioridade}</Badge>
               <Badge variant={st.badge}>{st.label}</Badge>
@@ -920,7 +929,13 @@ function ChamadoDetailPanel({
         </div>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-5">
-          {tarefasOpen ? <ChamadoTarefasPanel chamadoId={resumo.id} onClose={() => setTarefasOpen(false)} /> : null}
+          {tarefasOpen ? (
+            <ChamadoTarefasPanel
+              chamadoId={resumo.id}
+              onClose={() => setTarefasOpen(false)}
+              onPendentesChange={(count) => setTarefasPendentes(count)}
+            />
+          ) : null}
           {docsOpen ? (
             <DocumentosRelacionadosPanel
               chamadoId={resumo.id}
