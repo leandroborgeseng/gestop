@@ -27,7 +27,7 @@ import {
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import { ChamadosService } from '../chamados/chamados.service';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
-import { apresentarValorTexto } from '../checklists/checklist-item.rules';
+import { resolveRespostaTexto } from '../checklists/checklist-resposta-apresentacao';
 import { CronogramaService } from '../cronograma/cronograma.service';
 import { DocumentosService } from '../documentos/documentos.service';
 import { validateChecklistResponses } from '../domain/checklist-response.rules';
@@ -367,7 +367,7 @@ export class FiscalizacoesService {
         titulo: resposta.item.titulo,
         categoriaNome: resposta.item.categoriaVistoria?.nome ?? null,
         tipo: resposta.item.tipo,
-        respostaTexto: this.resolveRespostaTexto(resposta),
+        respostaTexto: resolveRespostaTexto(resposta),
         comentario: resposta.comentario,
         conformidade: resposta.conformidade ?? null,
         naoConformidade: resposta.naoConformidade
@@ -404,20 +404,6 @@ export class FiscalizacoesService {
       notasPorCategoria: nota.notasPorCategoria.map((item) => ({ categoriaNome: item.categoriaNome, nota: item.nota })),
       respostas,
     });
-  }
-
-  private resolveRespostaTexto(resposta: {
-    valorTexto?: string | null;
-    valorBooleano?: boolean | null;
-    valorNumero?: unknown;
-    conformidade?: ConformidadeStatus | null;
-  }): string {
-    if (resposta.valorTexto?.trim()) return apresentarValorTexto(resposta.valorTexto.trim());
-    if (resposta.valorBooleano === true) return 'Sim';
-    if (resposta.valorBooleano === false) return 'Não';
-    if (resposta.valorNumero != null) return String(resposta.valorNumero);
-    if (resposta.conformidade) return resposta.conformidade === 'CONFORME' ? 'Conforme' : 'Não conforme';
-    return '—';
   }
 
   async getOpcoesManuais(user: JwtPayload) {

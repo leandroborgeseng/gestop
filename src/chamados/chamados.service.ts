@@ -24,7 +24,8 @@ import { buildRelatorioExecucaoPdf } from '../documentos/relatorio-execucao-pdf'
 import { IntegracoesService } from '../integracoes/integracoes.service';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { apresentarValorTexto, getMultiplaEscolhaValues, parseValoresMultiplaEscolha, selecaoDaMultipla } from '../checklists/checklist-item.rules';
+import { getMultiplaEscolhaValues, parseValoresMultiplaEscolha, selecaoDaMultipla } from '../checklists/checklist-item.rules';
+import { resolveRespostaTexto } from '../checklists/checklist-resposta-apresentacao';
 import {
   andChamadoAtivo,
   andChamadoComExcluidos,
@@ -2313,10 +2314,7 @@ export class ChamadosService {
     valorTexto?: string | null;
     valorNumero?: number | null;
   }) {
-    if (item.naoSeAplica) return 'Não se aplica';
-    if (item.valorBooleano != null) return item.valorBooleano ? 'Sim' : 'Não';
-    if (item.valorNumero != null) return String(item.valorNumero);
-    return item.valorTexto?.trim() ? apresentarValorTexto(item.valorTexto) : '—';
+    return resolveRespostaTexto(item);
   }
 
   private async resolveExecucaoAnexoFromUrl(url: string, legenda: string) {

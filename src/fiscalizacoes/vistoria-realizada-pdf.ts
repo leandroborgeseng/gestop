@@ -1,4 +1,5 @@
 import { formatSecretariaLabel } from '../common/format-secretaria';
+import { deveExibirCabecalhoSecao, tituloPerguntaChecklist } from '../checklists/checklist-resposta-apresentacao';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
@@ -202,7 +203,7 @@ function drawPergunta(
   doc.restore();
   y += 6;
 
-  const title = `${index + 1}. ${resposta.titulo}`;
+  const title = `${index + 1}. ${tituloPerguntaChecklist(resposta.titulo, resposta.codigo)}`;
   doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND_PRIMARY).text(title, left, y, { width });
   y = doc.y + 4;
 
@@ -333,11 +334,10 @@ export function buildVistoriaRealizadaPdf(input: VistoriaRealizadaPdfInput): Pro
 
     let secaoAtual = '';
     input.respostas.forEach((resposta, index) => {
-      const secao = resposta.secao?.trim() ?? '';
-      if (secao && secao !== secaoAtual) {
-        secaoAtual = secao;
-        y = drawSecaoHeader(doc, secao, left, width, y, marginTop);
-      } else if (!secao) {
+      if (deveExibirCabecalhoSecao(resposta.secao, secaoAtual)) {
+        secaoAtual = resposta.secao?.trim() ?? '';
+        y = drawSecaoHeader(doc, secaoAtual, left, width, y, marginTop);
+      } else if (!resposta.secao?.trim()) {
         secaoAtual = '';
       }
       y = drawPergunta(doc, resposta, index, left, width, y, marginTop);
