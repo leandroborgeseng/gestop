@@ -396,6 +396,15 @@ describe('ChamadoTarefasService — leitura do chamado via tarefa', () => {
           capturadaEm: new Date('2026-10-01T12:00:00.000Z'),
           metadata: { origem: 'abertura', nomeOriginal: 'fachada.jpg' },
         },
+        {
+          id: 'ev-historico',
+          url: '/storage/historico.jpg',
+          storageKey: 'historico.jpg',
+          mimeType: 'image/jpeg',
+          tamanhoBytes: 18,
+          capturadaEm: new Date('2026-10-01T12:05:00.000Z'),
+          metadata: { origem: 'historico_manual', nome: 'comentario.jpg', descricao: 'anexo do histórico' },
+        },
       ],
     });
     prisma.historicoStatus.findMany.mockResolvedValue([
@@ -404,7 +413,7 @@ describe('ChamadoTarefasService — leitura do chamado via tarefa', () => {
         statusAnterior: null,
         statusNovo: 'ABERTO',
         motivo: 'Chamado aberto',
-        metadata: { tipo: 'abertura', evidenciaIds: ['ev-abertura'] },
+        metadata: { tipo: 'abertura', evidenciaIds: ['ev-historico'] },
         createdAt: new Date('2026-10-01T12:00:00.000Z'),
         alteradoPor: { id: 'user-admin', nome: 'Admin' },
       },
@@ -412,12 +421,18 @@ describe('ChamadoTarefasService — leitura do chamado via tarefa', () => {
 
     const resultado = await service.getChamadoLeituraViaTarefa('tarefa-1', 'chamado-1', userResponsavelTarefa());
 
+    expect(prisma.historicoStatus.findMany).toHaveBeenCalledWith({
+      where: { entidadeTipo: 'Chamado', entidadeId: 'chamado-1' },
+      orderBy: { createdAt: 'asc' },
+      include: { alteradoPor: { select: { id: true, nome: true } } },
+    });
     expect(resultado.somenteLeitura).toBe(true);
     expect(resultado.anexosAbertura).toHaveLength(1);
     expect(resultado.anexosAbertura[0]?.nome).toBe('fachada.jpg');
     expect(resultado.historico).toHaveLength(1);
     expect(resultado.historico[0]?.motivo).toBe('Chamado aberto');
     expect(resultado.historico[0]?.anexos).toHaveLength(1);
+    expect(resultado.historico[0]?.anexos?.[0]?.nome).toBe('comentario.jpg');
   });
 
   it('não devolve campo interno de metadata fora da whitelist da ficha', async () => {
@@ -429,7 +444,17 @@ describe('ChamadoTarefasService — leitura do chamado via tarefa', () => {
       createdAt: new Date('2026-10-01T12:00:00.000Z'),
       registradoPorId: 'user-admin',
       registradoPor: { nome: 'Admin' },
-      evidencias: [],
+      evidencias: [
+        {
+          id: 'ev-whitelist',
+          url: '/storage/whitelist.jpg',
+          storageKey: 'whitelist.jpg',
+          mimeType: 'image/jpeg',
+          tamanhoBytes: 10,
+          capturadaEm: new Date('2026-10-01T12:00:00.000Z'),
+          metadata: { origem: 'historico_manual', nome: 'visivel.jpg' },
+        },
+      ],
     });
     prisma.historicoStatus.findMany.mockResolvedValue([
       {
@@ -440,6 +465,7 @@ describe('ChamadoTarefasService — leitura do chamado via tarefa', () => {
         metadata: {
           tipo: 'HISTORY_UPDATE',
           descricao: 'Comentário visível na ficha',
+          evidenciaIds: ['ev-whitelist'],
           tokenInterno: 'segredo-nao-pode-sair',
           storageKeyInterna: 'evidencias/secreto.bin',
         },
@@ -455,6 +481,13 @@ describe('ChamadoTarefasService — leitura do chamado via tarefa', () => {
     expect(metadata.descricao).toBe('Comentário visível na ficha');
     expect(metadata).not.toHaveProperty('tokenInterno');
     expect(metadata).not.toHaveProperty('storageKeyInterna');
+    expect(resultado.historico[0]?.anexos).toHaveLength(1);
+    expect(resultado.historico[0]?.anexos?.[0]?.nome).toBe('visivel.jpg');
+    expect(prisma.historicoStatus.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { entidadeTipo: 'Chamado', entidadeId: 'chamado-1' },
+      }),
+    );
   });
 
   it('usuário sem acesso à tarefa é negado nessa via', async () => {
