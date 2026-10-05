@@ -2,13 +2,12 @@ import 'reflect-metadata';
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { describe, expect, it } from 'vitest';
-import { ADMINISTRADOR_SISTEMA_NOME } from '../domain/permissions-catalog';
-import { permissionMatrixKey } from '../domain/permissions-catalog';
+import { ADMINISTRADOR_SISTEMA_NOME, permissionMatrixKey } from '../domain/permissions-catalog';
 import { expandSessionPermissionKeys, hasAnyPermission, REQUIRED_ANY_PERMISSIONS_KEY } from '../auth/permissions';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { JwtPayload } from '../auth/jwt';
 import { DocumentosController } from './documentos.controller';
-import { canColetarAssinatura } from '@/lib/permissions-matrix';
+import { canColetarAssinatura } from '../domain/can-coletar-assinatura';
 
 const COLETAR_HANDLERS = [
   DocumentosController.prototype.coletarAssinatura,
@@ -82,6 +81,13 @@ const TABELA: Array<{
     esperado: false,
   },
   {
+    nome: 'matriz.documentos.administrar.alterar (sessão crua, sem chave legada)',
+    user: jwt({
+      permissoes: [permissionMatrixKey('documentos', 'administrar', 'alterar')],
+    }),
+    esperado: true,
+  },
+  {
     nome: 'Administrador do Sistema',
     user: jwt({ permissoes: [], perfis: [ADMINISTRADOR_SISTEMA_NOME] }),
     esperado: true,
@@ -105,6 +111,14 @@ describe('paridade canColetarAssinatura × PermissionsGuard (coletar assinatura)
       permissionMatrixKey('documentos', 'coletar_assinatura', 'executar'),
     ]);
     expect(expanded.has('documentos.coletar_assinatura')).toBe(true);
+  });
+
+  it('expandSessionPermissionKeys deriva documentos.administrar da chave de matriz administrar.alterar', () => {
+    const expanded = expandSessionPermissionKeys([
+      permissionMatrixKey('documentos', 'administrar', 'alterar'),
+    ]);
+    expect(expanded.has('documentos.administrar')).toBe(true);
+    expect(expanded.has('documentos.coletar_assinatura')).toBe(false);
   });
 
   it.each(TABELA)('$nome: front e guard coincidem (esperado $esperado)', ({ user, esperado }) => {

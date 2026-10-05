@@ -100,6 +100,25 @@ describe('DocumentosService.listByChamado', () => {
 
     const result = await service.listByChamado('ch-1', user());
 
+    expect(prisma.documento.findMany).toHaveBeenCalledTimes(1);
+    const findManyArg = prisma.documento.findMany.mock.calls[0][0] as {
+      where: unknown;
+      include: { assinaturaPedidos?: { where?: { status?: string } } };
+    };
+    expect(findManyArg.include.assinaturaPedidos?.where).toEqual({ status: 'PENDENTE' });
+    expect(findManyArg.where).toEqual(
+      expect.objectContaining({
+        AND: expect.arrayContaining([
+          expect.objectContaining({
+            OR: [
+              { chamadoId: 'ch-1' },
+              { chamadosVinculados: { some: { chamadoId: 'ch-1' } } },
+            ],
+          }),
+        ]),
+      }),
+    );
+
     expect(result.total).toBe(1);
     expect(result.items[0].signatariosPendentes).toEqual([
       expect.objectContaining({

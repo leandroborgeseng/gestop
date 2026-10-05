@@ -59,6 +59,16 @@ describe('DocumentoRelacionadoCard', () => {
     expect(html).toContain('Coletar nova assinatura');
   });
 
+  it('não mostra Coletar em documento CANCELADO mesmo com permissão', () => {
+    const html = renderCard(resumo({ situacao: 'CANCELADO' }), ['documentos.coletar_assinatura']);
+    expect(html).not.toContain('Coletar nova assinatura');
+  });
+
+  it('não mostra Coletar sem PDF original mesmo com permissão', () => {
+    const html = renderCard(resumo({ possuiPdfOriginal: false }), ['documentos.coletar_assinatura']);
+    expect(html).not.toContain('Coletar nova assinatura');
+  });
+
   it('lista signatários internos pendentes com nome e e-mail', () => {
     const html = renderCard(
       resumo({

@@ -20,6 +20,10 @@ describe('canColetarAssinatura (helper real, paridade com o guard)', () => {
     );
   });
 
+  it('retorna true para matriz.documentos.administrar.alterar (sessão crua)', () => {
+    expect(canColetarAssinatura([buildMatrixKey('documentos', 'administrar', 'alterar')])).toBe(true);
+  });
+
   it('retorna false com acesso ao módulo sem coletar_assinatura', () => {
     expect(
       canColetarAssinatura([

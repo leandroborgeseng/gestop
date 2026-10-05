@@ -230,31 +230,7 @@ export function canDisponibilizarAssinaturaInterna(permissoes: string[]) {
   );
 }
 
-/**
- * Paridade com o PermissionsGuard de POST /documentos/:id/assinatura
- * (`RequireAnyPermissions('documentos.coletar_assinatura', 'documentos.administrar')`).
- * O guard só faz bypass para Administrador do Sistema — `usuarios.gerenciar` sozinho toma 403.
- * `matriz.documentos.coletar_assinatura.executar` vira a chave legada via expandSessionPermissionKeys.
- */
-export function canColetarAssinatura(
-  permissoes: string[],
-  user?: { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null,
-) {
-  if (isAdministradorSistemaAtivo(user) || Boolean(user?.perfis?.includes(ADMINISTRADOR_SISTEMA_NOME))) {
-    return true;
-  }
-  if (permissoes.includes('documentos.administrar') || permissoes.includes('documentos.coletar_assinatura')) {
-    return true;
-  }
-  if (permissoes.includes(buildMatrixKey('documentos', 'coletar_assinatura', 'executar'))) {
-    return true;
-  }
-  return (
-    permissoes.includes(buildMatrixKey('documentos', 'administrar', 'alterar')) ||
-    permissoes.includes(buildMatrixKey('documentos', 'administrar', 'excluir')) ||
-    permissoes.includes(buildMatrixKey('documentos', 'administrar', 'executar'))
-  );
-}
+export { canColetarAssinatura } from '../../src/domain/can-coletar-assinatura';
 
 export function canCriarDocumentoAvulso(permissoes: string[]) {
   if (permissoes.includes('usuarios.gerenciar') || permissoes.includes('documentos.administrar')) return true;
