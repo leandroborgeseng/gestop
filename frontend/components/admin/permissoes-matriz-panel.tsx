@@ -27,6 +27,7 @@ import {
   PermissionAction,
   PermissionCatalogScreen,
   buildMatrixKey,
+  catalogCheckboxLabel,
   getScreenFunctionRows,
   screenActionState,
   setScreenAction,
@@ -551,7 +552,8 @@ export function PermissoesMatrizPanel({
                                     if (node) node.indeterminate = state === 'partial';
                                   }}
                                   onChange={(event) => handleScreenCheckbox(tela.id, acao, event.target.checked)}
-                                  aria-label={`${tela.label} · ${PERMISSION_ACTION_LABELS[acao]}`}
+                                  aria-label={catalogCheckboxLabel(screenRow, acao)}
+                                  title={catalogCheckboxLabel(screenRow, acao)}
                                 />
                               </td>
                             );
@@ -580,7 +582,8 @@ export function PermissoesMatrizPanel({
                                           onChange={(event) =>
                                             handleFunctionCheckbox(tela.id, funcao.id, acao, event.target.checked)
                                           }
-                                          aria-label={`${funcao.label} · ${PERMISSION_ACTION_LABELS[acao]}`}
+                                          aria-label={catalogCheckboxLabel(funcao, acao)}
+                                          title={catalogCheckboxLabel(funcao, acao)}
                                         />
                                       </td>
                                     );

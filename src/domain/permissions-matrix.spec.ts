@@ -112,4 +112,10 @@ describe('permissions-matrix', () => {
     expect(matrix.has(permissionMatrixKey('admin', 'usuarios', 'inserir'))).toBe(true);
     expect(matrix.has(permissionMatrixKey('admin', 'importacao', 'executar'))).toBe(true);
   });
+
+  it('expande tarefas.excluir para tarefas_cancelar.executar sem apagar a chave antiga', () => {
+    const effective = resolveEffectiveMatrixKeys([permissionMatrixKey('chamados', 'tarefas', 'excluir')]);
+    expect(effective.has(permissionMatrixKey('chamados', 'tarefas', 'excluir'))).toBe(true);
+    expect(effective.has(permissionMatrixKey('chamados', 'tarefas_cancelar', 'executar'))).toBe(true);
+  });
 });

@@ -144,7 +144,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/chamados (painel da tarefa; indicador Tarefas pendentes no cabeçalho)',
     api: 'ChamadoTarefasController: GET /chamado-tarefas/por-chamado/:chamadoId, GET /opcoes, POST /chamado-tarefas (anexos opcionais no body), PATCH /:id, POST /:id/anexos',
     tabelas: 'ChamadoTarefa, ChamadoTarefaAnexo, Chamado, Secretaria, Equipe, Usuario',
-    permissao: 'matriz.chamados.tarefas: visualizar, inserir (criar), alterar (dados de abertura; responsável e equipe geram eventos distintos na trilha), executar (andamento e conclusão, compatível), excluir (cancelar). Funções extras: tarefas_andamento, tarefas_concluir e tarefas_historico. Administrador do Sistema ignora a matriz. Responsável ou membro da equipe não ganha alterar dados.',
+    permissao: 'matriz.chamados.tarefas: visualizar (Visualizar tarefas), inserir (Criar tarefa), alterar (Alterar dados da tarefa; responsável e equipe geram eventos distintos na trilha), executar (andamento e conclusão, compatível). Cancelar: matriz.chamados.tarefas_cancelar.executar, com compatibilidade para a chave antiga matriz.chamados.tarefas.excluir. Funções extras: tarefas_andamento, tarefas_concluir e tarefas_historico (histórico e anexos da tarefa). Administrador do Sistema ignora a matriz. Responsável ou membro da equipe não ganha alterar dados nem cancelar nem ver histórico.',
   },
   {
     id: 'tarefas-exec',
@@ -153,7 +153,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/execucao (aba tarefas)',
     api: 'ChamadoTarefasController: GET /chamado-tarefas/execucao, PATCH /chamado-tarefas/:id, GET /chamado-tarefas/:id/chamado/:chamadoId (anexos e histórico em leitura; metadata do histórico na mesma whitelist da ficha: tipo, descricao, alteracoes, observadorNome, observadorIds, perfilAtivo, perfilAtivoNome, secretariaAtiva, secretariaAtivaSigla, resumo, temAnexos, documentoCodigo, impedimento, impedimentoMotivo, relatorio, distanciaMetros, evidenciasCount, equipeExecutora, membrosExecutores, membrosExternos, participantes, checklistComplementar). Gestão do chamado continua nas rotas reais de ChamadosController (POST /chamados/:id/historico, PUT /:id/status, POST|DELETE /:id/execucao/evidencias, POST /:id/exclusao-logica).',
     tabelas: 'ChamadoTarefa, EquipeUsuario, Usuario, Chamado, Evidencia, HistoricoStatus',
-    permissao: 'As mesmas chaves de chamados.tarefas, mais matriz.execucao.tarefas e chamados.tarefas_atribuidas.visualizar. Filtros da aba ficam na sanfona Filtros de tarefas. A leitura do chamado pela tarefa exige ver a tarefa e o vínculo tarefa↔chamado; não concede gestão do chamado.',
+    permissao: 'As mesmas chaves de chamados.tarefas, mais matriz.execucao.tarefas e chamados.tarefas_atribuidas.visualizar. Cancelar: tarefas_cancelar.executar (compatível com tarefas.excluir). Histórico e anexos da tarefa: tarefas_historico.visualizar ou Administrador do Sistema. Filtros da aba ficam na sanfona Filtros de tarefas. A leitura do chamado pela tarefa exige ver a tarefa e o vínculo tarefa↔chamado; não concede gestão do chamado.',
   },
   {
     id: 'tarefas-rel',

@@ -366,6 +366,17 @@ export function expandLegacyToMatrixKeys(legacyKeys: Set<string>): Set<string> {
   return matrix;
 }
 
+/** Compatibilidade 269: cancelar usava `tarefas.excluir`; a matriz nova usa `tarefas_cancelar.executar`. */
+export const TAREFAS_CANCELAR_KEY = permissionMatrixKey('chamados', 'tarefas_cancelar', 'executar');
+export const TAREFAS_CANCELAR_LEGADO_KEY = permissionMatrixKey('chamados', 'tarefas', 'excluir');
+
+export function expandCompatibleMatrixKeys(matrix: Set<string>) {
+  if (matrix.has(TAREFAS_CANCELAR_LEGADO_KEY)) {
+    matrix.add(TAREFAS_CANCELAR_KEY);
+  }
+  return matrix;
+}
+
 export function resolveEffectiveMatrixKeys(storedKeys: string[]): Set<string> {
   const legacy = new Set(storedKeys.filter((key) => !isMatrixPermissionKey(key)));
   const matrix = new Set(storedKeys.filter((key) => isMatrixPermissionKey(key)));
@@ -376,6 +387,7 @@ export function resolveEffectiveMatrixKeys(storedKeys: string[]): Set<string> {
     }
   }
 
+  expandCompatibleMatrixKeys(matrix);
   return matrix;
 }
 

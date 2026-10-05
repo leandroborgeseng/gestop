@@ -12,12 +12,12 @@ export const BLOCOS_ARQUITETURA: BlocoArquitetura[] = [
     id: 'frontend',
     nome: 'Frontend Next.js',
     papel: 'App Router com telas autenticadas, rotas públicas de chamado e validação de documento, e a área administrativa.',
-    onde: 'frontend/app. Sessão e menu em frontend/lib/navigation.ts e frontend/lib/permissions-matrix.ts.',
+    onde: 'frontend/app. Sessão e menu em frontend/lib/navigation.ts, frontend/lib/permissions-matrix.ts e frontend/lib/chamado-tarefa-permissoes.ts.',
   },
   {
     id: 'api',
     nome: 'API NestJS',
-    papel: 'Controllers por módulo (auth, chamados, tarefas, fiscalizações, documentos, operacional, admin, mobile, cronograma, relatórios, integrações, backup, e-mail, LGPD). AuthGuard e PermissionsGuard nas rotas privadas.',
+    papel: 'Controllers por módulo (auth, chamados, tarefas, fiscalizações, documentos, operacional, admin, mobile, cronograma, relatórios, integrações, backup, e-mail, LGPD). AuthGuard e PermissionsGuard nas rotas privadas. A matriz de tarefas separa visualizar, criar, alterar dados, andamento, concluir, cancelar e histórico; o PATCH da tarefa recusa no serviço.',
     onde: 'src/app.module.ts e os controllers em src/.',
   },
   {

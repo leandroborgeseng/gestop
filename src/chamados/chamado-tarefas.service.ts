@@ -655,13 +655,17 @@ export class ChamadoTarefasService {
   }
 
   private async detalhe(tarefa: TarefaLoaded, user: JwtPayload, equipes?: Set<string>) {
+    const base = this.serialize(tarefa, user, equipes ?? (await this.equipeIdsDoUsuario(user.sub)));
+    if (!base.podeVerHistorico) {
+      return { ...base, historico: [] };
+    }
     const historico = await this.prisma.historicoStatus.findMany({
       where: { entidadeTipo: 'ChamadoTarefa', entidadeId: tarefa.id },
       orderBy: { createdAt: 'asc' },
       include: { alteradoPor: { select: { id: true, nome: true } } },
     });
     return {
-      ...this.serialize(tarefa, user, equipes ?? (await this.equipeIdsDoUsuario(user.sub))),
+      ...base,
       historico: historico.map((item) => {
         const meta = item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
           ? (item.metadata as Record<string, unknown>)
@@ -706,12 +710,14 @@ export class ChamadoTarefasService {
       responsavel: tarefa.responsavel,
       criadaPor: tarefa.criadaPor,
       concluidaPor: tarefa.concluidaPor,
-      anexos: tarefa.anexos.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })),
+      anexos: this.podeVerHistorico(user)
+        ? tarefa.anexos.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() }))
+        : [],
       podeAlterarDados: this.podeAlterar(user) && !encerradaTarefa(tarefa.status),
       podeAndamento: (this.podeAndamento(user) || designadoTarefa(tarefa, user, equipesDoUsuario)) && !encerradaTarefa(tarefa.status),
       podeConcluir: (this.podeConcluir(user) || designadoTarefa(tarefa, user, equipesDoUsuario)) && !encerradaTarefa(tarefa.status),
       podeCancelar: this.podeCancelar(user) && !encerradaTarefa(tarefa.status),
-      podeVerHistorico: true,
+      podeVerHistorico: this.podeVerHistorico(user),
       podeTratar:
         (!encerradaTarefa(tarefa.status) &&
           (designadoTarefa(tarefa, user, equipesDoUsuario) || this.podeAlterar(user) || this.podeAndamento(user) || this.podeConcluir(user))) ||
@@ -1045,8 +1051,16 @@ export class ChamadoTarefasService {
     );
   }
 
+  private podeVerHistorico(user: JwtPayload) {
+    return this.tem(user, [], [this.chave('chamados', 'tarefas_historico', 'visualizar')]);
+  }
+
   private podeCancelar(user: JwtPayload) {
-    return this.tem(user, ['chamados.gerenciar'], [this.chave('chamados', 'tarefas', 'excluir')]);
+    return this.tem(
+      user,
+      ['chamados.gerenciar'],
+      [this.chave('chamados', 'tarefas_cancelar', 'executar'), this.chave('chamados', 'tarefas', 'excluir')],
+    );
   }
 
   private assertPodeAtribuir(user: JwtPayload) {
