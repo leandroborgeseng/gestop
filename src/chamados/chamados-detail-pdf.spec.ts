@@ -42,4 +42,26 @@ describe('PDF de detalhe do chamado (histórico de execução)', () => {
     expect(texto).toContain('Bom, Ótimo');
     expect(texto).not.toContain('["');
   });
+
+  it('P18 origem NC no PDF usa só o título, sem código técnico', async () => {
+    const buffer = await buildChamadoDetalhePdf({
+      codigo: 'CH-NC',
+      descricao: 'Chamado originado de não conformidade',
+      status: 'ABERTO',
+      prioridade: 'ALTA',
+      origem: 'VISTORIA',
+      createdAt: '2026-10-05T14:30:00.000Z',
+      naoConformidade: {
+        descricao: 'Infiltração visível na parede interna',
+        item: { codigo: 'ZZ-COD-NC', titulo: 'Estado das paredes internas' },
+      },
+      historico: [],
+    });
+
+    const texto = await extrairTextoPdf(buffer);
+    expect(texto).toContain('Estado das paredes internas');
+    expect(texto).toContain('Infiltração visível na parede interna');
+    expect(texto).not.toContain('ZZ-COD-NC');
+    expect(texto).not.toContain('ZZ-COD-NC — Estado das paredes internas');
+  });
 });
