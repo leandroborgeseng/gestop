@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { ChamadoPrioridade, ChamadoTarefaStatus } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JwtPayload } from '../auth/jwt';
@@ -106,6 +106,7 @@ describe('ChamadoTarefasService', () => {
       findMany: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
+      delete: vi.fn(),
     },
     chamadoTarefaAnexo: { create: vi.fn() },
     historicoStatus: { create: vi.fn(), findMany: vi.fn() },
@@ -128,6 +129,7 @@ describe('ChamadoTarefasService', () => {
     prisma.perfil.findUnique.mockResolvedValue(null);
     prisma.secretaria.findUnique.mockResolvedValue(null);
     prisma.historicoStatus.create.mockResolvedValue({ id: 'hist-1' });
+    prisma.chamadoTarefa.delete.mockResolvedValue({ id: 'tarefa-1' });
     audit.record.mockResolvedValue(undefined);
   });
 
@@ -219,6 +221,56 @@ describe('ChamadoTarefasService', () => {
 
       expect(prisma.chamadoTarefa.create).not.toHaveBeenCalled();
       expect(storage.persistBuffer).not.toHaveBeenCalled();
+    });
+
+    it('rejeita anexo inválido antes de criar a tarefa', async () => {
+      await expect(
+        service.create(
+          {
+            chamadoId: 'chamado-1',
+            titulo: 'Análise técnica',
+            secretariaId: 'sec-1',
+            anexos: [{ dataUrl: 'isto-nao-e-um-data-url-valido', nome: 'x.bin' }],
+          },
+          adminUser(),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      await expect(
+        service.create(
+          {
+            chamadoId: 'chamado-1',
+            titulo: 'Análise técnica',
+            secretariaId: 'sec-1',
+            anexos: [{ dataUrl: 'data:text/plain;base64,aGVsbG8gd29ybGQ=', nome: 'nota.txt' }],
+          },
+          adminUser(),
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.chamadoTarefa.create).not.toHaveBeenCalled();
+      expect(storage.persistBuffer).not.toHaveBeenCalled();
+      expect(prisma.chamadoTarefa.delete).not.toHaveBeenCalled();
+    });
+
+    it('apaga a tarefa se o storage falhar depois do create', async () => {
+      prisma.chamadoTarefa.create.mockResolvedValue(tarefaLoaded());
+      storage.persistBuffer.mockRejectedValue(new Error('storage indisponível'));
+
+      await expect(
+        service.create(
+          {
+            chamadoId: 'chamado-1',
+            titulo: 'Análise técnica',
+            secretariaId: 'sec-1',
+            anexos: [{ dataUrl: JPEG_DATA_URL, nome: 'foto.jpg' }],
+          },
+          adminUser(),
+        ),
+      ).rejects.toThrow('storage indisponível');
+
+      expect(prisma.chamadoTarefa.create).toHaveBeenCalledTimes(1);
+      expect(prisma.chamadoTarefa.delete).toHaveBeenCalledWith({ where: { id: 'tarefa-1' } });
     });
   });
 
