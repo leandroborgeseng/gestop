@@ -151,7 +151,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Tratar tarefa na execução',
     ator: 'Equipe de execução, gestor',
     tela: '/execucao (aba tarefas)',
-    api: 'ChamadoTarefasController: GET /chamado-tarefas/execucao, PATCH /chamado-tarefas/:id, GET /chamado-tarefas/:id/chamado/:chamadoId (anexos e histórico do chamado em leitura). POST/PUT/DELETE da mesma via recusam gestão do chamado.',
+    api: 'ChamadoTarefasController: GET /chamado-tarefas/execucao, PATCH /chamado-tarefas/:id, GET /chamado-tarefas/:id/chamado/:chamadoId (anexos e histórico em leitura; metadata do histórico na mesma whitelist da ficha: tipo, descricao, alteracoes, observadorNome, observadorIds, perfilAtivo, perfilAtivoNome, secretariaAtiva, secretariaAtivaSigla, resumo, temAnexos, documentoCodigo, impedimento, impedimentoMotivo, relatorio, distanciaMetros, evidenciasCount, equipeExecutora, membrosExecutores, membrosExternos, participantes, checklistComplementar). Gestão do chamado continua nas rotas reais de ChamadosController (POST /chamados/:id/historico, PUT /:id/status, POST|DELETE /:id/execucao/evidencias, POST /:id/exclusao-logica).',
     tabelas: 'ChamadoTarefa, EquipeUsuario, Usuario, Chamado, Evidencia, HistoricoStatus',
     permissao: 'As mesmas chaves de chamados.tarefas, mais matriz.execucao.tarefas e chamados.tarefas_atribuidas.visualizar. Filtros da aba ficam na sanfona Filtros de tarefas. A leitura do chamado pela tarefa exige ver a tarefa e o vínculo tarefa↔chamado; não concede gestão do chamado.',
   },

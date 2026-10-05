@@ -166,7 +166,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         nome: 'Consultar anexos e histórico do chamado pela tarefa',
         atores: ['equipe', 'gestor'],
         descricao:
-          'Quem vê a tarefa (responsável, membro da equipe ou permissão atual de ChamadoTarefasService) e não tem acesso direto ao chamado consulta anexos e histórico do chamado só em leitura, pelo vínculo tarefa↔chamado. Sem editar, mudar status, anexar, excluir anexo, comentar no histórico ou encerrar o chamado por essa via. Quem já acessa o chamado segue no fluxo atual da ficha.',
+          'Quem vê a tarefa (responsável, membro da equipe ou permissão atual de ChamadoTarefasService) e não tem acesso direto ao chamado consulta anexos e histórico do chamado só em leitura, pelo vínculo tarefa↔chamado. O metadata do histórico usa a mesma projeção da ficha (não o JSON bruto). Sem editar, mudar status, anexar, excluir anexo, comentar no histórico ou encerrar o chamado — a gestão permanece nas rotas reais de ChamadosService. Quem já acessa o chamado segue no fluxo atual da ficha.',
         rotas: ['/execucao', 'GET /chamado-tarefas/:id/chamado/:chamadoId'],
       },
       {

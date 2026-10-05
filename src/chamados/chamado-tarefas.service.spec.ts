@@ -420,6 +420,43 @@ describe('ChamadoTarefasService — leitura do chamado via tarefa', () => {
     expect(resultado.historico[0]?.anexos).toHaveLength(1);
   });
 
+  it('não devolve campo interno de metadata fora da whitelist da ficha', async () => {
+    mockTarefaDoResponsavel();
+    prisma.chamado.findFirst.mockResolvedValue({
+      id: 'chamado-1',
+      fotoUrl: null,
+      fotoMimeType: null,
+      createdAt: new Date('2026-10-01T12:00:00.000Z'),
+      registradoPorId: 'user-admin',
+      registradoPor: { nome: 'Admin' },
+      evidencias: [],
+    });
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-chamado-1',
+        statusAnterior: null,
+        statusNovo: 'ABERTO',
+        motivo: 'Atualização de histórico',
+        metadata: {
+          tipo: 'HISTORY_UPDATE',
+          descricao: 'Comentário visível na ficha',
+          tokenInterno: 'segredo-nao-pode-sair',
+          storageKeyInterna: 'evidencias/secreto.bin',
+        },
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+      },
+    ]);
+
+    const resultado = await service.getChamadoLeituraViaTarefa('tarefa-1', 'chamado-1', userResponsavelTarefa());
+    const metadata = resultado.historico[0]?.metadata ?? {};
+
+    expect(metadata.tipo).toBe('HISTORY_UPDATE');
+    expect(metadata.descricao).toBe('Comentário visível na ficha');
+    expect(metadata).not.toHaveProperty('tokenInterno');
+    expect(metadata).not.toHaveProperty('storageKeyInterna');
+  });
+
   it('usuário sem acesso à tarefa é negado nessa via', async () => {
     prisma.chamadoTarefa.findFirst.mockResolvedValue(
       tarefaLoaded({ responsavelId: 'outro', equipeId: null }),
@@ -434,33 +471,43 @@ describe('ChamadoTarefasService — leitura do chamado via tarefa', () => {
 
   it('tarefa de outro chamado não dá acesso (vínculo validado)', async () => {
     mockTarefaDoResponsavel();
+    prisma.chamado.findFirst.mockResolvedValue({
+      id: 'chamado-outro',
+      fotoUrl: null,
+      fotoMimeType: null,
+      createdAt: new Date('2026-10-01T12:00:00.000Z'),
+      registradoPorId: 'user-admin',
+      registradoPor: { nome: 'Admin' },
+      evidencias: [
+        {
+          id: 'ev-vazamento',
+          url: '/storage/segredo.jpg',
+          storageKey: 'segredo.jpg',
+          mimeType: 'image/jpeg',
+          tamanhoBytes: 24,
+          capturadaEm: new Date('2026-10-01T12:00:00.000Z'),
+          metadata: { origem: 'abertura', nomeOriginal: 'segredo-do-outro.jpg' },
+        },
+      ],
+    });
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-vazamento',
+        statusAnterior: null,
+        statusNovo: 'ABERTO',
+        motivo: 'Segredo do outro chamado',
+        metadata: { tipo: 'HISTORY_UPDATE', descricao: 'não deveria vazar' },
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+      },
+    ]);
 
     await expect(
       service.getChamadoLeituraViaTarefa('tarefa-1', 'chamado-outro', userResponsavelTarefa()),
     ).rejects.toBeInstanceOf(ForbiddenException);
 
+    expect(prisma.chamado.findFirst).not.toHaveBeenCalled();
     expect(prisma.historicoStatus.findMany).not.toHaveBeenCalled();
-  });
-
-  it('via tarefa, ações de gestão do chamado continuam negadas', async () => {
-    mockTarefaDoResponsavel();
-    const user = userResponsavelTarefa();
-
-    await expect(service.recusarGestaoChamadoViaTarefa('tarefa-1', 'chamado-1', user, 'historico')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-    await expect(service.recusarGestaoChamadoViaTarefa('tarefa-1', 'chamado-1', user, 'status')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-    await expect(service.recusarGestaoChamadoViaTarefa('tarefa-1', 'chamado-1', user, 'anexo')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-    await expect(service.recusarGestaoChamadoViaTarefa('tarefa-1', 'chamado-1', user, 'excluir-anexo')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
-    await expect(service.recusarGestaoChamadoViaTarefa('tarefa-1', 'chamado-1', user, 'encerrar')).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
   });
 });
 

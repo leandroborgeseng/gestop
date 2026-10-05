@@ -39,6 +39,7 @@ import {
   origemEvidencia,
   type AnexoAberturaNormalizado,
 } from './chamado-anexos-abertura';
+import { projetarMetadataHistoricoChamado } from './chamado-historico.projecao';
 import { StorageService } from '../storage/storage.service';
 import { extractStorageKeyFromUrl, resolveStoragePublicUrl } from '../storage/storage-url';
 import { shrinkImageForPdf } from '../storage/pdf-image';
@@ -3816,7 +3817,7 @@ export class ChamadosService {
         statusAnterior: entry.statusAnterior,
         statusNovo: entry.statusNovo,
         motivo: entry.motivo,
-        metadata,
+        metadata: projetarMetadataHistoricoChamado(metadata),
         createdAt: entry.createdAt.toISOString(),
         alteradoPor: entry.alteradoPor,
         anexos,

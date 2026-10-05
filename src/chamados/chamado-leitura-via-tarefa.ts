@@ -1,16 +1,6 @@
 import { extractStorageKeyFromUrl, resolveStoragePublicUrl } from '../storage/storage-url';
 import { extensaoDeMime, metadataAbertura, origemEvidencia } from './chamado-anexos-abertura';
 
-export const ACOES_GESTAO_CHAMADO_VIA_TAREFA = [
-  'historico',
-  'status',
-  'anexo',
-  'excluir-anexo',
-  'encerrar',
-] as const;
-
-export type AcaoGestaoChamadoViaTarefa = (typeof ACOES_GESTAO_CHAMADO_VIA_TAREFA)[number];
-
 type EvidenciaLeitura = {
   id: string;
   url: string;

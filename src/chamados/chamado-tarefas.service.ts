@@ -30,11 +30,8 @@ import {
   TAREFA_STATUS_PENDENTES,
   tarefaAtrasada,
 } from './chamado-tarefa.regras';
-import {
-  type AcaoGestaoChamadoViaTarefa,
-  montarAnexosAberturaLeitura,
-  serializarAnexoHistoricoLeitura,
-} from './chamado-leitura-via-tarefa';
+import { montarAnexosAberturaLeitura, serializarAnexoHistoricoLeitura } from './chamado-leitura-via-tarefa';
+import { projetarMetadataHistoricoChamado } from './chamado-historico.projecao';
 import { AnexoChamadoTarefaDto, CreateChamadoTarefaDto, UpdateChamadoTarefaDto } from './chamado-tarefas.dto';
 
 const TAREFA_EXPORT_HEADERS = [
@@ -360,7 +357,7 @@ export class ChamadoTarefasService {
           statusAnterior: entry.statusAnterior,
           statusNovo: entry.statusNovo,
           motivo: entry.motivo,
-          metadata,
+          metadata: projetarMetadataHistoricoChamado(metadata),
           createdAt: entry.createdAt.toISOString(),
           alteradoPor: entry.alteradoPor,
           anexos: ids
@@ -370,16 +367,6 @@ export class ChamadoTarefasService {
         };
       }),
     };
-  }
-
-  async recusarGestaoChamadoViaTarefa(
-    tarefaId: string,
-    chamadoId: string,
-    user: JwtPayload,
-    _acao: AcaoGestaoChamadoViaTarefa,
-  ): Promise<never> {
-    await this.exigirAcessoChamadoViaTarefa(tarefaId, chamadoId, user);
-    throw new ForbiddenException('Via tarefa o chamado é somente leitura.');
   }
 
   async anexar(id: string, dto: AnexoChamadoTarefaDto, user: JwtPayload) {
