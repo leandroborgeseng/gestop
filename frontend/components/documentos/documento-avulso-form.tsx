@@ -14,7 +14,7 @@ import {
   validateItemResponse,
   type ResponseDraft,
 } from '@/lib/checklist-response-draft';
-import { apresentarValorTexto, parseValoresMultiplaEscolha } from '@/lib/checklist-item-opcoes';
+import { formatRespostaValor, parseValoresMultiplaEscolha } from '@/lib/checklist-item-opcoes';
 import type { ChecklistItem, DocumentoDetalhe } from '@/lib/types';
 
 function fileToDataUrl(file: File) {
@@ -270,9 +270,7 @@ export function DocumentoAvulsoRespostasLeitura({ documento }: { documento: Docu
               {item.obrigatorio ? <span className="text-[var(--danger)]"> *</span> : null}
             </p>
             <p className="mt-0.5 text-[12px] text-[var(--ink-2)]">
-              {apresentarValorTexto(resposta?.valorTexto) ||
-                (resposta?.valorNumero != null ? String(resposta.valorNumero) : '') ||
-                (resposta?.valorBooleano === true ? 'Sim' : resposta?.valorBooleano === false ? 'Não' : '—')}
+              {formatRespostaValor(resposta ?? {})}
             </p>
             {resposta?.comentario?.trim() ? (
               <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p>

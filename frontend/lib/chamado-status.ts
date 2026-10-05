@@ -1,3 +1,5 @@
+import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
+
 export const CHAMADO_STATUS_META: Record<
   string,
   { label: string; badge: 'info' | 'warning' | 'brand' | 'success' | 'muted' | 'danger' }
@@ -317,14 +319,7 @@ function buildExecucaoConclusaoStep(
         : 'Perguntas complementares da execução',
       value: checklistComplementar.respostas
         .map((resposta) => {
-          const valor = resposta.naoSeAplica
-            ? 'Não se aplica'
-            : resposta.valorBooleano === true
-              ? 'Sim'
-              : resposta.valorBooleano === false
-                ? 'Não'
-                : resposta.valorTexto?.trim() ||
-                  (resposta.valorNumero != null ? String(resposta.valorNumero) : '—');
+          const valor = formatRespostaValor(resposta);
           const comentario = resposta.comentario?.trim();
           return `${resposta.titulo ?? 'Pergunta'}: ${valor}${comentario ? ` (${comentario})` : ''}`;
         })

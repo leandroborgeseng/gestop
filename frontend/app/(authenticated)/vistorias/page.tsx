@@ -21,7 +21,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
 import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
 import { downloadFiscalizacaoPdf, getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
-import { apresentarValorTexto } from '@/lib/checklist-item-opcoes';
+import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
 import { cn } from '@/lib/cn';
 import { formatUnidadeTipo, UNIDADE_TIPO_LABELS } from '@/lib/unidade-tipo';
 import { formatNotaBr, notaCorHex } from '@/lib/vistoria-nota';
@@ -78,27 +78,6 @@ function NotaVistoriaDestaque({ notaGeral }: { notaGeral: number }) {
       </span>
     </div>
   );
-}
-
-function formatRespostaValor(resposta: {
-  valorTexto?: string | null;
-  valorBooleano?: boolean | null;
-  valorNumero?: number | null;
-  conformidade?: string | null;
-}) {
-  if (resposta.valorTexto?.trim()) {
-    return apresentarValorTexto(resposta.valorTexto);
-  }
-  if (resposta.valorBooleano != null) {
-    return resposta.valorBooleano ? 'Sim' : 'Não';
-  }
-  if (resposta.valorNumero != null) {
-    return String(resposta.valorNumero);
-  }
-  if (resposta.conformidade) {
-    return resposta.conformidade;
-  }
-  return '—';
 }
 
 export default function VistoriasPage() {
@@ -550,7 +529,7 @@ export default function VistoriasPage() {
                         <div className="space-y-2">
                           {detail.naoConformidades.map((nc) => (
                             <div key={nc.id} className="rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[13px]">
-                              <p className="font-semibold text-[var(--warn)]">{nc.item.codigo} — {nc.item.titulo}</p>
+                              <p className="font-semibold text-[var(--warn)]">{nc.item.titulo}</p>
                               <p className="mt-1 text-[var(--ink-2)]">{nc.descricao}</p>
                               {nc.chamado ? (
                                 <p className="mt-2 text-[12px]">
@@ -587,7 +566,7 @@ export default function VistoriasPage() {
                               />
                               <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
                                 <p className="text-[12px] font-semibold text-[var(--ink)]">
-                                  {resposta.item.secao ? resposta.item.titulo : `${resposta.item.codigo} — ${resposta.item.titulo}`}
+                                  {resposta.item.titulo}
                                 </p>
                                 <p className="mt-1 text-[13px] text-[var(--ink-2)]">
                                   {formatRespostaValor(resposta)}
@@ -633,7 +612,7 @@ export default function VistoriasPage() {
                 />
                 <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
                   <p className="text-[12px] font-semibold text-[var(--ink)]">
-                    {resposta.item.secao ? resposta.item.titulo : `${resposta.item.codigo} — ${resposta.item.titulo}`}
+                    {resposta.item.titulo}
                   </p>
                   <p className="mt-1 text-[13px] text-[var(--ink-2)]">
                     {formatRespostaValor(resposta)}

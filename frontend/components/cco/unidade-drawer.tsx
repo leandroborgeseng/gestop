@@ -306,7 +306,7 @@ function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-[13px] font-semibold text-[var(--ink)]">
-                {item.item.codigo} — {item.item.titulo}
+                {item.item.titulo}
               </p>
               <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{item.descricao}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
