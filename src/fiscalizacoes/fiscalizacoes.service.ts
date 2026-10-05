@@ -161,6 +161,7 @@ export class FiscalizacoesService {
               select: {
                 id: true,
                 codigo: true,
+                secao: true,
                 titulo: true,
                 tipo: true,
                 opcoes: true,
@@ -279,6 +280,7 @@ export class FiscalizacoesService {
               select: {
                 id: true,
                 codigo: true,
+                secao: true,
                 titulo: true,
                 tipo: true,
                 opcoes: true,

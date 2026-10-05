@@ -583,7 +583,7 @@ export default function VistoriasPage() {
                             <div key={resposta.id}>
                               <CabecalhoSecao
                                 atual={resposta.item.secao}
-                                anterior={index > 0 ? detail.respostas[index - 1]?.item.secao : undefined}
+                                anterior={index > 0 ? detail.respostas?.[index - 1]?.item.secao : undefined}
                               />
                               <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
                                 <p className="text-[12px] font-semibold text-[var(--ink)]">
@@ -629,7 +629,7 @@ export default function VistoriasPage() {
               <div key={resposta.id}>
                 <CabecalhoSecao
                   atual={resposta.item.secao}
-                  anterior={index > 0 ? detail.respostas[index - 1]?.item.secao : undefined}
+                  anterior={index > 0 ? detail?.respostas?.[index - 1]?.item.secao : undefined}
                 />
                 <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
                   <p className="text-[12px] font-semibold text-[var(--ink)]">
