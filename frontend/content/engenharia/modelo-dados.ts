@@ -236,7 +236,8 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
       },
       {
         nome: 'HistoricoStatus',
-        resumo: 'Trilha genérica de mudança de status (entidade e identificador em texto).',
+        resumo:
+          'Trilha genérica de mudança de status (entidade e identificador em texto). Na tarefa, troca de responsável e troca de equipe geram eventos distintos (metadata.acao responsavel e equipe), com valor anterior e novo; as duas juntas gravam dois registros.',
         campos: ['entidadeTipo', 'entidadeId', 'statusAnterior', 'statusNovo', 'motivo', 'metadata (Json)'],
         relacoes: ['N:1 Usuario (alteradoPor)'],
       },

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Patch, Post, Query, StreamableFile, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, Param, Patch, Post, Put, Query, StreamableFile, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -58,6 +58,61 @@ export class ChamadoTarefasController {
   @Get('por-chamado/:chamadoId')
   porChamado(@Param('chamadoId', ParseUuidPipe) chamadoId: string, @CurrentUser() user: JwtPayload) {
     return this.tarefas.listByChamado(chamadoId, user);
+  }
+
+  @Get(':id/chamado/:chamadoId')
+  getChamadoLeitura(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('chamadoId', ParseUuidPipe) chamadoId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tarefas.getChamadoLeituraViaTarefa(id, chamadoId, user);
+  }
+
+  @Post(':id/chamado/:chamadoId/historico')
+  recusarHistoricoChamado(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('chamadoId', ParseUuidPipe) chamadoId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tarefas.recusarGestaoChamadoViaTarefa(id, chamadoId, user, 'historico');
+  }
+
+  @Put(':id/chamado/:chamadoId/status')
+  recusarStatusChamado(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('chamadoId', ParseUuidPipe) chamadoId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tarefas.recusarGestaoChamadoViaTarefa(id, chamadoId, user, 'status');
+  }
+
+  @Post(':id/chamado/:chamadoId/anexos')
+  recusarAnexoChamado(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('chamadoId', ParseUuidPipe) chamadoId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tarefas.recusarGestaoChamadoViaTarefa(id, chamadoId, user, 'anexo');
+  }
+
+  @Delete(':id/chamado/:chamadoId/anexos/:anexoId')
+  recusarExcluirAnexoChamado(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('chamadoId', ParseUuidPipe) chamadoId: string,
+    @Param('anexoId', ParseUuidPipe) _anexoId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tarefas.recusarGestaoChamadoViaTarefa(id, chamadoId, user, 'excluir-anexo');
+  }
+
+  @Post(':id/chamado/:chamadoId/encerrar')
+  recusarEncerrarChamado(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('chamadoId', ParseUuidPipe) chamadoId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tarefas.recusarGestaoChamadoViaTarefa(id, chamadoId, user, 'encerrar');
   }
 
   @Get(':id')

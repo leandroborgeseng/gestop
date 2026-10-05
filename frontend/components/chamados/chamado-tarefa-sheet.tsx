@@ -7,7 +7,8 @@ import { Field } from '@/components/ui/field';
 import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
-import { getChamadoTarefa, getOpcoesTarefa, updateChamadoTarefa } from '@/lib/api';
+import { getChamadoLeituraViaTarefa, getChamadoTarefa, getOpcoesTarefa, updateChamadoTarefa } from '@/lib/api';
+import { ChamadoTarefaChamadoLeituraView } from '@/components/chamados/chamado-tarefa-chamado-leitura';
 import {
   ANEXOS_ABERTURA_ACCEPT,
   ANEXOS_ABERTURA_FORMATOS,
@@ -17,7 +18,13 @@ import {
   mimeDeArquivo,
   type AnexoAberturaDraft,
 } from '@/lib/chamado-anexos-abertura';
-import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL, type ChamadoTarefaDetalhe, type ChamadoTarefaStatus } from '@/lib/chamado-tarefa';
+import {
+  TAREFA_PRIORIDADE_LABEL,
+  TAREFA_STATUS_LABEL,
+  type ChamadoTarefaChamadoLeitura,
+  type ChamadoTarefaDetalhe,
+  type ChamadoTarefaStatus,
+} from '@/lib/chamado-tarefa';
 import { baixarStorageAutenticado, fetchAuthenticatedStorageBlob } from '@/lib/storage-url';
 
 type Acao = 'editar' | 'andamento' | 'concluir' | 'cancelar';
@@ -34,6 +41,8 @@ const ACAO_HISTORICO: Record<string, string> = {
   anexo: 'Anexo',
   prazo: 'Alteração',
   atribuicao: 'Alteração',
+  responsavel: 'Responsável',
+  equipe: 'Equipe',
   atualizada: 'Alteração',
 };
 
@@ -48,6 +57,7 @@ export function ChamadoTarefaSheet({
 }) {
   const snackbar = useSnackbar();
   const [tarefa, setTarefa] = useState<ChamadoTarefaDetalhe | null>(null);
+  const [chamadoLeitura, setChamadoLeitura] = useState<ChamadoTarefaChamadoLeitura | null>(null);
   const [busy, setBusy] = useState(false);
   const [acao, setAcao] = useState<Acao | null>(null);
   const [texto, setTexto] = useState('');
@@ -65,15 +75,24 @@ export function ChamadoTarefaSheet({
   useEffect(() => {
     if (!tarefaId) {
       setTarefa(null);
+      setChamadoLeitura(null);
       setAcao(null);
       return;
     }
     let ativo = true;
     getChamadoTarefa(tarefaId)
-      .then((data) => {
+      .then(async (data) => {
         if (!ativo) return;
         setTarefa(data);
         preencherEdicao(data);
+        try {
+          const leitura = await getChamadoLeituraViaTarefa(data.id, data.chamado.id);
+          if (!ativo) return;
+          setChamadoLeitura(leitura);
+        } catch {
+          if (!ativo) return;
+          setChamadoLeitura(null);
+        }
       })
       .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao abrir a tarefa.', 'error'));
     return () => {
@@ -426,6 +445,8 @@ export function ChamadoTarefaSheet({
               <AnexosSoltos tarefa={tarefa} />
             </section>
           ) : null}
+
+          {chamadoLeitura ? <ChamadoTarefaChamadoLeituraView leitura={chamadoLeitura} /> : null}
         </div>
       )}
     </Sheet>
