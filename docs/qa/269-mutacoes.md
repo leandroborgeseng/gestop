@@ -1,6 +1,6 @@
 # Mutações 269 (não commitadas no código)
 
-As cinco mutações abaixo foram aplicadas localmente, fizeram o teste indicado ficar vermelho e foram revertidas. O código da branch permanece sem elas.
+As nove mutações abaixo foram aplicadas localmente, fizeram o teste indicado ficar vermelho e foram revertidas. O código da branch permanece sem elas. M6–M9 correspondem às mutações do Tester T4, T6, T9 e T11.
 
 ## M1 — `podeVerHistorico` volta a `true` fixo
 
@@ -112,3 +112,92 @@ AssertionError: expected false to be true // Object.is equality
 ```
 
 Sem o `designadoTarefa` na regra de anexos, o responsável deixa de receber `podeVerAnexos` e a lista de arquivos.
+
+## M6 — `chamados.gerenciar` libera o histórico (T4)
+
+- Arquivo: `src/chamados/chamado-tarefas.service.ts` (`podeVerHistorico`)
+- Alteração: `this.tem(user, [], [chave tarefas_historico.visualizar])` passou a aceitar também `chamados.gerenciar`.
+- Teste vermelho: `chamados.gerenciar sem tarefas_historico.visualizar não devolve histórico`
+
+Saída:
+
+```
+FAIL  src/chamados/chamado-tarefas.service.spec.ts > ChamadoTarefasService — permissões 269 > chamados.gerenciar sem tarefas_historico.visualizar não devolve histórico
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/chamados/chamado-tarefas.service.spec.ts:861:40
+    860|     expect(user.perfis).not.toContain('Administrador do Sistema');
+    861|     expect(resultado.podeVerHistorico).toBe(false);
+```
+
+Quem tem só `chamados.gerenciar` (sem a chave de histórico e sem ser Administrador do Sistema) passa a receber `podeVerHistorico: true` e o detalhe busca o histórico.
+
+## M7 — o front deixa de aceitar o legado `tarefas.excluir` no cancelar (T6)
+
+- Arquivo: `frontend/lib/permissions-matrix.ts` (`canGerirTarefasChamado`)
+- Alteração: a ação cancelar/excluir ficou só com `tarefas_cancelar.executar` (removeu `tarefas.excluir`).
+- Teste vermelho: `quem tem só o legado tarefas.excluir continua podendo cancelar`
+
+Saída:
+
+```
+FAIL  frontend/lib/permissions-matrix.spec.ts > permissions-matrix — rotina de tarefas (269) > quem tem só o legado tarefas.excluir continua podendo cancelar
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ frontend/lib/permissions-matrix.spec.ts:28:58
+    28|     expect(canGerirTarefasChamado(soLegado, 'cancelar')).toBe(true);
+```
+
+Quem ainda tem só `matriz.chamados.tarefas.excluir` deixa de cancelar no front. A compatibilidade (nova + legada) é o que o teste protege.
+
+## M8 — `catalogCheckboxLabel` ignora `actionLabels` (T9)
+
+- Arquivo: `frontend/lib/permissions-matrix.ts` (`catalogCheckboxLabel`)
+- Alteração: `return funcao.actionLabels?.[acao] ?? ...` virou o fallback `funcao.label · ação`.
+- Teste vermelho: `aria-label e title da matriz para tarefas/alterar usam Alterar dados da tarefa`
+
+Saída:
+
+```
+FAIL  frontend/lib/permissions-matrix.spec.ts > permissions-matrix — rotina de tarefas (269) > aria-label e title da matriz para tarefas/alterar usam Alterar dados da tarefa
+AssertionError: expected 'Tarefas do chamado · Alterar' to be 'Alterar dados da tarefa' // Object.is equality
+
+Expected: "Alterar dados da tarefa"
+Received: "Tarefas do chamado · Alterar"
+
+ ❯ frontend/lib/permissions-matrix.spec.ts:39:20
+    38|     const rotulo = catalogCheckboxLabel(TAREFAS_CATALOGO, 'alterar');
+    39|     expect(rotulo).toBe(TAREFA_BOTAO_ALTERAR_DADOS);
+```
+
+O `aria-label`/`title` da célula `tarefas`/`alterar` deixa de ser "Alterar dados da tarefa" e volta ao genérico "Tarefas do chamado · Alterar".
+
+## M9 — a seção de histórico renderiza sem `podeVerHistorico` (T11)
+
+- Arquivo: `frontend/components/chamados/chamado-tarefa-sheet.tsx` (`ChamadoTarefaHistoricoView`)
+- Alteração: removeu `if (!tarefa.podeVerHistorico) return null;`.
+- Teste vermelho: `com podeVerHistorico false, a seção de histórico não é renderizada`
+
+Saída:
+
+```
+FAIL  frontend/lib/chamado-tarefa-permissoes.spec.ts > render das ações de tarefa > com podeVerHistorico false, a seção de histórico não é renderizada
+AssertionError: expected '\'use client\';\n\nimport { useEffect…' to contain 'if (!tarefa.podeVerHistorico) return …'
+
+ ❯ frontend/lib/chamado-tarefa-permissoes.spec.ts:109:22
+    109|     expect(sheetSrc).toContain('if (!tarefa.podeVerHistorico) return null;');
+```
+
+Sem o early-return, a view de histórico deixa de ser recusada quando `podeVerHistorico` é falso. O `renderToStaticMarkup` do cabeçalho continua vazio, mas o guard da seção no sheet some.
