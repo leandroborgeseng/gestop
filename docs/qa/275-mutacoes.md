@@ -50,3 +50,51 @@ Saída: `Test Files  2 failed (2)` / `Tests  2 failed | 12 passed (14)`. O guard
 `npx vitest run frontend/components/documentos/documento-relacionado-card.spec.ts frontend/lib/permissions-coletar-assinatura.spec.ts src/documentos/documentos-coletar-assinatura-parity.spec.ts src/documentos/documentos-list-by-chamado.spec.ts`
 
 `Test Files  4 passed (4)` / `Tests  22 passed (22)`.
+
+## M4 — tirar o filtro `status: 'PENDENTE'` do include
+
+Alteração (não commitada): em `DOCUMENTO_INCLUDE` (`documentos.service.ts`), removido `where: { status: 'PENDENTE' as const }` de `assinaturaPedidos`.
+
+Comando: `npx vitest run src/documentos/documentos-list-by-chamado.spec.ts`
+
+Ficou vermelho:
+
+- `DocumentosService.listByChamado > devolve signatários internos pendentes (pedidos a Usuario), não a assinatura externa`
+
+Asserção: `findManyArg.include.assinaturaPedidos?.where` esperava `{ status: 'PENDENTE' }` e veio `undefined`.
+
+Saída: `Tests  1 failed | 2 passed (3)`.
+
+## M5 — ignorar `matriz.documentos.administrar.*` no helper
+
+Alteração (não commitada): em `src/domain/can-coletar-assinatura.ts` (reexportado pelo front), o retorno das chaves `administrar.alterar|excluir|executar` virou `return false`.
+
+Comando: `npx vitest run src/documentos/documentos-coletar-assinatura-parity.spec.ts`
+
+Ficou vermelho:
+
+- `paridade canColetarAssinatura × PermissionsGuard … > 'matriz.documentos.administrar.alterar (sessão crua, sem chave legada)': front e guard coincidem (esperado true)`
+
+O guard continua true (expande para `documentos.administrar`); o front passou a false.
+
+Saída: `Tests  1 failed | 9 passed (10)`.
+
+## M6 — mostrar Coletar em documento CANCELADO
+
+Alteração (não commitada): no card, `item.possuiPdfOriginal && item.situacao !== 'CANCELADO' && podeColetar` virou `item.possuiPdfOriginal && podeColetar`.
+
+Comando: `npx vitest run frontend/components/documentos/documento-relacionado-card.spec.ts`
+
+Ficou vermelho:
+
+- `DocumentoRelacionadoCard > não mostra Coletar em documento CANCELADO mesmo com permissão`
+
+Saída: `Tests  1 failed | 6 passed (7)`.
+
+## Verde após M4–M6 (código restaurado)
+
+`npx vitest run src/documentos/documentos-list-by-chamado.spec.ts src/documentos/documentos-coletar-assinatura-parity.spec.ts frontend/components/documentos/documento-relacionado-card.spec.ts frontend/lib/permissions-coletar-assinatura.spec.ts`
+
+`Test Files  4 passed (4)` / `Tests  26 passed (26)`.
+
+`tsc -p tsconfig.json` (raiz): mesmos 11 erros da `main` (auth.spec, chamado-tarefa.regras.spec sem tipos de teste, vitest.config ESM). Sem `TS2307` de `@/lib/permissions-matrix`.
