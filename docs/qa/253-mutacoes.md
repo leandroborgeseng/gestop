@@ -1,6 +1,6 @@
 # Mutações 253 (não commitadas no código)
 
-As quatro mutações abaixo foram aplicadas localmente, fizeram o teste indicado ficar vermelho e foram revertidas. O código da branch permanece sem elas.
+As mutações abaixo foram aplicadas localmente, fizeram o teste indicado ficar vermelho e foram revertidas. O código da branch permanece sem elas.
 
 ## M1 — remover a checagem de vínculo tarefa↔chamado (refeita)
 
@@ -123,3 +123,47 @@ AssertionError: expected { tipo: 'HISTORY_UPDATE', …(3) } to not have property
 ```
 
 Sem a whitelist, `tokenInterno` (e `storageKeyInterna`) voltam na leitura via tarefa.
+
+## M5 — tirar um campo lido da whitelist (`relatorio`)
+
+- Arquivo: `src/chamados/chamado-historico.projecao.ts` (`CAMPOS_METADATA_HISTORICO_CHAMADO`)
+- Alteração: removeu `'relatorio'` (campo que a ficha e o PDF leem). Equivale a R6 do script do Tester.
+- Testes vermelhos:
+  - `preserva todos os campos que a ficha e o PDF leem e descarta o intruso`
+  - `devolve os mesmos campos da whitelist que a timeline e o PDF leem, sem o intruso`
+
+Saída:
+
+```
+FAIL  src/chamados/chamado-historico.projecao.spec.ts > projetarMetadataHistoricoChamado > preserva todos os campos que a ficha e o PDF leem e descarta o intruso
+AssertionError: campo lido pela ficha/PDF fora da whitelist: relatorio: expected [ 'tipo', 'descricao', …(19) ] to include 'relatorio'
+ ❯ src/chamados/chamado-historico.projecao.spec.ts:95:9
+
+FAIL  src/chamados/chamados.enrich-historico.spec.ts > enrichHistorico na ficha normal do chamado > devolve os mesmos campos da whitelist que a timeline e o PDF leem, sem o intruso
+AssertionError: campo relatorio deveria sair igual na ficha: expected undefined to deeply equal 'Relatório de execução'
+ ❯ src/chamados/chamados.enrich-historico.spec.ts:171:77
+
+ Test Files  2 failed | 8 passed (10)
+      Tests  2 failed | 47 passed (49)
+```
+
+Trocar o `entidadeId` no `where` (R11 do Tester) também fica vermelho: 2 failed | 47 passed.
+
+## Script do Tester (`qa253-mut-v2.sh`)
+
+Rodei o script anexado (só ajustei o `cd` para `/workspace`; as mutações perl não foram editadas). `--exclude "**/checklist-item.rules.spec.ts"`. Nenhuma mutação saiu SOBREVIVEU nem NÃO APLICOU.
+
+```
+R1_sem_vinculo_tarefa_chamado: VERMELHO ( Tests 1 failed | 48 passed (49))
+R2_sem_podeVer: VERMELHO ( Tests 1 failed | 48 passed (49))
+R3_via_tarefa_metadata_bruto: VERMELHO ( Tests 1 failed | 48 passed (49))
+R4_ficha_normal_metadata_bruto: VERMELHO ( Tests 1 failed | 48 passed (49))
+R5_whitelist_sem_alteracoes: VERMELHO ( Tests 2 failed | 47 passed (49))
+R6_whitelist_sem_relatorio: VERMELHO ( Tests 2 failed | 47 passed (49))
+R7_whitelist_sem_checklistComplementar: VERMELHO ( Tests 2 failed | 47 passed (49))
+R8_anexos_historico_todas_evidencias: VERMELHO ( Tests 1 failed | 48 passed (49))
+R9_abertura_inclui_execucao: VERMELHO ( Tests 1 failed | 48 passed (49))
+R10_evento_unico: VERMELHO ( Tests 1 failed | 48 passed (49))
+R11_historico_de_outro_chamado: VERMELHO ( Tests 2 failed | 47 passed (49))
+R12_front_mostra_botao_gestao: VERMELHO ( Tests 1 failed | 48 passed (49))
+```
