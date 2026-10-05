@@ -826,7 +826,7 @@ export class DocumentosService {
       before.situacao,
       updated.situacao,
       dto.justificativa?.trim() ||
-        (chamadosMudaram ? this.motivoDiffChamados(before.codigo, previous.chamadoIds, chamadosNovos) : 'Vínculos do documento atualizados'),
+        (chamadosMudaram ? await this.motivoDiffChamados(before.codigo, previous.chamadoIds, chamadosNovos) : 'Vínculos do documento atualizados'),
       user.sub,
       {
         tipo: 'documento_vinculo',
@@ -3100,14 +3100,17 @@ export class DocumentosService {
   }
 
   private async substituirChamadosVinculados(documentoId: string, chamadoIds: string[], userId: string) {
-    await this.prisma.documentoChamado.deleteMany({ where: { documentoId } });
-    if (!chamadoIds.length) return;
-    await this.prisma.documentoChamado.createMany({
-      data: chamadoIds.map((chamadoId) => ({ documentoId, chamadoId, createdById: userId })),
+    await this.prisma.$transaction(async (tx) => {
+      await tx.documentoChamado.deleteMany({ where: { documentoId } });
+      if (chamadoIds.length) {
+        await tx.documentoChamado.createMany({
+          data: chamadoIds.map((chamadoId) => ({ documentoId, chamadoId, createdById: userId })),
+        });
+      }
     });
   }
 
-  private motivoDiffChamados(
+  private async motivoDiffChamados(
     codigo: string,
     antes: string[],
     depois: Array<{ id: string; codigo: string }>,
@@ -3115,10 +3118,17 @@ export class DocumentosService {
     const novos = new Set(depois.map((item) => item.id));
     const antigos = new Set(antes);
     const adicionados = depois.filter((item) => !antigos.has(item.id)).map((item) => item.codigo);
-    const removidos = antes.filter((id) => !novos.has(id));
+    const removidosIds = antes.filter((id) => !novos.has(id));
     const partes = [`Vínculos do documento ${codigo} atualizados`];
     if (adicionados.length) partes.push(`adicionados: ${adicionados.join(', ')}`);
-    if (removidos.length) partes.push(`removidos: ${removidos.length}`);
+    if (removidosIds.length) {
+      const chamadosRemovidos = await this.prisma.chamado.findMany({
+        where: { id: { in: removidosIds } },
+        select: { codigo: true },
+      });
+      const codigosRemovidos = chamadosRemovidos.map((c) => c.codigo);
+      partes.push(`removidos: ${codigosRemovidos.join(', ')}`);
+    }
     return partes.join('. ');
   }
 
