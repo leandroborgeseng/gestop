@@ -36,6 +36,7 @@ export type VistoriaRealizadaPdfAnexo = {
 
 export type VistoriaRealizadaPdfResposta = {
   codigo: string;
+  secao?: string | null;
   titulo: string;
   categoriaNome?: string | null;
   tipo: string;
@@ -173,6 +174,19 @@ function drawKeyValueRow(
   return y + Math.max(12, doc.heightOfString(value, { width: width - 152 }) + 2);
 }
 
+function drawSecaoHeader(
+  doc: InstanceType<typeof PDFDocument>,
+  secao: string,
+  left: number,
+  width: number,
+  y: number,
+  marginTop: number,
+): number {
+  y = ensureSpace(doc, y, 24, marginTop);
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND_PRIMARY).text(secao, left, y, { width });
+  return doc.y + 6;
+}
+
 function drawPergunta(
   doc: InstanceType<typeof PDFDocument>,
   resposta: VistoriaRealizadaPdfResposta,
@@ -188,7 +202,7 @@ function drawPergunta(
   doc.restore();
   y += 6;
 
-  const title = `${index + 1}. ${resposta.codigo} — ${resposta.titulo}`;
+  const title = `${index + 1}. ${resposta.titulo}`;
   doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND_PRIMARY).text(title, left, y, { width });
   y = doc.y + 4;
 
@@ -317,7 +331,15 @@ export function buildVistoriaRealizadaPdf(input: VistoriaRealizadaPdfInput): Pro
     doc.font('Helvetica-Bold').fontSize(11).fillColor(TEXT_PRIMARY).text('Perguntas e respostas', left, y);
     y += 14;
 
+    let secaoAtual = '';
     input.respostas.forEach((resposta, index) => {
+      const secao = resposta.secao?.trim() ?? '';
+      if (secao && secao !== secaoAtual) {
+        secaoAtual = secao;
+        y = drawSecaoHeader(doc, secao, left, width, y, marginTop);
+      } else if (!secao) {
+        secaoAtual = '';
+      }
       y = drawPergunta(doc, resposta, index, left, width, y, marginTop);
     });
 

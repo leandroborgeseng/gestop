@@ -27,6 +27,7 @@ import {
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import { ChamadosService } from '../chamados/chamados.service';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
+import { apresentarValorTexto } from '../checklists/checklist-item.rules';
 import { CronogramaService } from '../cronograma/cronograma.service';
 import { DocumentosService } from '../documentos/documentos.service';
 import { validateChecklistResponses } from '../domain/checklist-response.rules';
@@ -77,6 +78,9 @@ const listRespostasSelect = {
   valorBooleano: true,
   item: {
     select: {
+      codigo: true,
+      titulo: true,
+      secao: true,
       tipo: true,
       opcoes: true,
       categoriaVistoriaId: true,
@@ -357,6 +361,7 @@ export class FiscalizacoesService {
     const respostas: VistoriaRealizadaPdfResposta[] = await Promise.all(
       fiscalizacao.respostas.map(async (resposta) => ({
         codigo: resposta.item.codigo,
+        secao: resposta.item.secao,
         titulo: resposta.item.titulo,
         categoriaNome: resposta.item.categoriaVistoria?.nome ?? null,
         tipo: resposta.item.tipo,
@@ -405,7 +410,7 @@ export class FiscalizacoesService {
     valorNumero?: unknown;
     conformidade?: ConformidadeStatus | null;
   }): string {
-    if (resposta.valorTexto?.trim()) return resposta.valorTexto.trim();
+    if (resposta.valorTexto?.trim()) return apresentarValorTexto(resposta.valorTexto.trim());
     if (resposta.valorBooleano === true) return 'Sim';
     if (resposta.valorBooleano === false) return 'Não';
     if (resposta.valorNumero != null) return String(resposta.valorNumero);
