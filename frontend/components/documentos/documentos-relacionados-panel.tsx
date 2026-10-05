@@ -17,6 +17,7 @@ import {
 import { DOCUMENTO_SITUACAO_META, DOCUMENTO_TIPO_LABELS } from '@/lib/documento-status';
 import {
   canAssinarDocumentoInterno,
+  canColetarAssinatura,
   canCriarDocumentoAvulso,
   canDisponibilizarAssinaturaInterna,
   canVerDocumentosRelacionados,
@@ -61,7 +62,7 @@ export function DocumentosRelacionadosPanel({
   const podePreencher = hasDocumentosModuloAccess(permissoes) || canCriarDocumentoAvulso(permissoes);
   const podeAssinar = canAssinarDocumentoInterno(permissoes);
   const podeEncaminhar = canDisponibilizarAssinaturaInterna(permissoes);
-  const podeColetar = hasDocumentosModuloAccess(permissoes);
+  const podeColetar = canColetarAssinatura(permissoes);
 
   async function abrirDocumento(id: string, proximo: NonNullable<typeof modo>) {
     try {
@@ -160,12 +161,27 @@ export function DocumentosRelacionadosPanel({
               className="rounded-[12px] border border-[var(--line)] bg-[var(--canvas)] p-3"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
+                <div className="flex-1">
                   <p className="mono text-[12px] font-semibold text-[var(--brand-hover)]">{item.codigo}</p>
                   <p className="mt-0.5 text-[13px] font-medium text-[var(--ink)]">{item.titulo}</p>
                   <p className="text-[12px] text-[var(--ink-3)]">
                     {DOCUMENTO_TIPO_LABELS[item.tipo]} · {new Date(item.createdAt).toLocaleString('pt-BR')}
                   </p>
+                  {(item.signatariosPendentes ?? []).length > 0 ? (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-[11px] font-medium text-[var(--ink-2)]">
+                        Signatários pendentes:
+                      </p>
+                      <ul className="space-y-0.5">
+                        {item.signatariosPendentes?.map((sig) => (
+                          <li key={sig.id} className="text-[11px] text-[var(--ink-3)]">
+                            • {sig.nome}
+                            {sig.email ? ` (${sig.email})` : ''}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
                 </div>
                 <Badge variant={situacao.badge}>{situacao.label}</Badge>
               </div>

@@ -230,6 +230,14 @@ export function canDisponibilizarAssinaturaInterna(permissoes: string[]) {
   );
 }
 
+export function canColetarAssinatura(permissoes: string[]) {
+  if (permissoes.includes('usuarios.gerenciar') || permissoes.includes('documentos.administrar')) return true;
+  return (
+    permissoes.includes('documentos.coletar_assinatura') ||
+    permissoes.includes(buildMatrixKey('documentos', 'coletar_assinatura', 'executar'))
+  );
+}
+
 export function canCriarDocumentoAvulso(permissoes: string[]) {
   if (permissoes.includes('usuarios.gerenciar') || permissoes.includes('documentos.administrar')) return true;
   return (
