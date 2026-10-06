@@ -190,18 +190,18 @@ export function tarefaExecucaoToMapPoint(item: ChamadoTarefaResumo): ChamadoMapP
 }
 
 export type FiltrosTarefasExecucaoResumo = {
-  status: string;
-  historico: boolean;
+  status?: string;
+  historico?: boolean;
   secretariaSigla?: string;
   equipeNome?: string;
   responsavelNome?: string;
   tipoNome?: string;
-  prioridade: string;
-  atribuidaAMim: boolean;
-  minhasEquipes: boolean;
-  atrasadas: boolean;
-  prazoFrom: string;
-  prazoTo: string;
+  prioridade?: string;
+  atribuidaAMim?: boolean;
+  minhasEquipes?: boolean;
+  atrasadas?: boolean;
+  prazoFrom?: string;
+  prazoTo?: string;
 };
 
 export function resumoFiltrosTarefasExecucao(opts: FiltrosTarefasExecucaoResumo) {
@@ -209,6 +209,7 @@ export function resumoFiltrosTarefasExecucao(opts: FiltrosTarefasExecucaoResumo)
   if (opts.status === 'IMPEDIDA') partes.push('Status: Impedida (histórico)');
   else if (opts.status) partes.push(`Status: ${TAREFA_STATUS_LABEL[opts.status as ChamadoTarefaStatus] ?? opts.status}`);
   else if (opts.historico) partes.push('Status: histórico');
+  else if (opts.status === '') partes.push('Status: não finalizados');
   if (opts.secretariaSigla) partes.push(`Secretaria: ${opts.secretariaSigla}`);
   if (opts.equipeNome) partes.push(`Equipe: ${opts.equipeNome}`);
   if (opts.responsavelNome) partes.push(`Responsável: ${opts.responsavelNome}`);

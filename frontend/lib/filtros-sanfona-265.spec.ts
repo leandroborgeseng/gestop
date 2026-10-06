@@ -19,8 +19,11 @@ const VAZIO = {
 };
 
 describe('265 — sanfona de filtros', () => {
-  it('sem filtros o resumo é Nenhum filtro ativo; com filtros lista o que foi aplicado', () => {
-    expect(resumoFiltrosTarefasExecucao(VAZIO)).toBe('Nenhum filtro ativo');
+  it('o padrão mostra Status: não finalizados; outros filtros entram junto', () => {
+    expect(resumoFiltrosTarefasExecucao(VAZIO)).toBe('Status: não finalizados');
+    expect(resumoFiltrosTarefasExecucao({ ...VAZIO, secretariaSigla: 'EDU', atrasadas: true })).toBe(
+      'Status: não finalizados · Secretaria: EDU · Atrasadas',
+    );
     expect(
       resumoFiltrosTarefasExecucao({
         ...VAZIO,
@@ -29,6 +32,7 @@ describe('265 — sanfona de filtros', () => {
         atribuidaAMim: true,
       }),
     ).toBe('Status: Em andamento · Secretaria: EDU · Atribuídas a mim');
+    expect(resumoFiltrosTarefasExecucao({})).toBe('Nenhum filtro ativo');
 
     expect(
       summarizeChamadoFiltros({
