@@ -1,3 +1,5 @@
+import type { ChamadoMapPoint } from './types';
+
 export type ChamadoTarefaStatus = 'NOVA' | 'VISUALIZADA' | 'EM_ANDAMENTO' | 'IMPEDIDA' | 'CONCLUIDA' | 'CANCELADA';
 
 export const TAREFA_STATUS_LABEL: Record<ChamadoTarefaStatus, string> = {
@@ -134,6 +136,13 @@ export type TarefasExecucaoResponse = {
   items: ChamadoTarefaResumo[];
 };
 
+export type GrupoIndicadoresTarefas = {
+  nome: string;
+  total: number;
+  pendentes: number;
+  atrasadas: number;
+};
+
 export type RelatorioTarefasResponse = {
   indicadores: {
     abertas: number;
@@ -142,10 +151,105 @@ export type RelatorioTarefasResponse = {
     impedidas: number;
     concluidas: number;
     atrasadas: number;
-    porSecretaria: Array<{ nome: string; total: number }>;
-    porEquipe: Array<{ nome: string; total: number }>;
-    porResponsavel: Array<{ nome: string; total: number }>;
-    porTipoChamado: Array<{ nome: string; total: number }>;
+    porSecretaria: GrupoIndicadoresTarefas[];
+    porEquipe: GrupoIndicadoresTarefas[];
+    porResponsavel: GrupoIndicadoresTarefas[];
+    porTipoChamado: GrupoIndicadoresTarefas[];
   };
   items: Array<ChamadoTarefaResumo & { situacaoPrazo: string }>;
 };
+
+const RESUMO_CHAMADO_MAX = 60;
+
+export function resumoDoChamado(
+  chamado: { titulo?: string | null; descricao?: string | null },
+  maxLen = RESUMO_CHAMADO_MAX,
+) {
+  const titulo = chamado.titulo?.replace(/\s+/g, ' ').trim();
+  const descricao = (chamado.descricao ?? '').replace(/\s+/g, ' ').trim();
+  const fonte = titulo || descricao;
+  if (!fonte) return '—';
+  if (fonte.length <= maxLen) return fonte;
+  return `${fonte.slice(0, maxLen).trimEnd()}…`;
+}
+
+export function tarefaExecucaoToMapPoint(item: ChamadoTarefaResumo): ChamadoMapPoint | null {
+  if (item.chamado.latitude == null || item.chamado.longitude == null) return null;
+  return {
+    id: item.id,
+    codigo: item.chamado.codigo,
+    titulo: item.titulo,
+    latitude: item.chamado.latitude,
+    longitude: item.chamado.longitude,
+    unidadeNome: `Tarefa · ${item.chamado.unidade?.nome || item.chamado.enderecoTexto || 'Sem endereço'}`,
+    prioridade: TAREFA_PRIORIDADE_LABEL[item.prioridade] ?? item.prioridade,
+    equipeNome: item.equipe?.nome,
+    prazoEm: item.prazo,
+    responsavelNome: item.responsavel?.nome ?? null,
+  };
+}
+
+export type FiltrosTarefasExecucaoResumo = {
+  status?: string;
+  historico?: boolean;
+  secretariaSigla?: string;
+  equipeNome?: string;
+  responsavelNome?: string;
+  tipoNome?: string;
+  prioridade?: string;
+  atribuidaAMim?: boolean;
+  minhasEquipes?: boolean;
+  atrasadas?: boolean;
+  prazoFrom?: string;
+  prazoTo?: string;
+};
+
+export function resumoFiltrosTarefasExecucao(opts: FiltrosTarefasExecucaoResumo) {
+  const partes: string[] = [];
+  if (opts.status === 'IMPEDIDA') partes.push('Status: Impedida (histórico)');
+  else if (opts.status) partes.push(`Status: ${TAREFA_STATUS_LABEL[opts.status as ChamadoTarefaStatus] ?? opts.status}`);
+  else if (opts.historico) partes.push('Status: histórico');
+  else if (opts.status === '') partes.push('Status: não finalizados');
+  if (opts.secretariaSigla) partes.push(`Secretaria: ${opts.secretariaSigla}`);
+  if (opts.equipeNome) partes.push(`Equipe: ${opts.equipeNome}`);
+  if (opts.responsavelNome) partes.push(`Responsável: ${opts.responsavelNome}`);
+  if (opts.tipoNome) partes.push(`Tipo: ${opts.tipoNome}`);
+  if (opts.prioridade) partes.push(`Prioridade: ${TAREFA_PRIORIDADE_LABEL[opts.prioridade] ?? opts.prioridade}`);
+  if (opts.atribuidaAMim) partes.push('Atribuídas a mim');
+  if (opts.minhasEquipes) partes.push('Minhas equipes');
+  if (opts.atrasadas) partes.push('Atrasadas');
+  if (opts.prazoFrom || opts.prazoTo) partes.push('Prazo');
+  return partes.length ? partes.join(' · ') : 'Nenhum filtro ativo';
+}
+
+export type FiltrosRelatorioTarefasInput = {
+  from?: string;
+  to?: string;
+  status?: string;
+  prioridade?: string;
+  secretariaId?: string;
+  equipeId?: string;
+  responsavelId?: string;
+  tipoChamadoId?: string;
+  search?: string;
+  capa: 'simples' | 'formal';
+};
+
+export function montarFiltrosRelatorioTarefas(input: FiltrosRelatorioTarefasInput) {
+  return {
+    from: input.from || undefined,
+    to: input.to || undefined,
+    status: input.status || undefined,
+    prioridade: input.prioridade || undefined,
+    secretariaId: input.secretariaId || undefined,
+    equipeId: input.equipeId || undefined,
+    responsavelId: input.responsavelId || undefined,
+    tipoChamadoId: input.tipoChamadoId || undefined,
+    search: input.search?.trim() || undefined,
+    capa: input.capa,
+  };
+}
+
+export function formatarGrupoIndicadoresTarefas(item: Pick<GrupoIndicadoresTarefas, 'nome' | 'pendentes' | 'atrasadas'>) {
+  return `${item.nome}: ${item.pendentes} pendentes · ${item.atrasadas} atrasadas`;
+}

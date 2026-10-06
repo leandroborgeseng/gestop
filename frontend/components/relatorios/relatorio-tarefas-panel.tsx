@@ -3,7 +3,14 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { downloadRelatorioTarefas, getRelatorioTarefas, getSecretarias, listEquipesExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
-import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL, type RelatorioTarefasResponse } from '@/lib/chamado-tarefa';
+import {
+  formatarGrupoIndicadoresTarefas,
+  montarFiltrosRelatorioTarefas,
+  TAREFA_PRIORIDADE_LABEL,
+  TAREFA_STATUS_LABEL,
+  type GrupoIndicadoresTarefas,
+  type RelatorioTarefasResponse,
+} from '@/lib/chamado-tarefa';
 
 export function RelatorioTarefasPanel() {
   const [from, setFrom] = useState('');
@@ -33,18 +40,18 @@ export function RelatorioTarefasPanel() {
   const [aplicado, setAplicado] = useState<Record<string, string | undefined> | null>(null);
 
   function filtrosAtuais() {
-    return {
-      prazoFrom: from ? new Date(from).toISOString() : undefined,
-      prazoTo: to ? new Date(`${to}T23:59:59`).toISOString() : undefined,
-      status: status || undefined,
-      prioridade: prioridade || undefined,
-      secretariaId: secretariaId || undefined,
-      equipeId: equipeId || undefined,
-      responsavelId: responsavelId || undefined,
-      tipoChamadoId: tipoChamadoId || undefined,
-      search: chamado.trim() || undefined,
+    return montarFiltrosRelatorioTarefas({
+      from,
+      to,
+      status,
+      prioridade,
+      secretariaId,
+      equipeId,
+      responsavelId,
+      tipoChamadoId,
+      search: chamado,
       capa: 'simples',
-    };
+    });
   }
 
   async function gerar() {
@@ -80,7 +87,7 @@ export function RelatorioTarefasPanel() {
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2">
         <label className="text-[12px] text-[var(--ink-3)]">
-          Prazo de
+          Período (data de abertura)
           <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="mt-1 block h-9 rounded-[10px] border border-[var(--line)] px-2" />
         </label>
         <label className="text-[12px] text-[var(--ink-3)]">
@@ -145,8 +152,8 @@ export function RelatorioTarefasPanel() {
       ) : null}
       {indicadores ? (
         <div className="grid gap-3 md:grid-cols-2">
-          <Grupo titulo="Por secretaria" itens={indicadores.porSecretaria} />
-          <Grupo titulo="Por equipe" itens={indicadores.porEquipe} />
+          <Grupo titulo="Por secretaria" itens={indicadores.porSecretaria} detalharPendencias />
+          <Grupo titulo="Por equipe" itens={indicadores.porEquipe} detalharPendencias />
           <Grupo titulo="Por responsável" itens={indicadores.porResponsavel} />
           <Grupo titulo="Por tipo de chamado" itens={indicadores.porTipoChamado} />
         </div>
@@ -221,14 +228,22 @@ function Indicador({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Grupo({ titulo, itens }: { titulo: string; itens: Array<{ nome: string; total: number }> }) {
+function Grupo({
+  titulo,
+  itens,
+  detalharPendencias = false,
+}: {
+  titulo: string;
+  itens: GrupoIndicadoresTarefas[];
+  detalharPendencias?: boolean;
+}) {
   return (
     <div>
       <p className="text-[12px] font-semibold text-[var(--ink-2)]">{titulo}</p>
       <ul className="mt-1 text-[12px] text-[var(--ink-3)]">
         {itens.slice(0, 6).map((item) => (
           <li key={item.nome}>
-            {item.nome}: {item.total}
+            {detalharPendencias ? formatarGrupoIndicadoresTarefas(item) : `${item.nome}: ${item.total}`}
           </li>
         ))}
         {itens.length === 0 ? <li>Sem dados</li> : null}

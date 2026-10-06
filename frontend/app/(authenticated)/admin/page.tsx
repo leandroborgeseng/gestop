@@ -93,11 +93,10 @@ import {
   PASSWORD_POLICY_HINT,
   validatePasswordPolicy,
 } from '@/lib/password-policy';
+import { ADMINISTRADOR_SISTEMA_NOME, isAdministradorSistemaAtivo } from '@/lib/administrador-sistema';
 import {
-  ADMINISTRADOR_SISTEMA_NOME,
   AdminTabPermissionId,
   hasAdminTabAccess,
-  isAdministradorSistemaAtivo,
 } from '@/lib/permissions-matrix';
 
 type Tab =

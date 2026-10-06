@@ -412,12 +412,20 @@ export class ChamadoTarefasService {
     if (!this.podeVerRelatorio(user)) throw new ForbiddenException('Sem permissão para o relatório de tarefas.');
     const linhas = await this.carregarLinhas(query, user, 500);
     const por = (chave: (item: (typeof linhas)[number]) => string) => {
-      const map = new Map<string, number>();
+      const map = new Map<string, { total: number; pendentes: number; atrasadas: number }>();
       for (const item of linhas) {
         const nome = chave(item);
-        map.set(nome, (map.get(nome) ?? 0) + 1);
+        const atual = map.get(nome) ?? { total: 0, pendentes: 0, atrasadas: 0 };
+        atual.total += 1;
+        if (TAREFA_STATUS_PENDENTES.includes(item.status as (typeof TAREFA_STATUS_PENDENTES)[number])) {
+          atual.pendentes += 1;
+        }
+        if (item.atrasada) atual.atrasadas += 1;
+        map.set(nome, atual);
       }
-      return [...map.entries()].map(([nome, total]) => ({ nome, total })).sort((a, b) => b.total - a.total);
+      return [...map.entries()]
+        .map(([nome, counts]) => ({ nome, ...counts }))
+        .sort((a, b) => b.total - a.total);
     };
     return {
       indicadores: {

@@ -17,10 +17,10 @@ import {
   Settings,
 } from 'lucide-react';
 
+import { isAdministradorSistemaAtivo } from '@/lib/administrador-sistema';
 import {
   hasAbrirChamadoAccess,
   hasMeusChamadosAccess,
-  isAdministradorSistemaAtivo,
   isMatrixPermissionKey,
   navItemAllowedByMatrix,
   screenHasVisualizarAccess,

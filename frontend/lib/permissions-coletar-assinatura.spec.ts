@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ADMINISTRADOR_SISTEMA_NOME, buildMatrixKey, canColetarAssinatura, isAdministradorSistemaAtivo } from './permissions-matrix';
+import { ADMINISTRADOR_SISTEMA_NOME, isAdministradorSistemaAtivo } from './administrador-sistema';
+import { canColetarAssinatura } from './can-coletar-assinatura';
+import { buildMatrixKey } from './permissions-matrix';
 
 describe('canColetarAssinatura (helper real, paridade com o guard)', () => {
   it('retorna false para usuarios.gerenciar sem ser Administrador do Sistema', () => {

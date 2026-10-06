@@ -778,10 +778,10 @@ export default function RelatoriosPage() {
           }
         >
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Data inicial">
+            <Field label="Data inicial (abertura)">
               <Input type="date" value={tarefasModal.from} onChange={(e) => setTarefasModal((prev) => ({ ...prev, from: e.target.value }))} />
             </Field>
-            <Field label="Data final">
+            <Field label="Data final (abertura)">
               <Input type="date" value={tarefasModal.to} onChange={(e) => setTarefasModal((prev) => ({ ...prev, to: e.target.value }))} />
             </Field>
             <Field label="Status">

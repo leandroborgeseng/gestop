@@ -153,7 +153,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/execucao (aba tarefas)',
     api: 'ChamadoTarefasController: GET /chamado-tarefas/execucao, PATCH /chamado-tarefas/:id, GET /chamado-tarefas/:id/chamado/:chamadoId (anexos e histórico em leitura; metadata do histórico na mesma whitelist da ficha: tipo, descricao, alteracoes, observadorNome, observadorIds, perfilAtivo, perfilAtivoNome, secretariaAtiva, secretariaAtivaSigla, resumo, temAnexos, documentoCodigo, impedimento, impedimentoMotivo, relatorio, distanciaMetros, evidenciasCount, equipeExecutora, membrosExecutores, membrosExternos, participantes, checklistComplementar). Gestão do chamado continua nas rotas reais de ChamadosController (POST /chamados/:id/historico, PUT /:id/status, POST|DELETE /:id/execucao/evidencias, POST /:id/exclusao-logica).',
     tabelas: 'ChamadoTarefa, EquipeUsuario, Usuario, Chamado, Evidencia, HistoricoStatus',
-    permissao: 'As mesmas chaves de chamados.tarefas, mais matriz.execucao.tarefas e chamados.tarefas_atribuidas.visualizar. Cancelar: tarefas_cancelar.executar (compatível com tarefas.excluir). Histórico da tarefa: tarefas_historico.visualizar ou Administrador do Sistema. Anexos: a mesma chave ou designado na tarefa. Filtros da aba ficam na sanfona Filtros de tarefas. A leitura do chamado pela tarefa exige ver a tarefa e o vínculo tarefa↔chamado; não concede gestão do chamado.',
+    permissao: 'As mesmas chaves de chamados.tarefas, mais matriz.execucao.tarefas e chamados.tarefas_atribuidas.visualizar. Cancelar: tarefas_cancelar.executar (compatível com tarefas.excluir). Histórico da tarefa: tarefas_historico.visualizar ou Administrador do Sistema. Anexos: a mesma chave ou designado na tarefa. Filtros da aba ficam na sanfona Filtros de tarefas: fechar não limpa; o resumo padrão é Status: não finalizados (whereExecucao sem historico/status). Sem filtro nenhum no helper: Nenhum filtro ativo. A lista tem a coluna Resumo do chamado (título ou início da descrição). O pin do mapa mostra o responsável da tarefa. A leitura do chamado pela tarefa exige ver a tarefa e o vínculo tarefa↔chamado; não concede gestão do chamado.',
   },
   {
     id: 'tarefas-rel',
@@ -162,7 +162,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/dashboard (grade) e /relatorios (card Gerar)',
     api: 'ChamadoTarefasController: GET /chamado-tarefas/relatorio e /relatorio.csv|pdf|xlsx. capa=simples exporta a grade; o PDF formal usa o cabeçalho SIGMA.',
     tabelas: 'ChamadoTarefa, Chamado, Secretaria, Equipe',
-    permissao: 'chamados.gerenciar, dashboard.visualizar ou matriz de relatórios/tarefas. O escopo de secretaria do usuário é aplicado na consulta.',
+    permissao: 'chamados.gerenciar, dashboard.visualizar ou matriz de relatórios/tarefas. O escopo de secretaria do usuário é aplicado na consulta. O período da grade do dashboard e do modal formal filtra createdAt (data de abertura). Os agrupamentos por secretaria e equipe devolvem pendentes e atrasadas. Tarefas não entram nos indicadores de chamados do MonitoramentoService. O export da grade reenvia os mesmos filtros aplicados.',
   },
   {
     id: 'mobile',

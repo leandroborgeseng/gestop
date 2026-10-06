@@ -1000,6 +1000,7 @@ export type ChamadoMapPoint = {
   unidadeNome: string;
   prioridade: string;
   equipeNome?: string | null;
+  responsavelNome?: string | null;
   previstaExecucaoEm?: string | null;
   prazoEm?: string | null;
   programado?: boolean;

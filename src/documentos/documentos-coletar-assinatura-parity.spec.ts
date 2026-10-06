@@ -13,8 +13,11 @@ async function canColetarAssinaturaFront(
   user?: JwtPayload,
 ) {
   // Spec-only: o helper mora no frontend (imagem Docker / tracing não incluem src/).
-  // tsconfig da raiz é Node16/CJS; extensão .js é o que o tsc resolve para o .ts (vitest também).
-  const { canColetarAssinatura } = await import('../../frontend/lib/can-coletar-assinatura.js');
+  // Caminho em variável: o tsc da raiz (Node16) não segue o grafo do Next, que resolve sem .js.
+  const href = '../../frontend/lib/can-coletar-assinatura.js';
+  const { canColetarAssinatura } = (await import(href)) as {
+    canColetarAssinatura: (permissoes: string[], user?: JwtPayload) => boolean;
+  };
   return canColetarAssinatura(permissoes, user);
 }
 
