@@ -4,5 +4,5 @@
     "declaration": true,
     "sourceMap": true
   },
-  "exclude": ["node_modules", "dist", "**/*.spec.ts", "vitest.config.ts"]
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "vitest.config.ts", "src/checklists/pdf-texto.ts"]
 }
