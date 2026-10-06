@@ -61,5 +61,8 @@ export function resolveCommitFields(
   }
 }
 
-/** SHA resolvido uma vez no boot. Nunca lança; valor inválido ou ausente vira null. */
+/**
+ * SHA resolvido uma vez no boot. Nunca lança; valor inválido ou ausente vira null.
+ * APP_COMMIT_SHA é override manual e não deve ser definido em produção (Railway/Coolify): venceria o SHA da plataforma e o /health mostraria um commit velho.
+ */
 export const APP_COMMIT: ResolvedCommit = resolveCommitFields();

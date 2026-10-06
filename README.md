@@ -40,7 +40,8 @@ Stack completa (PostGIS + API + Web) no mesmo padrao dos outros apps deste ambie
 
 - Compose: [`docker-compose.coolify.yml`](docker-compose.coolify.yml)
 - Guia: [`COOLIFY.md`](COOLIFY.md)
-- Variaveis: [`.env.coolify.example`](.env.coolify.example)
+- Variaveis: [`.env.coolify.example`](.env.coolify.example) (Coolify) e [`.env.example`](.env.example) (local)
+- `APP_COMMIT_SHA` e so override manual do SHA em `GET /health` — nao definir em producao (Railway/Coolify), senao vence o SHA da plataforma e o health mostra um commit velho.
 
 ```bash
 cp .env.coolify.example .env
