@@ -1,20 +1,7 @@
-/** Mesmo valor de `ADMINISTRADOR_SISTEMA_NOME` em permissions-matrix.ts. */
-const ADMINISTRADOR_SISTEMA_NOME = 'Administrador do Sistema';
+import { isAdministradorSistemaAtivo } from './administrador-sistema';
 
 function matriz(telaId: string, funcaoId: string, acao: string) {
   return `matriz.${telaId}.${funcaoId}.${acao}`;
-}
-
-/**
- * Igual a `isAdministradorSistemaAtivo`: perfil ativo, senão o primeiro da lista.
- * Clone local para o módulo não importar nada (imagem Docker / tsc da raiz).
- */
-function isAdministradorSistemaAtivo(user?: {
-  perfilAtivo?: { nome?: string } | null;
-  perfis?: string[] | null;
-} | null) {
-  const nome = user?.perfilAtivo?.nome ?? user?.perfis?.[0];
-  return nome === ADMINISTRADOR_SISTEMA_NOME;
 }
 
 /**

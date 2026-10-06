@@ -1,3 +1,5 @@
+import { isAdministradorSistemaAtivo } from './administrador-sistema';
+
 export const PERMISSION_ACTIONS = ['visualizar', 'inserir', 'alterar', 'excluir', 'executar'] as const;
 
 export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
@@ -377,8 +379,6 @@ export function hasAnyAdminVisualizarAccess(permissoes: string[]) {
   return tabs.some((tab) => hasAdminTabAccess(tab, 'visualizar', permissoes));
 }
 
-export const ADMINISTRADOR_SISTEMA_NOME = 'Administrador do Sistema';
-
 export function canVisualizarChamadosExcluidos(user?: {
   permissoes?: string[];
   perfilAtivo?: { nome?: string } | null;
@@ -415,14 +415,6 @@ export function hasChecklistAccess(permissoes: string[], action: PermissionActio
     );
   }
   return permissoes.includes('checklists.gerenciar');
-}
-
-export function isAdministradorSistemaAtivo(user?: {
-  perfilAtivo?: { nome?: string } | null;
-  perfis?: string[];
-} | null) {
-  const nome = user?.perfilAtivo?.nome ?? user?.perfis?.[0];
-  return nome === ADMINISTRADOR_SISTEMA_NOME;
 }
 
 export function hasIntegracoesVisualizarAccess(

@@ -16,7 +16,8 @@ import {
 import { PageShell } from '@/components/layout/page-shell';
 import { Alert } from '@/components/ui/alert';
 import { useSessionUser } from '@/components/auth/session-context';
-import { hasChecklistAccess, isAdministradorSistemaAtivo } from '@/lib/permissions-matrix';
+import { isAdministradorSistemaAtivo } from '@/lib/administrador-sistema';
+import { hasChecklistAccess } from '@/lib/permissions-matrix';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import {
   createChecklistVersion,

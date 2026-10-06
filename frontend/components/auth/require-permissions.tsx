@@ -12,7 +12,8 @@ import {
   hasOperationalNavAccess,
   isNavActive,
 } from '@/lib/navigation';
-import { hasAnyAdminVisualizarAccess, hasChecklistAccess, hasCronogramaAccess, hasDocumentosModuloAccess, isAdministradorSistemaAtivo } from '@/lib/permissions-matrix';
+import { isAdministradorSistemaAtivo } from '@/lib/administrador-sistema';
+import { hasAnyAdminVisualizarAccess, hasChecklistAccess, hasCronogramaAccess, hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
 import { ErrorState } from '@/components/ui-states';
 
 function permissionSatisfied(
