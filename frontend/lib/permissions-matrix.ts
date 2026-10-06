@@ -14,6 +14,7 @@ export type PermissionCatalogFunction = {
   id: string;
   label: string;
   actions: PermissionAction[];
+  actionLabels?: Partial<Record<PermissionAction, string>>;
 };
 
 export type PermissionCatalogScreen = {
@@ -28,6 +29,10 @@ export function buildMatrixKey(telaId: string, funcaoId: string, acao: Permissio
 
 export function isMatrixPermissionKey(chave: string) {
   return chave.startsWith('matriz.');
+}
+
+export function catalogCheckboxLabel(funcao: PermissionCatalogFunction, acao: PermissionAction) {
+  return funcao.actionLabels?.[acao] ?? `${funcao.label} · ${PERMISSION_ACTION_LABELS[acao]}`;
 }
 
 export function getScreenFunctionRows(tela: PermissionCatalogScreen) {
@@ -188,9 +193,15 @@ export function hasCronogramaAccess(
 
 export function canGerirTarefasChamado(
   permissoes: string[],
-  acao: 'visualizar' | 'inserir' | 'alterar' | 'executar' | 'excluir',
+  acao: 'visualizar' | 'inserir' | 'alterar' | 'executar' | 'excluir' | 'cancelar',
 ) {
   if (permissoes.includes('usuarios.gerenciar') || permissoes.includes('chamados.gerenciar')) return true;
+  if (acao === 'excluir' || acao === 'cancelar') {
+    return (
+      permissoes.includes(buildMatrixKey('chamados', 'tarefas_cancelar', 'executar')) ||
+      permissoes.includes(buildMatrixKey('chamados', 'tarefas', 'excluir'))
+    );
+  }
   return permissoes.includes(buildMatrixKey('chamados', 'tarefas', acao));
 }
 
@@ -209,6 +220,8 @@ export function canVerTarefasExecucao(permissoes: string[]) {
     permissoes.includes(buildMatrixKey('chamados', 'tarefas', 'executar')) ||
     permissoes.includes(buildMatrixKey('chamados', 'tarefas_andamento', 'executar')) ||
     permissoes.includes(buildMatrixKey('chamados', 'tarefas_concluir', 'executar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'tarefas_cancelar', 'executar')) ||
+    permissoes.includes(buildMatrixKey('chamados', 'tarefas', 'excluir')) ||
     permissoes.includes(buildMatrixKey('chamados', 'tarefas_historico', 'visualizar')) ||
     permissoes.includes(buildMatrixKey('chamados', 'tarefas_atribuidas', 'visualizar'))
   );

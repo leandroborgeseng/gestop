@@ -21,7 +21,17 @@ import { normalizarMimeAnexo, validarBufferAnexo } from './anexos-midia';
 import { buildCsv } from '../relatorios/relatorios.csv';
 import { buildTablePdf } from '../relatorios/relatorios.pdf';
 import { buildXlsx } from '../relatorios/relatorios.xlsx';
-import { situacaoPrazoTarefa, TAREFA_STATUS_FINAIS, TAREFA_STATUS_PENDENTES, tarefaAtrasada } from './chamado-tarefa.regras';
+import {
+  eventosAtribuicaoTarefa,
+  rotuloEquipeTarefa,
+  rotuloResponsavelTarefa,
+  situacaoPrazoTarefa,
+  TAREFA_STATUS_FINAIS,
+  TAREFA_STATUS_PENDENTES,
+  tarefaAtrasada,
+} from './chamado-tarefa.regras';
+import { montarAnexosAberturaLeitura, serializarAnexoHistoricoLeitura } from './chamado-leitura-via-tarefa';
+import { projetarMetadataHistoricoChamado } from './chamado-historico.projecao';
 import { AnexoChamadoTarefaDto, CreateChamadoTarefaDto, UpdateChamadoTarefaDto } from './chamado-tarefas.dto';
 
 const TAREFA_EXPORT_HEADERS = [
@@ -153,23 +163,34 @@ export class ChamadoTarefasService {
     }
     const chamado = await this.requireChamadoOperacional(dto.chamadoId, user);
     await this.validarAtribuicao(dto.secretariaId, dto.equipeId ?? null, dto.responsavelId ?? null);
-    const criada = await this.prisma.chamadoTarefa.create({
-      data: {
-        chamadoId: dto.chamadoId,
-        titulo: dto.titulo.trim(),
-        descricao: dto.descricao?.trim() || null,
-        prazo: dto.prazo ? new Date(dto.prazo) : null,
-        secretariaId: dto.secretariaId,
-        equipeId: dto.equipeId ?? null,
-        responsavelId: dto.responsavelId ?? null,
-        prioridade: dto.prioridade ?? ChamadoPrioridade.MEDIA,
-        status: ChamadoTarefaStatus.NOVA,
-        criadaPorId: user.sub,
-      },
-      include: TAREFA_INCLUDE,
-    });
-    await this.registrarTrilha(criada, user, 'criada', criadoResumo(criada));
-    return this.serialize(criada, user, await this.equipeIdsDoUsuario(user.sub));
+    const anexosValidos = parseAnexos(dto.anexos ?? []);
+    let criada: TarefaLoaded | undefined;
+    try {
+      criada = await this.prisma.chamadoTarefa.create({
+        data: {
+          chamadoId: dto.chamadoId,
+          titulo: dto.titulo.trim(),
+          descricao: dto.descricao?.trim() || null,
+          prazo: dto.prazo ? new Date(dto.prazo) : null,
+          secretariaId: dto.secretariaId,
+          equipeId: dto.equipeId ?? null,
+          responsavelId: dto.responsavelId ?? null,
+          prioridade: dto.prioridade ?? ChamadoPrioridade.MEDIA,
+          status: ChamadoTarefaStatus.NOVA,
+          criadaPorId: user.sub,
+        },
+        include: TAREFA_INCLUDE,
+      });
+      const anexoIds = await this.persistirAnexos(criada.id, anexosValidos, user);
+      const atual = anexoIds.length ? await this.requireTarefa(criada.id) : criada;
+      await this.registrarTrilha(atual, user, 'criada', criadoResumo(atual), undefined, anexoIds);
+      return this.serialize(atual, user, await this.equipeIdsDoUsuario(user.sub));
+    } catch (err) {
+      if (criada) {
+        await this.prisma.chamadoTarefa.delete({ where: { id: criada.id } }).catch(() => undefined);
+      }
+      throw err;
+    }
   }
 
   async getById(id: string, user: JwtPayload) {
@@ -286,8 +307,66 @@ export class ChamadoTarefasService {
     const updated = await this.prisma.chamadoTarefa.update({ where: { id }, data, include: TAREFA_INCLUDE });
     const anexoIds = await this.gravarAnexos(updated.id, dto.anexos ?? [], user);
     const atual = anexoIds.length ? await this.requireTarefa(id) : updated;
-    await this.registrarTrilha(atual, user, acao, detalhe, before.status, anexoIds);
+    if (acao === 'editada') {
+      await this.registrarEventosEdicao(before, atual, user, dto, anexoIds);
+    } else {
+      await this.registrarTrilha(atual, user, acao, detalhe, before.status, anexoIds);
+    }
     return this.detalhe(atual, user);
+  }
+
+  async getChamadoLeituraViaTarefa(tarefaId: string, chamadoId: string, user: JwtPayload) {
+    const tarefa = await this.exigirAcessoChamadoViaTarefa(tarefaId, chamadoId, user);
+    const [chamado, historico] = await Promise.all([
+      this.prisma.chamado.findFirst({
+        where: { id: chamadoId, excluidoEm: null },
+        select: {
+          id: true,
+          fotoUrl: true,
+          fotoMimeType: true,
+          createdAt: true,
+          registradoPorId: true,
+          registradoPor: { select: { nome: true } },
+          evidencias: { orderBy: { capturadaEm: 'asc' as const } },
+        },
+      }),
+      this.prisma.historicoStatus.findMany({
+        where: { entidadeTipo: 'Chamado', entidadeId: chamadoId },
+        orderBy: { createdAt: 'asc' },
+        include: { alteradoPor: { select: { id: true, nome: true } } },
+      }),
+    ]);
+    if (!chamado) throw new NotFoundException('Chamado não encontrado.');
+    const evidencias = chamado.evidencias ?? [];
+    const evidenciaPorId = new Map(evidencias.map((item) => [item.id, item]));
+    return {
+      chamadoId: tarefa.chamadoId,
+      codigo: tarefa.chamado.codigo,
+      somenteLeitura: true,
+      anexosAbertura: montarAnexosAberturaLeitura(chamado, evidencias),
+      historico: historico.map((entry) => {
+        const metadata =
+          entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata)
+            ? (entry.metadata as Record<string, unknown>)
+            : {};
+        const ids = Array.isArray(metadata.evidenciaIds)
+          ? metadata.evidenciaIds.filter((id): id is string => typeof id === 'string')
+          : [];
+        return {
+          id: entry.id,
+          statusAnterior: entry.statusAnterior,
+          statusNovo: entry.statusNovo,
+          motivo: entry.motivo,
+          metadata: projetarMetadataHistoricoChamado(metadata),
+          createdAt: entry.createdAt.toISOString(),
+          alteradoPor: entry.alteradoPor,
+          anexos: ids
+            .map((id) => evidenciaPorId.get(id))
+            .filter((item): item is NonNullable<typeof item> => Boolean(item))
+            .map(serializarAnexoHistoricoLeitura),
+        };
+      }),
+    };
   }
 
   async anexar(id: string, dto: AnexoChamadoTarefaDto, user: JwtPayload) {
@@ -576,13 +655,17 @@ export class ChamadoTarefasService {
   }
 
   private async detalhe(tarefa: TarefaLoaded, user: JwtPayload, equipes?: Set<string>) {
+    const base = this.serialize(tarefa, user, equipes ?? (await this.equipeIdsDoUsuario(user.sub)));
+    if (!base.podeVerHistorico) {
+      return { ...base, historico: [] };
+    }
     const historico = await this.prisma.historicoStatus.findMany({
       where: { entidadeTipo: 'ChamadoTarefa', entidadeId: tarefa.id },
       orderBy: { createdAt: 'asc' },
       include: { alteradoPor: { select: { id: true, nome: true } } },
     });
     return {
-      ...this.serialize(tarefa, user, equipes ?? (await this.equipeIdsDoUsuario(user.sub))),
+      ...base,
       historico: historico.map((item) => {
         const meta = item.metadata && typeof item.metadata === 'object' && !Array.isArray(item.metadata)
           ? (item.metadata as Record<string, unknown>)
@@ -627,12 +710,15 @@ export class ChamadoTarefasService {
       responsavel: tarefa.responsavel,
       criadaPor: tarefa.criadaPor,
       concluidaPor: tarefa.concluidaPor,
-      anexos: tarefa.anexos.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() })),
+      anexos: this.podeVerAnexos(tarefa, user, equipesDoUsuario)
+        ? tarefa.anexos.map((item) => ({ ...item, createdAt: item.createdAt.toISOString() }))
+        : [],
       podeAlterarDados: this.podeAlterar(user) && !encerradaTarefa(tarefa.status),
       podeAndamento: (this.podeAndamento(user) || designadoTarefa(tarefa, user, equipesDoUsuario)) && !encerradaTarefa(tarefa.status),
       podeConcluir: (this.podeConcluir(user) || designadoTarefa(tarefa, user, equipesDoUsuario)) && !encerradaTarefa(tarefa.status),
       podeCancelar: this.podeCancelar(user) && !encerradaTarefa(tarefa.status),
-      podeVerHistorico: true,
+      podeVerHistorico: this.podeVerHistorico(user),
+      podeVerAnexos: this.podeVerAnexos(tarefa, user, equipesDoUsuario),
       podeTratar:
         (!encerradaTarefa(tarefa.status) &&
           (designadoTarefa(tarefa, user, equipesDoUsuario) || this.podeAlterar(user) || this.podeAndamento(user) || this.podeConcluir(user))) ||
@@ -658,6 +744,49 @@ export class ChamadoTarefasService {
     };
   }
 
+  private async exigirAcessoChamadoViaTarefa(tarefaId: string, chamadoId: string, user: JwtPayload) {
+    const tarefa = await this.requireTarefa(tarefaId);
+    if (!(await this.podeVer(tarefa, user))) throw new NotFoundException('Tarefa não encontrada.');
+    if (tarefa.chamadoId !== chamadoId) {
+      throw new ForbiddenException('A tarefa não pertence a este chamado.');
+    }
+    return tarefa;
+  }
+
+  private async registrarEventosEdicao(
+    before: TarefaLoaded,
+    atual: TarefaLoaded,
+    user: JwtPayload,
+    dto: UpdateChamadoTarefaDto,
+    anexoIds: string[],
+  ) {
+    const mudouResponsavel = dto.responsavelId !== undefined && dto.responsavelId !== before.responsavelId;
+    const mudouEquipe = dto.equipeId !== undefined && dto.equipeId !== before.equipeId;
+    const mudouOutros =
+      dto.titulo != null ||
+      dto.descricao != null ||
+      dto.prazo !== undefined ||
+      dto.secretariaId != null ||
+      dto.prioridade != null;
+    const atribuicoes = eventosAtribuicaoTarefa({
+      mudouResponsavel,
+      mudouEquipe,
+      responsavelAnterior: rotuloResponsavelTarefa(before.responsavel?.nome),
+      responsavelNovo: rotuloResponsavelTarefa(atual.responsavel?.nome),
+      equipeAnterior: rotuloEquipeTarefa(before.equipe?.nome),
+      equipeNova: rotuloEquipeTarefa(atual.equipe?.nome),
+    });
+    for (const evento of atribuicoes) {
+      await this.registrarTrilha(atual, user, evento.acao, evento.detalhe, before.status, anexoIds, {
+        valorAnterior: evento.valorAnterior,
+        valorNovo: evento.valorNovo,
+      });
+    }
+    if (mudouOutros || atribuicoes.length === 0) {
+      await this.registrarTrilha(atual, user, 'editada', null, before.status, anexoIds);
+    }
+  }
+
   private async registrarTrilha(
     tarefa: TarefaLoaded,
     user: JwtPayload,
@@ -665,6 +794,7 @@ export class ChamadoTarefasService {
     detalhe: string | null,
     statusAnterior?: string | null,
     anexoIds: string[] = [],
+    extras?: { valorAnterior?: string; valorNovo?: string },
   ) {
     const contexto = await this.contextoAtuacao(user);
     const motivo = motivoTarefa(acao, tarefa.titulo);
@@ -684,6 +814,8 @@ export class ChamadoTarefasService {
       secretariaAtivaSigla: contexto.secretariaSigla,
       temAnexos: anexoIds.length > 0,
       anexoIds,
+      ...(extras?.valorAnterior != null ? { valorAnterior: extras.valorAnterior } : {}),
+      ...(extras?.valorNovo != null ? { valorNovo: extras.valorNovo } : {}),
       resumo: [
         `Status: ${tarefa.status}`,
         tarefa.equipe?.nome ? `Equipe: ${tarefa.equipe.nome}` : null,
@@ -724,24 +856,30 @@ export class ChamadoTarefasService {
       tela: 'chamados',
       funcao: 'tarefas',
       descricao: motivo,
+      valorAntigo: extras?.valorAnterior != null ? { valor: extras.valorAnterior } : undefined,
       valorNovo: {
         chamadoId: tarefa.chamadoId,
         tarefaId: tarefa.id,
         acao,
         status: tarefa.status,
+        ...(extras?.valorAnterior != null ? { valorAnterior: extras.valorAnterior } : {}),
+        ...(extras?.valorNovo != null ? { de: extras.valorAnterior, para: extras.valorNovo } : {}),
       },
     });
   }
 
   private async gravarAnexos(tarefaId: string, anexos: AnexoChamadoTarefaDto[], user: JwtPayload) {
+    return this.persistirAnexos(tarefaId, parseAnexos(anexos), user);
+  }
+
+  private async persistirAnexos(tarefaId: string, anexos: ParsedAnexo[], user: JwtPayload) {
     const ids: string[] = [];
     for (const anexo of anexos) {
-      const parsed = parseDataUrl(anexo.dataUrl);
-      const stored = await this.storage.persistBuffer(parsed.buffer, parsed.mime, 'tarefas');
+      const stored = await this.storage.persistBuffer(anexo.buffer, anexo.mime, 'tarefas');
       const criado = await this.prisma.chamadoTarefaAnexo.create({
         data: {
           tarefaId,
-          nome: anexo.nome?.trim() || 'anexo',
+          nome: anexo.nome,
           url: stored.url,
           storageKey: stored.storageKey,
           mimeType: stored.mimeType,
@@ -914,8 +1052,20 @@ export class ChamadoTarefasService {
     );
   }
 
+  private podeVerHistorico(user: JwtPayload) {
+    return this.tem(user, [], [this.chave('chamados', 'tarefas_historico', 'visualizar')]);
+  }
+
+  private podeVerAnexos(tarefa: TarefaLoaded, user: JwtPayload, equipesDoUsuario: Set<string>) {
+    return this.podeVerHistorico(user) || designadoTarefa(tarefa, user, equipesDoUsuario);
+  }
+
   private podeCancelar(user: JwtPayload) {
-    return this.tem(user, ['chamados.gerenciar'], [this.chave('chamados', 'tarefas', 'excluir')]);
+    return this.tem(
+      user,
+      ['chamados.gerenciar'],
+      [this.chave('chamados', 'tarefas_cancelar', 'executar'), this.chave('chamados', 'tarefas', 'excluir')],
+    );
   }
 
   private assertPodeAtribuir(user: JwtPayload) {
@@ -923,6 +1073,15 @@ export class ChamadoTarefasService {
       throw new ForbiddenException('Sem permissão para atribuir tarefa.');
     }
   }
+}
+
+type ParsedAnexo = { nome: string; mime: string; buffer: Buffer };
+
+function parseAnexos(anexos: AnexoChamadoTarefaDto[]) {
+  return anexos.map((anexo) => ({
+    nome: anexo.nome?.trim() || 'anexo',
+    ...parseDataUrl(anexo.dataUrl),
+  }));
 }
 
 function parseDataUrl(dataUrl: string) {
@@ -955,6 +1114,8 @@ function motivoTarefa(acao: string, titulo: string) {
   if (acao === 'andamento') return `Andamento da tarefa: ${titulo}`;
   if (acao === 'visualizada') return `Tarefa visualizada: ${titulo}`;
   if (acao === 'editada') return `Dados da tarefa alterados: ${titulo}`;
+  if (acao === 'responsavel') return `Responsável da tarefa alterado: ${titulo}`;
+  if (acao === 'equipe') return `Equipe da tarefa alterada: ${titulo}`;
   if (acao === 'anexo') return `Anexo da tarefa: ${titulo}`;
   if (acao === 'prazo') return `Prazo da tarefa atualizado: ${titulo}`;
   if (acao === 'atribuicao') return `Atribuição da tarefa atualizada: ${titulo}`;

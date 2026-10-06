@@ -151,15 +151,23 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'atribuir-tarefa',
         nome: 'Atribuir tarefa',
         atores: ['administrador', 'gestor'],
-        descricao: 'Criar tarefa do chamado (status Nova). Alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige permissão específica de alterar dados.',
+        descricao: 'Criar tarefa do chamado (status Nova), com anexos opcionais no POST de criação (mesmo armazenamento das demais mídias). O painel lista abertas primeiro e recolhe Encerradas (N). O cabeçalho do chamado mostra Tarefas pendentes. Alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige permissão específica de alterar dados.',
         rotas: ['/chamados', 'GET /chamado-tarefas/por-chamado/:chamadoId', 'POST /chamado-tarefas', 'POST /chamado-tarefas/:id/anexos'],
       },
       {
         id: 'tratar-tarefa',
         nome: 'Tratar tarefa atribuída',
         atores: ['equipe', 'gestor'],
-        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Impedida não é mais atribuída; registros antigos continuam consultáveis.',
+        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Cancelar exige a permissão Cancelar tarefa (ou a chave antiga tarefas.excluir); alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige Alterar dados da tarefa. O histórico da tarefa só sai com tarefas_historico.visualizar. Os anexos da tarefa saem para o designado (responsável ou membro da equipe) mesmo sem essa chave. Impedida não é mais atribuída; registros antigos continuam consultáveis. Troca de responsável e de equipe geram eventos distintos na trilha, com valor anterior e novo.',
         rotas: ['/execucao', 'GET /chamado-tarefas/execucao', 'PATCH /chamado-tarefas/:id'],
+      },
+      {
+        id: 'consultar-chamado-via-tarefa',
+        nome: 'Consultar anexos e histórico do chamado pela tarefa',
+        atores: ['equipe', 'gestor'],
+        descricao:
+          'Quem vê a tarefa (responsável, membro da equipe ou permissão atual de ChamadoTarefasService) e não tem acesso direto ao chamado consulta anexos e histórico do chamado só em leitura, pelo vínculo tarefa↔chamado. O metadata do histórico usa a mesma projeção da ficha (não o JSON bruto). Sem editar, mudar status, anexar, excluir anexo, comentar no histórico ou encerrar o chamado — a gestão permanece nas rotas reais de ChamadosService. Quem já acessa o chamado segue no fluxo atual da ficha.',
+        rotas: ['/execucao', 'GET /chamado-tarefas/:id/chamado/:chamadoId'],
       },
       {
         id: 'relatorio-tarefas',
@@ -302,7 +310,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'permissoes',
         nome: 'Configurar permissões',
         atores: ['administrador'],
-        descricao: 'Criar perfis e gravar a matriz de permissões do perfil ou do usuário.',
+        descricao: 'Criar perfis e gravar a matriz de permissões do perfil ou do usuário. Na rotina de tarefas, as células rotulam Visualizar tarefas, Criar tarefa, Alterar dados da tarefa, Registrar andamento, Concluir tarefa, Cancelar tarefa e Visualizar histórico e anexos. Cancelar não usa a coluna Excluir: a função tarefas_cancelar fica em Executar; quem ainda tem a chave antiga tarefas.excluir continua podendo cancelar.',
         rotas: ['/admin', 'GET /admin/perfis/configuraveis', 'PUT /admin/perfis/:id/matriz', 'PUT /admin/usuarios/:id/matriz'],
       },
       {

@@ -60,6 +60,15 @@ export class ChamadoTarefasController {
     return this.tarefas.listByChamado(chamadoId, user);
   }
 
+  @Get(':id/chamado/:chamadoId')
+  getChamadoLeitura(
+    @Param('id', ParseUuidPipe) id: string,
+    @Param('chamadoId', ParseUuidPipe) chamadoId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.tarefas.getChamadoLeituraViaTarefa(id, chamadoId, user);
+  }
+
   @Get(':id')
   getById(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
     return this.tarefas.getById(id, user);

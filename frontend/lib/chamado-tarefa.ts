@@ -10,6 +10,30 @@ export const TAREFA_STATUS_LABEL: Record<ChamadoTarefaStatus, string> = {
 };
 
 export const TAREFA_STATUS_PENDENTES: ChamadoTarefaStatus[] = ['NOVA', 'VISUALIZADA', 'EM_ANDAMENTO'];
+export const TAREFA_STATUS_FINAIS: ChamadoTarefaStatus[] = ['CONCLUIDA', 'CANCELADA'];
+
+export function tarefaEncerrada(status: ChamadoTarefaStatus) {
+  return TAREFA_STATUS_FINAIS.includes(status);
+}
+
+export function agruparTarefasDoChamado<T extends { status: ChamadoTarefaStatus }>(items: T[]) {
+  const abertas: T[] = [];
+  const encerradas: T[] = [];
+  for (const item of items) {
+    if (tarefaEncerrada(item.status)) encerradas.push(item);
+    else abertas.push(item);
+  }
+  return { abertas, encerradas };
+}
+
+export function contarTarefasPendentes<T extends { status: ChamadoTarefaStatus }>(items: T[]) {
+  return items.filter((item) => TAREFA_STATUS_PENDENTES.includes(item.status)).length;
+}
+
+export function formatarDataCriacaoTarefa(iso: string) {
+  const date = new Date(iso);
+  return `Criada em ${date.toLocaleDateString('pt-BR')} às ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
 
 export const TAREFA_PRIORIDADE_LABEL: Record<string, string> = {
   BAIXA: 'Baixa',
@@ -43,6 +67,7 @@ export type ChamadoTarefaResumo = {
   podeConcluir?: boolean;
   podeCancelar?: boolean;
   podeVerHistorico?: boolean;
+  podeVerAnexos?: boolean;
   podeTratar: boolean;
   chamado: {
     id: string;
@@ -60,6 +85,31 @@ export type ChamadoTarefaResumo = {
     secretaria: { id: string; nome: string; sigla: string } | null;
     equipe: { id: string; nome: string } | null;
   };
+};
+
+export type ChamadoTarefaChamadoLeitura = {
+  chamadoId: string;
+  codigo: string;
+  somenteLeitura: true;
+  anexosAbertura: Array<{
+    id: string;
+    nome: string;
+    mimeType?: string | null;
+    categoria: 'imagem' | 'pdf' | 'video';
+    url: string;
+    tamanhoBytes?: number | null;
+    enviadoEm?: string | null;
+  }>;
+  historico: Array<{
+    id: string;
+    motivo: string | null;
+    statusAnterior: string | null;
+    statusNovo: string;
+    createdAt: string;
+    alteradoPor: { id: string; nome: string } | null;
+    metadata?: Record<string, unknown>;
+    anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null; nome?: string | null }>;
+  }>;
 };
 
 export type ChamadoTarefaDetalhe = ChamadoTarefaResumo & {

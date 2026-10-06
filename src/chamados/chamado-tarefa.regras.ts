@@ -21,3 +21,50 @@ export function situacaoPrazoTarefa(
   if (input.prazo.getTime() < now.getTime()) return 'Atrasada';
   return 'No prazo';
 }
+
+export const ROTULO_SEM_RESPONSAVEL = 'Sem responsável';
+export const ROTULO_SEM_EQUIPE = 'Sem equipe';
+
+export function rotuloResponsavelTarefa(nome?: string | null) {
+  return nome?.trim() || ROTULO_SEM_RESPONSAVEL;
+}
+
+export function rotuloEquipeTarefa(nome?: string | null) {
+  return nome?.trim() || ROTULO_SEM_EQUIPE;
+}
+
+export type EventoAtribuicaoTarefa = {
+  acao: 'responsavel' | 'equipe';
+  detalhe: string;
+  valorAnterior: string;
+  valorNovo: string;
+};
+
+/** Cada troca (responsável ou equipe) vira um evento próprio. As duas juntas geram dois. */
+export function eventosAtribuicaoTarefa(input: {
+  mudouResponsavel: boolean;
+  mudouEquipe: boolean;
+  responsavelAnterior: string;
+  responsavelNovo: string;
+  equipeAnterior: string;
+  equipeNova: string;
+}): EventoAtribuicaoTarefa[] {
+  const eventos: EventoAtribuicaoTarefa[] = [];
+  if (input.mudouResponsavel) {
+    eventos.push({
+      acao: 'responsavel',
+      valorAnterior: input.responsavelAnterior,
+      valorNovo: input.responsavelNovo,
+      detalhe: `${input.responsavelAnterior} → ${input.responsavelNovo}`,
+    });
+  }
+  if (input.mudouEquipe) {
+    eventos.push({
+      acao: 'equipe',
+      valorAnterior: input.equipeAnterior,
+      valorNovo: input.equipeNova,
+      detalhe: `${input.equipeAnterior} → ${input.equipeNova}`,
+    });
+  }
+  return eventos;
+}

@@ -160,7 +160,11 @@ export class DocumentosController {
   }
 
   @Patch(':id/vinculos')
-  @RequireAnyPermissions('documentos.editar_vinculo', 'documentos.administrar')
+  @RequireAnyPermissions(
+    'documentos.criar_avulso',
+    'documentos.editar_vinculo',
+    'documentos.administrar',
+  )
   updateVinculos(
     @Param('id') id: string,
     @Body() body: UpdateDocumentoVinculosDto,

@@ -6,6 +6,8 @@ export type PermissionFunctionDef = {
   id: string;
   label: string;
   actions: PermissionAction[];
+  /** Rótulo da célula na matriz, quando a coluna genérica (Alterar, Excluir…) não descreve a ação. */
+  actionLabels?: Partial<Record<PermissionAction, string>>;
 };
 
 export type PermissionScreenDef = {
@@ -66,9 +68,20 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
       { id: 'excluidos_visualizar', label: 'Visualizar chamados excluídos', actions: ['visualizar'] },
       { id: 'excluir_logicamente', label: 'Excluir logicamente chamado', actions: ['excluir'] },
       { id: 'restaurar_excluido', label: 'Restaurar chamado excluído', actions: ['alterar'] },
-      { id: 'tarefas', label: 'Tarefas do chamado', actions: ['visualizar', 'inserir', 'alterar', 'executar', 'excluir'] },
+      {
+        id: 'tarefas',
+        label: 'Tarefas do chamado',
+        actions: ['visualizar', 'inserir', 'alterar', 'executar'],
+        actionLabels: {
+          visualizar: 'Visualizar tarefas',
+          inserir: 'Criar tarefa',
+          alterar: 'Alterar dados da tarefa',
+          executar: 'Executar tarefa',
+        },
+      },
       { id: 'tarefas_andamento', label: 'Registrar andamento da tarefa', actions: ['executar'] },
       { id: 'tarefas_concluir', label: 'Concluir tarefa', actions: ['executar'] },
+      { id: 'tarefas_cancelar', label: 'Cancelar tarefa', actions: ['executar'] },
       { id: 'tarefas_historico', label: 'Visualizar histórico e anexos da tarefa', actions: ['visualizar'] },
       { id: 'tarefas_atribuidas', label: 'Tarefas atribuídas à minha secretaria ou equipe', actions: ['visualizar'] },
     ],
@@ -228,6 +241,10 @@ export function catalogEntryForKey(chave: string) {
   return { tela, funcao, acao: acao as PermissionAction };
 }
 
+export function catalogActionLabel(funcao: PermissionFunctionDef, acao: PermissionAction) {
+  return funcao.actionLabels?.[acao] ?? `${funcao.label} · ${acao}`;
+}
+
 export function serializeCatalog() {
   return PERMISSIONS_CATALOG.map((tela) => ({
     id: tela.id,
@@ -236,6 +253,7 @@ export function serializeCatalog() {
       id: funcao.id,
       label: funcao.label,
       actions: funcao.actions,
+      ...(funcao.actionLabels ? { actionLabels: funcao.actionLabels } : {}),
     })),
   }));
 }
