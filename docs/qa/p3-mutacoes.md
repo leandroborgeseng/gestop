@@ -148,23 +148,46 @@ AssertionError: expected '\'use client\';\n\nimport { useEffect…' to contain '
       Tests  1 failed | 1 passed (2)
 ```
 
-## Q8 — resumo da sanfona deixa de ter "Nenhum filtro ativo"
+## Q8 — remove o `Status: não finalizados` do padrão (refeita)
 
-- Arquivo: `frontend/lib/chamado-tarefa.ts` (`resumoFiltrosTarefasExecucao`, após a ramificação de status)
-- Alteração: no default voltou a empilhar `Status: não finalizados`, como antes do P3.
-- Teste vermelho: `sem filtros o resumo é Nenhum filtro ativo; com filtros lista o que foi aplicado`
+- Arquivo: `frontend/lib/chamado-tarefa.ts` (`resumoFiltrosTarefasExecucao`)
+- Alteração: apagou `else if (opts.status === '') partes.push('Status: não finalizados');`.
+- Teste vermelho: `o padrão mostra Status: não finalizados; outros filtros entram junto`
 
 Saída:
 
 ```
-FAIL  frontend/lib/filtros-sanfona-265.spec.ts > 265 — sanfona de filtros > sem filtros o resumo é Nenhum filtro ativo; com filtros lista o que foi aplicado
-AssertionError: expected 'Status: não finalizados' to be 'Nenhum filtro ativo' // Object.is equality
+FAIL  frontend/lib/filtros-sanfona-265.spec.ts > 265 — sanfona de filtros > o padrão mostra Status: não finalizados; outros filtros entram junto
+AssertionError: expected 'Nenhum filtro ativo' to be 'Status: não finalizados' // Object.is equality
 
-Expected: "Nenhum filtro ativo"
-Received: "Status: não finalizados"
+Expected: "Status: não finalizados"
+Received: "Nenhum filtro ativo"
 
  ❯ frontend/lib/filtros-sanfona-265.spec.ts:23:49
 
  Test Files  1 failed (1)
       Tests  1 failed | 1 passed (2)
+```
+
+O backend (`whereExecucao`) já recorta as não finalizadas quando não há `historico` nem `status`. Sem a linha, o resumo mente.
+
+## Q9 — muda o nome do Administrador do Sistema só no front
+
+- Arquivo: `frontend/lib/administrador-sistema.ts` (linha 1)
+- Alteração: `ADMINISTRADOR_SISTEMA_NOME` passou de `'Administrador do Sistema'` para `'Administrador'`.
+- Teste vermelho: `o nome e a regra do front coincidem com o backend`
+
+Saída:
+
+```
+FAIL  src/auth/administrador-sistema-parity.spec.ts > paridade Administrador do Sistema front × backend > o nome e a regra do front coincidem com o backend
+AssertionError: expected 'Administrador' to be 'Administrador do Sistema' // Object.is equality
+
+Expected: "Administrador do Sistema"
+Received: "Administrador"
+
+ ❯ src/auth/administrador-sistema-parity.spec.ts:9:46
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
 ```
