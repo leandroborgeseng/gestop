@@ -153,23 +153,34 @@ export class ChamadoTarefasService {
     }
     const chamado = await this.requireChamadoOperacional(dto.chamadoId, user);
     await this.validarAtribuicao(dto.secretariaId, dto.equipeId ?? null, dto.responsavelId ?? null);
-    const criada = await this.prisma.chamadoTarefa.create({
-      data: {
-        chamadoId: dto.chamadoId,
-        titulo: dto.titulo.trim(),
-        descricao: dto.descricao?.trim() || null,
-        prazo: dto.prazo ? new Date(dto.prazo) : null,
-        secretariaId: dto.secretariaId,
-        equipeId: dto.equipeId ?? null,
-        responsavelId: dto.responsavelId ?? null,
-        prioridade: dto.prioridade ?? ChamadoPrioridade.MEDIA,
-        status: ChamadoTarefaStatus.NOVA,
-        criadaPorId: user.sub,
-      },
-      include: TAREFA_INCLUDE,
-    });
-    await this.registrarTrilha(criada, user, 'criada', criadoResumo(criada));
-    return this.serialize(criada, user, await this.equipeIdsDoUsuario(user.sub));
+    const anexosValidos = parseAnexos(dto.anexos ?? []);
+    let criada: TarefaLoaded | undefined;
+    try {
+      criada = await this.prisma.chamadoTarefa.create({
+        data: {
+          chamadoId: dto.chamadoId,
+          titulo: dto.titulo.trim(),
+          descricao: dto.descricao?.trim() || null,
+          prazo: dto.prazo ? new Date(dto.prazo) : null,
+          secretariaId: dto.secretariaId,
+          equipeId: dto.equipeId ?? null,
+          responsavelId: dto.responsavelId ?? null,
+          prioridade: dto.prioridade ?? ChamadoPrioridade.MEDIA,
+          status: ChamadoTarefaStatus.NOVA,
+          criadaPorId: user.sub,
+        },
+        include: TAREFA_INCLUDE,
+      });
+      const anexoIds = await this.persistirAnexos(criada.id, anexosValidos, user);
+      const atual = anexoIds.length ? await this.requireTarefa(criada.id) : criada;
+      await this.registrarTrilha(atual, user, 'criada', criadoResumo(atual), undefined, anexoIds);
+      return this.serialize(atual, user, await this.equipeIdsDoUsuario(user.sub));
+    } catch (err) {
+      if (criada) {
+        await this.prisma.chamadoTarefa.delete({ where: { id: criada.id } }).catch(() => undefined);
+      }
+      throw err;
+    }
   }
 
   async getById(id: string, user: JwtPayload) {
@@ -734,14 +745,17 @@ export class ChamadoTarefasService {
   }
 
   private async gravarAnexos(tarefaId: string, anexos: AnexoChamadoTarefaDto[], user: JwtPayload) {
+    return this.persistirAnexos(tarefaId, parseAnexos(anexos), user);
+  }
+
+  private async persistirAnexos(tarefaId: string, anexos: ParsedAnexo[], user: JwtPayload) {
     const ids: string[] = [];
     for (const anexo of anexos) {
-      const parsed = parseDataUrl(anexo.dataUrl);
-      const stored = await this.storage.persistBuffer(parsed.buffer, parsed.mime, 'tarefas');
+      const stored = await this.storage.persistBuffer(anexo.buffer, anexo.mime, 'tarefas');
       const criado = await this.prisma.chamadoTarefaAnexo.create({
         data: {
           tarefaId,
-          nome: anexo.nome?.trim() || 'anexo',
+          nome: anexo.nome,
           url: stored.url,
           storageKey: stored.storageKey,
           mimeType: stored.mimeType,
@@ -923,6 +937,15 @@ export class ChamadoTarefasService {
       throw new ForbiddenException('Sem permissão para atribuir tarefa.');
     }
   }
+}
+
+type ParsedAnexo = { nome: string; mime: string; buffer: Buffer };
+
+function parseAnexos(anexos: AnexoChamadoTarefaDto[]) {
+  return anexos.map((anexo) => ({
+    nome: anexo.nome?.trim() || 'anexo',
+    ...parseDataUrl(anexo.dataUrl),
+  }));
 }
 
 function parseDataUrl(dataUrl: string) {

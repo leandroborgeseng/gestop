@@ -32,6 +32,12 @@ export class CreateChamadoTarefaDto {
   @IsOptional()
   @IsEnum(ChamadoPrioridade)
   prioridade?: ChamadoPrioridade;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AnexoChamadoTarefaDto)
+  anexos?: AnexoChamadoTarefaDto[];
 }
 
 export class AnexoChamadoTarefaDto {

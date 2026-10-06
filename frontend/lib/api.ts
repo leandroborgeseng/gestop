@@ -2025,6 +2025,7 @@ export function createChamadoTarefa(payload: {
   equipeId?: string;
   responsavelId?: string;
   prioridade?: string;
+  anexos?: Array<{ dataUrl: string; nome?: string }>;
 }) {
   return request<ChamadoTarefaResumo>('/chamado-tarefas', {
     method: 'POST',
