@@ -27,6 +27,7 @@ import {
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import { ChamadosService } from '../chamados/chamados.service';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
+import { resolveRespostaTexto } from '../checklists/checklist-resposta-apresentacao';
 import { CronogramaService } from '../cronograma/cronograma.service';
 import { DocumentosService } from '../documentos/documentos.service';
 import { validateChecklistResponses } from '../domain/checklist-response.rules';
@@ -77,6 +78,9 @@ const listRespostasSelect = {
   valorBooleano: true,
   item: {
     select: {
+      codigo: true,
+      titulo: true,
+      secao: true,
       tipo: true,
       opcoes: true,
       categoriaVistoriaId: true,
@@ -157,6 +161,7 @@ export class FiscalizacoesService {
               select: {
                 id: true,
                 codigo: true,
+                secao: true,
                 titulo: true,
                 tipo: true,
                 opcoes: true,
@@ -275,6 +280,7 @@ export class FiscalizacoesService {
               select: {
                 id: true,
                 codigo: true,
+                secao: true,
                 titulo: true,
                 tipo: true,
                 opcoes: true,
@@ -357,10 +363,11 @@ export class FiscalizacoesService {
     const respostas: VistoriaRealizadaPdfResposta[] = await Promise.all(
       fiscalizacao.respostas.map(async (resposta) => ({
         codigo: resposta.item.codigo,
+        secao: resposta.item.secao,
         titulo: resposta.item.titulo,
         categoriaNome: resposta.item.categoriaVistoria?.nome ?? null,
         tipo: resposta.item.tipo,
-        respostaTexto: this.resolveRespostaTexto(resposta),
+        respostaTexto: resolveRespostaTexto(resposta),
         comentario: resposta.comentario,
         conformidade: resposta.conformidade ?? null,
         naoConformidade: resposta.naoConformidade
@@ -397,20 +404,6 @@ export class FiscalizacoesService {
       notasPorCategoria: nota.notasPorCategoria.map((item) => ({ categoriaNome: item.categoriaNome, nota: item.nota })),
       respostas,
     });
-  }
-
-  private resolveRespostaTexto(resposta: {
-    valorTexto?: string | null;
-    valorBooleano?: boolean | null;
-    valorNumero?: unknown;
-    conformidade?: ConformidadeStatus | null;
-  }): string {
-    if (resposta.valorTexto?.trim()) return resposta.valorTexto.trim();
-    if (resposta.valorBooleano === true) return 'Sim';
-    if (resposta.valorBooleano === false) return 'Não';
-    if (resposta.valorNumero != null) return String(resposta.valorNumero);
-    if (resposta.conformidade) return resposta.conformidade === 'CONFORME' ? 'Conforme' : 'Não conforme';
-    return '—';
   }
 
   async getOpcoesManuais(user: JwtPayload) {

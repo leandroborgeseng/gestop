@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
 import { chamadoStatusLabel, formatDateBr, prioridadeLabel } from '../chamados/chamados-sla';
 import { parseBooleanoOpcoes } from '../checklists/checklist-item.rules';
+import { deveExibirCabecalhoSecao, tituloPerguntaChecklist } from '../checklists/checklist-resposta-apresentacao';
 import {
   LIKERT_CATALOGO,
   parseLikertConfig,
@@ -314,7 +315,7 @@ function drawPergunta(
   if (item.exigeEvidencia) tags.push('Exige foto');
   if (item.geraNaoConformidade) tags.push('Gera NC');
   const tagLine = tags.length ? ` [${tags.join(' · ')}]` : '';
-  const title = `${index + 1}. ${item.codigo} — ${item.titulo}${tagLine}`;
+  const title = `${index + 1}. ${tituloPerguntaChecklist(item.titulo, item.codigo)}${tagLine}`;
   const tipo = item.tipo;
 
   doc.font('Helvetica-Bold').fontSize(9);
@@ -484,13 +485,12 @@ function drawUnidadePage(
   y = drawSectionTitle(doc, 'Perguntas do checklist (marque com caneta)', y);
   let secaoAtual = '';
   input.itens.forEach((item, index) => {
-    const secao = item.secao?.trim() ?? '';
-    if (secao && secao !== secaoAtual) {
-      secaoAtual = secao;
+    if (deveExibirCabecalhoSecao(item.secao, secaoAtual)) {
+      secaoAtual = item.secao?.trim() ?? '';
       y = ensureSpace(doc, y, 22);
-      doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND_PRIMARY).text(secao, left, y, { width });
+      doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND_PRIMARY).text(secaoAtual, left, y, { width });
       y = doc.y + 6;
-    } else if (!secao) {
+    } else if (!item.secao?.trim()) {
       secaoAtual = '';
     }
     y = drawPergunta(doc, item, index, y);

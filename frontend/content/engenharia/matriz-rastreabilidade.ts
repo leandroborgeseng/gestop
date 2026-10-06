@@ -184,7 +184,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
   },
   {
     id: 'vistorias',
-    capacidade: 'Consultar vistorias realizadas',
+    capacidade: 'Consultar vistorias realizadas (PDF e tela sem código técnico; múltipla escolha formatada)',
     ator: 'Gestor, equipe, administrador',
     tela: '/vistorias',
     api: 'FiscalizacoesController: GET /fiscalizacoes, GET /fiscalizacoes/:id, GET /fiscalizacoes/:id/pdf',

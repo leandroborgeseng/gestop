@@ -1,3 +1,5 @@
+import { deveExibirCabecalhoSecao } from '@/lib/checklist-item-opcoes';
+
 export function CabecalhoSecao({
   atual,
   anterior,
@@ -5,10 +7,8 @@ export function CabecalhoSecao({
   atual?: string | null;
   anterior?: string | null;
 }) {
-  const secao = atual?.trim() ?? '';
-  const previa = anterior?.trim() ?? '';
-  if (!secao || secao === previa) return null;
+  if (!deveExibirCabecalhoSecao(atual, anterior)) return null;
   return (
-    <h4 className="px-1 pt-2 text-[12px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{secao}</h4>
+    <h4 className="px-1 pt-2 text-[12px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{atual?.trim()}</h4>
   );
 }

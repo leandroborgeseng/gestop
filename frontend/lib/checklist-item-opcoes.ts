@@ -353,6 +353,29 @@ export function apresentarValorTexto(valor: string | null | undefined) {
   return texto;
 }
 
+export function formatRespostaValor(resposta: {
+  valorTexto?: string | null;
+  valorBooleano?: boolean | null;
+  valorNumero?: number | null;
+  conformidade?: string | null;
+  naoSeAplica?: boolean;
+}) {
+  if (resposta.naoSeAplica) return 'Não se aplica';
+  if (resposta.valorTexto?.trim()) return apresentarValorTexto(resposta.valorTexto);
+  if (resposta.valorBooleano != null) return resposta.valorBooleano ? 'Sim' : 'Não';
+  if (resposta.valorNumero != null) return String(resposta.valorNumero);
+  if (resposta.conformidade === 'CONFORME') return 'Conforme';
+  if (resposta.conformidade === 'NAO_CONFORME') return 'Não conforme';
+  if (resposta.conformidade) return resposta.conformidade;
+  return '—';
+}
+
+export function deveExibirCabecalhoSecao(atual?: string | null, anterior?: string | null) {
+  const secao = atual?.trim() ?? '';
+  const previa = anterior?.trim() ?? '';
+  return Boolean(secao) && secao !== previa;
+}
+
 export function serializarValoresMultiplaEscolha(valores: string[]) {
   const unicos = [...new Set(valores.map((item) => item.trim()).filter(Boolean))];
   if (unicos.length <= 1) return unicos[0] ?? '';

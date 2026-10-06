@@ -1301,7 +1301,7 @@ function ChamadoDetailPanel({
                 Origem auditável (NC)
               </p>
               <p className="mt-2 text-[13px] text-[var(--ink-2)]">
-                {resumo.naoConformidade.item.codigo} — {resumo.naoConformidade.item.titulo}
+                {resumo.naoConformidade.item.titulo}
               </p>
               <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resumo.naoConformidade.descricao}</p>
             </div>

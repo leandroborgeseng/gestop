@@ -41,6 +41,7 @@ import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticat
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { resolveStorageApiPath } from '@/lib/storage-url';
 import { cn } from '@/lib/cn';
+import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
 
 type NcItem = UnidadeDetalhe['pendenciasDetalhadas']['naoConformidades'][number];
 
@@ -381,16 +382,7 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
             ncs.map((item) => {
               const situacao = item.situacaoVisual ?? (item.chamado ? 'VINCULADA_EM_ANDAMENTO' : 'ABERTA');
               const podeAgir = situacao === 'ABERTA';
-              const respostaTexto =
-                item.resposta?.valorTexto ??
-                (item.resposta?.valorBooleano != null
-                  ? item.resposta.valorBooleano
-                    ? 'Sim'
-                    : 'Não'
-                  : null) ??
-                (item.resposta?.valorNumero != null ? String(item.resposta.valorNumero) : null) ??
-                item.resposta?.conformidade ??
-                '—';
+              const respostaTexto = formatRespostaValor(item.resposta ?? {});
 
               return (
                 <div
@@ -409,7 +401,7 @@ function UnidadeDetalheView({ unidade, onRefresh }: { unidade: UnidadeDetalhe; o
                     <Chip>{item.severidade}</Chip>
                   </div>
                   <p className="mt-2 text-[14px] font-semibold text-[var(--ink)]">
-                    {item.item.codigo} — {item.item.titulo}
+                    {item.item.titulo}
                   </p>
                   <dl className="mt-2 grid gap-1.5 text-[12px] text-[var(--ink-3)] sm:grid-cols-2">
                     <div>
