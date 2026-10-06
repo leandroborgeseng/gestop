@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { summarizeForPdfDisplay } from './documentos-validation';
+import { deveExibirCabecalhoSecao, tituloPerguntaChecklist } from '../checklists/checklist-resposta-apresentacao';
 
 const BRAND = '#0066cc';
 const TEXT = '#1a1a1a';
@@ -171,17 +172,16 @@ export async function buildDocumentoPdf(input: DocumentoPdfInput): Promise<Buffe
 
       let secaoAtual = '';
       for (const resposta of input.respostas) {
-        const secao = resposta.secao?.trim() ?? '';
-        if (secao && secao !== secaoAtual) {
-          secaoAtual = secao;
+        if (deveExibirCabecalhoSecao(resposta.secao, secaoAtual)) {
+          secaoAtual = resposta.secao?.trim() ?? '';
           y = ensureSpace(doc, y, 24, marginTop);
-          doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND).text(secao, left, y, { width });
+          doc.font('Helvetica-Bold').fontSize(10).fillColor(BRAND).text(secaoAtual, left, y, { width });
           y = doc.y + 4;
-        } else if (!secao) {
+        } else if (!resposta.secao?.trim()) {
           secaoAtual = '';
         }
         y = ensureSpace(doc, y, 40, marginTop);
-        doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT).text(secao ? resposta.titulo : `${resposta.codigo} · ${resposta.titulo}`, left, y, {
+        doc.font('Helvetica-Bold').fontSize(9).fillColor(TEXT).text(tituloPerguntaChecklist(resposta.titulo, resposta.codigo), left, y, {
           width,
         });
         y = doc.y + 2;

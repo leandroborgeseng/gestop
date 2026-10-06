@@ -243,6 +243,8 @@ export function canDisponibilizarAssinaturaInterna(permissoes: string[]) {
   );
 }
 
+export { canColetarAssinatura } from './can-coletar-assinatura';
+
 export function canCriarDocumentoAvulso(permissoes: string[]) {
   if (permissoes.includes('usuarios.gerenciar') || permissoes.includes('documentos.administrar')) return true;
   return (

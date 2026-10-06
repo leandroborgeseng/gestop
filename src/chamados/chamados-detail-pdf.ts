@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
 import { chamadoStatusLabel, formatDateBr, prioridadeLabel } from './chamados-sla';
+import { resolveRespostaTexto, tituloPerguntaChecklist } from '../checklists/checklist-resposta-apresentacao';
 
 const BRAND_PRIMARY = '#0066cc';
 const TEXT_PRIMARY = '#1a1a1a';
@@ -384,7 +385,7 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
         .font('Helvetica')
         .fontSize(8)
         .text(
-          `${chamado.naoConformidade.item.codigo} — ${chamado.naoConformidade.item.titulo}: ${chamado.naoConformidade.descricao}`,
+          `${tituloPerguntaChecklist(chamado.naoConformidade.item.titulo, chamado.naoConformidade.item.codigo)}: ${chamado.naoConformidade.descricao}`,
           left,
           y,
           { width },
@@ -467,15 +468,8 @@ export function buildChamadoDetalhePdf(chamado: ChamadoDetalhePdfInput): Promise
           });
         y += 12;
         for (const resposta of checklistMeta.respostas) {
-          const valor = resposta.naoSeAplica
-            ? 'Não se aplica'
-            : resposta.valorBooleano === true
-              ? 'Sim'
-              : resposta.valorBooleano === false
-                ? 'Não'
-                : resposta.valorTexto?.trim() ||
-                  (resposta.valorNumero != null ? String(resposta.valorNumero) : '—');
-          const line = `${resposta.titulo ?? 'Pergunta'}: ${valor}${
+          const valor = resolveRespostaTexto(resposta);
+          const line = `${tituloPerguntaChecklist(resposta.titulo ?? 'Pergunta')}: ${valor}${
             resposta.comentario?.trim() ? ` (${resposta.comentario.trim()})` : ''
           }`;
           y = ensureSpace(doc, y, 12, marginTop);

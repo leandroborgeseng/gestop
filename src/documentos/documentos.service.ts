@@ -46,6 +46,7 @@ import {
 } from './documentos-validation';
 import { buildRelatorioExecucaoPdf } from './relatorio-execucao-pdf';
 import { apresentarValorTexto } from '../checklists/checklist-item.rules';
+import { resolveRespostaTexto } from '../checklists/checklist-resposta-apresentacao';
 import { tarefaAtrasada } from '../chamados/chamado-tarefa.regras';
 import { extractStorageKeyFromUrl } from '../storage/storage-url';
 import { isPdfRenderableImage } from '../fiscalizacoes/vistoria-realizada-pdf';
@@ -2472,11 +2473,12 @@ export class DocumentosService {
       }
 
       const naoSeAplica = Boolean(item.naoSeAplica);
-      let respostaTexto = '—';
-      if (naoSeAplica) respostaTexto = 'Não se aplica';
-      else if (typeof item.valorBooleano === 'boolean') respostaTexto = item.valorBooleano ? 'Sim' : 'Não';
-      else if (item.valorNumero != null) respostaTexto = String(item.valorNumero);
-      else if (typeof item.valorTexto === 'string' && item.valorTexto.trim()) respostaTexto = item.valorTexto.trim();
+      const respostaTexto = resolveRespostaTexto({
+        naoSeAplica,
+        valorBooleano: typeof item.valorBooleano === 'boolean' ? item.valorBooleano : null,
+        valorNumero: item.valorNumero ?? null,
+        valorTexto: typeof item.valorTexto === 'string' ? item.valorTexto : null,
+      });
 
       respostas.push({
         codigo: typeof item.codigo === 'string' ? item.codigo : String(item.itemId ?? ''),
@@ -3247,12 +3249,7 @@ export class DocumentosService {
       'valorTexto' | 'valorNumero' | 'valorBooleano' | 'conformidade'
     >,
   ) {
-    if (resposta.valorTexto?.trim()) return apresentarValorTexto(resposta.valorTexto);
-    if (resposta.valorNumero != null) return String(resposta.valorNumero);
-    if (resposta.valorBooleano === true) return 'Sim';
-    if (resposta.valorBooleano === false) return 'Não';
-    if (resposta.conformidade) return String(resposta.conformidade);
-    return '—';
+    return resolveRespostaTexto(resposta);
   }
 
   private truncateHash(hash?: string | null) {

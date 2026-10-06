@@ -1314,6 +1314,7 @@ export type FiscalizacaoDetalhe = FiscalizacaoResumo & {
     item: {
       id: string;
       codigo: string;
+      secao?: string | null;
       titulo: string;
       tipo: string;
       categoriaVistoriaId?: string | null;

@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClipboardList, ClipboardPen, FileDown, FileText, MapPin, Printer, Search, UserRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
+import { CabecalhoSecao } from '@/components/checklists/cabecalho-secao';
 import { DocumentosRelacionadosPanel } from '@/components/documentos/documentos-relacionados-panel';
 import { PageShell } from '@/components/layout/page-shell';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +21,7 @@ import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
 import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
 import { downloadFiscalizacaoPdf, getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
+import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
 import { cn } from '@/lib/cn';
 import { formatUnidadeTipo, UNIDADE_TIPO_LABELS } from '@/lib/unidade-tipo';
 import { formatNotaBr, notaCorHex } from '@/lib/vistoria-nota';
@@ -527,7 +529,7 @@ export default function VistoriasPage() {
                         <div className="space-y-2">
                           {detail.naoConformidades.map((nc) => (
                             <div key={nc.id} className="rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[13px]">
-                              <p className="font-semibold text-[var(--warn)]">{nc.item.codigo} — {nc.item.titulo}</p>
+                              <p className="font-semibold text-[var(--warn)]">{nc.item.titulo}</p>
                               <p className="mt-1 text-[var(--ink-2)]">{nc.descricao}</p>
                               {nc.chamado ? (
                                 <p className="mt-2 text-[12px]">
@@ -556,36 +558,38 @@ export default function VistoriasPage() {
                       <div>
                         <p className="mb-2 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Respostas do checklist</p>
                         <div className="space-y-2">
-                          {detail.respostas.map((resposta) => (
-                            <div key={resposta.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
-                              <p className="text-[12px] font-semibold text-[var(--ink)]">
-                                {resposta.item.codigo} — {resposta.item.titulo}
-                              </p>
-                              <p className="mt-1 text-[13px] text-[var(--ink-2)]">
-                                {resposta.valorTexto ??
-                                  (resposta.valorBooleano != null ? (resposta.valorBooleano ? 'Sim' : 'Não') : null) ??
-                                  (resposta.valorNumero != null ? String(resposta.valorNumero) : null) ??
-                                  resposta.conformidade ??
-                                  '—'}
-                              </p>
-                              {resposta.comentario ? (
-                                <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p>
-                              ) : null}
-                              <RespostaEvidencias evidencias={resposta.evidencias} altPrefix={resposta.item.titulo} />
-                              {resposta.naoConformidade?.chamado ? (
-                                <p className="mt-2 text-[12px]">
-                                  Chamado gerado:{' '}
-                                  <Link href={`/chamados?search=${encodeURIComponent(resposta.naoConformidade.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
-                                    {resposta.naoConformidade.chamado.codigo}
-                                  </Link>
+                          {detail.respostas.map((resposta, index) => (
+                            <div key={resposta.id}>
+                              <CabecalhoSecao
+                                atual={resposta.item.secao}
+                                anterior={index > 0 ? detail.respostas?.[index - 1]?.item.secao : undefined}
+                              />
+                              <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
+                                <p className="text-[12px] font-semibold text-[var(--ink)]">
+                                  {resposta.item.titulo}
                                 </p>
-                              ) : resposta.naoConformidade ? (
-                                <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
-                                  {resposta.naoConformidade.status === 'BAIXADA_MANUAL'
-                                    ? 'NC baixada manualmente (sem chamado)'
-                                    : 'NC pendente sem chamado'}
+                                <p className="mt-1 text-[13px] text-[var(--ink-2)]">
+                                  {formatRespostaValor(resposta)}
                                 </p>
-                              ) : null}
+                                {resposta.comentario ? (
+                                  <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p>
+                                ) : null}
+                                <RespostaEvidencias evidencias={resposta.evidencias} altPrefix={resposta.item.titulo} />
+                                {resposta.naoConformidade?.chamado ? (
+                                  <p className="mt-2 text-[12px]">
+                                    Chamado gerado:{' '}
+                                    <Link href={`/chamados?search=${encodeURIComponent(resposta.naoConformidade.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
+                                      {resposta.naoConformidade.chamado.codigo}
+                                    </Link>
+                                  </p>
+                                ) : resposta.naoConformidade ? (
+                                  <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
+                                    {resposta.naoConformidade.status === 'BAIXADA_MANUAL'
+                                      ? 'NC baixada manualmente (sem chamado)'
+                                      : 'NC pendente sem chamado'}
+                                  </p>
+                                ) : null}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -600,34 +604,36 @@ export default function VistoriasPage() {
 
         <Sheet open={questionarioOpen} onClose={() => setQuestionarioOpen(false)} title="Questionário da vistoria">
           <div className="space-y-3">
-            {(detail?.respostas ?? []).map((resposta) => (
-              <div key={resposta.id} className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
-                <p className="text-[12px] font-semibold text-[var(--ink)]">
-                  {resposta.item.codigo} — {resposta.item.titulo}
-                </p>
-                <p className="mt-1 text-[13px] text-[var(--ink-2)]">
-                  {resposta.valorTexto ??
-                    (resposta.valorBooleano != null ? (resposta.valorBooleano ? 'Sim' : 'Não') : null) ??
-                    (resposta.valorNumero != null ? String(resposta.valorNumero) : null) ??
-                    resposta.conformidade ??
-                    '—'}
-                </p>
-                {resposta.comentario ? <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p> : null}
-                <RespostaEvidencias evidencias={resposta.evidencias} altPrefix={resposta.item.titulo} />
-                {resposta.naoConformidade?.chamado ? (
-                  <p className="mt-2 text-[12px]">
-                    Chamado:{' '}
-                    <Link href={`/chamados?search=${encodeURIComponent(resposta.naoConformidade.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
-                      {resposta.naoConformidade.chamado.codigo}
-                    </Link>
+            {(detail?.respostas ?? []).map((resposta, index) => (
+              <div key={resposta.id}>
+                <CabecalhoSecao
+                  atual={resposta.item.secao}
+                  anterior={index > 0 ? detail?.respostas?.[index - 1]?.item.secao : undefined}
+                />
+                <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
+                  <p className="text-[12px] font-semibold text-[var(--ink)]">
+                    {resposta.item.titulo}
                   </p>
-                ) : resposta.naoConformidade ? (
-                  <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
-                    {resposta.naoConformidade.status === 'BAIXADA_MANUAL'
-                      ? 'NC baixada manualmente (sem chamado)'
-                      : 'NC pendente sem chamado'}
+                  <p className="mt-1 text-[13px] text-[var(--ink-2)]">
+                    {formatRespostaValor(resposta)}
                   </p>
-                ) : null}
+                  {resposta.comentario ? <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p> : null}
+                  <RespostaEvidencias evidencias={resposta.evidencias} altPrefix={resposta.item.titulo} />
+                  {resposta.naoConformidade?.chamado ? (
+                    <p className="mt-2 text-[12px]">
+                      Chamado:{' '}
+                      <Link href={`/chamados?search=${encodeURIComponent(resposta.naoConformidade.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
+                        {resposta.naoConformidade.chamado.codigo}
+                      </Link>
+                    </p>
+                  ) : resposta.naoConformidade ? (
+                    <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
+                      {resposta.naoConformidade.status === 'BAIXADA_MANUAL'
+                        ? 'NC baixada manualmente (sem chamado)'
+                        : 'NC pendente sem chamado'}
+                    </p>
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
