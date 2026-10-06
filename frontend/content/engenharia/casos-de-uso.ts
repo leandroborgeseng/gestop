@@ -362,6 +362,14 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         descricao: 'Inscrever o navegador para push a partir do dashboard.',
         rotas: ['/dashboard', 'POST /notificacoes/push/subscribe', 'POST /notificacoes/alertas/disparar'],
       },
+      {
+        id: 'sondar-saude',
+        nome: 'Sondar saúde da API',
+        atores: ['administrador'],
+        descricao:
+          'Sonda pública sem tela. GET /health devolve status ok, service, version, uptime, observabilidade, timestamp e o SHA do deploy (commit de 40 hex e commitShort de 7) quando alguma variável válida estiver presente; senão os dois campos vêm null.',
+        rotas: ['GET /', 'GET /health', 'GET /health/db', 'GET /health/storage'],
+      },
     ],
   },
 ];
