@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ChamadoPrioridade, ChamadoTarefaStatus } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JwtPayload } from '../auth/jwt';
@@ -41,6 +41,19 @@ function userSoVisualizar(): JwtPayload {
     permissoes: ['matriz.chamados.tarefas.visualizar'],
     acessoTodasSecretarias: true,
     secretariaId: null,
+    perfilAtivoId: null,
+  };
+}
+
+function userResponsavelTarefa(): JwtPayload {
+  return {
+    sub: 'user-resp',
+    email: 'resp@test.com',
+    nome: 'Responsável da tarefa',
+    perfis: [],
+    permissoes: [],
+    acessoTodasSecretarias: false,
+    secretariaId: 'sec-outra',
     perfilAtivoId: null,
   };
 }
@@ -110,6 +123,7 @@ describe('ChamadoTarefasService', () => {
     },
     chamadoTarefaAnexo: { create: vi.fn() },
     historicoStatus: { create: vi.fn(), findMany: vi.fn() },
+    evidencia: { findMany: vi.fn() },
     secretaria: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
     equipe: { findFirst: vi.fn(), findMany: vi.fn() },
     equipeUsuario: { findMany: vi.fn(), findUnique: vi.fn() },
@@ -129,6 +143,8 @@ describe('ChamadoTarefasService', () => {
     prisma.perfil.findUnique.mockResolvedValue(null);
     prisma.secretaria.findUnique.mockResolvedValue(null);
     prisma.historicoStatus.create.mockResolvedValue({ id: 'hist-1' });
+    prisma.historicoStatus.findMany.mockResolvedValue([]);
+    prisma.evidencia.findMany.mockResolvedValue([]);
     prisma.chamadoTarefa.delete.mockResolvedValue({ id: 'tarefa-1' });
     audit.record.mockResolvedValue(undefined);
   });
@@ -307,5 +323,341 @@ describe('ChamadoTarefasService', () => {
       ]);
       expect(resultado.items.every((item) => typeof item.createdAt === 'string')).toBe(true);
     });
+  });
+});
+
+function acoesTrilhaTarefa(prismaMock: { historicoStatus: { create: { mock: { calls: unknown[] } } } }) {
+  return prismaMock.historicoStatus.create.mock.calls
+    .map((call) => (call as [{ data?: { entidadeTipo?: string; metadata?: { acao?: string } } }])[0]?.data)
+    .filter((data) => data?.entidadeTipo === 'ChamadoTarefa')
+    .map((data) => data?.metadata?.acao);
+}
+
+describe('ChamadoTarefasService — leitura do chamado via tarefa', () => {
+  const prisma = {
+    chamado: { findFirst: vi.fn() },
+    chamadoTarefa: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    chamadoTarefaAnexo: { create: vi.fn() },
+    historicoStatus: { create: vi.fn(), findMany: vi.fn() },
+    evidencia: { findMany: vi.fn() },
+    secretaria: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
+    equipe: { findFirst: vi.fn(), findMany: vi.fn() },
+    equipeUsuario: { findMany: vi.fn(), findUnique: vi.fn() },
+    usuario: { findFirst: vi.fn() },
+    perfil: { findUnique: vi.fn() },
+  };
+  const storage = { persistBuffer: vi.fn() };
+  const audit = { record: vi.fn() };
+  let service: ChamadoTarefasService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = new ChamadoTarefasService(prisma as never, storage as never, audit as never);
+    prisma.equipeUsuario.findMany.mockResolvedValue([]);
+    prisma.equipeUsuario.findUnique.mockResolvedValue(null);
+    prisma.perfil.findUnique.mockResolvedValue(null);
+    prisma.secretaria.findUnique.mockResolvedValue(null);
+    prisma.historicoStatus.create.mockResolvedValue({ id: 'hist-1' });
+    prisma.historicoStatus.findMany.mockResolvedValue([]);
+    audit.record.mockResolvedValue(undefined);
+  });
+
+  function mockTarefaDoResponsavel() {
+    prisma.chamadoTarefa.findFirst.mockResolvedValue(
+      tarefaLoaded({
+        responsavelId: 'user-resp',
+        responsavel: { id: 'user-resp', nome: 'Responsável da tarefa', email: 'resp@test.com' },
+      }),
+    );
+  }
+
+  it('usuário da tarefa sem acesso ao chamado lê anexos e histórico via tarefa', async () => {
+    mockTarefaDoResponsavel();
+    prisma.chamado.findFirst.mockResolvedValue({
+      id: 'chamado-1',
+      fotoUrl: null,
+      fotoMimeType: null,
+      createdAt: new Date('2026-10-01T12:00:00.000Z'),
+      registradoPorId: 'user-admin',
+      registradoPor: { nome: 'Admin' },
+      evidencias: [
+        {
+          id: 'ev-abertura',
+          url: '/storage/abertura.jpg',
+          storageKey: 'abertura.jpg',
+          mimeType: 'image/jpeg',
+          tamanhoBytes: 24,
+          capturadaEm: new Date('2026-10-01T12:00:00.000Z'),
+          metadata: { origem: 'abertura', nomeOriginal: 'fachada.jpg' },
+        },
+        {
+          id: 'ev-historico',
+          url: '/storage/historico.jpg',
+          storageKey: 'historico.jpg',
+          mimeType: 'image/jpeg',
+          tamanhoBytes: 18,
+          capturadaEm: new Date('2026-10-01T12:05:00.000Z'),
+          metadata: { origem: 'historico_manual', nome: 'comentario.jpg', descricao: 'anexo do histórico' },
+        },
+      ],
+    });
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-chamado-1',
+        statusAnterior: null,
+        statusNovo: 'ABERTO',
+        motivo: 'Chamado aberto',
+        metadata: { tipo: 'abertura', evidenciaIds: ['ev-historico'] },
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+      },
+    ]);
+
+    const resultado = await service.getChamadoLeituraViaTarefa('tarefa-1', 'chamado-1', userResponsavelTarefa());
+
+    expect(prisma.historicoStatus.findMany).toHaveBeenCalledWith({
+      where: { entidadeTipo: 'Chamado', entidadeId: 'chamado-1' },
+      orderBy: { createdAt: 'asc' },
+      include: { alteradoPor: { select: { id: true, nome: true } } },
+    });
+    expect(resultado.somenteLeitura).toBe(true);
+    expect(resultado.anexosAbertura).toHaveLength(1);
+    expect(resultado.anexosAbertura[0]?.nome).toBe('fachada.jpg');
+    expect(resultado.historico).toHaveLength(1);
+    expect(resultado.historico[0]?.motivo).toBe('Chamado aberto');
+    expect(resultado.historico[0]?.anexos).toHaveLength(1);
+    expect(resultado.historico[0]?.anexos?.[0]?.nome).toBe('comentario.jpg');
+  });
+
+  it('não devolve campo interno de metadata fora da whitelist da ficha', async () => {
+    mockTarefaDoResponsavel();
+    prisma.chamado.findFirst.mockResolvedValue({
+      id: 'chamado-1',
+      fotoUrl: null,
+      fotoMimeType: null,
+      createdAt: new Date('2026-10-01T12:00:00.000Z'),
+      registradoPorId: 'user-admin',
+      registradoPor: { nome: 'Admin' },
+      evidencias: [
+        {
+          id: 'ev-whitelist',
+          url: '/storage/whitelist.jpg',
+          storageKey: 'whitelist.jpg',
+          mimeType: 'image/jpeg',
+          tamanhoBytes: 10,
+          capturadaEm: new Date('2026-10-01T12:00:00.000Z'),
+          metadata: { origem: 'historico_manual', nome: 'visivel.jpg' },
+        },
+      ],
+    });
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-chamado-1',
+        statusAnterior: null,
+        statusNovo: 'ABERTO',
+        motivo: 'Atualização de histórico',
+        metadata: {
+          tipo: 'HISTORY_UPDATE',
+          descricao: 'Comentário visível na ficha',
+          evidenciaIds: ['ev-whitelist'],
+          tokenInterno: 'segredo-nao-pode-sair',
+          storageKeyInterna: 'evidencias/secreto.bin',
+        },
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+      },
+    ]);
+
+    const resultado = await service.getChamadoLeituraViaTarefa('tarefa-1', 'chamado-1', userResponsavelTarefa());
+    const metadata = resultado.historico[0]?.metadata ?? {};
+
+    expect(metadata.tipo).toBe('HISTORY_UPDATE');
+    expect(metadata.descricao).toBe('Comentário visível na ficha');
+    expect(metadata).not.toHaveProperty('tokenInterno');
+    expect(metadata).not.toHaveProperty('storageKeyInterna');
+    expect(resultado.historico[0]?.anexos).toHaveLength(1);
+    expect(resultado.historico[0]?.anexos?.[0]?.nome).toBe('visivel.jpg');
+    expect(prisma.historicoStatus.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { entidadeTipo: 'Chamado', entidadeId: 'chamado-1' },
+      }),
+    );
+  });
+
+  it('usuário sem acesso à tarefa é negado nessa via', async () => {
+    prisma.chamadoTarefa.findFirst.mockResolvedValue(
+      tarefaLoaded({ responsavelId: 'outro', equipeId: null }),
+    );
+
+    await expect(
+      service.getChamadoLeituraViaTarefa('tarefa-1', 'chamado-1', userSemPermissao()),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    expect(prisma.historicoStatus.findMany).not.toHaveBeenCalled();
+  });
+
+  it('tarefa de outro chamado não dá acesso (vínculo validado)', async () => {
+    mockTarefaDoResponsavel();
+    prisma.chamado.findFirst.mockResolvedValue({
+      id: 'chamado-outro',
+      fotoUrl: null,
+      fotoMimeType: null,
+      createdAt: new Date('2026-10-01T12:00:00.000Z'),
+      registradoPorId: 'user-admin',
+      registradoPor: { nome: 'Admin' },
+      evidencias: [
+        {
+          id: 'ev-vazamento',
+          url: '/storage/segredo.jpg',
+          storageKey: 'segredo.jpg',
+          mimeType: 'image/jpeg',
+          tamanhoBytes: 24,
+          capturadaEm: new Date('2026-10-01T12:00:00.000Z'),
+          metadata: { origem: 'abertura', nomeOriginal: 'segredo-do-outro.jpg' },
+        },
+      ],
+    });
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-vazamento',
+        statusAnterior: null,
+        statusNovo: 'ABERTO',
+        motivo: 'Segredo do outro chamado',
+        metadata: { tipo: 'HISTORY_UPDATE', descricao: 'não deveria vazar' },
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+      },
+    ]);
+
+    await expect(
+      service.getChamadoLeituraViaTarefa('tarefa-1', 'chamado-outro', userResponsavelTarefa()),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(prisma.chamado.findFirst).not.toHaveBeenCalled();
+    expect(prisma.historicoStatus.findMany).not.toHaveBeenCalled();
+  });
+});
+
+describe('ChamadoTarefasService — auditoria de responsável e equipe', () => {
+  const prisma = {
+    chamado: { findFirst: vi.fn() },
+    chamadoTarefa: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    chamadoTarefaAnexo: { create: vi.fn() },
+    historicoStatus: { create: vi.fn(), findMany: vi.fn() },
+    evidencia: { findMany: vi.fn() },
+    secretaria: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
+    equipe: { findFirst: vi.fn(), findMany: vi.fn() },
+    equipeUsuario: { findMany: vi.fn(), findUnique: vi.fn() },
+    usuario: { findFirst: vi.fn() },
+    perfil: { findUnique: vi.fn() },
+  };
+  const storage = { persistBuffer: vi.fn() };
+  const audit = { record: vi.fn() };
+  let service: ChamadoTarefasService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = new ChamadoTarefasService(prisma as never, storage as never, audit as never);
+    prisma.secretaria.findFirst.mockResolvedValue({ id: 'sec-1' });
+    prisma.equipeUsuario.findMany.mockResolvedValue([]);
+    prisma.perfil.findUnique.mockResolvedValue(null);
+    prisma.secretaria.findUnique.mockResolvedValue(null);
+    prisma.historicoStatus.create.mockResolvedValue({ id: 'hist-1' });
+    prisma.historicoStatus.findMany.mockResolvedValue([]);
+    audit.record.mockResolvedValue(undefined);
+  });
+
+  it('trocar responsável gera evento de responsável', async () => {
+    const before = tarefaLoaded({
+      status: ChamadoTarefaStatus.VISUALIZADA,
+      responsavelId: 'user-ana',
+      responsavel: { id: 'user-ana', nome: 'Ana', email: 'ana@test.com' },
+    });
+    const after = tarefaLoaded({
+      status: ChamadoTarefaStatus.VISUALIZADA,
+      responsavelId: 'user-beto',
+      responsavel: { id: 'user-beto', nome: 'Beto', email: 'beto@test.com' },
+    });
+    prisma.chamadoTarefa.findFirst.mockResolvedValue(before);
+    prisma.chamadoTarefa.update.mockResolvedValue(after);
+    prisma.usuario.findFirst.mockResolvedValue({ id: 'user-beto' });
+
+    await service.update('tarefa-1', { responsavelId: 'user-beto' }, adminUser());
+
+    const acoes = acoesTrilhaTarefa(prisma);
+    expect(acoes).toEqual(['responsavel']);
+    const gravado = prisma.historicoStatus.create.mock.calls
+      .map((call) => call[0]?.data)
+      .find((data) => data?.entidadeTipo === 'ChamadoTarefa');
+    expect(gravado?.motivo).toContain('Responsável da tarefa alterado');
+    expect(gravado?.metadata?.valorAnterior).toBe('Ana');
+    expect(gravado?.metadata?.valorNovo).toBe('Beto');
+    expect(gravado?.metadata?.resumo).toContain('Ana → Beto');
+  });
+
+  it('trocar equipe gera evento de equipe', async () => {
+    const before = tarefaLoaded({
+      status: ChamadoTarefaStatus.VISUALIZADA,
+      equipeId: 'eq-1',
+      equipe: { id: 'eq-1', nome: 'Equipe Norte', codigo: 'N' },
+    });
+    const after = tarefaLoaded({
+      status: ChamadoTarefaStatus.VISUALIZADA,
+      equipeId: 'eq-2',
+      equipe: { id: 'eq-2', nome: 'Equipe Sul', codigo: 'S' },
+    });
+    prisma.chamadoTarefa.findFirst.mockResolvedValue(before);
+    prisma.chamadoTarefa.update.mockResolvedValue(after);
+    prisma.equipe.findFirst.mockResolvedValue({ id: 'eq-2' });
+
+    await service.update('tarefa-1', { equipeId: 'eq-2' }, adminUser());
+
+    const acoes = acoesTrilhaTarefa(prisma);
+    expect(acoes).toEqual(['equipe']);
+    const gravado = prisma.historicoStatus.create.mock.calls
+      .map((call) => call[0]?.data)
+      .find((data) => data?.entidadeTipo === 'ChamadoTarefa');
+    expect(gravado?.motivo).toContain('Equipe da tarefa alterada');
+    expect(gravado?.metadata?.valorAnterior).toBe('Equipe Norte');
+    expect(gravado?.metadata?.valorNovo).toBe('Equipe Sul');
+    expect(gravado?.metadata?.resumo).toContain('Equipe Norte → Equipe Sul');
+  });
+
+  it('trocar responsável e equipe juntos gera dois eventos distintos', async () => {
+    const before = tarefaLoaded({
+      status: ChamadoTarefaStatus.VISUALIZADA,
+      equipeId: 'eq-1',
+      equipe: { id: 'eq-1', nome: 'Equipe Norte', codigo: 'N' },
+      responsavelId: 'user-ana',
+      responsavel: { id: 'user-ana', nome: 'Ana', email: 'ana@test.com' },
+    });
+    const after = tarefaLoaded({
+      status: ChamadoTarefaStatus.VISUALIZADA,
+      equipeId: 'eq-2',
+      equipe: { id: 'eq-2', nome: 'Equipe Sul', codigo: 'S' },
+      responsavelId: 'user-beto',
+      responsavel: { id: 'user-beto', nome: 'Beto', email: 'beto@test.com' },
+    });
+    prisma.chamadoTarefa.findFirst.mockResolvedValue(before);
+    prisma.chamadoTarefa.update.mockResolvedValue(after);
+    prisma.equipe.findFirst.mockResolvedValue({ id: 'eq-2' });
+    prisma.usuario.findFirst.mockResolvedValue({ id: 'user-beto' });
+    prisma.equipeUsuario.findUnique.mockResolvedValue({ equipeId: 'eq-2' });
+
+    await service.update('tarefa-1', { equipeId: 'eq-2', responsavelId: 'user-beto' }, adminUser());
+
+    expect(acoesTrilhaTarefa(prisma)).toEqual(['responsavel', 'equipe']);
   });
 });

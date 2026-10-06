@@ -1,4 +1,4 @@
-import type { ChamadoTarefaDetalhe, ChamadoTarefaResumo, RelatorioTarefasResponse, TarefasExecucaoResponse } from '@/lib/chamado-tarefa';
+import type { ChamadoTarefaChamadoLeitura, ChamadoTarefaDetalhe, ChamadoTarefaResumo, RelatorioTarefasResponse, TarefasExecucaoResponse } from '@/lib/chamado-tarefa';
 import {
   AuthUser,
   AdminPerfil,
@@ -2001,6 +2001,10 @@ export function listTarefasDoChamado(chamadoId: string) {
 
 export function getChamadoTarefa(id: string) {
   return request<ChamadoTarefaDetalhe>(`/chamado-tarefas/${id}`);
+}
+
+export function getChamadoLeituraViaTarefa(tarefaId: string, chamadoId: string) {
+  return request<ChamadoTarefaChamadoLeitura>(`/chamado-tarefas/${tarefaId}/chamado/${chamadoId}`);
 }
 
 export function getOpcoesTarefa(secretariaId?: string) {

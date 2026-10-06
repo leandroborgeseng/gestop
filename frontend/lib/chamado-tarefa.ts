@@ -86,6 +86,31 @@ export type ChamadoTarefaResumo = {
   };
 };
 
+export type ChamadoTarefaChamadoLeitura = {
+  chamadoId: string;
+  codigo: string;
+  somenteLeitura: true;
+  anexosAbertura: Array<{
+    id: string;
+    nome: string;
+    mimeType?: string | null;
+    categoria: 'imagem' | 'pdf' | 'video';
+    url: string;
+    tamanhoBytes?: number | null;
+    enviadoEm?: string | null;
+  }>;
+  historico: Array<{
+    id: string;
+    motivo: string | null;
+    statusAnterior: string | null;
+    statusNovo: string;
+    createdAt: string;
+    alteradoPor: { id: string; nome: string } | null;
+    metadata?: Record<string, unknown>;
+    anexos?: Array<{ id: string; url: string; mimeType?: string | null; descricao?: string | null; nome?: string | null }>;
+  }>;
+};
+
 export type ChamadoTarefaDetalhe = ChamadoTarefaResumo & {
   historico: Array<{
     id: string;

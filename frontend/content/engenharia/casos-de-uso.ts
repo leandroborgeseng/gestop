@@ -158,8 +158,16 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'tratar-tarefa',
         nome: 'Tratar tarefa atribuída',
         atores: ['equipe', 'gestor'],
-        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Impedida não é mais atribuída; registros antigos continuam consultáveis.',
+        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Impedida não é mais atribuída; registros antigos continuam consultáveis. Troca de responsável e de equipe geram eventos distintos na trilha, com valor anterior e novo.',
         rotas: ['/execucao', 'GET /chamado-tarefas/execucao', 'PATCH /chamado-tarefas/:id'],
+      },
+      {
+        id: 'consultar-chamado-via-tarefa',
+        nome: 'Consultar anexos e histórico do chamado pela tarefa',
+        atores: ['equipe', 'gestor'],
+        descricao:
+          'Quem vê a tarefa (responsável, membro da equipe ou permissão atual de ChamadoTarefasService) e não tem acesso direto ao chamado consulta anexos e histórico do chamado só em leitura, pelo vínculo tarefa↔chamado. O metadata do histórico usa a mesma projeção da ficha (não o JSON bruto). Sem editar, mudar status, anexar, excluir anexo, comentar no histórico ou encerrar o chamado — a gestão permanece nas rotas reais de ChamadosService. Quem já acessa o chamado segue no fluxo atual da ficha.',
+        rotas: ['/execucao', 'GET /chamado-tarefas/:id/chamado/:chamadoId'],
       },
       {
         id: 'relatorio-tarefas',
