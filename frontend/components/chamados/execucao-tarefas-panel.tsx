@@ -9,7 +9,15 @@ import { Badge } from '@/components/ui/badge';
 import { Chip } from '@/components/ui/chip';
 import { cn } from '@/lib/cn';
 import { getSecretarias, listEquipesExecucao, listTarefasExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
-import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL, TAREFA_STATUS_PENDENTES, type TarefasExecucaoResponse } from '@/lib/chamado-tarefa';
+import {
+  resumoDoChamado,
+  resumoFiltrosTarefasExecucao,
+  TAREFA_PRIORIDADE_LABEL,
+  TAREFA_STATUS_LABEL,
+  TAREFA_STATUS_PENDENTES,
+  tarefaExecucaoToMapPoint,
+  type TarefasExecucaoResponse,
+} from '@/lib/chamado-tarefa';
 import type { ChamadoMapPoint } from '@/lib/types';
 
 export function ExecucaoTarefasPanel() {
@@ -75,41 +83,31 @@ export function ExecucaoTarefasPanel() {
   }, []);
 
   const pontos = useMemo<ChamadoMapPoint[]>(() => {
-    return (data?.items ?? [])
-      .filter((item) => item.chamado.latitude != null && item.chamado.longitude != null)
-      .map((item) => ({
-        id: item.id,
-        codigo: item.chamado.codigo,
-        titulo: item.titulo,
-        latitude: item.chamado.latitude as number,
-        longitude: item.chamado.longitude as number,
-        unidadeNome: `Tarefa · ${item.chamado.unidade?.nome || item.chamado.enderecoTexto || 'Sem endereço'}`,
-        prioridade: TAREFA_PRIORIDADE_LABEL[item.prioridade] ?? item.prioridade,
-        equipeNome: item.equipe?.nome,
-        prazoEm: item.prazo,
-      }));
+    return (data?.items ?? []).flatMap((item) => {
+      const ponto = tarefaExecucaoToMapPoint(item);
+      return ponto ? [ponto] : [];
+    });
   }, [data]);
 
   const resumoFiltros = useMemo(() => {
-    const partes: string[] = [];
-    if (status === 'IMPEDIDA') partes.push('Status: Impedida (histórico)');
-    else if (status) partes.push(`Status: ${TAREFA_STATUS_LABEL[status as keyof typeof TAREFA_STATUS_LABEL] ?? status}`);
-    else if (historico) partes.push('Status: histórico');
-    else partes.push('Status: não finalizados');
     const secretaria = secretarias.find((item) => item.id === secretariaId);
-    if (secretaria) partes.push(`Secretaria: ${secretaria.sigla}`);
     const equipe = equipes.find((item) => item.id === equipeId);
-    if (equipe) partes.push(`Equipe: ${equipe.nome}`);
     const responsavel = responsaveis.find((item) => item.id === responsavelId);
-    if (responsavel) partes.push(`Responsável: ${responsavel.nome}`);
     const tipo = tipos.find((item) => item.id === tipoChamadoId);
-    if (tipo) partes.push(`Tipo: ${tipo.nome}`);
-    if (prioridade) partes.push(`Prioridade: ${TAREFA_PRIORIDADE_LABEL[prioridade] ?? prioridade}`);
-    if (atribuidaAMim) partes.push('Atribuídas a mim');
-    if (minhasEquipes) partes.push('Minhas equipes');
-    if (atrasadas) partes.push('Atrasadas');
-    if (prazoFrom || prazoTo) partes.push('Prazo');
-    return partes.length ? partes.join(' · ') : 'Nenhum filtro ativo';
+    return resumoFiltrosTarefasExecucao({
+      status,
+      historico,
+      secretariaSigla: secretaria?.sigla,
+      equipeNome: equipe?.nome,
+      responsavelNome: responsavel?.nome,
+      tipoNome: tipo?.nome,
+      prioridade,
+      atribuidaAMim,
+      minhasEquipes,
+      atrasadas,
+      prazoFrom,
+      prazoTo,
+    });
   }, [
     atrasadas,
     atribuidaAMim,
@@ -258,6 +256,7 @@ export function ExecucaoTarefasPanel() {
             <thead className="text-[var(--ink-3)]">
               <tr>
                 <th className="p-2">Chamado</th>
+                <th className="p-2">Resumo do chamado</th>
                 <th className="p-2">Tarefa</th>
                 <th className="p-2">Status</th>
                 <th className="p-2">Prazo</th>
@@ -275,6 +274,7 @@ export function ExecucaoTarefasPanel() {
                   onClick={() => setAberta(item.id)}
                 >
                   <td className="p-2 mono">{item.chamado.codigo}</td>
+                  <td className="p-2">{resumoDoChamado(item.chamado)}</td>
                   <td className="p-2">{item.titulo}</td>
                   <td className="p-2">{TAREFA_STATUS_LABEL[item.status]}</td>
                   <td className="p-2">{item.prazo ? new Date(item.prazo).toLocaleDateString('pt-BR') : '—'}</td>
