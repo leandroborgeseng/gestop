@@ -23,7 +23,7 @@ describe('paridade Administrador do Sistema front × backend', () => {
     ];
 
     for (const user of casos) {
-      expect(front.isAdministradorSistemaAtivo(user)).toBe(isAdministradorSistema(user));
+      expect(front.isAdministradorSistemaAtivo(user)).toBe(isAdministradorSistema({ perfis: [...(user.perfis ?? [])] }));
     }
   });
 });

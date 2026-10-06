@@ -13,7 +13,7 @@ describe('administrador-sistema — módulo único', () => {
     expect(isAdministradorSistemaAtivo({ perfis: ['Gestor'] })).toBe(false);
     expect(matrixSrc).toContain("from './administrador-sistema'");
     expect(matrixSrc).not.toContain("export const ADMINISTRADOR_SISTEMA_NOME");
-    expect(coletarSrc).toContain("from './administrador-sistema'");
+    expect(coletarSrc).toContain("from './administrador-sistema.js'");
     expect(coletarSrc).not.toContain("const ADMINISTRADOR_SISTEMA_NOME");
     expect(coletarSrc).not.toContain('function isAdministradorSistemaAtivo');
   });

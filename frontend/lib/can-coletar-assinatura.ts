@@ -1,4 +1,4 @@
-import { isAdministradorSistemaAtivo } from './administrador-sistema';
+import { isAdministradorSistemaAtivo } from './administrador-sistema.js';
 
 function matriz(telaId: string, funcaoId: string, acao: string) {
   return `matriz.${telaId}.${funcaoId}.${acao}`;
