@@ -158,7 +158,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'tratar-tarefa',
         nome: 'Tratar tarefa atribuída',
         atores: ['equipe', 'gestor'],
-        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Cancelar exige a permissão Cancelar tarefa (ou a chave antiga tarefas.excluir); alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige Alterar dados da tarefa. O histórico da tarefa só sai com tarefas_historico.visualizar. Os anexos da tarefa saem para o designado (responsável ou membro da equipe) mesmo sem essa chave. Impedida não é mais atribuída; registros antigos continuam consultáveis. Troca de responsável e de equipe geram eventos distintos na trilha, com valor anterior e novo.',
+        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Cancelar exige a permissão Cancelar tarefa (ou a chave antiga tarefas.excluir); alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige Alterar dados da tarefa. O histórico da tarefa só sai com tarefas_historico.visualizar. Os anexos da tarefa saem para o designado (responsável ou membro da equipe) mesmo sem essa chave. Impedida não é mais atribuída; registros antigos continuam consultáveis. Troca de responsável e de equipe geram eventos distintos na trilha, com valor anterior e novo. A lista da aba Tarefas mostra a coluna Resumo do chamado (título ou início da descrição). O pin do mapa inclui o responsável. Fechar a sanfona Filtros de tarefas não limpa os filtros; o resumo mostra Nenhum filtro ativo ou a lista aplicada.',
         rotas: ['/execucao', 'GET /chamado-tarefas/execucao', 'PATCH /chamado-tarefas/:id'],
       },
       {
@@ -173,7 +173,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'relatorio-tarefas',
         nome: 'Relatório de tarefas',
         atores: ['administrador', 'gestor'],
-        descricao: 'A grade filtrável fica no dashboard, com exportação simples dos dados exibidos. O relatório formal (PDF, CSV ou XLSX) sai do card Tarefas de chamados, no padrão dos demais relatórios.',
+        descricao: 'A grade filtrável fica no dashboard, com exportação simples dos dados exibidos (os mesmos filtros da grade). O período do box usa a data de abertura (createdAt), o mesmo campo do modal formal. Os agrupamentos por secretaria e equipe mostram pendentes e atrasadas. Tarefas não entram na contagem de chamados. O relatório formal (PDF, CSV ou XLSX) sai do card Tarefas de chamados, no padrão dos demais relatórios.',
         rotas: ['/dashboard', '/relatorios', 'GET /chamado-tarefas/relatorio', 'GET /chamado-tarefas/relatorio.csv', 'GET /chamado-tarefas/relatorio.pdf', 'GET /chamado-tarefas/relatorio.xlsx'],
       },
     ],
