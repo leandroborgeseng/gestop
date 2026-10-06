@@ -367,7 +367,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Sondar saúde da API e do banco',
     ator: 'Operação (sem tela no produto)',
     tela: 'Sem tela. Sonda HTTP.',
-    api: 'HealthController: GET /, GET /health, GET /health/db, GET /health/storage. GET /health inclui commit (SHA de 40 hex ou null) e commitShort (7 chars ou null), resolvidos no boot a partir de APP_COMMIT_SHA, RAILWAY_GIT_COMMIT_SHA, SOURCE_COMMIT ou GIT_COMMIT.',
+    api: 'HealthController: GET /, GET /health, GET /health/db, GET /health/storage. GET /health inclui commit (SHA de 40 hex ou null) e commitShort (7 chars ou null), resolvidos no boot a partir de APP_COMMIT_SHA, RAILWAY_GIT_COMMIT_SHA, SOURCE_COMMIT ou GIT_COMMIT. APP_COMMIT_SHA é só override manual — não definir em produção.',
     tabelas: 'Nenhuma tabela de negócio. /health/db consulta o PostgreSQL via Prisma.',
     permissao: 'Rotas de saúde sem o guard de permissão de tela.',
   },
