@@ -1,11 +1,11 @@
 import { PrismaClient } from '@prisma/client';
-import { catalogEntryForKey, listCatalogMatrixKeys } from '../domain/permissions-catalog';
+import { catalogActionLabel, catalogEntryForKey, listCatalogMatrixKeys } from '../domain/permissions-catalog';
 
 export async function syncPermissionsCatalog(prisma: PrismaClient) {
   const entries = listCatalogMatrixKeys().map((chave) => {
     const entry = catalogEntryForKey(chave);
     const descricao = entry
-      ? `${entry.tela.label} · ${entry.funcao.label} · ${entry.acao}`
+      ? `${entry.tela.label} · ${catalogActionLabel(entry.funcao, entry.acao)}`
       : chave;
     return {
       chave,

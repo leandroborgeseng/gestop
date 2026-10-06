@@ -9,6 +9,7 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { getChamadoLeituraViaTarefa, getChamadoTarefa, getOpcoesTarefa, updateChamadoTarefa } from '@/lib/api';
 import { ChamadoTarefaChamadoLeituraView } from '@/components/chamados/chamado-tarefa-chamado-leitura';
+import { ChamadoTarefaBarraAcoes, ChamadoTarefaAnexosCabecalho, ChamadoTarefaHistoricoCabecalho } from '@/components/chamados/chamado-tarefa-permissoes-view';
 import {
   ANEXOS_ABERTURA_ACCEPT,
   ANEXOS_ABERTURA_FORMATOS,
@@ -254,28 +255,14 @@ export function ChamadoTarefaSheet({
               .join(' · ')}
           </p>
 
-          <div className="flex flex-wrap gap-2 border-t border-[var(--line)] pt-3">
-            {tarefa.podeAlterarDados ? (
-              <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={() => { setAcao('editar'); preencherEdicao(tarefa); }}>
-                Editar dados da tarefa
-              </Button>
-            ) : null}
-            {tarefa.podeAndamento ? (
-              <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={() => { limparAcao(); setAcao('andamento'); }}>
-                Registrar andamento
-              </Button>
-            ) : null}
-            {tarefa.podeConcluir ? (
-              <Button type="button" size="sm" variant="filled" disabled={busy} onClick={() => { limparAcao(); setAcao('concluir'); }}>
-                Concluir tarefa
-              </Button>
-            ) : null}
-            {tarefa.podeCancelar ? (
-              <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => { limparAcao(); setAcao('cancelar'); }}>
-                Cancelar tarefa
-              </Button>
-            ) : null}
-          </div>
+          <ChamadoTarefaBarraAcoes
+            tarefa={tarefa}
+            busy={busy}
+            onAlterarDados={() => { setAcao('editar'); preencherEdicao(tarefa); }}
+            onAndamento={() => { limparAcao(); setAcao('andamento'); }}
+            onConcluir={() => { limparAcao(); setAcao('concluir'); }}
+            onCancelar={() => { limparAcao(); setAcao('cancelar'); }}
+          />
 
           {acao === 'editar' ? (
             <div className="space-y-2 rounded-[12px] border border-[var(--line)] p-3">
@@ -407,44 +394,22 @@ export function ChamadoTarefaSheet({
             </div>
           ) : null}
 
-          {tarefa.podeVerHistorico !== false ? (
+          {tarefa.podeVerAnexos && !tarefa.podeVerHistorico ? (
             <section className="space-y-2 border-t border-[var(--line)] pt-3">
-              <h4 className="text-[12px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Histórico da tarefa</h4>
-              {tarefa.historico.length ? (
-                <ol className="space-y-2">
-                  {tarefa.historico.map((item) => {
-                    const ligados = (item.anexoIds ?? [])
-                      .map((id) => tarefa.anexos.find((anexo) => anexo.id === id))
-                      .filter((anexo): anexo is ChamadoTarefaDetalhe['anexos'][number] => Boolean(anexo));
-                    return (
-                      <li key={item.id} className="rounded-[10px] bg-[var(--surface-2)] p-2 text-[12px]">
-                        <p className="font-semibold text-[var(--ink)]">
-                          {ACAO_HISTORICO[item.acao ?? ''] ?? 'Registro'}
-                          {item.motivo ? ` · ${item.motivo}` : ''}
-                        </p>
-                        <p className="text-[var(--ink-3)]">
-                          {[new Date(item.createdAt).toLocaleString('pt-BR'), item.alteradoPor?.nome, item.perfil, item.secretaria]
-                            .filter(Boolean)
-                            .join(' · ')}
-                          {item.temAnexos ? ' · Há anexos' : ''}
-                        </p>
-                        {ligados.length ? (
-                          <ul className="mt-2 space-y-2">
-                            {ligados.map((anexo) => (
-                              <AnexoLinha key={anexo.id} anexo={anexo} />
-                            ))}
-                          </ul>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ol>
+              <ChamadoTarefaAnexosCabecalho visivel />
+              {tarefa.anexos.length ? (
+                <ul className="space-y-2">
+                  {tarefa.anexos.map((anexo) => (
+                    <AnexoLinha key={anexo.id} anexo={anexo} />
+                  ))}
+                </ul>
               ) : (
-                <p className="text-[12px] text-[var(--ink-3)]">Nenhum registro ainda.</p>
+                <p className="text-[12px] text-[var(--ink-3)]">Nenhum anexo.</p>
               )}
-              <AnexosSoltos tarefa={tarefa} />
             </section>
           ) : null}
+
+          <ChamadoTarefaHistoricoView tarefa={tarefa} />
 
           {chamadoLeitura ? <ChamadoTarefaChamadoLeituraView leitura={chamadoLeitura} /> : null}
         </div>
@@ -453,7 +418,53 @@ export function ChamadoTarefaSheet({
   );
 }
 
-function AnexosSoltos({ tarefa }: { tarefa: ChamadoTarefaDetalhe }) {
+function ChamadoTarefaHistoricoView({
+  tarefa,
+}: {
+  tarefa: Pick<ChamadoTarefaDetalhe, 'podeVerHistorico' | 'historico' | 'anexos'>;
+}) {
+  if (!tarefa.podeVerHistorico) return null;
+  return (
+    <section className="space-y-2 border-t border-[var(--line)] pt-3">
+      <ChamadoTarefaHistoricoCabecalho podeVerHistorico={tarefa.podeVerHistorico} />
+      {tarefa.historico.length ? (
+        <ol className="space-y-2">
+          {tarefa.historico.map((item) => {
+            const ligados = (item.anexoIds ?? [])
+              .map((id) => tarefa.anexos.find((anexo) => anexo.id === id))
+              .filter((anexo): anexo is ChamadoTarefaDetalhe['anexos'][number] => Boolean(anexo));
+            return (
+              <li key={item.id} className="rounded-[10px] bg-[var(--surface-2)] p-2 text-[12px]">
+                <p className="font-semibold text-[var(--ink)]">
+                  {ACAO_HISTORICO[item.acao ?? ''] ?? 'Registro'}
+                  {item.motivo ? ` · ${item.motivo}` : ''}
+                </p>
+                <p className="text-[var(--ink-3)]">
+                  {[new Date(item.createdAt).toLocaleString('pt-BR'), item.alteradoPor?.nome, item.perfil, item.secretaria]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  {item.temAnexos ? ' · Há anexos' : ''}
+                </p>
+                {ligados.length ? (
+                  <ul className="mt-2 space-y-2">
+                    {ligados.map((anexo) => (
+                      <AnexoLinha key={anexo.id} anexo={anexo} />
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className="text-[12px] text-[var(--ink-3)]">Nenhum registro ainda.</p>
+      )}
+      <AnexosSoltos tarefa={tarefa} />
+    </section>
+  );
+}
+
+function AnexosSoltos({ tarefa }: { tarefa: Pick<ChamadoTarefaDetalhe, 'historico' | 'anexos'> }) {
   const ligados = new Set(tarefa.historico.flatMap((item) => item.anexoIds ?? []));
   const soltos = tarefa.anexos.filter((item) => !ligados.has(item.id));
   if (!soltos.length) return null;

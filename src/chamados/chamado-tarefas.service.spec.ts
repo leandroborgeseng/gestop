@@ -661,3 +661,294 @@ describe('ChamadoTarefasService — auditoria de responsável e equipe', () => {
     expect(acoesTrilhaTarefa(prisma)).toEqual(['responsavel', 'equipe']);
   });
 });
+
+function userComPermissoes(permissoes: string[], sub = 'user-matriz'): JwtPayload {
+  return {
+    sub,
+    email: `${sub}@test.com`,
+    nome: 'Usuário matriz',
+    perfis: [],
+    permissoes,
+    acessoTodasSecretarias: true,
+    secretariaId: null,
+    perfilAtivoId: null,
+  };
+}
+
+describe('ChamadoTarefasService — permissões 269', () => {
+  const prisma = {
+    chamado: { findFirst: vi.fn() },
+    chamadoTarefa: {
+      findFirst: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+    },
+    chamadoTarefaAnexo: { create: vi.fn() },
+    historicoStatus: { create: vi.fn(), findMany: vi.fn() },
+    evidencia: { findMany: vi.fn() },
+    secretaria: { findFirst: vi.fn(), findMany: vi.fn(), findUnique: vi.fn() },
+    equipe: { findFirst: vi.fn(), findMany: vi.fn() },
+    equipeUsuario: { findMany: vi.fn(), findUnique: vi.fn() },
+    usuario: { findFirst: vi.fn() },
+    perfil: { findUnique: vi.fn() },
+  };
+  const storage = { persistBuffer: vi.fn() };
+  const audit = { record: vi.fn() };
+  let service: ChamadoTarefasService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = new ChamadoTarefasService(prisma as never, storage as never, audit as never);
+    prisma.secretaria.findFirst.mockResolvedValue({ id: 'sec-1' });
+    prisma.equipeUsuario.findMany.mockResolvedValue([]);
+    prisma.equipeUsuario.findUnique.mockResolvedValue(null);
+    prisma.perfil.findUnique.mockResolvedValue(null);
+    prisma.secretaria.findUnique.mockResolvedValue(null);
+    prisma.historicoStatus.create.mockResolvedValue({ id: 'hist-1' });
+    prisma.historicoStatus.findMany.mockResolvedValue([]);
+    audit.record.mockResolvedValue(undefined);
+  });
+
+  function mockTarefa(overrides: Record<string, unknown> = {}) {
+    const loaded = tarefaLoaded({
+      status: ChamadoTarefaStatus.VISUALIZADA,
+      anexos: [
+        {
+          id: 'anexo-hist',
+          nome: 'foto.jpg',
+          url: '/storage/foto.jpg',
+          mimeType: 'image/jpeg',
+          tamanhoBytes: 24,
+          createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        },
+      ],
+      ...overrides,
+    });
+    prisma.chamadoTarefa.findFirst.mockResolvedValue(loaded);
+    prisma.chamadoTarefa.update.mockResolvedValue(loaded);
+    return loaded;
+  }
+
+  it('responsável sem alterar dados não edita título/prazo/secretaria', async () => {
+    mockTarefa({
+      responsavelId: 'user-resp',
+      responsavel: { id: 'user-resp', nome: 'Responsável da tarefa', email: 'resp@test.com' },
+    });
+
+    await expect(
+      service.update('tarefa-1', { titulo: 'Novo título da tarefa' }, userResponsavelTarefa()),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(prisma.chamadoTarefa.update).not.toHaveBeenCalled();
+  });
+
+  it('com a permissão de alterar dados a edição passa', async () => {
+    const before = mockTarefa();
+    const after = tarefaLoaded({ ...before, titulo: 'Novo título da tarefa', status: ChamadoTarefaStatus.VISUALIZADA });
+    prisma.chamadoTarefa.update.mockResolvedValue(after);
+
+    const user = userComPermissoes([
+      'matriz.chamados.tarefas.visualizar',
+      'matriz.chamados.tarefas.alterar',
+    ]);
+    const resultado = await service.update('tarefa-1', { titulo: 'Novo título da tarefa' }, user);
+
+    expect(resultado.titulo).toBe('Novo título da tarefa');
+    expect(prisma.chamadoTarefa.update).toHaveBeenCalled();
+  });
+
+  it('cancela com tarefas_cancelar.executar', async () => {
+    mockTarefa();
+    const user = userComPermissoes([
+      'matriz.chamados.tarefas.visualizar',
+      'matriz.chamados.tarefas_cancelar.executar',
+    ]);
+
+    await service.update('tarefa-1', { status: ChamadoTarefaStatus.CANCELADA, justificativa: 'Fora de escopo da equipe' }, user);
+
+    expect(prisma.chamadoTarefa.update).toHaveBeenCalled();
+    const data = prisma.chamadoTarefa.update.mock.calls[0]?.[0]?.data;
+    expect(data?.status).toBe(ChamadoTarefaStatus.CANCELADA);
+    expect(data?.justificativa).toBe('Fora de escopo da equipe');
+  });
+
+  it('cancela com a chave legada tarefas.excluir', async () => {
+    mockTarefa();
+    const user = userComPermissoes(['matriz.chamados.tarefas.visualizar', 'matriz.chamados.tarefas.excluir']);
+
+    await service.update('tarefa-1', { status: ChamadoTarefaStatus.CANCELADA, justificativa: 'Pedido do gestor' }, user);
+
+    expect(prisma.chamadoTarefa.update).toHaveBeenCalled();
+  });
+
+  it('recusa cancelar sem a permissão nova e sem a chave legada', async () => {
+    mockTarefa({
+      responsavelId: 'user-resp',
+      responsavel: { id: 'user-resp', nome: 'Responsável da tarefa', email: 'resp@test.com' },
+    });
+
+    await expect(
+      service.update(
+        'tarefa-1',
+        { status: ChamadoTarefaStatus.CANCELADA, justificativa: 'Quero cancelar mesmo assim' },
+        userResponsavelTarefa(),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(prisma.chamadoTarefa.update).not.toHaveBeenCalled();
+  });
+
+  it('recusa cancelar sem justificativa', async () => {
+    mockTarefa();
+    const user = userComPermissoes([
+      'matriz.chamados.tarefas.visualizar',
+      'matriz.chamados.tarefas_cancelar.executar',
+    ]);
+
+    await expect(service.update('tarefa-1', { status: ChamadoTarefaStatus.CANCELADA }, user)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(
+      service.update('tarefa-1', { status: ChamadoTarefaStatus.CANCELADA, justificativa: 'ab' }, user),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(prisma.chamadoTarefa.update).not.toHaveBeenCalled();
+  });
+
+  it('não designado sem tarefas_historico.visualizar não devolve histórico nem anexos', async () => {
+    mockTarefa();
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-tarefa',
+        motivo: 'Criação',
+        statusAnterior: null,
+        statusNovo: 'NOVA',
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+        metadata: { acao: 'criada', anexoIds: ['anexo-hist'] },
+      },
+    ]);
+    const user = userComPermissoes(['matriz.chamados.tarefas.visualizar']);
+
+    const resultado = await service.getById('tarefa-1', user);
+
+    expect(resultado.podeVerHistorico).toBe(false);
+    expect(resultado.podeVerAnexos).toBe(false);
+    expect(resultado.historico).toEqual([]);
+    expect(resultado.anexos).toEqual([]);
+    expect(prisma.historicoStatus.findMany).not.toHaveBeenCalled();
+  });
+
+  it('chamados.gerenciar sem tarefas_historico.visualizar não devolve histórico', async () => {
+    mockTarefa();
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-tarefa',
+        motivo: 'Criação',
+        statusAnterior: null,
+        statusNovo: 'NOVA',
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+        metadata: { acao: 'criada', anexoIds: ['anexo-hist'] },
+      },
+    ]);
+    const user = userComPermissoes(['chamados.gerenciar']);
+
+    const resultado = await service.getById('tarefa-1', user);
+
+    expect(user.perfis).not.toContain('Administrador do Sistema');
+    expect(resultado.podeVerHistorico).toBe(false);
+    expect(resultado.historico).toEqual([]);
+    expect(prisma.historicoStatus.findMany).not.toHaveBeenCalled();
+  });
+
+  it('designado sem tarefas_historico.visualizar vê anexos e não vê histórico', async () => {
+    mockTarefa({
+      responsavelId: 'user-resp',
+      responsavel: { id: 'user-resp', nome: 'Responsável da tarefa', email: 'resp@test.com' },
+    });
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-tarefa',
+        motivo: 'Criação',
+        statusAnterior: null,
+        statusNovo: 'NOVA',
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+        metadata: { acao: 'criada', anexoIds: ['anexo-hist'] },
+      },
+    ]);
+
+    const resultado = await service.getById('tarefa-1', userResponsavelTarefa());
+
+    expect(resultado.podeVerHistorico).toBe(false);
+    expect(resultado.podeVerAnexos).toBe(true);
+    expect(resultado.historico).toEqual([]);
+    expect(resultado.anexos).toHaveLength(1);
+    expect(resultado.anexos[0]?.nome).toBe('foto.jpg');
+    expect(prisma.historicoStatus.findMany).not.toHaveBeenCalled();
+  });
+
+  it('com tarefas_historico.visualizar devolve histórico e anexos', async () => {
+    mockTarefa();
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-tarefa',
+        motivo: 'Criação',
+        statusAnterior: null,
+        statusNovo: 'NOVA',
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+        metadata: { acao: 'criada', anexoIds: ['anexo-hist'] },
+      },
+    ]);
+    const user = userComPermissoes([
+      'matriz.chamados.tarefas.visualizar',
+      'matriz.chamados.tarefas_historico.visualizar',
+    ]);
+
+    const resultado = await service.getById('tarefa-1', user);
+
+    expect(resultado.podeVerHistorico).toBe(true);
+    expect(resultado.podeVerAnexos).toBe(true);
+    expect(resultado.historico).toHaveLength(1);
+    expect(resultado.historico[0]?.motivo).toBe('Criação');
+    expect(resultado.anexos).toHaveLength(1);
+    expect(resultado.anexos[0]?.nome).toBe('foto.jpg');
+  });
+
+  it('administrador do sistema altera, cancela e vê histórico', async () => {
+    mockTarefa();
+    prisma.historicoStatus.findMany.mockResolvedValue([
+      {
+        id: 'h-tarefa',
+        motivo: 'Criação',
+        statusAnterior: null,
+        statusNovo: 'NOVA',
+        createdAt: new Date('2026-10-01T12:00:00.000Z'),
+        alteradoPor: { id: 'user-admin', nome: 'Admin' },
+        metadata: { acao: 'criada' },
+      },
+    ]);
+
+    const detalhe = await service.getById('tarefa-1', adminUser());
+    expect(detalhe.podeAlterarDados).toBe(true);
+    expect(detalhe.podeCancelar).toBe(true);
+    expect(detalhe.podeVerHistorico).toBe(true);
+    expect(detalhe.podeVerAnexos).toBe(true);
+    expect(detalhe.historico).toHaveLength(1);
+    expect(detalhe.anexos).toHaveLength(1);
+
+    await service.update('tarefa-1', { titulo: 'Título ajustado pelo admin' }, adminUser());
+    expect(prisma.chamadoTarefa.update).toHaveBeenCalled();
+
+    prisma.chamadoTarefa.update.mockClear();
+    await service.update(
+      'tarefa-1',
+      { status: ChamadoTarefaStatus.CANCELADA, justificativa: 'Cancelamento administrativo' },
+      adminUser(),
+    );
+    expect(prisma.chamadoTarefa.update.mock.calls[0]?.[0]?.data?.status).toBe(ChamadoTarefaStatus.CANCELADA);
+  });
+});

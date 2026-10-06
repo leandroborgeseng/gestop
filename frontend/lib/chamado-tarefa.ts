@@ -67,6 +67,7 @@ export type ChamadoTarefaResumo = {
   podeConcluir?: boolean;
   podeCancelar?: boolean;
   podeVerHistorico?: boolean;
+  podeVerAnexos?: boolean;
   podeTratar: boolean;
   chamado: {
     id: string;
