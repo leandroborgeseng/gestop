@@ -21,7 +21,9 @@ COPY data ./data
 RUN npm run build
 
 FROM base AS runner
+ARG SOURCE_COMMIT
 ENV NODE_ENV=production
+ENV SOURCE_COMMIT=${SOURCE_COMMIT}
 WORKDIR /app
 
 COPY package.json package-lock.json ./

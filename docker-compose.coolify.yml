@@ -31,6 +31,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -41,6 +43,7 @@ services:
       HOST: 0.0.0.0
       PORT: 3001
       COOLIFY: 'true'
+      SOURCE_COMMIT: ${SOURCE_COMMIT:-}
       # POSTGRES_* precisam estar no .env de interpolacao do compose
       DATABASE_URL: postgresql://${POSTGRES_USER:-gestop}:${POSTGRES_PASSWORD:-gestop_change_me}@postgres:5432/${POSTGRES_DB:-gestop}?schema=public
       # JWT_SECRET e INITIAL_ADMIN_PASSWORD: NAO definir aqui — so injecao Coolify (runtime).
