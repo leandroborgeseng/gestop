@@ -82,7 +82,7 @@ function NavLink({
   );
 }
 
-function DesktopSidebar({
+export function DesktopSidebar({
   user,
   collapsed,
   badges,
