@@ -4,7 +4,14 @@ import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 
 /** Classe mínima de texto dos campos em modo somente leitura (nota de UX do 292: nunca abaixo de `--ink-3`). */
-export const CLASSE_SOMENTE_LEITURA = 'text-[var(--ink-3)] cursor-default focus:shadow-none';
+export const CLASSE_SOMENTE_LEITURA = [
+  // texto AA sobre fundo neutro (testado contra globals.css)
+  'text-[var(--ink-3)] bg-[var(--surface-2)]',
+  // sem aparência de campo ativo: borda e sombra não reagem a hover/foco
+  'hover:border-[var(--line)] focus:border-[var(--line)] focus:shadow-none',
+  // texto continua selecionável/copiável
+  'cursor-text select-text',
+].join(' ');
 
 /**
  * Atributos dos campos do formulário de próprio. Somente leitura usa `readOnly`

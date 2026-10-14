@@ -10,6 +10,9 @@ import {
 } from './proprio-campos';
 import { salvarEdicaoProprio, secretariaIdDoFormulario } from '@/lib/admin-proprios';
 import { readForbiddenMessage } from '@/lib/api-errors';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { CLASSE_SOMENTE_LEITURA } from './proprio-campos';
 
 const SECRETARIAS = [
   { value: 'sec-sme', label: 'SME · Educação' },
@@ -138,5 +141,49 @@ describe('292 · nota 3 · 403 de escopo', () => {
     const ok = await salvarEdicaoProprio(mutateComSnackbar(() => {}), async () => ({}), 'ok', fechar);
     expect(ok).toBe(true);
     expect(fechar).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('292 · somente leitura não parece editável (Designer)', () => {
+  const css = readFileSync(path.resolve(__dirname, '../../app/globals.css'), 'utf8');
+  const cor = (v: string) => new RegExp(`--${v}:\\s*(#[0-9a-fA-F]{6})`).exec(css)![1];
+  const lum = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contraste = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m); return (x + 0.05) / (y + 0.05); };
+
+  const html = renderToStaticMarkup(
+    createElement(CampoSelecaoProprio, {
+      name: 'regiao', value: 'NORTE', somenteLeitura: true,
+      opcoes: [{ value: 'NORTE', label: 'Norte' }],
+      children: createElement('option', { value: 'NORTE' }, 'Norte'),
+    }),
+  );
+  const classeDoInput = (/<input(?![^>]*type="hidden")[^>]*class="([^"]*)"/.exec(html)?.[1] ?? '').split(/\s+/);
+
+  it('sem caret de select (sem svg/chevron) e sem select', () => {
+    expect(html).not.toContain('<svg');
+    expect(html).not.toContain('<select');
+  });
+
+  it('fundo neutro e hover/foco neutralizados', () => {
+    expect(classeDoInput).toContain('bg-[var(--surface-2)]');
+    expect(classeDoInput).not.toContain('bg-[var(--surface)]');
+    expect(classeDoInput).toContain('hover:border-[var(--line)]');
+    expect(classeDoInput).not.toContain('hover:border-[#cdd8e6]');
+    expect(classeDoInput).toContain('focus:shadow-none');
+  });
+
+  it('texto continua selecionável', () => {
+    expect(CLASSE_SOMENTE_LEITURA).not.toMatch(/select-none|pointer-events-none/);
+    expect(classeDoInput).not.toContain('select-none');
+    expect(classeDoInput).not.toContain('pointer-events-none');
+  });
+
+  it('contraste AA (≥ 4.5:1) entre texto e fundo do campo', () => {
+    const texto = /text-\[var\(--([\w-]+)\)\]/.exec(CLASSE_SOMENTE_LEITURA)![1];
+    const fundo = /bg-\[var\(--([\w-]+)\)\]/.exec(CLASSE_SOMENTE_LEITURA)![1];
+    expect(contraste(cor(texto), cor(fundo))).toBeGreaterThanOrEqual(4.5);
   });
 });
