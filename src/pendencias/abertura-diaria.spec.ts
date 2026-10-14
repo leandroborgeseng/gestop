@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { diaSaoPaulo, diaSaoPauloComoData, verificarAberturaDiaria, type UsuarioUpdateManyDelegate } from './abertura-diaria';
 
@@ -112,4 +114,14 @@ describe('289 · verificarAberturaDiaria', () => {
       OR: [{ ultimaVerificacaoPendencias: null }, { ultimaVerificacaoPendencias: { not: new Date('2026-10-14T00:00:00.000Z') } }],
     });
   });
+});
+
+describe('289 · "hoje" não depende do fuso do processo/cliente', () => {
+  it.each(['UTC', 'Asia/Tokyo', 'America/Los_Angeles'])('com TZ=%s o dia de 21:30 BRT continua 2026-10-14', (tz) => {
+    const tsx = path.resolve(__dirname, '../../node_modules/.bin/tsx');
+    const script = `import { diaSaoPaulo } from ${JSON.stringify(path.resolve(__dirname, 'abertura-diaria.ts'))};
+      process.stdout.write(diaSaoPaulo(new Date('2026-10-14T21:30:00-03:00')) + '|' + diaSaoPaulo(new Date('2026-10-15T00:01:00-03:00')));`;
+    const out = execFileSync(tsx, ['-e', script], { env: { ...process.env, TZ: tz }, encoding: 'utf8' });
+    expect(out).toBe('2026-10-14|2026-10-15');
+  }, 20000);
 });
