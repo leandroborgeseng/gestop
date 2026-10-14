@@ -63,6 +63,7 @@ import {
 } from './types';
 import { toGeoCheckin } from '@/lib/geolocation';
 import { notifyAuthExpired } from './security';
+import { extractApiErrorMessage, readForbiddenMessage } from './api-errors';
 
 // Sempre usa proxy interno do Next.js no browser.
 // NEXT_PUBLIC_API_URL apontando para URL externa quebra login no Railway.
@@ -74,8 +75,7 @@ const LEGACY_AUTH_STORAGE_KEY = 'gestop.auth';
 
 async function readApiError(response: Response, fallback: string) {
   try {
-    const payload = (await response.json()) as { message?: string; error?: string };
-    return payload.message ?? payload.error ?? fallback;
+    return extractApiErrorMessage(await response.json(), fallback);
   } catch {
     return fallback;
   }
@@ -159,7 +159,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (response.status === 403) {
-    throw new Error('Acesso negado para o seu perfil.');
+    throw new Error(await readForbiddenMessage(response));
   }
 
   if (!response.ok) {
