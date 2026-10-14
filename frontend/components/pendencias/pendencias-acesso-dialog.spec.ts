@@ -109,9 +109,10 @@ describe('288: modal de pendências via portal', () => {
     expect(portais[0]?.alvo).toBe(body);
   });
 
-  it('login automático e botão usam o mesmo componente', () => {
+  it('abertura automática e botão usam o mesmo componente', () => {
     const raiz = path.resolve(__dirname, '../..');
-    const login = readFileSync(path.join(raiz, 'app/login/page.tsx'), 'utf8');
+    // 289: a abertura automática saiu do login e foi para o shell (uma vez por dia, decidida pelo servidor).
+    const login = readFileSync(path.join(raiz, 'components/pendencias/pendencias-abertura-automatica.tsx'), 'utf8');
     const botao = readFileSync(path.join(raiz, 'components/pendencias/pendencias-button.tsx'), 'utf8');
     const imp = /import \{[^}]*PendenciasAcessoDialog[^}]*\} from '@\/components\/pendencias\/pendencias-acesso-dialog'/;
     expect(login).toMatch(imp);
