@@ -543,7 +543,7 @@ function SidebarToggleButton({
       aria-label={sidebarToggleLabel(collapsed)}
       aria-expanded={!collapsed}
       className={cn(
-        'group flex h-11 w-11 shrink-0 items-center justify-center focus-visible:outline-none',
+        'group flex h-11 w-11 shrink-0 items-center justify-center focus-visible:outline-none!',
         className,
       )}
     >
