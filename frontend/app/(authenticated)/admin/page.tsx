@@ -1,6 +1,13 @@
 'use client';
 
-import { capacidadesProprios, secretariaIdDoFormulario } from '@/lib/admin-proprios';
+import { capacidadesProprios, salvarEdicaoProprio, secretariaIdDoFormulario, secretariaTravada } from '@/lib/admin-proprios';
+import {
+  atributosCampoProprio,
+  CampoSecretariaProprio,
+  CampoSelecaoProprio,
+  RodapeSheetProprio,
+  tituloSheetProprio,
+} from '@/components/admin/proprio-campos';
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -565,6 +572,8 @@ function UnidadesPanel({
   const caps = useAdminCaps('proprios');
   const sessionUser = useSessionUser();
   const proprioCaps = capacidadesProprios(sessionUser?.permissoes ?? [], caps.isAdminAtivo);
+  const somenteLeitura = !proprioCaps.podeSalvar;
+  const ro = atributosCampoProprio(somenteLeitura);
   const secretariasForm = useMemo(() => {
     if (caps.escopoTodas || !caps.secretariaAtivaId) return secretarias;
     return secretarias.filter((s) => s.id === caps.secretariaAtivaId);
@@ -669,7 +678,8 @@ function UnidadesPanel({
     if (!editing || !proprioCaps.podeSalvar) return;
 
     const form = new FormData(event.currentTarget);
-    const ok = await mutate(
+    await salvarEdicaoProprio(
+      mutate,
       () => {
         const latitude = parseCoordinate(form.get('latitude'));
         const longitude = parseCoordinate(form.get('longitude'));
@@ -692,12 +702,13 @@ function UnidadesPanel({
         );
       },
       'Próprio atualizado. Campos alterados ficam protegidos na próxima sync QGIS.',
+      () => setEditing(null),
     );
-    if (ok) setEditing(null);
   }
 
   const editingMetadata = editing ? getUnidadeMetadata(editing) : null;
   const editingLockedFields = editing ? getLockedFields(editing) : [];
+  const opcoesSecretaria = secretariasForm.map((s) => ({ value: s.id, label: formatSecretariaLabel(s) }));
 
   return (
     <div className="space-y-6">
@@ -706,16 +717,11 @@ function UnidadesPanel({
         <form onSubmit={submitCreate} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Secretaria">
-              <Select
-                name="secretariaId"
-                required
-                defaultValue={caps.secretariaAtivaId ?? ''}
-                disabled={!caps.escopoTodas && Boolean(caps.secretariaAtivaId)}
-              >
-                {secretariasForm.map((s) => (
-                  <option key={s.id} value={s.id}>{formatSecretariaLabel(s)}</option>
-                ))}
-              </Select>
+              <CampoSecretariaProprio
+                travada={secretariaTravada(caps)}
+                valor={caps.secretariaAtivaId ?? ''}
+                opcoes={opcoesSecretaria}
+              />
             </Field>
             <Field label="Código patrimonial"><Input name="codigoPatrimonial" required /></Field>
             <Field label="Nome"><Input name="nome" required /></Field>
@@ -841,23 +847,15 @@ function UnidadesPanel({
       <Sheet
         open={Boolean(editing) && (proprioCaps.podeSalvar || proprioCaps.podeVer)}
         onClose={() => setEditing(null)}
-        title={editing ? `${proprioCaps.podeSalvar ? 'Editar' : 'Ver'} — ${editing.nome}` : 'Editar próprio'}
+        title={tituloSheetProprio(editing?.nome, proprioCaps.podeSalvar)}
         footer={
-          editing && proprioCaps.podeSalvar ? (
-            <div className="flex gap-2">
-              <Button type="submit" form="edit-unidade-form" variant="filled" className="flex-1">
-                Salvar alterações
-              </Button>
-              <Button type="button" variant="text" onClick={() => setEditing(null)}>
-                Cancelar
-              </Button>
-            </div>
+          editing ? (
+            <RodapeSheetProprio podeSalvar={proprioCaps.podeSalvar} formId="edit-unidade-form" onClose={() => setEditing(null)} />
           ) : null
         }
       >
         {editing && (proprioCaps.podeSalvar || proprioCaps.podeVer) ? (
           <form id="edit-unidade-form" onSubmit={submitEdit} className="space-y-4">
-            <fieldset disabled={!proprioCaps.podeSalvar} className="contents">
             {isQgisImported(editing) ? (
               <Alert variant="info">
                 Importado do QGIS
@@ -876,67 +874,69 @@ function UnidadesPanel({
             ) : null}
 
             <Field label="Secretaria">
-              <Select
-                name="secretariaId"
-                defaultValue={
-                  !caps.escopoTodas && caps.secretariaAtivaId
-                    ? caps.secretariaAtivaId
-                    : editing.secretariaId
-                }
-                required
-                disabled={!caps.escopoTodas && Boolean(caps.secretariaAtivaId)}
-              >
-                {secretariasForm.map((s) => (
-                  <option key={s.id} value={s.id}>{formatSecretariaLabel(s)}</option>
-                ))}
-              </Select>
+              <CampoSecretariaProprio
+                travada={secretariaTravada(caps)}
+                somenteLeitura={somenteLeitura}
+                valor={secretariaTravada(caps) ? (caps.secretariaAtivaId as string) : editing.secretariaId}
+                opcoes={opcoesSecretaria}
+              />
             </Field>
             <Field label="Código patrimonial">
-              <Input name="codigoPatrimonial" defaultValue={editing.codigoPatrimonial} required />
+              <Input {...ro} name="codigoPatrimonial" defaultValue={editing.codigoPatrimonial} required />
             </Field>
             <Field label="Nome">
-              <Input name="nome" defaultValue={editing.nome} required />
+              <Input {...ro} name="nome" defaultValue={editing.nome} required />
             </Field>
             <Field label="Tipo">
-              <Select name="tipo" defaultValue={editing.tipo} required>
+              <CampoSelecaoProprio
+                name="tipo"
+                value={editing.tipo}
+                required
+                somenteLeitura={somenteLeitura}
+                opcoes={tiposParaSelect.map((tipo) => ({ value: tipo.codigo, label: `${tipo.nome}${tipo.ativo ? '' : ' (inativo)'}` }))}
+              >
                 {tiposParaSelect.map((tipo) => (
                   <option key={tipo.codigo} value={tipo.codigo}>
                     {tipo.nome}{tipo.ativo ? '' : ' (inativo)'}
                   </option>
                 ))}
-              </Select>
+              </CampoSelecaoProprio>
             </Field>
             <Field label="Endereço">
-              <Input name="endereco" defaultValue={editing.endereco} required />
+              <Input {...ro} name="endereco" defaultValue={editing.endereco} required />
             </Field>
             <Field label="Bairro">
-              <Input name="bairro" defaultValue={editing.bairro ?? ''} />
+              <Input {...ro} name="bairro" defaultValue={editing.bairro ?? ''} />
             </Field>
             <Field label="CEP">
-              <Input name="cep" defaultValue={editing.cep ?? ''} />
+              <Input {...ro} name="cep" defaultValue={editing.cep ?? ''} />
             </Field>
             <Field label="Região">
-              <Select name="regiao" defaultValue={editing.regiao ?? ''}>
+              <CampoSelecaoProprio
+                name="regiao"
+                value={editing.regiao ?? ''}
+                somenteLeitura={somenteLeitura}
+                opcoes={[{ value: '', label: 'Não informada' }, ...regioes.map((regiao) => ({ value: regiao, label: REGIAO_UNIDADE_LABELS[regiao] }))]}
+              >
                 <option value="">Não informada</option>
                 {regioes.map((regiao) => (
                   <option key={regiao} value={regiao}>
                     {REGIAO_UNIDADE_LABELS[regiao]}
                   </option>
                 ))}
-              </Select>
+              </CampoSelecaoProprio>
             </Field>
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Latitude">
-                <Input name="latitude" type="number" step="0.000001" defaultValue={String(editing.latitude)} required />
+                <Input {...ro} name="latitude" type="number" step="0.000001" defaultValue={String(editing.latitude)} required />
               </Field>
               <Field label="Longitude">
-                <Input name="longitude" type="number" step="0.000001" defaultValue={String(editing.longitude)} required />
+                <Input {...ro} name="longitude" type="number" step="0.000001" defaultValue={String(editing.longitude)} required />
               </Field>
               <Field label="Raio (m)">
-                <Input name="raioValidacaoMetros" type="number" defaultValue={String(editing.raioValidacaoMetros)} />
+                <Input {...ro} name="raioValidacaoMetros" type="number" defaultValue={String(editing.raioValidacaoMetros)} />
               </Field>
             </div>
-            </fieldset>
           </form>
         ) : null}
       </Sheet>

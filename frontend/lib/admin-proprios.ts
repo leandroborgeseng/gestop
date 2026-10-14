@@ -40,3 +40,19 @@ export function capacidadesProprios(permissoes: string[], isAdministrador = fals
     podeInativar: hasAdminTabAccess('proprios', 'excluir', permissoes),
   };
 }
+
+/**
+ * Salva a edição do próprio e só fecha o modal se deu certo. Em erro (ex.: 403 de
+ * escopo), `mutate` já mostrou a mensagem do backend no snackbar e o modal fica aberto.
+ */
+export async function salvarEdicaoProprio(
+  mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>,
+  action: () => Promise<unknown>,
+  message: string,
+  fechar: () => void,
+) {
+  const ok = await mutate(action, message);
+  if (ok) fechar();
+  return ok;
+}
+
