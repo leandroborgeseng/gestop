@@ -220,6 +220,32 @@ describe('285 — guard global da matriz (dirigido pela matriz)', () => {
     expectNegado(await executar(rota, inativo), 'admin inativo');
   });
 
+  it('M5: perfil ATIVO = Admin com administradorSistema → exceção em rota que as chaves não permitiriam', async () => {
+    const rota = porChave.get('POST /admin/backup/restore')!;
+    const adminAtivo = sessao({
+      perfilAtivo: { id: 'p-adm', nome: 'Administrador do Sistema', ativo: true, administradorSistema: true, chaves: [] },
+      outros: [VAZIO],
+    });
+    expect(adminAtivo.administradorSistema).toBe(true);
+    expect(adminAtivo.permissoes).toEqual([]);
+    expectNegado(await executar(rota, sessao({ perfilAtivo: VAZIO })), 'mesmas chaves sem a exceção');
+    expectPermitido(await executar(rota, adminAtivo), 'admin ativo');
+  });
+
+  it('M5: o mesmo perfil Admin DESATIVADO não concede exceção → 403 com mensagem exata, sem gravar', async () => {
+    const rota = porChave.get('POST /admin/backup/restore')!;
+    const adminDesativado = sessao({
+      perfilAtivo: { id: 'p-adm', nome: 'Administrador do Sistema', ativo: false, administradorSistema: true, chaves: [] },
+      outros: [VAZIO],
+    });
+    expect(adminDesativado.administradorSistema).toBe(false);
+    expectNegado(await executar(rota, adminDesativado), 'admin desativado');
+    const soEle = sessao({
+      perfilAtivo: { id: 'p-adm', nome: 'Administrador do Sistema', ativo: false, administradorSistema: true, chaves: [] },
+    });
+    expectNegado(await executar(rota, soEle), 'admin desativado sem outro perfil');
+  });
+
   it('deny-by-default: rota sem entrada na matriz → 403 com a mensagem exata, sem gravar', async () => {
     const rota = porChave.get('POST /chamados')!;
     const { ['POST /chamados']: _removida, ...semEntrada } = PERMISSOES_MATRIZ;
