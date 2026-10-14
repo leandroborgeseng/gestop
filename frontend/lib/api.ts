@@ -1711,6 +1711,13 @@ export type PendenciasResumo = {
   }>;
 };
 
+/** 289: o servidor calcula, marca o dia (America/Sao_Paulo) de forma atômica e decide `abrir`. */
+export function verificarAberturaDiariaPendencias() {
+  return request<{ abrir: boolean; pendencias: PendenciasResumo }>('/documentos/pendencias-abertura-diaria', {
+    method: 'POST',
+  });
+}
+
 export function getPendenciasResumo() {
   return request<PendenciasResumo>('/documentos/pendencias-resumo');
 }

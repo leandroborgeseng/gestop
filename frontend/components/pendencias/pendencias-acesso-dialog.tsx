@@ -69,7 +69,7 @@ export function PendenciasAcessoDialog({
         className="flex h-[100dvh] w-full max-w-lg flex-col overflow-hidden bg-[var(--canvas)] pt-[env(safe-area-inset-top)] shadow-[var(--sh-lg)] sm:h-auto sm:max-h-[min(80dvh,640px)] sm:rounded-[16px] sm:pt-0"
       >
         <div className="shrink-0 px-4 pt-4">
-          <h2 id="pendencias-titulo" className="text-[16px] font-semibold text-[var(--ink)]">
+          <h2 id="pendencias-titulo" tabIndex={-1} className="text-[16px] font-semibold text-[var(--ink)] outline-none">
             {soDocumentos ? 'Você possui documentos pendentes de assinatura.' : 'Você possui pendências.'}
           </h2>
           <p className="mt-1 text-[13px] text-[var(--ink-3)]">

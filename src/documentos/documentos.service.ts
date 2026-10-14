@@ -1,3 +1,4 @@
+import { verificarAberturaDiaria } from '../pendencias/abertura-diaria';
 import { formatSecretariaLabel } from '../common/format-secretaria';
 import {
   BadRequestException,
@@ -1056,6 +1057,16 @@ export class DocumentosService {
       total,
       items: items.map((item) => this.serialize(item, { fullPii: true, usuarioId: user.sub })),
     };
+  }
+
+  /** 289: abertura diária automática — o servidor decide se o modal abre. */
+  pendenciasAberturaDiaria(user: JwtPayload, agora: Date = new Date()) {
+    return verificarAberturaDiaria({
+      usuarioId: user.sub,
+      usuarios: this.prisma.usuario,
+      calcular: () => this.pendenciasResumo(user),
+      agora,
+    });
   }
 
   async pendenciasResumo(user: JwtPayload) {

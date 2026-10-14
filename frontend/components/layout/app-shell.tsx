@@ -23,6 +23,7 @@ import { getGroupedNavItems, getMobileNav, isNavActive, MORE_NAV_ICON, type NavI
 import { SessionScopeSwitchers } from '@/components/auth/session-scope-switchers';
 import { useGuide } from '@/components/help/guide-provider';
 import { PendenciasButton } from '@/components/pendencias/pendencias-button';
+import { PendenciasAberturaAutomatica } from '@/components/pendencias/pendencias-abertura-automatica';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
 
@@ -511,6 +512,7 @@ export function AppShell({
 
   return (
     <div className="sigma-app flex min-h-dvh bg-[var(--canvas)]">
+      <PendenciasAberturaAutomatica />
       <DesktopSidebar
         user={user}
         collapsed={collapsed}
