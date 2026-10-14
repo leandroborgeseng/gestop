@@ -1,5 +1,6 @@
 'use client';
 
+import { capacidadesProprios, secretariaIdDoFormulario } from '@/lib/admin-proprios';
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -562,6 +563,8 @@ function UnidadesPanel({
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
   const caps = useAdminCaps('proprios');
+  const sessionUser = useSessionUser();
+  const proprioCaps = capacidadesProprios(sessionUser?.permissoes ?? [], caps.isAdminAtivo);
   const secretariasForm = useMemo(() => {
     if (caps.escopoTodas || !caps.secretariaAtivaId) return secretarias;
     return secretarias.filter((s) => s.id === caps.secretariaAtivaId);
@@ -642,7 +645,7 @@ function UnidadesPanel({
         const latitude = parseCoordinate(form.get('latitude'));
         const longitude = parseCoordinate(form.get('longitude'));
         return saveAdminUnidade({
-          secretariaId: String(form.get('secretariaId')),
+          secretariaId: secretariaIdDoFormulario(form, caps),
           codigoPatrimonial: String(form.get('codigoPatrimonial')),
           nome: String(form.get('nome')),
           tipo: String(form.get('tipo')),
@@ -663,7 +666,7 @@ function UnidadesPanel({
 
   async function submitEdit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editing) return;
+    if (!editing || !proprioCaps.podeSalvar) return;
 
     const form = new FormData(event.currentTarget);
     const ok = await mutate(
@@ -672,7 +675,7 @@ function UnidadesPanel({
         const longitude = parseCoordinate(form.get('longitude'));
         return saveAdminUnidade(
           {
-            secretariaId: String(form.get('secretariaId')),
+            secretariaId: secretariaIdDoFormulario(form, caps),
             codigoPatrimonial: String(form.get('codigoPatrimonial')),
             nome: String(form.get('nome')),
             tipo: String(form.get('tipo')),
@@ -698,7 +701,7 @@ function UnidadesPanel({
 
   return (
     <div className="space-y-6">
-      {caps.canInsert ? (
+      {proprioCaps.podeInserir ? (
       <FormSection title="Novo próprio">
         <form onSubmit={submitCreate} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -816,12 +819,12 @@ function UnidadesPanel({
                   </DataTableCell>
                   <DataTableCell>
                     <div className="flex flex-wrap gap-1">
-                      {caps.canAlter ? (
+                      {proprioCaps.podeSalvar || proprioCaps.podeVer ? (
                         <Button variant="text" size="sm" onClick={() => setEditing(unidade)}>
-                          Editar
+                          {proprioCaps.podeSalvar ? 'Editar' : 'Ver'}
                         </Button>
                       ) : null}
-                      {caps.canDelete && unidade.ativo ? (
+                      {proprioCaps.podeInativar && unidade.ativo ? (
                         <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
                           Inativar
                         </Button>
@@ -836,11 +839,11 @@ function UnidadesPanel({
       </div>
 
       <Sheet
-        open={Boolean(editing) && caps.canAlter}
+        open={Boolean(editing) && (proprioCaps.podeSalvar || proprioCaps.podeVer)}
         onClose={() => setEditing(null)}
-        title={editing ? `Editar — ${editing.nome}` : 'Editar próprio'}
+        title={editing ? `${proprioCaps.podeSalvar ? 'Editar' : 'Ver'} — ${editing.nome}` : 'Editar próprio'}
         footer={
-          editing && caps.canAlter ? (
+          editing && proprioCaps.podeSalvar ? (
             <div className="flex gap-2">
               <Button type="submit" form="edit-unidade-form" variant="filled" className="flex-1">
                 Salvar alterações
@@ -852,8 +855,9 @@ function UnidadesPanel({
           ) : null
         }
       >
-        {editing && caps.canAlter ? (
+        {editing && (proprioCaps.podeSalvar || proprioCaps.podeVer) ? (
           <form id="edit-unidade-form" onSubmit={submitEdit} className="space-y-4">
+            <fieldset disabled={!proprioCaps.podeSalvar} className="contents">
             {isQgisImported(editing) ? (
               <Alert variant="info">
                 Importado do QGIS
@@ -932,6 +936,7 @@ function UnidadesPanel({
                 <Input name="raioValidacaoMetros" type="number" defaultValue={String(editing.raioValidacaoMetros)} />
               </Field>
             </div>
+            </fieldset>
           </form>
         ) : null}
       </Sheet>
