@@ -61,10 +61,16 @@ export function DocumentoAvulsoForm({
   documento,
   onSaved,
   ocultarTitulo = false,
+  layout = 'inline',
 }: {
   documento: DocumentoDetalhe;
   onSaved: (info?: { concluido?: boolean }) => void | Promise<void>;
   ocultarTitulo?: boolean;
+  /**
+   * `inline`: rodapé de ações dentro do fluxo (comportamento original).
+   * `dialog`: o form renderiza um corpo rolável e um rodapé irmão, fora da área que rola (284).
+   */
+  layout?: 'inline' | 'dialog';
 }) {
   const snackbar = useSnackbar();
   const itens = useMemo(
@@ -176,14 +182,40 @@ export function DocumentoAvulsoForm({
   }
 
   if (itens.length === 0) {
-    return (
+    const vazio = (
       <p className="text-[13px] text-[var(--ink-3)]">
         Este rascunho não tem itens de checklist para preencher.
       </p>
     );
+    return layout === 'dialog' ? <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">{vazio}</div> : vazio;
   }
 
-  return (
+  const acoes = (
+    <>
+      <Button
+        type="button"
+        variant="outlined"
+        size={layout === 'dialog' ? 'md' : 'sm'}
+        className={layout === 'dialog' ? 'min-h-11 max-sm:h-11' : undefined}
+        disabled={busy != null}
+        onClick={() => void salvar(false)}
+      >
+        {busy === 'salvar' ? 'Salvando…' : 'Salvar rascunho'}
+      </Button>
+      <Button
+        type="button"
+        variant="filled"
+        size={layout === 'dialog' ? 'md' : 'sm'}
+        className={layout === 'dialog' ? 'min-h-11 max-sm:h-11' : undefined}
+        disabled={busy != null}
+        onClick={() => void salvar(true)}
+      >
+        {busy === 'concluir' ? 'Concluindo…' : 'Concluir documento'}
+      </Button>
+    </>
+  );
+
+  const corpo = (
     <div className="space-y-3">
       {ocultarTitulo ? null : (
         <div>
@@ -229,16 +261,40 @@ export function DocumentoAvulsoForm({
           </div>
         );
       })}
-      <div className="sticky bottom-0 flex flex-wrap gap-2 bg-[var(--canvas)] py-2">
-        <Button type="button" variant="outlined" size="sm" disabled={busy != null} onClick={() => void salvar(false)}>
-          {busy === 'salvar' ? 'Salvando…' : 'Salvar rascunho'}
-        </Button>
-        <Button type="button" variant="filled" size="sm" disabled={busy != null} onClick={() => void salvar(true)}>
-          {busy === 'concluir' ? 'Concluindo…' : 'Concluir documento'}
-        </Button>
-      </div>
+      {layout === 'inline' ? (
+        <div className="sticky bottom-0 flex flex-wrap gap-2 bg-[var(--canvas)] py-2">{acoes}</div>
+      ) : null}
     </div>
   );
+
+  if (layout === 'inline') return corpo;
+
+  return (
+    <>
+      <div
+        data-testid="documento-preencher-corpo"
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3"
+        onFocus={(event) => rolarCampoFocadoParaVisivel(event.target)}
+      >
+        {corpo}
+      </div>
+      <footer
+        data-testid="documento-preencher-rodape"
+        className="grid shrink-0 grid-cols-2 gap-2 border-t border-[var(--line)] bg-white px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex sm:justify-end sm:bg-[var(--canvas)]"
+      >
+        {acoes}
+      </footer>
+    </>
+  );
+}
+
+/** 284: com o teclado virtual aberto, garante que o campo focado fique visível (só layout). */
+function rolarCampoFocadoParaVisivel(target: EventTarget | null) {
+  if (typeof window === 'undefined' || !(target instanceof HTMLElement)) return;
+  if (!target.matches('input, textarea, select, [contenteditable="true"]')) return;
+  window.setTimeout(() => {
+    if (typeof target.scrollIntoView === 'function') target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, 300);
 }
 
 export function DocumentoAvulsoRespostasLeitura({ documento }: { documento: DocumentoDetalhe }) {
