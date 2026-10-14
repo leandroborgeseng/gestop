@@ -46,6 +46,12 @@ export class DocumentosController {
     return this.documentosService.listMinhasPendenciasAssinatura(user);
   }
 
+  /** 289: chamada no carregamento da página e na volta à aba; marca o dia de forma atômica. */
+  @Post('pendencias-abertura-diaria')
+  pendenciasAberturaDiaria(@CurrentUser() user: JwtPayload) {
+    return this.documentosService.pendenciasAberturaDiaria(user);
+  }
+
   @Get('pendencias-resumo')
   pendenciasResumo(@CurrentUser() user: JwtPayload) {
     return this.documentosService.pendenciasResumo(user);

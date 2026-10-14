@@ -299,6 +299,8 @@ model Usuario {
   cargoId       String?
   ativo         Boolean   @default(true)
   ultimoLoginAt DateTime?
+  /// 289: dia (America/Sao_Paulo) da última verificação automática de pendências.
+  ultimaVerificacaoPendencias DateTime? @db.Date
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
