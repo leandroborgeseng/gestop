@@ -12,6 +12,7 @@ function adminUser(): JwtPayload {
     email: 'admin@test.com',
     nome: 'Admin',
     perfis: ['Administrador do Sistema'],
+    administradorSistema: true,
     permissoes: [],
     acessoTodasSecretarias: true,
     secretariaId: null,

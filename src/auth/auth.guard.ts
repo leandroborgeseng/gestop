@@ -15,6 +15,8 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext) {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    // 285: o guard global da matriz já resolve a sessão; evita segunda consulta.
+    if (request.sessaoResolvida && request.user) return true;
     const authorization = getNodeHeader(request, 'authorization');
     const token = authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : null;
 
@@ -44,7 +46,9 @@ export class AuthGuard implements CanActivate {
         perfilNatureza: session.perfilNatureza,
         acessoTodasSecretarias: session.acessoTodasSecretarias,
         secretariasIds: session.secretariasIds,
+        administradorSistema: session.administradorSistema,
       };
+      request.sessaoResolvida = true;
     } catch {
       throw new UnauthorizedException('Sessao invalida ou expirada');
     }

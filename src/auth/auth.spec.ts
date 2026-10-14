@@ -75,25 +75,15 @@ describe('RBAC', () => {
     ).toBe(false);
   });
 
-  it('libera qualquer permissão para o perfil ativo Administrador do Sistema', () => {
-    expect(
-      hasAllPermissions(
-        {
-          perfis: ['Administrador do Sistema'],
-          permissoes: [],
-        },
-        ['matriz.integracoes.monitorar.executar'],
-      ),
-    ).toBe(true);
-    expect(
-      hasAnyPermission(
-        {
-          perfis: ['Administrador do Sistema'],
-          permissoes: [],
-        },
-        ['matriz.integracoes._tela.executar'],
-      ),
-    ).toBe(true);
+  it('libera qualquer permissão para o perfil ativo Administrador do Sistema (flag 285)', () => {
+    const admin = { perfis: ['Administrador do Sistema'], permissoes: [] as string[], administradorSistema: true };
+    expect(hasAllPermissions(admin, ['matriz.integracoes.monitorar.executar'])).toBe(true);
+    expect(hasAnyPermission(admin, ['matriz.integracoes._tela.executar'])).toBe(true);
+  });
+
+  it('285: o nome do perfil sozinho não concede a exceção de Administrador', () => {
+    const soNome = { perfis: ['Administrador do Sistema'], permissoes: [] as string[], administradorSistema: false };
+    expect(hasAllPermissions(soNome, ['matriz.integracoes.monitorar.executar'])).toBe(false);
   });
 
   it('não libera Administrador do Sistema quando o perfil ativo é outro', () => {

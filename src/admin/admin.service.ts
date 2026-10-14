@@ -1,3 +1,4 @@
+import { isAdministradorSistema } from '../auth/permissions';
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditAction, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
@@ -10,7 +11,6 @@ import {
 import { validatePasswordPolicy } from '../auth/password-policy';
 import { hashPassword } from '../auth/password';
 import { resolveAuditUsuarioId } from '../audit/audit.util';
-import { ADMINISTRADOR_SISTEMA_NOME } from '../domain/permissions-catalog';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   buildManualOverrideOnEdit,
@@ -898,7 +898,8 @@ export class AdminService {
   }
 
   private isPerfilAtivoAdministrador(user: JwtPayload) {
-    return user.perfis.includes(ADMINISTRADOR_SISTEMA_NOME);
+    // 285: flag do perfil ativo, não o nome.
+    return isAdministradorSistema(user);
   }
 
   private constrainSecretariaIds(
@@ -926,7 +927,7 @@ export class AdminService {
     }
 
     const adminPerfil = await this.prisma.perfil.findFirst({
-      where: { nome: ADMINISTRADOR_SISTEMA_NOME },
+      where: { administradorSistema: true },
       select: { id: true },
     });
     if (!adminPerfil) {

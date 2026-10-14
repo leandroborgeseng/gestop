@@ -1,0 +1,1819 @@
+{
+  "versao": 1,
+  "mensagem403": "Você não possui permissão para executar esta ação.",
+  "rotas": {
+    "DELETE /admin/cargos/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.cargos",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.admin.cargos.excluir",
+        "matriz.admin._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "DELETE /admin/categorias-vistoria/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.categorias_vistoria",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.admin.categorias_vistoria.excluir",
+        "matriz.admin._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "DELETE /admin/equipes/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.equipes",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.admin.equipes.excluir",
+        "matriz.admin._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "DELETE /admin/secretarias/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.secretarias",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.admin.secretarias.excluir",
+        "matriz.admin._tela.excluir",
+        "matriz.admin.cadastros.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "DELETE /admin/tipos-chamado/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.tipos_chamado",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.admin.tipos_chamado.excluir",
+        "matriz.admin._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "DELETE /admin/tipos-proprio/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.tipos_proprio",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.admin.tipos_proprio.excluir",
+        "matriz.admin._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "DELETE /admin/unidades/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.proprios",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.admin.proprios.excluir",
+        "matriz.admin._tela.excluir",
+        "matriz.admin.cadastros.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "DELETE /admin/usuarios/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.usuarios",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.admin.usuarios.excluir",
+        "matriz.admin._tela.excluir",
+        "matriz.admin.cadastros.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "DELETE /chamados/:id/execucao/evidencias/:evidenciaId": {
+      "tipo": "permissao",
+      "rotina": "execucao.anexar_evidencia",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.execucao.anexar_evidencia.inserir",
+        "matriz.execucao._tela.inserir",
+        "matriz.execucao._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa",
+      "nota": "Remover a própria evidência durante a execução."
+    },
+    "DELETE /checklists/:id": {
+      "tipo": "permissao",
+      "rotina": "checklists.gerenciar",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.checklists.gerenciar.excluir",
+        "matriz.checklists._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "DELETE /cronograma/:id": {
+      "tipo": "permissao",
+      "rotina": "cronograma.gerenciar",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.cronograma.gerenciar.excluir",
+        "matriz.cronograma._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "DELETE /meus-chamados/:id/observadores/:usuarioId": {
+      "tipo": "permissao",
+      "rotina": "meus_chamados.cadastrar_observadores",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.meus_chamados.cadastrar_observadores.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "GET /": {
+      "tipo": "publico",
+      "efeito": "leitura",
+      "nota": "Raiz da API."
+    },
+    "GET /admin/auditoria/config": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/auditoria/logs": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/backup": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/backup/objects": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/cargos": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/categorias-vistoria": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/email": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/equipes": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/importacao/webmap/status": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/perfis": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/perfis/:id/matriz": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/perfis/configuraveis": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/permissoes/catalogo": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/secretarias": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/tipos-chamado": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/tipos-proprio": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/unidades": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/usuarios": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /admin/usuarios/:id/matriz": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /auth/me": {
+      "tipo": "sessao",
+      "efeito": "sessao",
+      "nota": "Dados da própria sessão."
+    },
+    "GET /chamado-tarefas/:id": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "Checagem fina no serviço."
+    },
+    "GET /chamado-tarefas/:id/chamado/:chamadoId": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "Checagem fina no serviço."
+    },
+    "GET /chamado-tarefas/execucao": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "Checagem fina no serviço."
+    },
+    "GET /chamado-tarefas/opcoes": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "Checagem fina no serviço."
+    },
+    "GET /chamado-tarefas/por-chamado/:chamadoId": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "Checagem fina no serviço."
+    },
+    "GET /chamado-tarefas/relatorio": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /chamado-tarefas/relatorio.csv": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /chamado-tarefas/relatorio.pdf": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /chamado-tarefas/relatorio.xlsx": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /chamados": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /chamados/:id": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /chamados/:id/execucao": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /chamados/:id/pdf": {
+      "tipo": "permissao",
+      "rotina": "chamados.exportar_pdf",
+      "acao": "executar",
+      "chaves": [
+        "matriz.chamados.exportar_pdf.executar",
+        "matriz.chamados._tela.executar"
+      ],
+      "efeito": "exportacao",
+      "escopo": "secretaria-ativa"
+    },
+    "GET /chamados/em-execucao": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /chamados/equipes/execucao": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /chamados/equipes/opcoes": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /chamados/programacao": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /chamados/secretarias/execucao": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /chamados/tipos/opcoes": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /chamados/usuarios/ativos": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /checklists": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /checklists/:id": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /checklists/secretarias": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /checklists/tipos-proprio/opcoes": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /cronograma": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /cronograma/calendario": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /cronograma/checklists": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /documentos": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /documentos/:id": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "Checagem de escopo no serviço."
+    },
+    "GET /documentos/:id/pdf/assinado": {
+      "tipo": "permissao",
+      "rotina": "documentos.consultar",
+      "acao": "visualizar",
+      "chaves": [
+        "matriz.documentos.consultar.visualizar",
+        "matriz.documentos._tela.visualizar",
+        "matriz.meus_chamados.consultar_documentos.visualizar"
+      ],
+      "efeito": "download",
+      "escopo": "secretaria-ativa",
+      "nota": "Download do PDF; escopo do documento conferido no serviço."
+    },
+    "GET /documentos/:id/pdf/original": {
+      "tipo": "permissao",
+      "rotina": "documentos.consultar",
+      "acao": "visualizar",
+      "chaves": [
+        "matriz.documentos.consultar.visualizar",
+        "matriz.documentos._tela.visualizar",
+        "matriz.meus_chamados.consultar_documentos.visualizar"
+      ],
+      "efeito": "download",
+      "escopo": "secretaria-ativa",
+      "nota": "Download do PDF; escopo do documento conferido no serviço."
+    },
+    "GET /documentos/chamados-busca": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /documentos/checklists-avulso": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /documentos/minhas-pendencias-assinatura": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "Pendências do próprio usuário."
+    },
+    "GET /documentos/pendencias-resumo": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "Pendências do próprio usuário."
+    },
+    "GET /documentos/por-chamado/:chamadoId": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /documentos/por-fiscalizacao/:fiscalizacaoId": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /documentos/signatarios-internos": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /fiscalizacoes": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /fiscalizacoes/:id": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /fiscalizacoes/:id/pdf": {
+      "tipo": "permissao",
+      "rotina": "vistorias.exibir_questionario",
+      "acao": "visualizar",
+      "chaves": [
+        "matriz.vistorias.exibir_questionario.visualizar",
+        "matriz.vistorias._tela.visualizar",
+        "matriz.vistorias.consultar.visualizar"
+      ],
+      "efeito": "exportacao",
+      "escopo": "secretaria-ativa"
+    },
+    "GET /fiscalizacoes/opcoes-manuais": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /health": {
+      "tipo": "publico",
+      "efeito": "leitura",
+      "nota": "Health check."
+    },
+    "GET /health/db": {
+      "tipo": "publico",
+      "efeito": "leitura",
+      "nota": "Health check do banco."
+    },
+    "GET /health/storage": {
+      "tipo": "publico",
+      "efeito": "leitura",
+      "nota": "Health check do storage."
+    },
+    "GET /integracoes/eventos": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /meus-chamados": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /meus-chamados/:id": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /meus-chamados/usuarios/opcoes": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /mobile/field-package": {
+      "tipo": "permissao",
+      "rotina": "vistoria_campo.sincronizar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.vistoria_campo.sincronizar.executar",
+        "matriz.vistoria_campo._tela.executar",
+        "matriz.vistoria_campo.iniciar_vistoria.executar"
+      ],
+      "efeito": "offline",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285b: baixar dados para vistoria offline exige Executar."
+    },
+    "GET /mobile/unidades/:id/chamados-pendentes": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /mobile/vistorias-programadas": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /monitoramento/alertas": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /monitoramento/auditoria": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /monitoramento/dashboard": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /notificacoes/push/vapid-public-key": {
+      "tipo": "publico",
+      "efeito": "leitura",
+      "nota": "Chave pública VAPID."
+    },
+    "GET /operacional/bairros": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /operacional/chamados-mapa": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /operacional/opcoes-filtro": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /operacional/resumo": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /operacional/secretarias": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /operacional/unidades": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /operacional/unidades/:id": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /operacional/unidades/:id/chamados-para-vincular": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura"
+    },
+    "GET /public/chamados/protocolo/:codigo": {
+      "tipo": "publico",
+      "efeito": "leitura",
+      "nota": "Consulta pública por protocolo."
+    },
+    "GET /public/documentos/validar-por-documento": {
+      "tipo": "publico",
+      "efeito": "leitura",
+      "nota": "Validação pública de documento."
+    },
+    "GET /public/documentos/validar/:codigo": {
+      "tipo": "publico",
+      "efeito": "leitura",
+      "nota": "Validação pública de documento."
+    },
+    "GET /public/tipos-chamado": {
+      "tipo": "publico",
+      "efeito": "leitura",
+      "nota": "Tipos de chamado públicos."
+    },
+    "GET /public/unidades/:codigo": {
+      "tipo": "publico",
+      "efeito": "leitura",
+      "nota": "Próprio público (QR code)."
+    },
+    "GET /relatorios/export/chamados-produtividade.csv": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/chamados-produtividade.pdf": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/chamados-produtividade.xlsx": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/chamados.csv": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/chamados.pdf": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/chamados.xlsx": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/cronograma-cobertura.csv": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/cronograma-cobertura.pdf": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/cronograma-cobertura.xlsx": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/fiscalizacoes.csv": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/fiscalizacoes.pdf": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/fiscalizacoes.xlsx": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/ordens-servico.csv": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/ordens-servico.pdf": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/unidades.csv": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/unidades.pdf": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /relatorios/export/unidades.xlsx": {
+      "tipo": "permissao",
+      "rotina": "relatorios.exportar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.relatorios.exportar.executar",
+        "matriz.relatorios._tela.executar"
+      ],
+      "efeito": "relatorio",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285a: gerar relatório exige Executar."
+    },
+    "GET /storage/{*splat}": {
+      "tipo": "dono-registro",
+      "efeito": "download",
+      "verificador": "StorageAcessoService.assertPodeBaixar",
+      "nota": "Exige permissão de visualizar a rotina do registro dono do arquivo e o escopo de Secretaria dele."
+    },
+    "PATCH /chamado-tarefas/:id": {
+      "tipo": "permissao",
+      "rotina": "chamados.tarefas",
+      "acao": "executar",
+      "chaves": [
+        "matriz.chamados.tarefas.executar",
+        "matriz.chamados._tela.executar",
+        "matriz.chamados.tarefas.alterar",
+        "matriz.chamados.tarefas_andamento.executar",
+        "matriz.chamados.tarefas_concluir.executar",
+        "matriz.chamados.tarefas_cancelar.executar",
+        "matriz.execucao.tarefas.alterar",
+        "matriz.execucao.tarefas.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa",
+      "nota": "Tratar tarefa (inclusive pela Execução). O serviço refina por campo/transição."
+    },
+    "PATCH /documentos/:id/respostas": {
+      "tipo": "permissao",
+      "rotina": "documentos.avulso",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.documentos.avulso.inserir",
+        "matriz.documentos._tela.inserir",
+        "matriz.documentos.administrar.alterar",
+        "matriz.documentos._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "PATCH /documentos/:id/vinculos": {
+      "tipo": "permissao",
+      "rotina": "documentos.editar_vinculo",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.documentos.editar_vinculo.alterar",
+        "matriz.documentos._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /admin/backup/restore": {
+      "tipo": "permissao",
+      "rotina": "admin.backup",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.backup.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/backup/run": {
+      "tipo": "permissao",
+      "rotina": "admin.backup",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.backup.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/cargos": {
+      "tipo": "permissao",
+      "rotina": "admin.cargos",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.admin.cargos.inserir",
+        "matriz.admin._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/categorias-vistoria": {
+      "tipo": "permissao",
+      "rotina": "admin.categorias_vistoria",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.admin.categorias_vistoria.inserir",
+        "matriz.admin._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/email/teste": {
+      "tipo": "permissao",
+      "rotina": "admin.email",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.email.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/equipes": {
+      "tipo": "permissao",
+      "rotina": "admin.equipes",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.admin.equipes.inserir",
+        "matriz.admin._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/importacao/secretarias/sync": {
+      "tipo": "permissao",
+      "rotina": "admin.importacao",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.importacao.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/importacao/webmap/apply": {
+      "tipo": "permissao",
+      "rotina": "admin.importacao",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.importacao.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/importacao/webmap/automation/cron": {
+      "tipo": "publico",
+      "efeito": "mutacao",
+      "nota": "Automação: protegida por segredo próprio (cron)."
+    },
+    "POST /admin/importacao/webmap/automation/webhook": {
+      "tipo": "publico",
+      "efeito": "mutacao",
+      "nota": "Automação: protegida por assinatura do webhook."
+    },
+    "POST /admin/importacao/webmap/preview": {
+      "tipo": "permissao",
+      "rotina": "admin.importacao",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.importacao.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/importacao/webmap/sync": {
+      "tipo": "permissao",
+      "rotina": "admin.importacao",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.importacao.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/importacao/webmap/sync-all": {
+      "tipo": "permissao",
+      "rotina": "admin.importacao",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.importacao.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/perfis": {
+      "tipo": "permissao",
+      "rotina": "admin.permissoes",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.admin.permissoes.inserir",
+        "matriz.admin._tela.inserir",
+        "matriz.permissoes.criar_perfil.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/secretarias": {
+      "tipo": "permissao",
+      "rotina": "admin.secretarias",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.admin.secretarias.inserir",
+        "matriz.admin._tela.inserir",
+        "matriz.admin.cadastros.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/tipos-chamado": {
+      "tipo": "permissao",
+      "rotina": "admin.tipos_chamado",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.admin.tipos_chamado.inserir",
+        "matriz.admin._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/tipos-proprio": {
+      "tipo": "permissao",
+      "rotina": "admin.tipos_proprio",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.admin.tipos_proprio.inserir",
+        "matriz.admin._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/unidades": {
+      "tipo": "permissao",
+      "rotina": "admin.proprios",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.admin.proprios.inserir",
+        "matriz.admin._tela.inserir",
+        "matriz.admin.cadastros.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/usuarios": {
+      "tipo": "permissao",
+      "rotina": "admin.usuarios",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.admin.usuarios.inserir",
+        "matriz.admin._tela.inserir",
+        "matriz.admin.cadastros.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /auth/change-password": {
+      "tipo": "sessao",
+      "efeito": "sessao",
+      "nota": "Troca da própria senha."
+    },
+    "POST /auth/forgot-password": {
+      "tipo": "publico",
+      "efeito": "sessao",
+      "nota": "Recuperação de senha."
+    },
+    "POST /auth/login": {
+      "tipo": "publico",
+      "efeito": "sessao",
+      "nota": "Login."
+    },
+    "POST /auth/logout": {
+      "tipo": "sessao",
+      "efeito": "sessao",
+      "nota": "Logoff."
+    },
+    "POST /auth/perfil-ativo": {
+      "tipo": "sessao",
+      "efeito": "sessao",
+      "nota": "Troca do perfil ativo entre perfis ATIVOS do próprio usuário."
+    },
+    "POST /auth/reset-password": {
+      "tipo": "publico",
+      "efeito": "sessao",
+      "nota": "Redefinição de senha por token."
+    },
+    "POST /auth/secretaria-ativa": {
+      "tipo": "sessao",
+      "efeito": "sessao",
+      "nota": "Troca da secretaria ativa entre as autorizadas."
+    },
+    "POST /chamado-tarefas": {
+      "tipo": "permissao",
+      "rotina": "chamados.tarefas",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.chamados.tarefas.inserir",
+        "matriz.chamados._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamado-tarefas/:id/anexos": {
+      "tipo": "permissao",
+      "rotina": "chamados.tarefas_andamento",
+      "acao": "executar",
+      "chaves": [
+        "matriz.chamados.tarefas_andamento.executar",
+        "matriz.chamados._tela.executar",
+        "matriz.chamados.tarefas.executar",
+        "matriz.chamados.tarefas_concluir.executar",
+        "matriz.execucao.tarefas.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamados": {
+      "tipo": "permissao",
+      "rotina": "chamados.abrir_chamado",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.chamados.abrir_chamado.inserir",
+        "matriz.chamados._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamados/:id/exclusao-logica": {
+      "tipo": "permissao",
+      "rotina": "chamados.excluir_logicamente",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.chamados.excluir_logicamente.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamados/:id/execucao/checkin": {
+      "tipo": "permissao",
+      "rotina": "execucao.checkin",
+      "acao": "executar",
+      "chaves": [
+        "matriz.execucao.checkin.executar",
+        "matriz.execucao._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamados/:id/execucao/concluir": {
+      "tipo": "permissao",
+      "rotina": "execucao.concluir_execucao",
+      "acao": "executar",
+      "chaves": [
+        "matriz.execucao.concluir_execucao.executar",
+        "matriz.execucao._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamados/:id/execucao/evidencias": {
+      "tipo": "permissao",
+      "rotina": "execucao.anexar_evidencia",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.execucao.anexar_evidencia.inserir",
+        "matriz.execucao._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamados/:id/execucao/manual": {
+      "tipo": "permissao",
+      "rotina": "chamados.execucao_manual",
+      "acao": "executar",
+      "chaves": [
+        "matriz.chamados.execucao_manual.executar",
+        "matriz.chamados._tela.executar",
+        "matriz.execucao.lancamento_manual.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamados/:id/historico": {
+      "tipo": "permissao",
+      "rotina": "chamados.registrar_historico",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.chamados.registrar_historico.inserir",
+        "matriz.chamados._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamados/:id/notificar-equipe": {
+      "tipo": "permissao",
+      "rotina": "chamados.notificar_equipe",
+      "acao": "executar",
+      "chaves": [
+        "matriz.chamados.notificar_equipe.executar",
+        "matriz.chamados._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamados/:id/restaurar-exclusao": {
+      "tipo": "permissao",
+      "rotina": "chamados.restaurar_excluido",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.chamados.restaurar_excluido.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /chamados/ordens-servico/lote.pdf": {
+      "tipo": "permissao",
+      "rotina": "chamados.emitir_ordem_servico",
+      "acao": "executar",
+      "chaves": [
+        "matriz.chamados.emitir_ordem_servico.executar",
+        "matriz.chamados._tela.executar"
+      ],
+      "efeito": "exportacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /checklists": {
+      "tipo": "permissao",
+      "rotina": "checklists.gerenciar",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.checklists.gerenciar.inserir",
+        "matriz.checklists._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /checklists/:id/versions": {
+      "tipo": "permissao",
+      "rotina": "checklists.gerenciar",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.checklists.gerenciar.inserir",
+        "matriz.checklists._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /checklists/versions/:versionId/publish": {
+      "tipo": "permissao",
+      "rotina": "checklists.gerenciar",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.checklists.gerenciar.alterar",
+        "matriz.checklists._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /cronograma": {
+      "tipo": "permissao",
+      "rotina": "cronograma.gerenciar",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.cronograma.gerenciar.inserir",
+        "matriz.cronograma._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /documentos/:id/assinatura": {
+      "tipo": "permissao",
+      "rotina": "documentos.coletar_assinatura",
+      "acao": "executar",
+      "chaves": [
+        "matriz.documentos.coletar_assinatura.executar",
+        "matriz.documentos._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /documentos/:id/assinatura-interna": {
+      "tipo": "permissao",
+      "rotina": "documentos.assinar_interno",
+      "acao": "executar",
+      "chaves": [
+        "matriz.documentos.assinar_interno.executar",
+        "matriz.documentos._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa",
+      "nota": "Assinar internamente. O serviço confere se o usuário é o signatário do pedido."
+    },
+    "POST /documentos/:id/assinatura-pendente": {
+      "tipo": "permissao",
+      "rotina": "documentos.coletar_assinatura",
+      "acao": "executar",
+      "chaves": [
+        "matriz.documentos.coletar_assinatura.executar",
+        "matriz.documentos._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /documentos/:id/cancelar-assinado": {
+      "tipo": "permissao",
+      "rotina": "documentos.cancelar_assinado",
+      "acao": "executar",
+      "chaves": [
+        "matriz.documentos.cancelar_assinado.executar",
+        "matriz.documentos._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /documentos/:id/concluir": {
+      "tipo": "permissao",
+      "rotina": "documentos.avulso",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.documentos.avulso.inserir",
+        "matriz.documentos._tela.inserir",
+        "matriz.documentos.administrar.alterar",
+        "matriz.documentos._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /documentos/:id/disponibilizar-assinatura": {
+      "tipo": "permissao",
+      "rotina": "documentos.disponibilizar_assinatura",
+      "acao": "executar",
+      "chaves": [
+        "matriz.documentos.disponibilizar_assinatura.executar",
+        "matriz.documentos._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /documentos/:id/gerar-pdf": {
+      "tipo": "permissao",
+      "rotina": "documentos.gerar_pdf",
+      "acao": "executar",
+      "chaves": [
+        "matriz.documentos.gerar_pdf.executar",
+        "matriz.documentos._tela.executar"
+      ],
+      "efeito": "exportacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /documentos/avulso": {
+      "tipo": "permissao",
+      "rotina": "documentos.avulso",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.documentos.avulso.inserir",
+        "matriz.documentos._tela.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa",
+      "nota": "Criar documento (avulso ou dentro de chamado/vistoria) exige Documentos › Inserir."
+    },
+    "POST /documentos/pedidos-assinatura/:pedidoId/recusar": {
+      "tipo": "permissao",
+      "rotina": "documentos.assinar_interno",
+      "acao": "executar",
+      "chaves": [
+        "matriz.documentos.assinar_interno.executar",
+        "matriz.documentos._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /documentos/pedidos-assinatura/:pedidoId/retirar": {
+      "tipo": "permissao",
+      "rotina": "documentos.disponibilizar_assinatura",
+      "acao": "executar",
+      "chaves": [
+        "matriz.documentos.disponibilizar_assinatura.executar",
+        "matriz.documentos._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /fiscalizacoes/imprimir-manual": {
+      "tipo": "permissao",
+      "rotina": "vistoria_campo.iniciar_vistoria",
+      "acao": "executar",
+      "chaves": [
+        "matriz.vistoria_campo.iniciar_vistoria.executar",
+        "matriz.vistoria_campo._tela.executar"
+      ],
+      "efeito": "exportacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /fiscalizacoes/lancamento-manual": {
+      "tipo": "permissao",
+      "rotina": "vistoria_campo.gravar_enviar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.vistoria_campo.gravar_enviar.executar",
+        "matriz.vistoria_campo._tela.executar",
+        "matriz.vistoria_campo.sincronizar.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285b: realizar vistoria exige Executar."
+    },
+    "POST /integracoes/notificar": {
+      "tipo": "permissao",
+      "rotina": "integracoes.monitorar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.integracoes.monitorar.executar",
+        "matriz.integracoes._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /integracoes/sync/:id/ignorar": {
+      "tipo": "permissao",
+      "rotina": "integracoes.monitorar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.integracoes.monitorar.executar",
+        "matriz.integracoes._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /integracoes/sync/:id/retry": {
+      "tipo": "permissao",
+      "rotina": "integracoes.monitorar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.integracoes.monitorar.executar",
+        "matriz.integracoes._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /integracoes/sync/retry": {
+      "tipo": "permissao",
+      "rotina": "integracoes.monitorar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.integracoes.monitorar.executar",
+        "matriz.integracoes._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /lgpd/auditoria/purge": {
+      "tipo": "permissao",
+      "rotina": "admin.auditoria",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.auditoria.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /lgpd/usuarios/:id/anonymize": {
+      "tipo": "permissao",
+      "rotina": "admin.usuarios",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.admin.usuarios.excluir",
+        "matriz.admin._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /meus-chamados/:id/observadores": {
+      "tipo": "permissao",
+      "rotina": "meus_chamados.cadastrar_observadores",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.meus_chamados.cadastrar_observadores.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /mobile/sync/fiscalizacoes": {
+      "tipo": "permissao",
+      "rotina": "vistoria_campo.gravar_enviar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.vistoria_campo.gravar_enviar.executar",
+        "matriz.vistoria_campo._tela.executar",
+        "matriz.vistoria_campo.sincronizar.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa",
+      "nota": "D-285b: realizar vistoria exige Executar."
+    },
+    "POST /notificacoes/alertas/disparar": {
+      "tipo": "permissao",
+      "rotina": "dashboard._tela",
+      "acao": "executar",
+      "chaves": [
+        "matriz.dashboard._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /notificacoes/push/subscribe": {
+      "tipo": "sessao",
+      "efeito": "sessao",
+      "nota": "Inscrição push do próprio dispositivo."
+    },
+    "POST /notificacoes/push/unsubscribe": {
+      "tipo": "sessao",
+      "efeito": "sessao",
+      "nota": "Cancelamento push do próprio dispositivo."
+    },
+    "POST /operacional/nao-conformidades/:id/baixa": {
+      "tipo": "permissao",
+      "rotina": "cco._tela",
+      "acao": "executar",
+      "chaves": [
+        "matriz.cco._tela.executar",
+        "matriz.chamados.triagem.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /operacional/nao-conformidades/:id/vincular-chamado": {
+      "tipo": "permissao",
+      "rotina": "chamados.salvar_chamado",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.chamados.salvar_chamado.alterar",
+        "matriz.chamados._tela.alterar",
+        "matriz.cco._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "POST /public/unidades/:codigo/chamados": {
+      "tipo": "publico",
+      "efeito": "mutacao",
+      "nota": "Abertura pública de chamado (cidadão)."
+    },
+    "PUT /admin/auditoria/config": {
+      "tipo": "permissao",
+      "rotina": "admin.auditoria",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.auditoria.alterar",
+        "matriz.admin._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/backup": {
+      "tipo": "permissao",
+      "rotina": "admin.backup",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.backup.alterar",
+        "matriz.admin._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/cargos/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.cargos",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.cargos.alterar",
+        "matriz.admin._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/categorias-vistoria/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.categorias_vistoria",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.categorias_vistoria.alterar",
+        "matriz.admin._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/email": {
+      "tipo": "permissao",
+      "rotina": "admin.email",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.email.alterar",
+        "matriz.admin._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/equipes/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.equipes",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.equipes.alterar",
+        "matriz.admin._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/perfis/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.permissoes",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.permissoes.alterar",
+        "matriz.admin._tela.alterar",
+        "matriz.permissoes.configurar.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/perfis/:id/ativo": {
+      "tipo": "permissao",
+      "rotina": "admin.permissoes",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.permissoes.alterar",
+        "matriz.admin._tela.alterar",
+        "matriz.permissoes.configurar.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/perfis/:id/matriz": {
+      "tipo": "permissao",
+      "rotina": "admin.permissoes",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.permissoes.alterar",
+        "matriz.admin._tela.alterar",
+        "matriz.permissoes.configurar.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/secretarias/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.secretarias",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.secretarias.alterar",
+        "matriz.admin._tela.alterar",
+        "matriz.admin.cadastros.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/tipos-chamado/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.tipos_chamado",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.tipos_chamado.alterar",
+        "matriz.admin._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/tipos-proprio/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.tipos_proprio",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.tipos_proprio.alterar",
+        "matriz.admin._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/unidades/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.proprios",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.proprios.alterar",
+        "matriz.admin._tela.alterar",
+        "matriz.admin.cadastros.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/usuarios/:id": {
+      "tipo": "permissao",
+      "rotina": "admin.usuarios",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.usuarios.alterar",
+        "matriz.admin._tela.alterar",
+        "matriz.admin.cadastros.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /admin/usuarios/:id/matriz": {
+      "tipo": "permissao",
+      "rotina": "admin.usuarios",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.admin.usuarios.alterar",
+        "matriz.admin._tela.alterar",
+        "matriz.permissoes.configurar.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /chamados/:id/abertura": {
+      "tipo": "permissao",
+      "rotina": "chamados.editar_abertura",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.chamados.editar_abertura.alterar",
+        "matriz.chamados._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "PUT /chamados/:id/atribuicao": {
+      "tipo": "permissao",
+      "rotina": "chamados.triagem",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.chamados.triagem.alterar",
+        "matriz.chamados._tela.alterar",
+        "matriz.chamados.salvar_chamado.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "PUT /chamados/:id/observadores": {
+      "tipo": "permissao",
+      "rotina": "chamados.salvar_chamado",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.chamados.salvar_chamado.alterar",
+        "matriz.chamados._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "PUT /chamados/:id/planejamento": {
+      "tipo": "permissao",
+      "rotina": "chamados.programacao",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.chamados.programacao.alterar",
+        "matriz.chamados._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "PUT /chamados/:id/status": {
+      "tipo": "permissao",
+      "rotina": "chamados.alterar_status",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.chamados.alterar_status.alterar",
+        "matriz.chamados._tela.alterar",
+        "matriz.chamados.alterar_status.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "PUT /chamados/:id/triagem": {
+      "tipo": "permissao",
+      "rotina": "chamados.triagem",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.chamados.triagem.alterar",
+        "matriz.chamados._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "PUT /checklists/:id": {
+      "tipo": "permissao",
+      "rotina": "checklists.gerenciar",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.checklists.gerenciar.alterar",
+        "matriz.checklists._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /checklists/versions/:versionId": {
+      "tipo": "permissao",
+      "rotina": "checklists.gerenciar",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.checklists.gerenciar.alterar",
+        "matriz.checklists._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "PUT /cronograma/:id": {
+      "tipo": "permissao",
+      "rotina": "cronograma.gerenciar",
+      "acao": "alterar",
+      "chaves": [
+        "matriz.cronograma.gerenciar.alterar",
+        "matriz.cronograma._tela.alterar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    },
+    "PUT /meus-chamados/:id/observadores": {
+      "tipo": "permissao",
+      "rotina": "meus_chamados.cadastrar_observadores",
+      "acao": "inserir",
+      "chaves": [
+        "matriz.meus_chamados.cadastrar_observadores.inserir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa"
+    }
+  }
+}
