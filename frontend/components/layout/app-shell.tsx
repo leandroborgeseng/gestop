@@ -17,6 +17,7 @@ import { SIGMA_NAME, SIGMA_TAGLINE } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { getAlertasOperacionais, getResumoOperacional, logout } from '@/lib/api';
 import type { AuthUser } from '@/lib/types';
+import { sidebarLogoClass, sidebarToggleLabel, sidebarToggleRowClass, sidebarTopClass } from '@/lib/sidebar-layout';
 import { buildNavBadges, resolveGlobalSearchRoute, type NavBadges } from '@/lib/nav-badges';
 import { getGroupedNavItems, getMobileNav, isNavActive, MORE_NAV_ICON, type NavItem } from '@/lib/navigation';
 import { SessionScopeSwitchers } from '@/components/auth/session-scope-switchers';
@@ -111,8 +112,9 @@ function DesktopSidebar({
       <div
         className={cn(
           'flex h-[var(--topbar-h)] shrink-0 items-center border-b border-[var(--line-2)]',
-          collapsed ? 'flex-col justify-center gap-2 py-3' : 'gap-2.5 px-3.5 pl-4',
+          sidebarTopClass(collapsed),
         )}
+        data-testid="sidebar-top"
       >
         <div className={cn('flex min-w-0 items-center gap-2.5', collapsed ? 'justify-center' : 'flex-1')}>
           <Image
@@ -122,7 +124,7 @@ function DesktopSidebar({
             height={48}
             className={cn(
               'shrink-0 object-contain object-center',
-              collapsed ? 'h-10 w-auto max-h-10' : 'h-11 w-auto max-h-11',
+              sidebarLogoClass(collapsed),
             )}
             priority
           />
@@ -133,15 +135,16 @@ function DesktopSidebar({
             </div>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-          className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] border border-[var(--line)] bg-[var(--surface)] text-[var(--ink-3)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </button>
+        {!collapsed ? (
+          <SidebarToggleButton collapsed={collapsed} onToggle={onToggleCollapsed} className="-mx-[9px]" />
+        ) : null}
       </div>
+
+      {collapsed ? (
+        <div className={sidebarToggleRowClass} data-testid="sidebar-toggle-row">
+          <SidebarToggleButton collapsed={collapsed} onToggle={onToggleCollapsed} />
+        </div>
+      ) : null}
 
       <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Navegação principal">
         {groups.map((group) => (
@@ -521,5 +524,32 @@ export function AppShell({
         <MobileBottomNav user={user} badges={navBadges} moreOpen={moreOpen} onMoreOpen={setMoreOpen} />
       </div>
     </div>
+  );
+}
+
+function SidebarToggleButton({
+  collapsed,
+  onToggle,
+  className,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={sidebarToggleLabel(collapsed)}
+      aria-expanded={!collapsed}
+      className={cn(
+        'group flex h-11 w-11 shrink-0 items-center justify-center rounded-[9px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]',
+        className,
+      )}
+    >
+      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] border border-[var(--line)] bg-[var(--surface)] text-[var(--ink-3)] group-hover:bg-[var(--surface-2)] group-hover:text-[var(--ink)]">
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+      </span>
+    </button>
   );
 }
