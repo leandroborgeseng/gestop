@@ -57,6 +57,21 @@ export function hasAnyPermission(
     return true;
   }
 
+  const propriosFine = propriosMatrixKeysRequired(permissions);
+  if (propriosFine.length > 0 && user.permissoes.some((key) => key.startsWith(PROPRIOS_MATRIX_PREFIX))) {
+    // Só nas rotas de Próprios: perfil com qualquer `matriz.admin.proprios.*` vale pela chave fina
+    // da ação, como no front. O legado `unidades.gerenciar` (derivado de qualquer escrita em
+    // Próprios) não libera outra ação (#292). As demais abas da Administração seguem o legado.
+    return propriosFine.some((key) => user.permissoes.includes(key));
+  }
+
   const expanded = expandSessionPermissionKeys(user.permissoes);
   return permissions.some((permission) => expanded.has(permission) || user.permissoes.includes(permission));
+}
+
+const PROPRIOS_MATRIX_PREFIX = 'matriz.admin.proprios.';
+
+/** Chaves finas de Próprios exigidas pela rota (`matriz.admin.proprios.<ação>`). */
+function propriosMatrixKeysRequired(permissions: string[]) {
+  return permissions.filter((key) => key.startsWith(PROPRIOS_MATRIX_PREFIX));
 }
