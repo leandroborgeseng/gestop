@@ -293,8 +293,16 @@ function rolarCampoFocadoParaVisivel(target: EventTarget | null) {
   if (typeof window === 'undefined' || !(target instanceof HTMLElement)) return;
   if (!target.matches('input, textarea, select, [contenteditable="true"]')) return;
   window.setTimeout(() => {
-    if (typeof target.scrollIntoView === 'function') target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (typeof target.scrollIntoView === 'function') {
+      target.scrollIntoView({ block: 'center', behavior: comportamentoRolagem(window) });
+    }
   }, 300);
+}
+
+/** 284: respeita prefers-reduced-motion ao rolar o campo focado. */
+export function comportamentoRolagem(win: Pick<Window, 'matchMedia'> | undefined): ScrollBehavior {
+  const reduz = typeof win?.matchMedia === 'function' && win.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return reduz ? 'auto' : 'smooth';
 }
 
 export function DocumentoAvulsoRespostasLeitura({ documento }: { documento: DocumentoDetalhe }) {

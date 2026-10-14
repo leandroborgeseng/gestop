@@ -5,6 +5,34 @@ import { X } from 'lucide-react';
 import { DocumentoAvulsoForm, DocumentoAvulsoRespostasLeitura } from '@/components/documentos/documento-avulso-form';
 import type { DocumentoDetalhe } from '@/lib/types';
 
+type JanelaRolavel = Pick<Window, 'scrollY' | 'scrollTo'>;
+
+/** 284: trava a rolagem do fundo com position:fixed (iOS-safe). Retorna a função que restaura. */
+export function travarRolagemFundo(win: JanelaRolavel, doc: Pick<Document, 'body'>) {
+  const body = doc.body;
+  const salvoY = win.scrollY;
+  const anterior = {
+    position: body.style.position,
+    top: body.style.top,
+    left: body.style.left,
+    right: body.style.right,
+    width: body.style.width,
+  };
+  body.style.position = 'fixed';
+  body.style.top = `-${salvoY}px`;
+  body.style.left = '0';
+  body.style.right = '0';
+  body.style.width = '100%';
+  return () => {
+    body.style.position = anterior.position;
+    body.style.top = anterior.top;
+    body.style.left = anterior.left;
+    body.style.right = anterior.right;
+    body.style.width = anterior.width;
+    win.scrollTo(0, salvoY);
+  };
+}
+
 export function DocumentoPreencherDialog({
   documento,
   onClose,
@@ -17,16 +45,8 @@ export function DocumentoPreencherDialog({
   const aberto = documento != null;
   useEffect(() => {
     if (!aberto || typeof document === 'undefined') return;
-    // 284: trava a rolagem do fundo enquanto o modal está aberto e restaura ao fechar.
-    const html = document.documentElement;
-    const anteriorHtml = html.style.overflow;
-    const anteriorBody = document.body.style.overflow;
-    html.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    return () => {
-      html.style.overflow = anteriorHtml;
-      document.body.style.overflow = anteriorBody;
-    };
+    // 284: trava a rolagem do fundo (seguro no iOS) e restaura posição ao fechar.
+    return travarRolagemFundo(window, document);
   }, [aberto]);
   if (!documento) return null;
   return (

@@ -6,7 +6,8 @@ vi.mock('@/components/ui/snackbar', () => ({
   useSnackbar: () => ({ show: () => undefined }),
 }));
 
-import { DocumentoPreencherDialog } from './documento-consulta-dialogs';
+import { DocumentoPreencherDialog, travarRolagemFundo } from './documento-consulta-dialogs';
+import { comportamentoRolagem } from './documento-avulso-form';
 import type { DocumentoDetalhe } from '@/lib/types';
 
 const documento = {
@@ -74,5 +75,33 @@ describe('DocumentoPreencherDialog (284)', () => {
     expect(html).toContain('sm:max-h-[min(94dvh,920px)]');
     expect(html).not.toContain('100vh');
     expect(html).toMatch(/aria-label="Fechar"[^>]*h-11 w-11|h-11 w-11[^>]*aria-label="Fechar"/);
+  });
+});
+
+describe('284: rolagem respeita prefers-reduced-motion', () => {
+  it('usa auto quando reduce está ativo e smooth caso contrário', () => {
+    const mm = (matches: boolean) => vi.fn().mockReturnValue({ matches }) as unknown as Window['matchMedia'];
+    const reduz = mm(true);
+    expect(comportamentoRolagem({ matchMedia: reduz })).toBe('auto');
+    expect(reduz).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
+    expect(comportamentoRolagem({ matchMedia: mm(false) })).toBe('smooth');
+    expect(comportamentoRolagem(undefined)).toBe('smooth');
+  });
+});
+
+describe('284: trava do fundo iOS-safe', () => {
+  it('fixa o body com top negativo e restaura estilos e posição ao fechar', () => {
+    const style = { position: 'relative', top: '', left: '', right: '', width: '' };
+    const body = { style } as unknown as HTMLElement;
+    const scrollTo = vi.fn();
+    const win = { scrollY: 420, scrollTo } as unknown as Window;
+
+    const restaurar = travarRolagemFundo(win, { body });
+    expect(style).toEqual({ position: 'fixed', top: '-420px', left: '0', right: '0', width: '100%' });
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    restaurar();
+    expect(style).toEqual({ position: 'relative', top: '', left: '', right: '', width: '' });
+    expect(scrollTo).toHaveBeenCalledWith(0, 420);
   });
 });
