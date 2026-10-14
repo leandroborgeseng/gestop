@@ -1,0 +1,15 @@
+{
+  "_doc": "#292 · tabela única de casos da aba Próprios, lida pelos specs do front (hasAdminTabAccess) e da API (guard dos handlers de unidades). esperado = acesso liberado.",
+  "casos": [
+    { "nome": "proprios.visualizar + cadastros.alterar → não altera", "permissoes": ["matriz.admin.proprios.visualizar", "matriz.admin.cadastros.alterar"], "acao": "alterar", "esperado": false },
+    { "nome": "proprios.visualizar + cadastros.inserir → não insere", "permissoes": ["matriz.admin.proprios.visualizar", "matriz.admin.cadastros.inserir"], "acao": "inserir", "esperado": false },
+    { "nome": "proprios.visualizar + cadastros.excluir → não exclui", "permissoes": ["matriz.admin.proprios.visualizar", "matriz.admin.cadastros.excluir"], "acao": "excluir", "esperado": false },
+    { "nome": "proprios.visualizar + cadastros.alterar → ainda visualiza", "permissoes": ["matriz.admin.proprios.visualizar", "matriz.admin.cadastros.alterar"], "acao": "visualizar", "esperado": true },
+    { "nome": "proprios.visualizar + unidades.gerenciar → não altera", "permissoes": ["matriz.admin.proprios.visualizar", "unidades.gerenciar"], "acao": "alterar", "esperado": false },
+    { "nome": "proprios.visualizar + usuarios.gerenciar → não exclui", "permissoes": ["matriz.admin.proprios.visualizar", "usuarios.gerenciar"], "acao": "excluir", "esperado": false },
+    { "nome": "proprios.alterar exato → altera", "permissoes": ["matriz.admin.proprios.alterar"], "acao": "alterar", "esperado": true },
+    { "nome": "sem proprios.*: cadastros.alterar → altera (como hoje)", "permissoes": ["matriz.admin.cadastros.alterar"], "acao": "alterar", "esperado": true },
+    { "nome": "sem proprios.*: só outra aba (usuarios.alterar) → não altera Próprios", "permissoes": ["matriz.admin.usuarios.alterar"], "acao": "alterar", "esperado": false },
+    { "nome": "sem proprios.*: unidades.gerenciar → altera (legado)", "permissoes": ["unidades.gerenciar"], "acao": "alterar", "esperado": true }
+  ]
+}

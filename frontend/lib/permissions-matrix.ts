@@ -342,14 +342,15 @@ export function hasAdminTabAccess(
   permissoes: string[],
 ) {
   if (permissoes.includes(buildMatrixKey('admin', tab, action))) return true;
-  if (ADMIN_CADASTROS_TABS.includes(tab) && permissoes.includes(buildMatrixKey('admin', 'cadastros', action))) {
-    return true;
-  }
   // #292: chave exata só na aba Próprios (igual ao guard da API). Com qualquer
-  // `matriz.admin.proprios.*`, o legado (`unidades.gerenciar`, `usuarios.gerenciar`) não libera
-  // outra ação. As demais abas seguem o legado, para a tela não esconder o que a API libera.
+  // `matriz.admin.proprios.*`, nem `matriz.admin.cadastros.<ação>` nem o legado
+  // (`unidades.gerenciar`, `usuarios.gerenciar`) liberam outra ação. Tem que vir ANTES de `cadastros`.
+  // As demais abas seguem o legado, para a tela não esconder o que a API libera.
   if (tab === 'proprios' && permissoes.some((key) => key.startsWith('matriz.admin.proprios.'))) {
     return false;
+  }
+  if (ADMIN_CADASTROS_TABS.includes(tab) && permissoes.includes(buildMatrixKey('admin', 'cadastros', action))) {
+    return true;
   }
 
   if (permissoes.includes('usuarios.gerenciar')) return true;
