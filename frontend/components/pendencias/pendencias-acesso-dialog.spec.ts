@@ -5,6 +5,18 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const portais: Array<{ children: ReactNode; alvo: unknown }> = [];
+const limpezas: Array<void | (() => void)> = [];
+
+// Sem DOM no ambiente de teste: executa os efeitos de forma síncrona e guarda a limpeza (unmount).
+vi.mock('react', async (importOriginal) => {
+  const real = await importOriginal<typeof import('react')>();
+  return {
+    ...real,
+    useEffect: (efeito: () => void | (() => void)) => {
+      limpezas.push(efeito());
+    },
+  };
+});
 
 vi.mock('react-dom', async (importOriginal) => {
   const real = await importOriginal<typeof import('react-dom')>();
@@ -35,12 +47,16 @@ const resumo: PendenciasResumo = {
   ],
 } as unknown as PendenciasResumo;
 
-const body = { tag: 'document.body' };
+const estiloInicial = () => ({ position: 'static', top: '', left: '', right: '', width: '' });
+const body = { tag: 'document.body', style: estiloInicial() };
 
 describe('288: modal de pendências via portal', () => {
   beforeEach(() => {
     portais.length = 0;
+    limpezas.length = 0;
+    body.style = estiloInicial();
     vi.stubGlobal('document', { body });
+    vi.stubGlobal('window', { scrollY: 0, scrollTo: vi.fn() });
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -50,6 +66,20 @@ describe('288: modal de pendências via portal', () => {
     expect(portais[0].alvo).toBe(body);
     expect(html).toContain('z-[140]'); // header z-30, menu inferior z-40
     expect(html).not.toContain('<header');
+    expect(html).toContain('sm:p-6'); // Q12: overlay mantém o respiro do desktop
+  });
+
+  it('Q9: ao abrir trava o fundo (iOS-safe) e ao desmontar restaura estilos e posição', () => {
+    const scrollTo = vi.fn();
+    vi.stubGlobal('window', { scrollY: 320, scrollTo });
+    renderToStaticMarkup(createElement(PendenciasAcessoDialog, { open: true, resumo, onClose: () => undefined }));
+    expect(body.style).toEqual({ position: 'fixed', top: '-320px', left: '0', right: '0', width: '100%' });
+    const limpeza = limpezas.find((l): l is () => void => typeof l === 'function');
+    expect(limpeza).toBeTypeOf('function');
+    expect(scrollTo).not.toHaveBeenCalled();
+    limpeza!();
+    expect(body.style).toEqual(estiloInicial());
+    expect(scrollTo).toHaveBeenCalledWith(0, 320);
   });
 
   it('no celular é folha 100dvh com rolagem interna e rodapé fora da rolagem; desktop mantém o card', () => {
@@ -60,6 +90,7 @@ describe('288: modal de pendências via portal', () => {
     const rolagem = html.indexOf('overflow-y-auto');
     const fechar = html.lastIndexOf('Fechar');
     expect(rolagem).toBeGreaterThan(-1);
+    expect(html).toMatch(/overflow-y-auto overscroll-contain/); // Q11
     // rodapé com Fechar é irmão da área rolável (shrink-0) e respeita safe-area
     expect(html).toMatch(/flex shrink-0 justify-end[^"]*env\(safe-area-inset-bottom\)/);
     expect(fechar).toBeGreaterThan(rolagem);
