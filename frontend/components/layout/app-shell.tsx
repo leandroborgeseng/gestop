@@ -543,11 +543,11 @@ function SidebarToggleButton({
       aria-label={sidebarToggleLabel(collapsed)}
       aria-expanded={!collapsed}
       className={cn(
-        'group flex h-11 w-11 shrink-0 items-center justify-center rounded-[9px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]',
+        'group flex h-11 w-11 shrink-0 items-center justify-center focus-visible:outline-none',
         className,
       )}
     >
-      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] border border-[var(--line)] bg-[var(--surface)] text-[var(--ink-3)] group-hover:bg-[var(--surface-2)] group-hover:text-[var(--ink)]">
+      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] border border-[var(--line)] bg-[var(--surface)] text-[var(--ink-3)] group-hover:bg-[var(--surface-2)] group-hover:text-[var(--ink)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--brand)]">
         {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
       </span>
     </button>
