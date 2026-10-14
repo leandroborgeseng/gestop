@@ -69,7 +69,12 @@ describe('292 · capacidades da tela de Próprios (matriz.admin.proprios.*)', ()
     expect(capacidadesProprios([], true)).toEqual({ podeVer: true, podeInserir: true, podeSalvar: true, podeInativar: true });
   });
 
-  it('chave usada pelo front é matriz.admin.proprios.<ação>', () => {
-    expect(chaveProprios('alterar')).toBe('matriz.admin.proprios.alterar');
+  it('C8: chave usada pelo front é matriz.admin.proprios.<ação> (a mesma do guard do backend)', () => {
+    for (const acao of ['visualizar', 'inserir', 'alterar', 'excluir'] as const) {
+      expect(chaveProprios(acao)).toBe(`matriz.admin.proprios.${acao}`);
+      expect(capacidadesProprios([`matriz.admin.proprios.${acao}`])).toMatchObject({
+        visualizar: { podeVer: true }, inserir: { podeInserir: true }, alterar: { podeSalvar: true }, excluir: { podeInativar: true },
+      }[acao]);
+    }
   });
 });

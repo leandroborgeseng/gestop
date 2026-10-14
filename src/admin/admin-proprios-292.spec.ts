@@ -5,7 +5,7 @@ import { REQUIRED_ANY_PERMISSIONS_KEY, hasAnyPermission } from '../auth/permissi
 import type { JwtPayload } from '../auth/jwt';
 import { adminTabPermissionKeys } from '../domain/admin-permissions';
 import { ADMINISTRADOR_SISTEMA_NOME } from '../domain/permissions-catalog';
-import { chaveProprios } from '../../frontend/lib/admin-proprios';
+import type { UnidadeDto } from './admin.dto';
 import { AdminController } from './admin.controller';
 import { AdminService, PROPRIO_FORA_DO_ESCOPO_MSG, normalizeRequestedSecretariaId } from './admin.service';
 
@@ -42,7 +42,7 @@ const dto = (secretariaId: string | undefined) => ({
   secretariaId, codigoPatrimonial: 'pmf-esc-001', nome: 'EMEB', tipo: 'UBS', endereco: 'Rua Nova, 10',
   bairro: 'Centro', cep: '14400-000', regiao: 'NORTE' as never, latitude: -20.55, longitude: -47.41,
   raioValidacaoMetros: 250, ativo: true,
-});
+}) as unknown as UnidadeDto;
 
 /** Chaves que o PermissionsGuard exige no handler do controller. */
 function guardKeys(handler: keyof AdminController): string[] {
@@ -133,11 +133,11 @@ describe('292 · permissões no guard (critérios 4–8)', () => {
     expect(prisma.unidadePublica.create.mock.calls[0][0].data.secretariaId).toBe(SME);
   });
 
+  // O lado do front (`chaveProprios`) é travado na mesma string em frontend/lib/admin-proprios.spec.ts.
   it('C8: front e back usam a mesma chave matriz.admin.proprios.<ação>', () => {
     const handlers = { visualizar: 'listUnidades', inserir: 'createUnidade', alterar: 'updateUnidade', excluir: 'deleteUnidade' } as const;
     for (const acao of ACOES) {
       const esperada = `matriz.admin.proprios.${acao}`;
-      expect(chaveProprios(acao)).toBe(esperada);
       expect(adminTabPermissionKeys('proprios', acao)[0]).toBe(esperada);
       expect(guardKeys(handlers[acao])[0]).toBe(esperada);
     }
