@@ -153,6 +153,8 @@ export type ChamadoTimelineStep = {
   /** 293: evento de tarefa — qual tarefa e o texto digitado (íntegro). */
   tarefa?: { id: string; titulo: string };
   texto?: string;
+  /** 293: true quando o texto é o resumo de um andamento legado (rótulo "Registro anterior"). */
+  registroAnterior?: boolean;
 };
 
 export type ChamadoHistoricoEntry = {
@@ -483,6 +485,7 @@ export function buildChamadoTimelineFromHistorico(
         active: false,
         ...(tarefaId && tarefaTitulo ? { tarefa: { id: tarefaId, titulo: tarefaTitulo } } : {}),
         ...(texto ? { texto } : {}),
+        ...(texto && metadata.textoOrigem === 'registro_anterior' ? { registroAnterior: true } : {}),
       };
     }
 

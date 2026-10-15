@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { JwtPayload } from '../auth/jwt';
 import { ChamadoTarefasService } from './chamado-tarefas.service';
+import { ChamadosService } from './chamados.service';
 
 const url = process.env.DATABASE_URL ?? '';
 const local = /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url);
@@ -119,14 +120,94 @@ describe.skipIf(!local)('293 · texto do andamento/conclusão no histórico (Pos
     expect(ev[0].metadata).toMatchObject({ tipo: 'tarefa', tarefaId: id, tarefaTitulo: 'Limpar calha', acao: 'andamento', texto: 'Calha desentupida\nfalta vedar' });
   });
 
-  it('registro antigo sem texto: texto null (sem backfill/placeholder)', async () => {
-    const id = await novaTarefa('Tarefa legada');
-    await prisma.historicoStatus.create({
-      data: { entidadeTipo: 'ChamadoTarefa', entidadeId: id, statusNovo: 'EM_ANDAMENTO', motivo: 'Andamento da tarefa: Tarefa legada', alteradoPorId: user.sub, metadata: { tipo: 'tarefa', acao: 'andamento', resumo: 'Status: EM_ANDAMENTO · antigo' } },
-    });
-    const d = await historico(id);
-    const ev = d.historico.filter((h) => h.acao === 'andamento');
-    expect(ev).toHaveLength(1);
-    expect(ev[0].texto).toBeNull();
+  // 293b (critério 6, decisão do Tech Lead): registros legados (sem metadata.texto).
+  async function legado(tarefaId: string, acao: string, extra: Record<string, unknown> = {}) {
+    const t = await prisma.chamadoTarefa.findUniqueOrThrow({ where: { id: tarefaId } });
+    const metadata = { tipo: 'tarefa', tarefaId, tarefaTitulo: t.titulo, acao, ...extra };
+    for (const entidade of [{ entidadeTipo: 'ChamadoTarefa', entidadeId: tarefaId }, { entidadeTipo: 'Chamado', entidadeId: chamadoId }]) {
+      await prisma.historicoStatus.create({ data: { ...entidade, statusNovo: 'X', motivo: `legado ${acao}`, alteradoPorId: user.sub, metadata } });
+    }
+  }
+  type HistLeg = Hist & { textoOrigem: string | null };
+  async function eventosTarefa(id: string) {
+    return (await historico(id)).historico as HistLeg[];
+  }
+  async function eventosChamado(id: string, via: 'tarefa' | 'chamado') {
+    const lista =
+      via === 'tarefa'
+        ? (await service.getChamadoLeituraViaTarefa(id, chamadoId, user)).historico
+        : await (new ChamadosService(prisma as never, {} as never, {} as never, {} as never, {} as never) as unknown as {
+            enrichHistorico(h: unknown[], id: string): Promise<Array<{ metadata: Record<string, unknown> }>>;
+          }).enrichHistorico(
+            await prisma.historicoStatus.findMany({ where: { entidadeTipo: 'Chamado', entidadeId: chamadoId }, orderBy: { createdAt: 'asc' }, include: { alteradoPor: { select: { id: true, nome: true } } } }),
+            chamadoId,
+          );
+    return lista.filter((h) => h.metadata.tarefaId === id && (h.metadata.acao === 'andamento' || h.metadata.acao === 'concluida'));
+  }
+
+  it('legado CONCLUSÃO: mostra ChamadoTarefa.conclusaoTexto (tarefa e linha do tempo, nas duas rotas)', async () => {
+    const id = await novaTarefa('Legada concluída');
+    await prisma.chamadoTarefa.update({ where: { id }, data: { conclusaoTexto: 'Conclusão antiga\ncom duas linhas', observacao: 'OBSERVACAO NAO USAR' } });
+    await legado(id, 'concluida', { resumo: 'Status: CONCLUIDA · resumo antigo' });
+    const ev = (await eventosTarefa(id)).filter((h) => h.acao === 'concluida');
+    expect(ev.map((h) => [h.texto, h.textoOrigem])).toEqual([['Conclusão antiga\ncom duas linhas', 'conclusao']]);
+    for (const via of ['tarefa', 'chamado'] as const) {
+      const tl = await eventosChamado(id, via);
+      expect(tl).toHaveLength(1);
+      expect(tl[0].metadata).toMatchObject({ tarefaTitulo: 'Legada concluída', texto: 'Conclusão antiga\ncom duas linhas', textoOrigem: 'conclusao' });
+    }
+  });
+
+  it('legado ANDAMENTO: mostra metadata.resumo inteiro como "Registro anterior"; nunca a observacao', async () => {
+    const id = await novaTarefa('Legada andamento');
+    await prisma.chamadoTarefa.update({ where: { id }, data: { observacao: 'OBSERVACAO ATUAL DA TAREFA' } });
+    const resumo = 'Status: EM_ANDAMENTO · Equipe: Elétrica · texto antigo · com ponto';
+    await legado(id, 'andamento', { resumo });
+    const ev = (await eventosTarefa(id)).filter((h) => h.acao === 'andamento');
+    expect(ev.map((h) => [h.texto, h.textoOrigem])).toEqual([[resumo, 'registro_anterior']]);
+    for (const via of ['tarefa', 'chamado'] as const) {
+      const tl = await eventosChamado(id, via);
+      expect(tl.map((h) => [h.metadata.texto, h.metadata.textoOrigem])).toEqual([[resumo, 'registro_anterior']]);
+      expect(JSON.stringify(tl)).not.toContain('OBSERVACAO ATUAL DA TAREFA');
+    }
+    expect(JSON.stringify(ev)).not.toContain('OBSERVACAO ATUAL DA TAREFA');
+  });
+
+  it('legado sem resumo nem conclusaoTexto: sem texto (nada inventado), mesmo com observacao na tarefa', async () => {
+    const id = await novaTarefa('Legada vazia');
+    await prisma.chamadoTarefa.update({ where: { id }, data: { observacao: 'OBSERVACAO QUE NAO APARECE' } });
+    await legado(id, 'andamento');
+    await legado(id, 'concluida');
+    const ev = (await eventosTarefa(id)).filter((h) => h.acao === 'andamento' || h.acao === 'concluida');
+    expect(ev.map((h) => [h.acao, h.texto, h.textoOrigem])).toEqual([
+      ['andamento', null, null],
+      ['concluida', null, null],
+    ]);
+    for (const via of ['tarefa', 'chamado'] as const) {
+      const tl = await eventosChamado(id, via);
+      expect(tl).toHaveLength(2);
+      for (const h of tl) {
+        expect(h.metadata).not.toHaveProperty('texto');
+        expect(h.metadata).not.toHaveProperty('textoOrigem');
+      }
+    }
+  });
+
+  it('evento novo com texto: origem "evento" (precede resumo e conclusaoTexto)', async () => {
+    const id = await novaTarefa('Nova com texto');
+    await service.update(id, { status: ChamadoTarefaStatus.EM_ANDAMENTO, observacao: 'Texto novo' } as never, user);
+    await service.update(id, { status: ChamadoTarefaStatus.CONCLUIDA, conclusaoTexto: 'Conclusão nova' } as never, user);
+    const ev = (await eventosTarefa(id)).filter((h) => h.acao === 'andamento' || h.acao === 'concluida');
+    expect(ev.map((h) => [h.texto, h.textoOrigem])).toEqual([
+      ['Texto novo', 'evento'],
+      ['Conclusão nova', 'evento'],
+    ]);
+    for (const via of ['tarefa', 'chamado'] as const) {
+      const tl = await eventosChamado(id, via);
+      expect(tl.map((h) => [h.metadata.texto, h.metadata.textoOrigem])).toEqual([
+        ['Texto novo', 'evento'],
+        ['Conclusão nova', 'evento'],
+      ]);
+    }
   });
 });

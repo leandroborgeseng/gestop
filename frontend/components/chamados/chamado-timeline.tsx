@@ -77,6 +77,9 @@ export function ChamadoTimeline({ steps }: { steps: ChamadoTimelineStep[] }) {
               ) : null}
               {step.texto ? (
                 <div className="mt-1">
+                  {step.registroAnterior ? (
+                    <p data-testid="timeline-registro-anterior" className="text-[11px] font-semibold text-[var(--ink-3)]">Registro anterior</p>
+                  ) : null}
                   <TextoExpansivel texto={step.texto} testId="timeline-texto" />
                 </div>
               ) : null}

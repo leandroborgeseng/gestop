@@ -32,6 +32,7 @@ import {
 } from './chamado-tarefa.regras';
 import { montarAnexosAberturaLeitura, serializarAnexoHistoricoLeitura } from './chamado-leitura-via-tarefa';
 import { projetarMetadataHistoricoChamado } from './chamado-historico.projecao';
+import { aplicarTextoTarefaNaLinhaDoTempo, resolverTextoEventoTarefa } from './chamado-tarefa-texto-legado';
 import { AnexoChamadoTarefaDto, CreateChamadoTarefaDto, UpdateChamadoTarefaDto } from './chamado-tarefas.dto';
 
 const TAREFA_EXPORT_HEADERS = [
@@ -344,7 +345,7 @@ export class ChamadoTarefasService {
       codigo: tarefa.chamado.codigo,
       somenteLeitura: true,
       anexosAbertura: montarAnexosAberturaLeitura(chamado, evidencias),
-      historico: historico.map((entry) => {
+      historico: await aplicarTextoTarefaNaLinhaDoTempo(this.prisma, historico.map((entry) => {
         const metadata =
           entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata)
             ? (entry.metadata as Record<string, unknown>)
@@ -365,7 +366,7 @@ export class ChamadoTarefasService {
             .filter((item): item is NonNullable<typeof item> => Boolean(item))
             .map(serializarAnexoHistoricoLeitura),
         };
-      }),
+      }).map((saida, i) => ({ bruta: (historico[i].metadata ?? {}) as Record<string, unknown>, saida }))),
     };
   }
 
@@ -691,8 +692,11 @@ export class ChamadoTarefasService {
           secretaria: typeof meta.secretariaAtiva === 'string' ? meta.secretariaAtiva : null,
           temAnexos: meta.temAnexos === true || anexoIds.length > 0,
           anexoIds,
-          // 293: registros antigos sem `texto` ficam null (sem backfill, sem placeholder).
-          texto: typeof meta.texto === 'string' ? meta.texto : null,
+          // 293: evento novo usa metadata.texto; legado: conclusão → conclusaoTexto, andamento → resumo ("Registro anterior").
+          ...(() => {
+            const r = resolverTextoEventoTarefa(meta, tarefa.conclusaoTexto);
+            return { texto: r?.texto ?? null, textoOrigem: r?.origem ?? null };
+          })(),
         };
       }),
     };

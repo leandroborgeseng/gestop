@@ -57,6 +57,7 @@ vi.mock('@/lib/api', () => ({
       id: `h-${++servidor.seq}`, motivo: 'x', statusAnterior: t.status, statusNovo: payload.status as string,
       createdAt: '2026-10-15T13:05:00.000Z', alteradoPor: { id: 'u1', nome: 'Bruno' }, acao, anexoIds, temAnexos: anexoIds.length > 0,
       texto: texto ?? null,
+      textoOrigem: texto ? 'evento' : null,
     };
     t.historico.push(ev);
     t.status = payload.status as never;
@@ -153,6 +154,40 @@ for (const ponto of ['execucao', 'chamado'] as const) {
     });
   });
 }
+
+describe('293b · registros legados no histórico da tarefa', () => {
+  const ev = (over: Partial<Hist>): Hist => ({ id: `h-${over.acao}`, motivo: 'm', statusAnterior: 'NOVA', statusNovo: 'X', createdAt: '2026-01-01T10:00:00.000Z', alteradoPor: { id: 'u1', nome: 'Bruno' }, anexoIds: [], ...over });
+  async function montar(historico: Hist[], over: Partial<ChamadoTarefaDetalhe> = {}) {
+    servidor.tarefa = { ...tarefaBase(), observacao: 'OBSERVACAO DA TAREFA', ...over, historico } as unknown as Record<string, unknown>;
+    await abrir('chamado');
+  }
+  it('conclusão legada mostra o conclusaoTexto (sem rótulo "Registro anterior")', async () => {
+    await montar([ev({ acao: 'concluida', texto: 'Conclusão antiga\nduas linhas', textoOrigem: 'conclusao' })]);
+    expect(textos()).toEqual(['Conclusão antiga\nduas linhas']);
+    expect(screen.queryAllByTestId('historico-registro-anterior')).toHaveLength(0);
+  });
+  it('andamento legado mostra o resumo inteiro com o rótulo "Registro anterior" antes do texto', async () => {
+    const resumo = 'Status: EM_ANDAMENTO · Equipe: Elétrica · texto antigo';
+    await montar([ev({ acao: 'andamento', texto: resumo, textoOrigem: 'registro_anterior' })]);
+    const rotulo = screen.getByTestId('historico-registro-anterior');
+    expect(rotulo.textContent).toBe('Registro anterior');
+    const texto = screen.getByTestId('historico-texto');
+    expect(texto.textContent).toBe(resumo);
+    expect(rotulo.compareDocumentPosition(texto) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+  it('andamento legado sem texto: nunca mostra a observacao da tarefa, nem placeholder', async () => {
+    await montar([ev({ acao: 'andamento', texto: null, textoOrigem: null })]);
+    expect(itens()).toHaveLength(1);
+    expect(screen.queryAllByTestId('historico-texto')).toHaveLength(0);
+    expect(screen.queryAllByTestId('historico-registro-anterior')).toHaveLength(0);
+    expect(itens()[0].textContent).not.toContain('OBSERVACAO DA TAREFA');
+  });
+  it('evento novo com texto não mostra "Registro anterior"', async () => {
+    await montar([ev({ acao: 'andamento', texto: 'Texto novo', textoOrigem: 'evento' })]);
+    expect(textos()).toEqual(['Texto novo']);
+    expect(screen.queryAllByTestId('historico-registro-anterior')).toHaveLength(0);
+  });
+});
 
 describe('293 · registro antigo sem texto', () => {
   it('mostra só cabeçalho e meta, sem placeholder', async () => {

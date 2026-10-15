@@ -30,6 +30,7 @@ export const CAMPOS_METADATA_HISTORICO_CHAMADO = [
   'tarefaTitulo',
   'acao',
   'texto',
+  'textoOrigem',
 ] as const;
 
 export type CampoMetadataHistoricoChamado = (typeof CAMPOS_METADATA_HISTORICO_CHAMADO)[number];

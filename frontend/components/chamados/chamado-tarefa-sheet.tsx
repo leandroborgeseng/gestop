@@ -451,6 +451,9 @@ function ChamadoTarefaHistoricoView({
                     .join(' · ')}
                   {item.temAnexos ? ' · Há anexos' : ''}
                 </p>
+                {item.texto && item.textoOrigem === 'registro_anterior' ? (
+                  <p data-testid="historico-registro-anterior" className="mt-1 text-[11px] font-semibold text-[var(--ink-3)]">Registro anterior</p>
+                ) : null}
                 {item.texto ? <TextoExpansivel texto={item.texto} testId="historico-texto" /> : null}
                 {ligados.length ? (
                   <ul data-testid="historico-anexos" className="mt-2 space-y-2">

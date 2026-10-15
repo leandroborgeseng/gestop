@@ -41,6 +41,7 @@ import {
   type AnexoAberturaNormalizado,
 } from './chamado-anexos-abertura';
 import { projetarMetadataHistoricoChamado } from './chamado-historico.projecao';
+import { aplicarTextoTarefaNaLinhaDoTempo } from './chamado-tarefa-texto-legado';
 import { StorageService } from '../storage/storage.service';
 import { extractStorageKeyFromUrl, resolveStoragePublicUrl } from '../storage/storage-url';
 import { shrinkImageForPdf } from '../storage/pdf-image';
@@ -3799,7 +3800,7 @@ export class ChamadosService {
         return metadata?.tipo === 'execucao_conclusao' && !(metadata.evidenciaIds?.length ?? 0);
       })?.id;
 
-    return historico.map((entry) => {
+    const saidas = historico.map((entry) => {
       const metadata = (entry.metadata ?? {}) as Record<string, unknown>;
       const ids = Array.isArray(metadata.evidenciaIds) ? (metadata.evidenciaIds as string[]) : [];
       const anexosFromIds = ids.map((id) => evidenciaMap.get(id)).filter(Boolean);
@@ -3821,6 +3822,11 @@ export class ChamadosService {
         anexos,
       };
     });
+    // 293: texto dos eventos de tarefa (novo ou legado) com a mesma regra do histórico da tarefa.
+    return aplicarTextoTarefaNaLinhaDoTempo(
+      this.prisma,
+      saidas.map((saida, i) => ({ bruta: (historico[i].metadata ?? {}) as Record<string, unknown>, saida })),
+    );
   }
 
   private buildProgramacaoDateFilter(filters?: {

@@ -43,4 +43,34 @@ describe('293 · linha do tempo do chamado', () => {
     expect(screen.queryByTestId('timeline-texto')).toBeNull();
     expect(step.sub).toBe('Bruno · Status: EM_ANDAMENTO · Calha ok\nfalta vedar');
   });
+  it('293b: andamento legado na linha do tempo — "Registro anterior" + resumo inteiro, tarefa identificada', () => {
+    const resumo = 'Status: EM_ANDAMENTO · Calha ok · falta vedar';
+    const steps = buildChamadoTimelineFromHistorico(
+      [{ id: 'h3', statusNovo: 'EM_EXECUCAO', motivo: 'Andamento da tarefa: Limpar calha', createdAt: '2026-01-01T10:00:00.000Z', alteradoPor: { nome: 'Bruno' }, metadata: meta({ resumo, texto: resumo, textoOrigem: 'registro_anterior' }) }],
+      'EM_EXECUCAO',
+      '2026-01-01T09:00:00.000Z',
+    );
+    const step = steps.find((s) => s.id === 'h3')!;
+    expect(step.registroAnterior).toBe(true);
+    expect(step.sub).toBe('Bruno');
+    render(createElement(ChamadoTimeline, { steps: [step] }));
+    expect(screen.getByTestId('timeline-tarefa').textContent).toBe('Tarefa: Limpar calha');
+    expect(screen.getByTestId('timeline-registro-anterior').textContent).toBe('Registro anterior');
+    expect(screen.getByTestId('timeline-texto').textContent).toBe(resumo);
+  });
+  it('293b: conclusão legada (conclusaoTexto) e evento novo não mostram "Registro anterior"', () => {
+    const steps = buildChamadoTimelineFromHistorico(
+      [
+        { id: 'h4', statusNovo: 'EM_EXECUCAO', motivo: 'm', createdAt: '2026-01-01T10:00:00.000Z', alteradoPor: { nome: 'Bruno' }, metadata: meta({ acao: 'concluida', texto: 'Conclusão antiga', textoOrigem: 'conclusao' }) },
+        { id: 'h5', statusNovo: 'EM_EXECUCAO', motivo: 'm', createdAt: '2026-01-02T10:00:00.000Z', alteradoPor: { nome: 'Bruno' }, metadata: meta({ texto: 'Novo', textoOrigem: 'evento' }) },
+      ],
+      'EM_EXECUCAO',
+      '2026-01-01T09:00:00.000Z',
+    );
+    const tl = steps.filter((s) => s.id === 'h4' || s.id === 'h5');
+    expect(tl.map((s) => [s.texto, s.registroAnterior ?? false])).toEqual([['Conclusão antiga', false], ['Novo', false]]);
+    render(createElement(ChamadoTimeline, { steps: tl }));
+    expect(screen.queryAllByTestId('timeline-registro-anterior')).toHaveLength(0);
+    expect(screen.getAllByTestId('timeline-texto').map((e) => e.textContent)).toEqual(['Conclusão antiga', 'Novo']);
+  });
 });
