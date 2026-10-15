@@ -145,6 +145,9 @@ describe('294 · CSV e TXT', () => {
     const r = analisarLinhas(lerCsv('Opção;Nota\nA;7,5\n'), 'VISTORIA');
     expect(r.opcoes).toEqual([{ nome: 'A', nota: 7.5, linha: 2 }]);
   });
+  it('TXT remove o BOM já na leitura', () => {
+    expect(lerTxt('\uFEFFA\r\nB\n')).toEqual([['A'], ['B']]);
+  });
   it('TXT: uma opção por linha, com ou sem cabeçalho, vazias ignoradas', () => {
     expect(nomes(analisarLinhas(lerTxt('\uFEFFOpção\nA\n\nB\n'), 'VISTORIA', { permitirSemCabecalho: true }))).toEqual(['A', 'B']);
     const sem = analisarLinhas(lerTxt('Primeira\r\nSegunda\r\n\r\nTerceira'), 'VISTORIA', { permitirSemCabecalho: true });
