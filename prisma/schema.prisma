@@ -329,6 +329,7 @@ model Usuario {
   chamadosObservadoresCriados ChamadoObservador[] @relation("ChamadoObservadorCreatedBy")
   documentosResponsavel Documento[] @relation("DocumentoResponsavel")
   documentosCriados Documento[] @relation("DocumentoCriadoPor")
+  documentosCancelados Documento[] @relation("DocumentoCanceladoPor")
   documentoAssinaturas DocumentoAssinatura[] @relation("DocumentoAssinaturaUsuario")
   documentoAssinaturasColetadas DocumentoAssinatura[] @relation("DocumentoAssinaturaColetadaPor")
   assinaturaPedidosDestino DocumentoAssinaturaPedido[] @relation("PedidoAssinaturaDestinatario")
@@ -1036,6 +1037,10 @@ model Documento {
   pdfAssinadoSha256      String?
   conteudoTravadoEm      DateTime?
   substituidoPorId       String?
+  /// 287: cancelamento lógico (o registro nunca é apagado).
+  canceladoEm            DateTime?
+  canceladoPorId         String?
+  canceladoMotivo        String?
   metadata               Json?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
@@ -1047,6 +1052,7 @@ model Documento {
   checklistVersao ChecklistVersao? @relation(fields: [checklistVersaoId], references: [id], onDelete: SetNull)
   responsavel     Usuario?         @relation("DocumentoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   criadoPor       Usuario?         @relation("DocumentoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  canceladoPor    Usuario?         @relation("DocumentoCanceladoPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
   substituidoPor  Documento?       @relation("DocumentoSubstituicao", fields: [substituidoPorId], references: [id], onDelete: SetNull)
   substitutos     Documento[]      @relation("DocumentoSubstituicao")
   assinaturas     DocumentoAssinatura[]

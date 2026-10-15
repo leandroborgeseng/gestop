@@ -22,6 +22,7 @@ const LEGACY_DOCUMENTOS_COLETAR_ASSINATURA = 'documentos.coletar_assinatura';
 const LEGACY_DOCUMENTOS_ASSINAR_INTERNO = 'documentos.assinar_interno';
 const LEGACY_DOCUMENTOS_DISPONIBILIZAR_ASSINATURA = 'documentos.disponibilizar_assinatura';
 const LEGACY_DOCUMENTOS_CANCELAR_ASSINADO = 'documentos.cancelar_assinado';
+const LEGACY_DOCUMENTOS_CANCELAR = 'documentos.cancelar';
 const LEGACY_DOCUMENTOS_ADMINISTRAR = 'documentos.administrar';
 
 const CHAMADOS_ABRIR_ONLY_KEYS = new Set([
@@ -175,6 +176,9 @@ export function deriveLegacyPermissionKeys(matrixKeys: Set<string>): Set<string>
     if (matrixKeys.has(permissionMatrixKey('documentos', 'cancelar_assinado', 'executar'))) {
       legacy.add(LEGACY_DOCUMENTOS_CANCELAR_ASSINADO);
     }
+    if (matrixKeys.has(permissionMatrixKey('documentos', 'cancelar', 'executar'))) {
+      legacy.add(LEGACY_DOCUMENTOS_CANCELAR);
+    }
     if (
       matrixKeys.has(permissionMatrixKey('documentos', 'administrar', 'alterar')) ||
       matrixKeys.has(permissionMatrixKey('documentos', 'administrar', 'excluir')) ||
@@ -325,6 +329,9 @@ export function expandLegacyToMatrixKeys(legacyKeys: Set<string>): Set<string> {
   }
   if (legacyKeys.has(LEGACY_DOCUMENTOS_CANCELAR_ASSINADO)) {
     matrix.add(permissionMatrixKey('documentos', 'cancelar_assinado', 'executar'));
+  }
+  if (legacyKeys.has(LEGACY_DOCUMENTOS_CANCELAR)) {
+    matrix.add(permissionMatrixKey('documentos', 'cancelar', 'executar'));
   }
   if (legacyKeys.has(LEGACY_DOCUMENTOS_ADMINISTRAR)) {
     grantScreen('documentos');
