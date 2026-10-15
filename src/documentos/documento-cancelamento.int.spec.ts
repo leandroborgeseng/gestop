@@ -143,26 +143,59 @@ describe.skipIf(!local)('287 · integração (Postgres local)', () => {
     }
   });
 
-  it('legado: documento já CANCELADO com pedido PENDENTE não aparece em pendências, total nem minhas pendências', async () => {
-    const u = await prisma.usuario.create({ data: { nome: 'legado287', email: `legado287-${tag}@aion.local`, senhaHash: 'x', secretariaId } });
+  async function destinatarioIsolado(nome: string): Promise<JwtPayload> {
+    const u = await prisma.usuario.create({ data: { nome, email: `${nome}-${tag}@aion.local`, senhaHash: 'x', secretariaId } });
     userIds.push(u.id);
-    const destinatario: JwtPayload = { ...signatario, sub: u.id, nome: u.nome, email: u.email };
+    return { ...signatario, sub: u.id, nome: u.nome, email: u.email };
+  }
+  async function documentoLegadoCancelado(destinatarioId: string, sufixo: string) {
     const id = randomUUID();
     docIds.push(id);
     await prisma.documento.create({
       data: {
-        id, codigo: `DOC-287L-${tag}`, codigoValidacao: `V287L${tag}`, tipo: DocumentoTipo.DOCUMENTO_AVULSO,
+        id, codigo: `DOC-287L-${sufixo}-${tag}`, codigoValidacao: `V287L${sufixo}${tag}`, tipo: DocumentoTipo.DOCUMENTO_AVULSO,
         situacao: DocumentoSituacao.CANCELADO, origem: DocumentoOrigem.AVULSO, titulo: `Legado 287 ${tag}`, secretariaId,
       },
     });
-    await prisma.documentoAssinaturaPedido.create({ data: { documentoId: id, destinatarioId: u.id, solicitanteId: gestor.sub } });
-    const resumo = await service.pendenciasResumo(destinatario);
-    const ids = resumo.grupos.flatMap((g: { itens: Array<{ id: string }> }) => g.itens.map((x) => x.id));
-    expect(ids).not.toContain(id);
+    // caso legado (antes da 287): documento CANCELADO com pedido ainda PENDENTE
+    await prisma.documentoAssinaturaPedido.create({ data: { documentoId: id, destinatarioId, solicitanteId: gestor.sub } });
+    return id;
+  }
+
+  it('legado isolado: único pedido é PENDENTE de documento CANCELADO → total 0 exato', async () => {
+    const dest = await destinatarioIsolado('legadoA287');
+    const id = await documentoLegadoCancelado(dest.sub, 'A');
+    const resumo = await service.pendenciasResumo(dest);
     expect(resumo.total).toBe(0);
-    expect(resumo.grupos.find((g: { id: string }) => g.id === 'documentos')).toBeUndefined();
-    const minhas = await service.listMinhasPendenciasAssinatura(destinatario);
+    expect(resumo.grupos).toEqual([]);
+    expect(resumo.grupos.flatMap((g: { itens: Array<{ id: string }> }) => g.itens.map((x) => x.id))).not.toContain(id);
+    const minhas = await service.listMinhasPendenciasAssinatura(dest);
     expect(minhas.total).toBe(0);
-    expect(minhas.items.map((d: { id: string }) => d.id)).not.toContain(id);
+    expect(minhas.items).toEqual([]);
+  });
+
+  it('legado + 1 pedido válido → total 1 exato (vem do count, não de itens.length)', async () => {
+    const dest = await destinatarioIsolado('legadoB287');
+    const legado = await documentoLegadoCancelado(dest.sub, 'B');
+    const validoId = randomUUID();
+    docIds.push(validoId);
+    await prisma.documento.create({
+      data: {
+        id: validoId, codigo: `DOC-287V-${tag}`, codigoValidacao: `V287V${tag}`, tipo: DocumentoTipo.DOCUMENTO_AVULSO,
+        situacao: DocumentoSituacao.ASSINATURA_PENDENTE, origem: DocumentoOrigem.AVULSO, titulo: `Válido 287 ${tag}`, secretariaId,
+      },
+    });
+    await prisma.documentoAssinaturaPedido.create({ data: { documentoId: validoId, destinatarioId: dest.sub, solicitanteId: gestor.sub } });
+    const resumo = await service.pendenciasResumo(dest);
+    expect(resumo.total).toBe(1);
+    expect(resumo.grupos).toHaveLength(1);
+    const grupo = resumo.grupos[0] as { id: string; total: number; itens: Array<{ id: string }> };
+    expect(grupo.id).toBe('documentos');
+    expect(grupo.total).toBe(1);
+    expect(grupo.itens.map((x) => x.id)).toEqual([validoId]);
+    const minhas = await service.listMinhasPendenciasAssinatura(dest);
+    expect(minhas.total).toBe(1);
+    expect(minhas.items.map((d: { id: string }) => d.id)).toEqual([validoId]);
+    expect(minhas.items.map((d: { id: string }) => d.id)).not.toContain(legado);
   });
 });
