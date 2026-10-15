@@ -1,4 +1,4 @@
-import '@/test-utils/jsdom-286';
+import '@/test-utils/jsdom-global';
 import { createElement } from 'react';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
