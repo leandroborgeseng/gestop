@@ -2,23 +2,25 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ListX, Search } from 'lucide-react';
 import { ChamadosExecucaoMap } from '@/components/chamados/chamados-execucao-map';
 import { ChamadoTarefaSheet } from '@/components/chamados/chamado-tarefa-sheet';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ErrorState } from '@/components/ui-states';
+import { TarefasExecucaoList } from '@/components/chamados/tarefas-execucao-list';
 import { Chip } from '@/components/ui/chip';
 import { cn } from '@/lib/cn';
 import { getSecretarias, listEquipesExecucao, listTarefasExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
+import { agruparPinsTarefas, filtrarTarefasBusca, montarParametrosTarefasExecucao, pinDaTarefa } from '@/lib/tarefa-card';
 import {
-  resumoDoChamado,
   resumoFiltrosTarefasExecucao,
   TAREFA_PRIORIDADE_LABEL,
   TAREFA_STATUS_LABEL,
   TAREFA_STATUS_PENDENTES,
-  tarefaExecucaoToMapPoint,
   type TarefasExecucaoResponse,
 } from '@/lib/chamado-tarefa';
-import type { ChamadoMapPoint } from '@/lib/types';
 
 export function ExecucaoTarefasPanel() {
   const searchParams = useSearchParams();
@@ -41,27 +43,91 @@ export function ExecucaoTarefasPanel() {
   const [responsaveis, setResponsaveis] = useState<Array<{ id: string; nome: string }>>([]);
   const [tipos, setTipos] = useState<Array<{ id: string; nome: string }>>([]);
   const [aberta, setAberta] = useState<string | null>(searchParams.get('tarefa'));
+  // 286: no celular a aba abre em Lista (decisão 14/10).
   const [mobile, setMobile] = useState<'lista' | 'mapa'>('lista');
+  const [carregando, setCarregando] = useState(true);
+  const [busca, setBusca] = useState('');
+  const [selecionada, setSelecionada] = useState<string | null>(searchParams.get('tarefa'));
+  const [destacadas, setDestacadas] = useState<string[]>([]);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [rolarParaSelecionada, setRolarParaSelecionada] = useState(0);
+  const [anuncio, setAnuncio] = useState('');
   const [filtrosAbertos, setFiltrosAbertos] = useState(false);
 
   function carregar() {
     setErro(null);
-    listTarefasExecucao({
-      status: status || undefined,
-      atribuidaAMim: atribuidaAMim ? '1' : undefined,
-      minhasEquipes: minhasEquipes ? '1' : undefined,
-      atrasadas: atrasadas ? '1' : undefined,
-      historico: historico ? '1' : undefined,
-      prazoFrom: prazoFrom ? new Date(prazoFrom).toISOString() : undefined,
-      prazoTo: prazoTo ? new Date(prazoTo).toISOString() : undefined,
-      secretariaId: secretariaId || undefined,
-      equipeId: equipeId || undefined,
-      responsavelId: responsavelId || undefined,
-      tipoChamadoId: tipoChamadoId || undefined,
-      prioridade: prioridade || undefined,
-    })
+    setCarregando(true);
+    listTarefasExecucao(
+      montarParametrosTarefasExecucao({
+        status,
+        atribuidaAMim,
+        minhasEquipes,
+        atrasadas,
+        historico,
+        prazoFrom,
+        prazoTo,
+        secretariaId,
+        equipeId,
+        responsavelId,
+        tipoChamadoId,
+        prioridade,
+      }),
+    )
       .then(setData)
-      .catch((err) => setErro(err instanceof Error ? err.message : 'Falha ao carregar tarefas.'));
+      .catch((err) => setErro(err instanceof Error ? err.message : 'Falha ao carregar tarefas.'))
+      .finally(() => setCarregando(false));
+  }
+
+  function limparFiltros() {
+    setStatus('');
+    setAtribuidaAMim(false);
+    setMinhasEquipes(false);
+    setAtrasadas(false);
+    setHistorico(false);
+    setPrazoFrom('');
+    setPrazoTo('');
+    setSecretariaId('');
+    setEquipeId('');
+    setResponsavelId('');
+    setTipoChamadoId('');
+    setPrioridade('');
+    setBusca('');
+  }
+
+  /** 286: clique no pin só seleciona (não abre o modal), rola a lista e anuncia. */
+  function selecionarPeloPin(pinId: string) {
+    const pin = pins.find((item) => item.id === pinId);
+    const ids = pin?.tarefaIds ?? [pinId];
+    const id = ids[0];
+    setSelecionada(id);
+    setDestacadas(ids.length > 1 ? ids : []);
+    setRolarParaSelecionada((n) => n + 1);
+    const tarefa = data?.items.find((item) => item.id === id);
+    setAnuncio(
+      ids.length > 1
+        ? `${ids.length} tarefas neste local selecionadas no mapa`
+        : tarefa
+          ? `Tarefa ${tarefa.titulo} selecionada no mapa`
+          : '',
+    );
+  }
+
+  /** 286: card/Enter/Espaço seleciona, abre o modal e lembra o card para devolver o foco. */
+  function abrirTarefa(id: string) {
+    setSelecionada(id);
+    setDestacadas([]);
+    setAberta(id);
+  }
+
+  function fecharTarefa() {
+    const id = aberta;
+    setAberta(null);
+    if (id && typeof document !== 'undefined') {
+      requestAnimationFrame(() => {
+        const card = document.querySelector<HTMLButtonElement>(`[data-tarefa-id="${CSS.escape(id)}"]`);
+        card?.focus();
+      });
+    }
   }
 
   useEffect(() => {
@@ -82,12 +148,21 @@ export function ExecucaoTarefasPanel() {
     listTiposChamadoOpcoes().then(setTipos).catch(() => setTipos([]));
   }, []);
 
-  const pontos = useMemo<ChamadoMapPoint[]>(() => {
-    return (data?.items ?? []).flatMap((item) => {
-      const ponto = tarefaExecucaoToMapPoint(item);
-      return ponto ? [ponto] : [];
-    });
-  }, [data]);
+  const visiveis = useMemo(() => filtrarTarefasBusca(data?.items ?? [], busca), [data, busca]);
+  // 286: um pin por ponto, com contador; a busca local também filtra os pins.
+  const pins = useMemo(() => agruparPinsTarefas(visiveis), [visiveis]);
+  const pinSelecionado = pinDaTarefa(pins, selecionada);
+  const pinHover = pinDaTarefa(pins, hovered);
+
+  useEffect(() => {
+    if (!aberta || typeof window === 'undefined') return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') fecharTarefa();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aberta]);
 
   const resumoFiltros = useMemo(() => {
     const secretaria = secretarias.find((item) => item.id === secretariaId);
@@ -133,8 +208,8 @@ export function ExecucaoTarefasPanel() {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         <Badge variant="neutral">{data?.contadores.novas ?? 0} novas</Badge>
-        <Badge variant="warning">{data?.contadores.emAndamento ?? 0} em andamento</Badge>
-        <Badge variant="danger">{data?.contadores.atrasadas ?? 0} atrasadas</Badge>
+        <Badge variant="warning" className="text-[var(--warn-ink)]">{data?.contadores.emAndamento ?? 0} em andamento</Badge>
+        <Badge variant="danger" className="text-[var(--danger-ink)]">{data?.contadores.atrasadas ?? 0} atrasadas</Badge>
       </div>
       <div className="overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)]">
         <button
@@ -241,58 +316,84 @@ export function ExecucaoTarefasPanel() {
           </div>
         ) : null}
       </div>
-      {erro ? <p className="text-[13px] text-[var(--danger)]">{erro}</p> : null}
       <div className="flex gap-2 xl:hidden">
-        <Chip active={mobile === 'lista'} onClick={() => setMobile('lista')}>
+        <Chip active={mobile === 'lista'} onClick={() => setMobile('lista')} className="min-h-11">
           Lista
         </Chip>
-        <Chip active={mobile === 'mapa'} onClick={() => setMobile('mapa')}>
+        <Chip active={mobile === 'mapa'} onClick={() => setMobile('mapa')} className="min-h-11">
           Mapa
         </Chip>
       </div>
-      <div className="grid gap-3 xl:grid-cols-[1.1fr_0.9fr]">
-        <div className={`max-h-[70dvh] overflow-auto ${mobile === 'lista' ? 'block' : 'hidden xl:block'}`}>
-          <table className="w-full min-w-[720px] text-left text-[12px]">
-            <thead className="text-[var(--ink-3)]">
-              <tr>
-                <th className="p-2">Chamado</th>
-                <th className="p-2">Resumo do chamado</th>
-                <th className="p-2">Tarefa</th>
-                <th className="p-2">Status</th>
-                <th className="p-2">Prazo</th>
-                <th className="p-2">Prioridade</th>
-                <th className="p-2">Secretaria</th>
-                <th className="p-2">Equipe</th>
-                <th className="p-2">Responsável</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(data?.items ?? []).map((item) => (
-                <tr
-                  key={item.id}
-                  className={`cursor-pointer border-t border-[var(--line)] ${item.atrasada ? 'bg-amber-50' : item.status === 'IMPEDIDA' ? 'bg-orange-50' : item.status === 'NOVA' ? 'bg-sky-50' : ''}`}
-                  onClick={() => setAberta(item.id)}
-                >
-                  <td className="p-2 mono">{item.chamado.codigo}</td>
-                  <td className="p-2">{resumoDoChamado(item.chamado)}</td>
-                  <td className="p-2">{item.titulo}</td>
-                  <td className="p-2">{TAREFA_STATUS_LABEL[item.status]}</td>
-                  <td className="p-2">{item.prazo ? new Date(item.prazo).toLocaleDateString('pt-BR') : '—'}</td>
-                  <td className="p-2">{TAREFA_PRIORIDADE_LABEL[item.prioridade] ?? item.prioridade}</td>
-                  <td className="p-2">{item.secretaria?.sigla ?? '—'}</td>
-                  <td className="p-2">{item.equipe?.nome ?? '—'}</td>
-                  <td className="p-2">{item.responsavel?.nome ?? '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {data && data.items.length === 0 ? <p className="p-3 text-[13px] text-[var(--ink-3)]">Nenhuma tarefa neste filtro.</p> : null}
-        </div>
-        <div className={`min-h-[320px] ${mobile === 'mapa' ? 'block' : 'hidden xl:block'}`}>
-          <ChamadosExecucaoMap pontos={pontos} selectedId={aberta} onSelect={setAberta} onPopupAction={setAberta} popupActionLabel="Executar tarefa" />
+      <p className="sr-only" aria-live="polite" data-tarefas-anuncio>
+        {anuncio}
+      </p>
+      <div className="tarefas-workspace cco-workspace grid min-h-0 min-w-0 gap-3 xl:grid-cols-[minmax(300px,360px)_minmax(0,1fr)] xl:items-stretch">
+        <section
+          aria-label="Fila de tarefas"
+          className={`cco-list-panel min-h-0 min-w-0 flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)] ${mobile === 'lista' ? 'flex' : 'hidden xl:flex'}`}
+        >
+          <div className="shrink-0 border-b border-[var(--line-2)] px-3.5 py-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[13px] font-semibold text-[var(--ink)]">Fila de tarefas</span>
+              <span className="text-[12px] text-[var(--ink-3)]" data-tarefas-no-mapa={pins.length}>
+                {pins.length} no mapa
+              </span>
+            </div>
+            <div className="relative">
+              <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" aria-hidden />
+              <input
+                type="search"
+                value={busca}
+                onChange={(event) => setBusca(event.target.value)}
+                aria-label="Buscar tarefa"
+                placeholder="Buscar tarefa, chamado, equipe…"
+                className="h-11 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px] focus:border-[var(--brand)] focus:shadow-[0_0_0_3px_var(--brand-soft)] focus:outline-none xl:h-[38px]"
+              />
+            </div>
+          </div>
+          <div className="tarefas-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(var(--bottom-nav-h)+env(safe-area-inset-bottom))] xl:pb-0">
+            <FilaTarefasConteudo
+              estado={estadoFila({ carregando: carregando && !data, erro, total: visiveis.length })}
+              erro={erro}
+              busca={busca}
+              onRetry={carregar}
+              onLimpar={limparFiltros}
+            >
+              <TarefasExecucaoList
+                tarefas={visiveis}
+                selectedId={selecionada}
+                destacadas={destacadas}
+                hoveredId={hovered}
+                onOpen={abrirTarefa}
+                onHover={setHovered}
+                rolarParaSelecionada={rolarParaSelecionada}
+              />
+            </FilaTarefasConteudo>
+          </div>
+        </section>
+        <div className={`cco-map-host min-h-0 min-w-0 flex-col overflow-hidden ${mobile === 'mapa' ? 'flex' : 'hidden xl:flex'}`}>
+          <div className="mb-2 hidden shrink-0 items-center gap-2 xl:flex">
+            <span className="text-[13px] font-semibold text-[var(--ink)]">Mapa de tarefas</span>
+            <span className="text-[12px] text-[var(--ink-2)]">— clique no pin para selecionar</span>
+          </div>
+          <section className="cco-map-panel min-h-[320px] flex-1 overflow-hidden xl:min-h-0">
+            <ChamadosExecucaoMap
+              pontos={erro ? [] : pins}
+              selectedId={pinSelecionado}
+              hoveredId={pinHover}
+              onSelect={selecionarPeloPin}
+              onClearSelection={() => {
+                setSelecionada(null);
+                setDestacadas([]);
+              }}
+              onPopupAction={(pinId) => abrirTarefa(pins.find((pin) => pin.id === pinId)?.tarefaIds[0] ?? pinId)}
+              popupActionLabel="Abrir tarefa"
+              popupActionKind="modal"
+            />
+          </section>
         </div>
       </div>
-      <ChamadoTarefaSheet tarefaId={aberta} onClose={() => setAberta(null)} onChanged={carregar} />
+      <ChamadoTarefaSheet tarefaId={aberta} onClose={fecharTarefa} onChanged={carregar} />
     </div>
   );
 }
@@ -304,4 +405,65 @@ function FiltroRotulo({ label, children }: { label: string; children: ReactNode 
       {children}
     </label>
   );
+}
+
+export type EstadoFilaTarefas = 'carregando' | 'erro' | 'vazia' | 'lista';
+
+/** 286 §7: qual estado a fila mostra (dentro do painel). */
+export function estadoFila({ carregando, erro, total }: { carregando: boolean; erro: string | null; total: number }): EstadoFilaTarefas {
+  if (erro) return 'erro';
+  if (carregando) return 'carregando';
+  return total === 0 ? 'vazia' : 'lista';
+}
+
+export function FilaTarefasConteudo({
+  estado,
+  erro,
+  busca,
+  onRetry,
+  onLimpar,
+  children,
+}: {
+  estado: EstadoFilaTarefas;
+  erro: string | null;
+  busca: string;
+  onRetry: () => void;
+  onLimpar: () => void;
+  children: ReactNode;
+}) {
+  if (estado === 'carregando') {
+    return (
+      <div className="space-y-3 p-3.5" aria-busy="true" aria-label="Carregando tarefas" data-fila-estado="carregando">
+        {[0, 1, 2].map((n) => (
+          <div key={n} className="space-y-2">
+            <Skeleton className="h-3 w-1/3" />
+            <Skeleton className="h-4 w-4/5" />
+            <Skeleton className="h-3 w-2/3" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (estado === 'erro') {
+    return (
+      <div className="p-3.5" data-fila-estado="erro">
+        <ErrorState message={erro ?? 'Falha ao carregar tarefas.'} onRetry={onRetry} />
+      </div>
+    );
+  }
+  if (estado === 'vazia') {
+    const termo = busca.trim();
+    return (
+      <div className="flex flex-col items-center px-6 py-10 text-center" data-fila-estado="vazia">
+        <ListX className="mb-2 h-8 w-8 text-[var(--ink-3)]" aria-hidden />
+        <p className="text-[14px] font-semibold text-[var(--ink)]">
+          {termo ? `Nenhuma tarefa encontrada para '${termo}'` : 'Nenhuma tarefa neste filtro'}
+        </p>
+        <Button type="button" variant="outlined" size="sm" className="mt-3 min-h-11 xl:min-h-8" onClick={onLimpar}>
+          Limpar filtros
+        </Button>
+      </div>
+    );
+  }
+  return <>{children}</>;
 }

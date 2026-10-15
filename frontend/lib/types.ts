@@ -1006,6 +1006,8 @@ export type ChamadoMapPoint = {
   programado?: boolean;
   meta?: string;
   label?: string;
+  /** 286: quantidade de itens agrupados no mesmo pin (>1 mostra o contador). */
+  contagem?: number;
 };
 
 export type PublicUnidadeChamado = {
