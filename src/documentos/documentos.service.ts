@@ -1,3 +1,4 @@
+import { assertDocumentoNaoCancelado, cancelarDocumentoLogico, filtroCanceladosNaLista, podeCancelarDocumento } from './documento-cancelamento';
 import { verificarAberturaDiaria } from '../pendencias/abertura-diaria';
 import { formatSecretariaLabel } from '../common/format-secretaria';
 import {
@@ -54,6 +55,7 @@ import { isPdfRenderableImage } from '../fiscalizacoes/vistoria-realizada-pdf';
 import {
   AssinarDocumentoInternoDto,
   CancelarDocumentoDto,
+  CancelarDocumentoLogicoDto,
   ColetarAssinaturaDto,
   CreateDocumentoAvulsoDto,
   DisponibilizarAssinaturaInternaDto,
@@ -97,6 +99,7 @@ const DOCUMENTO_INCLUDE = {
   },
   responsavel: { select: { id: true, nome: true, email: true } },
   criadoPor: { select: { id: true, nome: true, email: true } },
+  canceladoPor: { select: { id: true, nome: true } },
   respostas: {
     orderBy: { createdAt: 'asc' as const },
     include: {
@@ -278,6 +281,7 @@ export class DocumentosService {
         documento.origem === DocumentoOrigem.AVULSO && this.podeVincularChamadosAvulso(documento, user),
       checklistItens,
       podeAssinarInterno: await this.podeAssinarInterno(documento, user),
+      podeCancelar: podeCancelarDocumento(user) && !['CANCELADO', 'SUBSTITUIDO', 'INVALIDO'].includes(documento.situacao),
       podeDisponibilizarAssinatura:
         isAdministradorSistema(user) ||
         hasAnyPermission(user, ['documentos.disponibilizar_assinatura', 'documentos.administrar', 'usuarios.gerenciar']),
@@ -481,6 +485,7 @@ export class DocumentosService {
       'documentos.gerar_pdf',
       'documentos.administrar',
     ]);
+    assertDocumentoNaoCancelado(await this.requireDocumentoFull(id, user));
     await this.saveRespostasInternal(id, dto.respostas ?? [], user);
 
     if (dto.concluir) {
@@ -742,6 +747,7 @@ export class DocumentosService {
 
   async updateVinculos(id: string, dto: UpdateDocumentoVinculosDto, user: JwtPayload) {
     const before = await this.requireDocumentoFull(id, user);
+    assertDocumentoNaoCancelado(before);
     const alteraChamadosAvulso =
       before.origem === DocumentoOrigem.AVULSO &&
       (dto.chamadoIds !== undefined || dto.chamadoId !== undefined);
@@ -1040,6 +1046,7 @@ export class DocumentosService {
 
   async listMinhasPendenciasAssinatura(user: JwtPayload) {
     const where: Prisma.DocumentoWhereInput = {
+      situacao: { not: DocumentoSituacao.CANCELADO },
       assinaturaPedidos: {
         some: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
       },
@@ -1071,7 +1078,7 @@ export class DocumentosService {
 
   async pendenciasResumo(user: JwtPayload) {
     const pedidos = await this.prisma.documentoAssinaturaPedido.findMany({
-      where: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
+      where: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE, documento: { situacao: { not: DocumentoSituacao.CANCELADO } } },
       orderBy: { requestedAt: 'desc' },
       take: 40,
       include: {
@@ -1087,7 +1094,7 @@ export class DocumentosService {
       },
     });
     const total = await this.prisma.documentoAssinaturaPedido.count({
-      where: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE },
+      where: { destinatarioId: user.sub, status: DocumentoAssinaturaPedidoStatus.PENDENTE, documento: { situacao: { not: DocumentoSituacao.CANCELADO } } },
     });
     const documentos = pedidos
       .map((pedido) => ({
@@ -1612,6 +1619,18 @@ export class DocumentosService {
       throw new NotFoundException('PDF original não encontrado no armazenamento.');
     }
     return originalLoaded.buffer;
+  }
+
+  /** 287: cancelamento lógico. Escopo de secretaria via requireDocumentoFull; nunca apaga. */
+  async cancelar(id: string, dto: CancelarDocumentoLogicoDto, user: JwtPayload) {
+    if (!podeCancelarDocumento(user)) {
+      throw new ForbiddenException('Sem permissão para cancelar documentos.');
+    }
+    const before = await this.requireDocumentoFull(id, user);
+    await this.prisma.$transaction((tx) =>
+      cancelarDocumentoLogico(tx, { documentoId: id, situacaoAnterior: before.situacao, user, motivo: dto.motivo }),
+    );
+    return this.serialize(await this.requireDocumentoFull(id, user));
   }
 
   async cancelarAssinado(id: string, dto: CancelarDocumentoDto, user: JwtPayload) {
@@ -2767,6 +2786,8 @@ export class DocumentosService {
         ],
       });
     }
+    const semCancelados = filtroCanceladosNaLista(query);
+    if (semCancelados) and.push(semCancelados);
     if (query.fiscalizacaoId) and.push({ fiscalizacaoId: query.fiscalizacaoId });
     if (query.responsavelId) and.push({ responsavelId: query.responsavelId });
 
@@ -3386,6 +3407,13 @@ export class DocumentosService {
       codigoVerificador,
       tipo: documento.tipo,
       situacao: documento.situacao,
+      cancelamento: documento.canceladoEm
+        ? {
+            em: documento.canceladoEm.toISOString?.() ?? documento.canceladoEm,
+            motivo: documento.canceladoMotivo ?? null,
+            por: documento.canceladoPor ? { id: documento.canceladoPor.id, nome: documento.canceladoPor.nome } : null,
+          }
+        : null,
       origem: documento.origem,
       origemPdf,
       pdfOriginalCanonico,

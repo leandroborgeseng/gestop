@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Select } from '@/components/ui/select';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import {
+  cancelarDocumento,
   cancelarDocumentoAssinado,
   concluirDocumento,
   downloadDocumentoPdfAssinado,
@@ -33,6 +34,13 @@ import { cn } from '@/lib/cn';
 import { hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { useSnackbar } from '@/components/ui/snackbar';
+import { CancelarDocumentoDialog } from '@/components/documentos/cancelar-documento-dialog';
+import {
+  CANCELAR_DOCUMENTO_SNACKBAR,
+  documentoSomenteLeitura,
+  mostrarBotaoCancelarDocumento,
+  rotuloCancelamento,
+} from '@/lib/documento-cancelamento';
 import { DocumentoDetalhe, DocumentoResumo, DocumentoSituacao, DocumentoTipo } from '@/lib/types';
 
 const PAGE_SIZE = 50;
@@ -91,6 +99,8 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
   const [disponibilizarOpen, setDisponibilizarOpen] = useState(false);
   const [preencherAberto, setPreencherAberto] = useState(() => searchParams.get('preencher') === '1');
   const [respostasAbertas, setRespostasAbertas] = useState(false);
+  const [historico, setHistorico] = useState(false);
+  const [cancelarDocOpen, setCancelarDocOpen] = useState(false);
 
   useEffect(() => {
     setPreencherAberto(searchParams.get('id') === selectedId && searchParams.get('preencher') === '1');
@@ -111,6 +121,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
           situacao: situacao === 'TODOS' ? undefined : situacao,
           assinatura: assinatura === 'TODOS' || assinatura === 'minha' ? undefined : assinatura,
           pendentesAssinatura: assinatura === 'minha' ? '1' : undefined,
+          historico: historico ? '1' : undefined,
         });
     lista
       .then((response) => {
@@ -126,7 +137,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
     const handle = window.setTimeout(() => loadList(), 200);
     return () => window.clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, tipo, situacao, assinatura, modoPendencias]);
+  }, [search, tipo, situacao, assinatura, historico, modoPendencias]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -168,6 +179,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
             situacao: situacao === 'TODOS' ? undefined : situacao,
             assinatura: assinatura === 'TODOS' || assinatura === 'minha' ? undefined : assinatura,
             pendentesAssinatura: assinatura === 'minha' ? '1' : undefined,
+            historico: historico ? '1' : undefined,
           }),
       getDocumento(selectedId),
     ]);
@@ -237,6 +249,17 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
             onClose={() => setDisponibilizarOpen(false)}
             onDone={() => void refreshSelected()}
           />
+          <CancelarDocumentoDialog
+            open={cancelarDocOpen}
+            codigo={detail.codigo}
+            busy={busyAction}
+            onVoltar={() => setCancelarDocOpen(false)}
+            onConfirmar={(motivo) => {
+              void runAction(() => cancelarDocumento(detail.id, motivo), CANCELAR_DOCUMENTO_SNACKBAR).then(() =>
+                setCancelarDocOpen(false),
+              );
+            }}
+          />
           </>
         ) : null}
 
@@ -272,6 +295,17 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
             <option value="substituido">Substituído</option>
             <option value="minha">Pendentes para minha assinatura</option>
           </Select>
+          {modoPendencias ? null : (
+            <label className="flex items-center gap-2 text-[12px] text-[var(--ink-2)] sm:col-span-2">
+              <input
+                type="checkbox"
+                data-testid="toggle-historico"
+                checked={historico}
+                onChange={(event) => setHistorico(event.target.checked)}
+              />
+              Mostrar histórico (cancelados)
+            </label>
+          )}
         </div>
 
         {error ? <ErrorState message={error} /> : null}
@@ -313,7 +347,21 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
                               {item.unidade ? ` · ${item.unidade.nome}` : ''}
                             </p>
                           </div>
-                          <Badge variant={meta.badge}>{meta.label}</Badge>
+                          {item.situacao === 'CANCELADO' ? (
+                            <div className="shrink-0 text-right">
+                              <span
+                                data-testid="badge-cancelado"
+                                className="inline-flex items-center rounded-full bg-[var(--muted-bg)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-3)]"
+                              >
+                                Cancelado
+                              </span>
+                              {rotuloCancelamento(item) ? (
+                                <p className="mt-0.5 text-[11px] text-[var(--ink-3)]">{rotuloCancelamento(item)}</p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <Badge variant={meta.badge}>{meta.label}</Badge>
+                          )}
                         </div>
                       </button>
                     </li>
@@ -374,6 +422,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
                       : 'Assinatura marcada como pendente.',
                   )
                 }
+                onCancelarDocumento={() => setCancelarDocOpen(true)}
                 onCancelar={() => {
                   const motivo = window.prompt(
                     'Justificativa obrigatória: ao cancelar o PDF assinado vigente, todas as assinaturas externas serão invalidadas e deverão ser coletadas novamente.',
@@ -413,6 +462,7 @@ function DocumentoDetail({
   onDisponibilizar,
   onPendente,
   onCancelar,
+  onCancelarDocumento,
 }: {
   documento: DocumentoDetalhe;
   gestaoDocumentos: boolean;
@@ -434,8 +484,11 @@ function DocumentoDetail({
   onDisponibilizar: () => void;
   onPendente: () => void;
   onCancelar: () => void;
+  onCancelarDocumento: () => void;
 }) {
   const situacao = DOCUMENTO_SITUACAO_META[documento.situacao];
+  // 287: documento cancelado é somente leitura (só consulta: PDFs, link, respostas).
+  const editavel = !documentoSomenteLeitura(documento);
   const origemAutomatica =
     documento.origem === 'CHAMADO_EXECUCAO' || documento.origem === 'VISTORIA';
   const situacaoPermitePdf =
@@ -476,15 +529,30 @@ function DocumentoDetail({
             Validação: <span className="mono font-semibold">{documento.codigoValidacao}</span>
           </p>
         </div>
-        <Badge variant={situacao.badge}>{situacao.label}</Badge>
+        {editavel ? (
+          <Badge variant={situacao.badge}>{situacao.label}</Badge>
+        ) : (
+          <span
+            data-testid="badge-cancelado"
+            className="inline-flex items-center rounded-full bg-[var(--muted-bg)] px-2 py-0.5 text-[11px] font-medium text-[var(--ink-3)]"
+          >
+            Cancelado
+          </span>
+        )}
       </div>
+      {!editavel ? (
+        <p data-testid="documento-somente-leitura" className="rounded-[10px] bg-[var(--canvas-2)] px-3 py-2 text-[12px] text-[var(--ink-3)]">
+          Documento cancelado{rotuloCancelamento(documento) ? ` em ${rotuloCancelamento(documento)}` : ''}. Somente leitura.
+          {documento.cancelamento?.motivo ? ` Motivo: ${documento.cancelamento.motivo}` : ''}
+        </p>
+      ) : null}
 
       <dl className="grid gap-2 text-[13px] sm:grid-cols-2">
         <Detail label="Tipo" value={DOCUMENTO_TIPO_LABELS[documento.tipo]} />
         <Detail label="Origem" value={documento.origem} />
         <Detail label="Secretaria" value={documento.secretaria ? `${documento.secretaria.sigla} · ${documento.secretaria.nome}` : '—'} />
         <Detail label="Próprio" value={documento.unidade ? `${documento.unidade.codigoPatrimonial} · ${documento.unidade.nome}` : '—'} />
-        <DocumentoChamadosBloco documento={documento} onSaved={onFormSaved} />
+        <DocumentoChamadosBloco documento={editavel ? documento : { ...documento, podeEditarChamados: false }} onSaved={onFormSaved} />
         <Detail
           label="Vistoria"
           value={
@@ -500,17 +568,17 @@ function DocumentoDetail({
       </dl>
 
       <div className="flex flex-wrap gap-1.5">
-        {gestaoDocumentos && podePreencherAvulso ? (
+        {editavel && gestaoDocumentos && podePreencherAvulso ? (
           <Button type="button" size="sm" variant="filled" disabled={busy} onClick={onPreencher}>
             Preencher documento
           </Button>
         ) : null}
-        {gestaoDocumentos && !documento.possuiPdfOriginal && documento.situacao === 'RASCUNHO' && !podePreencherAvulso ? (
+        {editavel && gestaoDocumentos && !documento.possuiPdfOriginal && documento.situacao === 'RASCUNHO' && !podePreencherAvulso ? (
           <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onConcluir}>
             Concluir documento
           </Button>
         ) : null}
-        {gestaoDocumentos && podeGerarPdfOriginal ? (
+        {editavel && gestaoDocumentos && podeGerarPdfOriginal ? (
           <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onGerarPdf}>
             {precisaCorrigirPdfExecucao
               ? 'Corrigir PDF original'
@@ -533,17 +601,17 @@ function DocumentoDetail({
             Visualizar PDF assinado
           </Button>
         ) : null}
-        {documento.podeAssinarInterno && documento.possuiPdfOriginal && documento.situacao !== 'RASCUNHO' ? (
+        {editavel && documento.podeAssinarInterno && documento.possuiPdfOriginal && documento.situacao !== 'RASCUNHO' ? (
           <Button type="button" size="sm" variant="filled" disabled={busy} onClick={onAssinarInterno}>
             Assinar com usuário e senha
           </Button>
         ) : null}
-        {documento.podeDisponibilizarAssinatura && documento.possuiPdfOriginal && documento.situacao !== 'RASCUNHO' ? (
+        {editavel && documento.podeDisponibilizarAssinatura && documento.possuiPdfOriginal && documento.situacao !== 'RASCUNHO' ? (
           <Button type="button" size="sm" variant="outlined" disabled={busy} onClick={onDisponibilizar}>
             Encaminhar para assinatura
           </Button>
         ) : null}
-        {gestaoDocumentos ? (
+        {editavel && gestaoDocumentos ? (
           <Button
             type="button"
             size="sm"
@@ -558,18 +626,31 @@ function DocumentoDetail({
           <Copy className="h-3.5 w-3.5" />
           Copiar link de validação
         </Button>
-        {gestaoDocumentos && (documento.signatariosPendentes ?? []).length === 0 ? (
+        {editavel && gestaoDocumentos && (documento.signatariosPendentes ?? []).length === 0 ? (
           <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onPendente}>
             {documento.situacao === 'ASSINATURA_PENDENTE'
               ? 'Desmarcar assinatura pendente'
               : 'Marcar assinatura pendente'}
           </Button>
         ) : null}
-        {gestaoDocumentos &&
+        {editavel && gestaoDocumentos &&
         documento.possuiPdfAssinado &&
         (documento.situacao === 'ASSINADO_VIGENTE' || documento.situacao === 'ASSINATURA_PENDENTE') ? (
           <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancelar}>
             Cancelar PDF assinado vigente
+          </Button>
+        ) : null}
+        {mostrarBotaoCancelarDocumento(documento) ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            data-testid="botao-cancelar-documento"
+            className="text-[var(--danger)] hover:bg-[var(--danger-bg)]"
+            disabled={busy}
+            onClick={onCancelarDocumento}
+          >
+            Cancelar documento
           </Button>
         ) : null}
       </div>
@@ -577,7 +658,7 @@ function DocumentoDetail({
       {(documento.signatariosPendentes ?? []).length ? (
         <SignatariosInternosPendentes
           itens={documento.signatariosPendentes ?? []}
-          podeCancelar={Boolean(documento.podeDisponibilizarAssinatura)}
+          podeCancelar={editavel && Boolean(documento.podeDisponibilizarAssinatura)}
           onChanged={onFormSaved}
         />
       ) : null}
@@ -587,7 +668,7 @@ function DocumentoDetail({
           Ver respostas do documento
         </Button>
       ) : null}
-      {preencherAberto && podePreencherAvulso ? (
+      {editavel && preencherAberto && podePreencherAvulso ? (
         <DocumentoPreencherDialog
           documento={documento}
           onClose={onFecharPreencher}

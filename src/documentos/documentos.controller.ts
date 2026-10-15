@@ -19,6 +19,7 @@ import { PermissionsGuard } from '../auth/permissions.guard';
 import {
   AssinarDocumentoInternoDto,
   CancelarDocumentoDto,
+  CancelarDocumentoLogicoDto,
   ColetarAssinaturaDto,
   CreateDocumentoAvulsoDto,
   DisponibilizarAssinaturaInternaDto,
@@ -245,6 +246,17 @@ export class DocumentosController {
   @RequireAnyPermissions('documentos.coletar_assinatura', 'documentos.administrar')
   togglePendente(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.documentosService.toggleAssinaturaPendente(id, user);
+  }
+
+  /** 287: cancelamento lógico (nunca DELETE). */
+  @Post(':id/cancelar')
+  @RequireAnyPermissions('documentos.cancelar')
+  cancelar(
+    @Param('id') id: string,
+    @Body() body: CancelarDocumentoLogicoDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.documentosService.cancelar(id, body, user);
   }
 
   @Post(':id/cancelar-assinado')

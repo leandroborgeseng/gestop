@@ -55,6 +55,11 @@ export class ListDocumentosQueryDto {
   @IsDateString()
   from?: string;
 
+  /** 287: `1` mostra também os documentos cancelados (histórico). */
+  @IsOptional()
+  @IsString()
+  historico?: string;
+
   @IsOptional()
   @IsDateString()
   to?: string;
@@ -310,6 +315,14 @@ export class DisponibilizarAssinaturaInternaDto {
 }
 
 export class RecusarAssinaturaInternaDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  motivo?: string;
+}
+
+/** 287: motivo opcional no cancelamento lógico. */
+export class CancelarDocumentoLogicoDto {
   @IsOptional()
   @IsString()
   @MaxLength(1000)
