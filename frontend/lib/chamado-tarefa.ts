@@ -127,6 +127,8 @@ export type ChamadoTarefaDetalhe = ChamadoTarefaResumo & {
     secretaria?: string | null;
     temAnexos?: boolean;
     anexoIds?: string[];
+    /** 293: texto digitado no evento (andamento/conclusão/cancelamento). null em registros antigos. */
+    texto?: string | null;
   }>;
 };
 

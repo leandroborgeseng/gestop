@@ -1,5 +1,6 @@
 'use client';
 
+import { TextoExpansivel } from '@/components/ui/texto-expansivel';
 import { useEffect, useState } from 'react';
 import { Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -421,7 +422,7 @@ export function ChamadoTarefaSheet({
 function ChamadoTarefaHistoricoView({
   tarefa,
 }: {
-  tarefa: Pick<ChamadoTarefaDetalhe, 'podeVerHistorico' | 'historico' | 'anexos'>;
+  tarefa: Pick<ChamadoTarefaDetalhe, 'titulo' | 'podeVerHistorico' | 'historico' | 'anexos'>;
 }) {
   if (!tarefa.podeVerHistorico) return null;
   return (
@@ -434,10 +435,15 @@ function ChamadoTarefaHistoricoView({
               .map((id) => tarefa.anexos.find((anexo) => anexo.id === id))
               .filter((anexo): anexo is ChamadoTarefaDetalhe['anexos'][number] => Boolean(anexo));
             return (
-              <li key={item.id} className="rounded-[10px] bg-[var(--surface-2)] p-2 text-[12px]">
-                <p className="font-semibold text-[var(--ink)]">
+              <li key={item.id} data-testid="historico-item" className="rounded-[10px] bg-[var(--surface-2)] p-2 text-[12px]">
+                <p data-testid="historico-cabecalho" className="font-semibold text-[var(--ink)]">
                   {ACAO_HISTORICO[item.acao ?? ''] ?? 'Registro'}
-                  {item.motivo ? ` · ${item.motivo}` : ''}
+                  {` · ${tarefa.titulo}`}
+                  {item.acao === 'concluida' ? (
+                    <span className="ml-1.5 rounded-full bg-[var(--ok-bg,#e7f6ee)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--ok-ink)]">
+                      Concluída
+                    </span>
+                  ) : null}
                 </p>
                 <p className="text-[var(--ink-3)]">
                   {[new Date(item.createdAt).toLocaleString('pt-BR'), item.alteradoPor?.nome, item.perfil, item.secretaria]
@@ -445,8 +451,9 @@ function ChamadoTarefaHistoricoView({
                     .join(' · ')}
                   {item.temAnexos ? ' · Há anexos' : ''}
                 </p>
+                {item.texto ? <TextoExpansivel texto={item.texto} testId="historico-texto" /> : null}
                 {ligados.length ? (
-                  <ul className="mt-2 space-y-2">
+                  <ul data-testid="historico-anexos" className="mt-2 space-y-2">
                     {ligados.map((anexo) => (
                       <AnexoLinha key={anexo.id} anexo={anexo} />
                     ))}

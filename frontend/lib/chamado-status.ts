@@ -150,6 +150,9 @@ export type ChamadoTimelineStep = {
     usuario?: string;
     dataHora?: string;
   };
+  /** 293: evento de tarefa — qual tarefa e o texto digitado (íntegro). */
+  tarefa?: { id: string; titulo: string };
+  texto?: string;
 };
 
 export type ChamadoHistoricoEntry = {
@@ -467,13 +470,19 @@ export function buildChamadoTimelineFromHistorico(
       const perfil = typeof metadata.perfilAtivo === 'string' ? metadata.perfilAtivo : null;
       const secretaria = typeof metadata.secretariaAtiva === 'string' ? metadata.secretariaAtiva : null;
       const temAnexos = metadata.temAnexos === true;
+      const texto = typeof metadata.texto === 'string' && metadata.texto ? metadata.texto : undefined;
+      const tarefaId = typeof metadata.tarefaId === 'string' ? metadata.tarefaId : null;
+      const tarefaTitulo = typeof metadata.tarefaTitulo === 'string' ? metadata.tarefaTitulo : null;
       return {
         id: entry.id,
         title: entry.motivo?.trim() || 'Atualização de tarefa',
         date: formatTimelineDate(entry.createdAt),
-        sub: [entry.alteradoPor?.nome, perfil, secretaria, resumo, temAnexos ? 'Há anexos' : null].filter(Boolean).join(' · '),
+        // Com `texto` próprio, o resumo (que repete o texto numa linha só) sai do subtítulo.
+        sub: [entry.alteradoPor?.nome, perfil, secretaria, texto ? null : resumo, temAnexos ? 'Há anexos' : null].filter(Boolean).join(' · '),
         done: true,
         active: false,
+        ...(tarefaId && tarefaTitulo ? { tarefa: { id: tarefaId, titulo: tarefaTitulo } } : {}),
+        ...(texto ? { texto } : {}),
       };
     }
 

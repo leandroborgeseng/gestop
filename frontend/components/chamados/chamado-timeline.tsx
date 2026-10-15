@@ -7,6 +7,7 @@ import { AuthenticatedImage } from '@/components/ui/authenticated-image';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { AuthenticatedStorageLink } from '@/components/ui/authenticated-storage-link';
 import { ChamadoTimelineStep } from '@/lib/chamado-status';
+import { TextoExpansivel } from '@/components/ui/texto-expansivel';
 
 export function ChamadoTimeline({ steps }: { steps: ChamadoTimelineStep[] }) {
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -65,6 +66,20 @@ export function ChamadoTimeline({ steps }: { steps: ChamadoTimelineStep[] }) {
                 <span className="mono text-[11px] text-[var(--ink-3)]">{step.date}</span>
               </div>
               {step.sub ? <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{step.sub}</p> : null}
+              {step.tarefa ? (
+                <a
+                  data-testid="timeline-tarefa"
+                  href={`/execucao?aba=tarefas&tarefa=${encodeURIComponent(step.tarefa.id)}`}
+                  className="mt-0.5 inline-block text-[12px] font-semibold text-[var(--brand)] underline"
+                >
+                  Tarefa: {step.tarefa.titulo}
+                </a>
+              ) : null}
+              {step.texto ? (
+                <div className="mt-1">
+                  <TextoExpansivel texto={step.texto} testId="timeline-texto" />
+                </div>
+              ) : null}
 
               {canExpand && isExpanded && step.expand ? (
                 <div className="mt-2 space-y-2 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-[12px] text-[var(--ink-2)]">
