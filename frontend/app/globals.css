@@ -33,6 +33,10 @@
   --warn: #b5680a;
   --warn-bg: #fbf0dd;
   --warn-bd: #f0d8ae;
+  /* 286: textos AA (≥ 4,5:1) — --warn fica só para ícone/borda/pin. */
+  --warn-ink: #8f5207;
+  --ok-ink: #11703b;
+  --danger-ink: #b42020;
   --danger: #d62b2b;
   --danger-bg: #fbe9e9;
   --danger-bd: #f2c9c9;
