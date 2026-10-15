@@ -127,4 +127,42 @@ describe.skipIf(!local)('287 · integração (Postgres local)', () => {
     const editor = { ...gestor, permissoes: [...gestor.permissoes, 'documentos.criar_avulso'] };
     await expect(service.salvarRespostas(id, { respostas: [] } as never, editor)).rejects.toBeInstanceOf(ConflictException);
   });
+
+  it('detalhe: podeCancelar só para documentos.cancelar ou Admin do Sistema (administrar sozinho = false)', async () => {
+    const id = await novoDocumento(DocumentoSituacao.GERADO);
+    const base = { ...signatario, permissoes: ['documentos.visualizar'] };
+    const casos: Array<[string, JwtPayload, boolean]> = [
+      ['sem documentos.cancelar', base, false],
+      ['só documentos.administrar', { ...base, permissoes: ['documentos.visualizar', 'documentos.administrar'] }, false],
+      ['documentos.cancelar', { ...base, permissoes: ['documentos.visualizar', 'documentos.cancelar'] }, true],
+      ['Admin do Sistema', { ...base, perfis: ['Administrador do Sistema'] }, true],
+    ];
+    for (const [nome, perfil, esperado] of casos) {
+      const d = (await service.getById(id, perfil)) as { podeCancelar?: boolean };
+      expect(d.podeCancelar, nome).toBe(esperado);
+    }
+  });
+
+  it('legado: documento já CANCELADO com pedido PENDENTE não aparece em pendências, total nem minhas pendências', async () => {
+    const u = await prisma.usuario.create({ data: { nome: 'legado287', email: `legado287-${tag}@aion.local`, senhaHash: 'x', secretariaId } });
+    userIds.push(u.id);
+    const destinatario: JwtPayload = { ...signatario, sub: u.id, nome: u.nome, email: u.email };
+    const id = randomUUID();
+    docIds.push(id);
+    await prisma.documento.create({
+      data: {
+        id, codigo: `DOC-287L-${tag}`, codigoValidacao: `V287L${tag}`, tipo: DocumentoTipo.DOCUMENTO_AVULSO,
+        situacao: DocumentoSituacao.CANCELADO, origem: DocumentoOrigem.AVULSO, titulo: `Legado 287 ${tag}`, secretariaId,
+      },
+    });
+    await prisma.documentoAssinaturaPedido.create({ data: { documentoId: id, destinatarioId: u.id, solicitanteId: gestor.sub } });
+    const resumo = await service.pendenciasResumo(destinatario);
+    const ids = resumo.grupos.flatMap((g: { itens: Array<{ id: string }> }) => g.itens.map((x) => x.id));
+    expect(ids).not.toContain(id);
+    expect(resumo.total).toBe(0);
+    expect(resumo.grupos.find((g: { id: string }) => g.id === 'documentos')).toBeUndefined();
+    const minhas = await service.listMinhasPendenciasAssinatura(destinatario);
+    expect(minhas.total).toBe(0);
+    expect(minhas.items.map((d: { id: string }) => d.id)).not.toContain(id);
+  });
 });
