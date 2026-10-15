@@ -7,10 +7,10 @@
 export const DETALHE_SECTION_MOBILE =
   'max-md:h-[calc(100dvh-var(--mobile-appbar-h)-var(--bottom-nav-h)-env(safe-area-inset-bottom))] max-md:max-h-none max-md:scroll-mt-[var(--mobile-appbar-h)]';
 
-/** Área de rolagem: no celular é a única do card, com respiro acima do menu inferior. */
+/** Área de rolagem: no celular é a única do card; respiro de 12px no fim (a altura já desconta o menu inferior). */
 export const DETALHE_SCROLL_BASE = 'flex h-full flex-col p-0';
 export const DETALHE_SCROLL_MOBILE =
-  'max-md:overflow-y-auto max-md:overscroll-contain max-md:pb-[calc(var(--bottom-nav-h)+env(safe-area-inset-bottom)+12px)]';
+  'max-md:overflow-y-auto max-md:overscroll-contain max-md:pb-3';
 
 /** Linha fixa (só no celular): código, status e "⋯", 48px. */
 export const DETALHE_LINHA_FIXA =

@@ -40,14 +40,16 @@ describe('291 layout do detalhe do chamado', () => {
     );
   });
 
-  it('altura útil e respiro acima do menu inferior', () => {
+  it('altura útil e respiro de 12px no fim da rolagem', () => {
     expect(L.DETALHE_SECTION_MOBILE).toContain(
       'max-md:h-[calc(100dvh-var(--mobile-appbar-h)-var(--bottom-nav-h)-env(safe-area-inset-bottom))]',
     );
     expect(L.DETALHE_SECTION_MOBILE).toContain('max-md:max-h-none');
-    expect(L.DETALHE_SCROLL_MOBILE).toContain(
-      'max-md:pb-[calc(var(--bottom-nav-h)+env(safe-area-inset-bottom)+12px)]',
-    );
+    const scroll = tokens(L.DETALHE_SCROLL_MOBILE);
+    expect(scroll).toContain('max-md:pb-3');
+    // a altura já desconta o menu inferior: o respiro não pode somar o menu de novo
+    expect(L.DETALHE_SCROLL_MOBILE).not.toContain('bottom-nav-h');
+    expect(scroll.filter((t) => t.startsWith('max-md:pb-'))).toEqual(['max-md:pb-3']);
   });
 
   it('espaçamento do celular: 12px de padding e de gap', () => {
