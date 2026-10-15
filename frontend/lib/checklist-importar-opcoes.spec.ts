@@ -19,6 +19,14 @@ import { decodificarTexto, tipoDoArquivo } from './checklist-importar-opcoes-arq
 const nomes = (r: { opcoes: Array<{ nome: string }> }) => r.opcoes.map((o) => o.nome);
 
 describe('294 · cabeçalho', () => {
+  it('cabeçalho "Opções" (plural) é reconhecido como a coluna da opção', () => {
+    const r = analisarLinhas([['Opções', 'Nota'], ['Bom', 8], ['Ruim', 2]], 'VISTORIA');
+    expect(r.erros).toEqual([]);
+    expect(r.opcoes).toEqual([
+      { nome: 'Bom', nota: 8, linha: 2 },
+      { nome: 'Ruim', nota: 2, linha: 3 },
+    ]);
+  });
   it('normaliza acento e caixa', () => {
     expect(['Opção', 'opcao', 'OPÇÃO ', ' Opções', 'NOTA'].map(normalizarCabecalho)).toEqual(['opcao', 'opcao', 'opcao', 'opcoes', 'nota']);
   });
@@ -139,6 +147,12 @@ describe('294 · CSV e TXT', () => {
       ['opcao', 'nota'],
       ['A', '1'],
       ['B, C', '2'],
+    ]);
+  });
+  it('CSV com mais "," que ";" no cabeçalho usa ","', () => {
+    expect(lerCsv('Opção,Nota,Obs;extra\nA,1,x;y\n')).toEqual([
+      ['Opção', 'Nota', 'Obs;extra'],
+      ['A', '1', 'x;y'],
     ]);
   });
   it('CSV ; com nota decimal em vírgula', () => {

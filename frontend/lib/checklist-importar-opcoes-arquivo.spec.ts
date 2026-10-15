@@ -16,6 +16,16 @@ describe('294 · leitura de planilha', () => {
     const [aba] = await lerPlanilha(planilha(ws));
     expect(aba.linhas).toEqual([['Opção'], ['Guardado']]);
   });
+  it('célula com fórmula (XLSX e XLS): só o valor guardado, nunca o texto da fórmula', async () => {
+    for (const formato of ['xlsx', 'biff8'] as const) {
+      const ws = XLSX.utils.aoa_to_sheet([['Opção', 'Nota'], ['Guardado', 7]]);
+      ws.A2 = { t: 's', v: 'Guardado', f: 'CONCATENATE("Exec","utado")' };
+      ws.B2 = { t: 'n', v: 7, f: '1+1' };
+      const [aba] = await lerPlanilha(planilha(ws, formato));
+      expect(aba.linhas).toEqual([['Opção', 'Nota'], ['Guardado', 7]]);
+      expect(JSON.stringify(aba.linhas)).not.toMatch(/CONCATENATE|1\+1|Executado|=/);
+    }
+  });
   it('XLS (BIFF8) também é lido', async () => {
     const ws = XLSX.utils.aoa_to_sheet([['Opção', 'Nota'], ['Bom', 8]]);
     const abas = await lerPlanilha(planilha(ws, 'biff8'));

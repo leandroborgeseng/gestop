@@ -8,7 +8,7 @@ const snack = vi.hoisted(() => ({ msgs: [] as string[] }));
 vi.mock('@/components/ui/snackbar', () => ({ useSnackbar: () => ({ show: (m: string) => snack.msgs.push(m) }) }));
 vi.mock('@/lib/api', () => ({ listTiposProprioOpcoes: () => Promise.resolve([]) }));
 
-import { MultiplaEscolhaEditor } from './checklist-shared';
+import { MultiplaEscolhaEditor, VersionEditor } from './checklist-shared';
 
 type Cfg = { opcoes: string[]; notas?: Array<number | null>; selecao: string; modoExibicao: string };
 const estado: { atual: Cfg | null; mudancas: number } = { atual: null, mudancas: 0 };
@@ -64,6 +64,20 @@ describe('294 · gatilho', () => {
     const cadastrar = screen.getByRole('button', { name: 'Cadastrar mais opções' });
     expect(importar.parentElement).toBe(cadastrar.parentElement);
     expect(cadastrar.compareDocumentPosition(importar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
+describe('294 · gatilho só em múltipla escolha', () => {
+  it('ausente para outros tipos e aparece ao trocar para Múltipla escolha', async () => {
+    const versao = { id: 'v1', itens: [{ id: 'i1', ordem: 1, codigo: 'P1', secao: '', titulo: 'P', tipo: 'TEXTO', obrigatorio: false, geraNaoConformidade: false, exigeEvidencia: false, categoriaVistoriaId: 'c1', opcoes: null }] };
+    render(createElement(VersionEditor, { version: versao as never, categorias: [{ id: 'c1', nome: 'Cat', ativo: true }] as never, onSave: () => {}, onPublish: () => {} }));
+    const tipo = screen.getByDisplayValue('Texto') as HTMLSelectElement;
+    for (const outro of [...tipo.options].map((o) => o.value).filter((v) => v !== 'MULTIPLA_ESCOLHA')) {
+      fireEvent.change(tipo, { target: { value: outro } });
+      expect(screen.queryByRole('button', { name: 'Importar lista de opções' }), outro).toBeNull();
+    }
+    fireEvent.change(tipo, { target: { value: 'MULTIPLA_ESCOLHA' } });
+    expect(screen.getByRole('button', { name: 'Importar lista de opções' })).toBeTruthy();
   });
 });
 
@@ -170,6 +184,18 @@ describe('294 · conflito com opções atuais', () => {
     const substituir = screen.getByLabelText(/Substituir as 2 opções atuais/) as HTMLInputElement;
     expect(adicionar.checked).toBe(true);
     expect(substituir.checked).toBe(false);
+  });
+  it('Adicionar que passaria de 500: botão Importar com atributo disabled; Substituir libera', async () => {
+    await montar({ opcoes: Array.from({ length: 499 }, (_, i) => `A${i}`), selecao: 'UNICA', modoExibicao: 'SELECT' });
+    await abrir();
+    await enviar(csv('Opção\nX\nY\n'));
+    await act(async () => fireEvent.click(confirmar()));
+    expect((screen.getByLabelText(/Adicionar ao final/) as HTMLInputElement).checked).toBe(true);
+    expect(confirmar().hasAttribute('disabled')).toBe(true);
+    await act(async () => fireEvent.click(confirmar()));
+    expect(estado.mudancas).toBe(0);
+    fireEvent.click(screen.getByLabelText(/Substituir as 499 opções atuais/));
+    expect(confirmar().hasAttribute('disabled')).toBe(false);
   });
   it('Adicionar ao final: mantém as atuais, seleção e exibição; foco na 1ª importada', async () => {
     await ateConflito();
