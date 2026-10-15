@@ -2,14 +2,19 @@ import { Controller, Get, NotFoundException, Param, StreamableFile, UseGuards } 
 import { createReadStream, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { AuthGuard } from '../auth/auth.guard';
+import { CurrentUser } from '../auth/current-user';
+import type { JwtPayload } from '../auth/jwt';
+import { StorageAcessoService } from './storage-acesso.service';
 import { normalizeStorageRoutePath } from './storage-url';
 import { resolveStorageLocalDir } from './storage.health';
 
 @UseGuards(AuthGuard)
 @Controller('storage')
 export class StorageController {
+  constructor(private readonly acesso: StorageAcessoService) {}
+
   @Get('{*splat}')
-  serveLocalFile(@Param('splat') splat: string | string[]) {
+  async serveLocalFile(@Param('splat') splat: string | string[], @CurrentUser() user?: JwtPayload) {
     const driver = process.env.STORAGE_DRIVER?.trim() || 'local';
     if (driver !== 'local') {
       throw new NotFoundException('Arquivo nao encontrado.');
@@ -19,6 +24,9 @@ export class StorageController {
     if (!path) {
       throw new NotFoundException('Arquivo nao encontrado.');
     }
+
+    // 285: permissão + escopo do registro dono do arquivo.
+    await this.acesso.assertPodeBaixar(user, path);
 
     const root = resolveStorageLocalDir();
     const absolutePath = join(root, path);

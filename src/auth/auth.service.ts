@@ -21,6 +21,7 @@ const PERFIL_SESSION_SELECT = {
   nome: true,
   ativo: true,
   natureza: true,
+  administradorSistema: true,
   permissoes: {
     select: {
       permissao: {
@@ -135,6 +136,7 @@ export class AuthService {
     perfilNatureza: 'INTERNO' | 'EXTERNO';
     acessoTodasSecretarias: boolean;
     secretariasIds: string[];
+    administradorSistema: boolean;
   }> {
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: userId },
@@ -154,6 +156,7 @@ export class AuthService {
       perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
       acessoTodasSecretarias: session.acessoTodasSecretarias,
       secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
+      administradorSistema: session.administradorSistema,
     };
   }
 
@@ -313,7 +316,7 @@ export class AuthService {
       acessoTodasSecretarias: true,
       secretaria: { select: SECRETARIA_SELECT },
       secretariaAtiva: { select: SECRETARIA_SELECT },
-      perfilAtivo: { select: { id: true, nome: true, ativo: true, natureza: true } },
+      perfilAtivo: { select: { id: true, nome: true, ativo: true, natureza: true, administradorSistema: true } },
       perfis: {
         select: {
           perfilId: true,
@@ -345,13 +348,20 @@ export class AuthService {
     acessoTodasSecretarias: boolean;
     secretaria: { id: string; nome: string; sigla: string } | null;
     secretariaAtiva: { id: string; nome: string; sigla: string } | null;
-    perfilAtivo: { id: string; nome: string; ativo: boolean; natureza?: 'INTERNO' | 'EXTERNO' } | null;
+    perfilAtivo: {
+      id: string;
+      nome: string;
+      ativo: boolean;
+      natureza?: 'INTERNO' | 'EXTERNO';
+      administradorSistema?: boolean;
+    } | null;
     perfis: Array<{
       perfilId: string;
       perfil: {
         id: string;
         nome: string;
         ativo: boolean;
+        administradorSistema?: boolean;
         natureza?: 'INTERNO' | 'EXTERNO';
         permissoes: Array<{ permissao: { chave: string } }>;
       };
@@ -453,6 +463,8 @@ export class AuthService {
       user,
       perfis: user.perfis,
       permissoes,
+      // 285: exceção do guard só pelo flag do perfil ATIVO (nunca pelo nome).
+      administradorSistema: Boolean(perfilAtivo?.ativo && perfilAtivo.administradorSistema),
       secretariaId,
       perfilAtivo,
       acessoTodasSecretarias: canTodas,

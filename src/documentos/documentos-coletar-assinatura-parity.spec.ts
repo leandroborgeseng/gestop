@@ -101,7 +101,7 @@ const TABELA: Array<{
   },
   {
     nome: 'Administrador do Sistema',
-    user: jwt({ permissoes: [], perfis: [ADMINISTRADOR_SISTEMA_NOME] }),
+    user: jwt({ permissoes: [], perfis: [ADMINISTRADOR_SISTEMA_NOME], administradorSistema: true }),
     esperado: true,
   },
 ];

@@ -384,6 +384,8 @@ model Perfil {
   /// Interno = servidor/operacional. Externo = cidadão/consulta pública (futuro).
   natureza    PerfilNatureza @default(INTERNO)
   sistema     Boolean        @default(false)
+  /// 285: exceção explícita do guard de permissões (acesso total). Não depende do nome.
+  administradorSistema Boolean @default(false)
   ativo       Boolean        @default(true)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt

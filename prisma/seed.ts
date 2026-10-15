@@ -203,7 +203,7 @@ async function main() {
 
   const [adminPerfil, gestorPerfil, fiscalPerfil, manutencaoPerfil, solicitacaoPerfil] = await Promise.all([
     prisma.perfil.create({
-      data: { nome: 'Administrador do Sistema', sistema: true, descricao: 'Acesso total ao SIGMA' },
+      data: { nome: 'Administrador do Sistema', sistema: true, administradorSistema: true, descricao: 'Acesso total ao SIGMA' },
     }),
     prisma.perfil.create({
       data: { nome: 'Gestor CCO', sistema: true, descricao: 'Operacao da Central de Controle' },

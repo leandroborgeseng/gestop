@@ -11,6 +11,8 @@ export type JwtPayload = {
   perfilNatureza?: 'INTERNO' | 'EXTERNO';
   acessoTodasSecretarias?: boolean;
   secretariasIds?: string[];
+  /** 285: perfil ativo marcado como Administrador do Sistema (flag no banco). Só preenchido pelo AuthGuard. */
+  administradorSistema?: boolean;
   iat?: number;
   exp?: number;
 };
