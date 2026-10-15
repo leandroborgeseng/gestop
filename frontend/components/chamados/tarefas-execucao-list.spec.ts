@@ -167,7 +167,7 @@ describe('286 §8.5 — abrir pelo card, Esc e foco', () => {
 });
 
 describe('286 §8.6 — clique no pin', () => {
-  const fn = panelSrc.slice(panelSrc.indexOf('function selecionarPeloPin'), panelSrc.indexOf('useEffect(() => {\n    if (searchParams'));
+  const fn = panelSrc.slice(panelSrc.indexOf('function selecionarPeloPin'), panelSrc.indexOf('/** 286: card/Enter/Espaço'));
   it('seleciona, rola a lista e anuncia em aria-live, sem abrir o modal', () => {
     expect(fn).toContain('setSelecionada(id)');
     expect(fn).toContain('setRolarParaSelecionada');
@@ -294,8 +294,11 @@ describe('286 §8.12 — contraste AA (≥ 4,5:1)', () => {
     expect(token('warn-ink')).toBe('#8f5207');
     expect(razaoContraste(token('warn-ink'), token('warn-bg'))).toBeGreaterThanOrEqual(4.5);
     expect(razaoContraste(token('warn-ink'), '#ffffff')).toBeGreaterThanOrEqual(4.5);
-    expect(badgeSrc).toContain("warning: 'bg-[var(--warn-bg)] text-[var(--warn-ink)]'");
-    expect(badgeSrc).not.toContain('text-[var(--warn)]');
+    // 2º ciclo: Badge global intacto; --warn-ink aplicado só na aba Tarefas
+    expect(badgeSrc).toContain("warning: 'bg-[var(--warn-bg)] text-[var(--warn)]'");
+    expect(listSrc).toContain("warning: 'text-[var(--warn-ink)]'");
+    expect(panelSrc).toContain('<Badge variant="warning" className="text-[var(--warn-ink)]">{data?.contadores.emAndamento');
+    expect(lista([tarefa({ status: 'EM_ANDAMENTO' })])).toMatch(/bg-\[var\(--warn-bg\)\] text-\[var\(--warn-ink\)\][^"]*">Em andamento</);
   });
   it('todos os pares texto/fundo usados no card passam 4,5:1', () => {
     const fundos = ['surface', 'surface-2', 'brand-soft'];

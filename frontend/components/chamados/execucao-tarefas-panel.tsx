@@ -94,24 +94,6 @@ export function ExecucaoTarefasPanel() {
     setBusca('');
   }
 
-  /** 286: card/Enter/Espaço seleciona, abre o modal e lembra o card para devolver o foco. */
-  function abrirTarefa(id: string) {
-    setSelecionada(id);
-    setDestacadas([]);
-    setAberta(id);
-  }
-
-  function fecharTarefa() {
-    const id = aberta;
-    setAberta(null);
-    if (id && typeof document !== 'undefined') {
-      requestAnimationFrame(() => {
-        const card = document.querySelector<HTMLButtonElement>(`[data-tarefa-id="${CSS.escape(id)}"]`);
-        card?.focus();
-      });
-    }
-  }
-
   /** 286: clique no pin só seleciona (não abre o modal), rola a lista e anuncia. */
   function selecionarPeloPin(pinId: string) {
     const pin = pins.find((item) => item.id === pinId);
@@ -128,6 +110,24 @@ export function ExecucaoTarefasPanel() {
           ? `Tarefa ${tarefa.titulo} selecionada no mapa`
           : '',
     );
+  }
+
+  /** 286: card/Enter/Espaço seleciona, abre o modal e lembra o card para devolver o foco. */
+  function abrirTarefa(id: string) {
+    setSelecionada(id);
+    setDestacadas([]);
+    setAberta(id);
+  }
+
+  function fecharTarefa() {
+    const id = aberta;
+    setAberta(null);
+    if (id && typeof document !== 'undefined') {
+      requestAnimationFrame(() => {
+        const card = document.querySelector<HTMLButtonElement>(`[data-tarefa-id="${CSS.escape(id)}"]`);
+        card?.focus();
+      });
+    }
   }
 
   useEffect(() => {
@@ -208,7 +208,7 @@ export function ExecucaoTarefasPanel() {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         <Badge variant="neutral">{data?.contadores.novas ?? 0} novas</Badge>
-        <Badge variant="warning">{data?.contadores.emAndamento ?? 0} em andamento</Badge>
+        <Badge variant="warning" className="text-[var(--warn-ink)]">{data?.contadores.emAndamento ?? 0} em andamento</Badge>
         <Badge variant="danger" className="text-[var(--danger-ink)]">{data?.contadores.atrasadas ?? 0} atrasadas</Badge>
       </div>
       <div className="overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)]">

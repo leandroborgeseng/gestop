@@ -11,12 +11,12 @@ import { TAREFA_STATUS_BADGE, coordenadaTarefa, prazoTarefaInfo, resumoTipoTaref
 
 /**
  * 286: badges do card com texto em tokens *-ink (≥ 4,5:1 sobre o fundo do badge e sobre --brand-soft).
- * O Badge global já usa --warn-ink no warning; ok/danger são reforçados só aqui para não mexer em outras telas.
+ * O Badge global não muda (decisão do 2º ciclo): warning/ok/danger são reforçados só aqui, na aba Tarefas.
  */
-const BADGE_INK = {
+export const BADGE_INK = {
   ok: 'text-[var(--ok-ink)]',
   danger: 'text-[var(--danger-ink)]',
-  warning: '',
+  warning: 'text-[var(--warn-ink)]',
   neutral: '',
   info: '',
 } as const;
