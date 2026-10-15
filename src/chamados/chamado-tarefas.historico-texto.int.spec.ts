@@ -72,13 +72,30 @@ describe.skipIf(!local)('293 · texto do andamento/conclusão no histórico (Pos
     const texto = 'Linha 1 do andamento\nLinha 2\n\n  Linha 4 indentada';
     await service.update(id, { status: ChamadoTarefaStatus.EM_ANDAMENTO, observacao: `  ${texto}  ` } as never, user);
     const row = await prisma.historicoStatus.findFirstOrThrow({ where: { entidadeTipo: 'ChamadoTarefa', entidadeId: id } });
-    expect((row.metadata as { texto?: string }).texto).toBe(texto);
+    expect((row.metadata as { texto?: string }).texto).toBe(`  ${texto}  `);
     const d = await historico(id);
     const ev = d.historico.filter((h) => h.acao === 'andamento');
     expect(ev).toHaveLength(1);
-    expect(ev[0].texto).toBe('Linha 1 do andamento\nLinha 2\n\n  Linha 4 indentada');
+    expect(ev[0].texto).toBe('  Linha 1 do andamento\nLinha 2\n\n  Linha 4 indentada  ');
     expect(ev[0].alteradoPor?.nome).toBe('Executor 293');
     expect(Number.isNaN(Date.parse(ev[0].createdAt))).toBe(false);
+  });
+
+  it('Q5: texto gravado e devolvido exatamente como digitado (espaços e quebras nas pontas)', async () => {
+    const id = await novaTarefa('Texto exato');
+    const digitado = '  inicio\n\n  meio com espaços  \n...\nfim  \n';
+    await service.update(id, { status: ChamadoTarefaStatus.EM_ANDAMENTO, observacao: digitado } as never, user);
+    const row = await prisma.historicoStatus.findFirstOrThrow({ where: { entidadeTipo: 'ChamadoTarefa', entidadeId: id } });
+    expect((row.metadata as { texto?: string }).texto).toBe('  inicio\n\n  meio com espaços  \n...\nfim  \n');
+    const ev = (await historico(id)).historico.filter((h) => h.acao === 'andamento');
+    expect(ev.map((h) => h.texto)).toEqual(['  inicio\n\n  meio com espaços  \n...\nfim  \n']);
+    const tl = (await service.getChamadoLeituraViaTarefa(id, chamadoId, user)).historico.filter((h) => h.metadata.tarefaId === id && h.metadata.acao === 'andamento');
+    expect(tl.map((h) => h.metadata.texto)).toEqual(['  inicio\n\n  meio com espaços  \n...\nfim  \n']);
+    const conc = await novaTarefa('Conclusão exata');
+    await service.update(conc, { status: ChamadoTarefaStatus.CONCLUIDA, conclusaoTexto: '\n  feito  \n' } as never, user);
+    expect((await historico(conc)).historico.filter((h) => h.acao === 'concluida').map((h) => h.texto)).toEqual(['\n  feito  \n']);
+    // a coluna da tarefa continua com trim (regressão)
+    expect((await prisma.chamadoTarefa.findUniqueOrThrow({ where: { id: conc } })).conclusaoTexto).toBe('feito');
   });
 
   it('dois andamentos seguidos: dois registros, nenhum sobrescreve, na ordem', async () => {

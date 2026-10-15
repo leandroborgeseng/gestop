@@ -49,4 +49,13 @@ describe('293 · TextoExpansivel', () => {
     await act(async () => fireEvent.click(screen.getByRole('button')));
     expect(screen.getByRole('button').textContent).toBe('Ver mais');
   });
+  it('Q22: texto com mais de 1000 caracteres aparece inteiro depois de "Ver mais" (nada truncado)', async () => {
+    const enorme = Array.from({ length: 40 }, (_, i) => `linha ${String(i + 1).padStart(2, '0')} ${'x'.repeat(40)}`).join('\n');
+    expect(enorme.length).toBeGreaterThan(1000);
+    render(createElement(TextoExpansivel, { texto: enorme, testId: 't' }));
+    expect(screen.getByTestId('t').textContent).toBe(enorme);
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Ver mais' })));
+    expect(screen.getByTestId('t').textContent).toBe(enorme);
+    expect(screen.getByTestId('t').textContent!.length).toBe(enorme.length);
+  });
 });

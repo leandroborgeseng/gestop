@@ -271,7 +271,7 @@ export class ChamadoTarefasService {
       data.justificativa = justificativa;
       data.canceladaEm = new Date();
       acao = 'cancelada';
-      detalhe = justificativa;
+      detalhe = dto.justificativa ?? justificativa; // 293: texto do evento exatamente como digitado
     } else if (dto.status === ChamadoTarefaStatus.CONCLUIDA) {
       if (encerrada) throw new BadRequestException('Tarefa concluída ou cancelada não muda de status.');
       if (!this.podeConcluir(user) && !designado) throw new ForbiddenException('Sem permissão para concluir a tarefa.');
@@ -282,7 +282,7 @@ export class ChamadoTarefasService {
       data.concluidaEm = new Date();
       data.concluidaPor = { connect: { id: user.sub } };
       acao = 'concluida';
-      detalhe = texto;
+      detalhe = dto.conclusaoTexto ?? texto; // 293: texto do evento exatamente como digitado
     } else if (dto.status === ChamadoTarefaStatus.EM_ANDAMENTO) {
       if (encerrada) throw new BadRequestException('Tarefa concluída ou cancelada não muda de status.');
       if (!this.podeAndamento(user) && !designado) throw new ForbiddenException('Sem permissão para registrar andamento.');
@@ -291,7 +291,7 @@ export class ChamadoTarefasService {
       data.status = ChamadoTarefaStatus.EM_ANDAMENTO;
       data.observacao = texto;
       acao = 'andamento';
-      detalhe = texto;
+      detalhe = dto.observacao ?? texto; // 293: texto do evento exatamente como digitado
     } else if (dto.status && dto.status !== before.status) {
       throw new BadRequestException('Transição de status não permitida.');
     } else if (mudaCampo) {

@@ -183,9 +183,10 @@ export function ChamadoTarefaSheet({
     try {
       const atualizada = await updateChamadoTarefa(tarefa.id, {
         status,
-        observacao: status === 'EM_ANDAMENTO' ? texto.trim() : undefined,
-        conclusaoTexto: status === 'CONCLUIDA' ? texto.trim() : undefined,
-        justificativa: status === 'CANCELADA' ? texto.trim() : undefined,
+        // 293: envia o texto como digitado (espaços e quebras preservados); a validação usa trim.
+        observacao: status === 'EM_ANDAMENTO' ? texto : undefined,
+        conclusaoTexto: status === 'CONCLUIDA' ? texto : undefined,
+        justificativa: status === 'CANCELADA' ? texto : undefined,
         anexos: anexos.map((item) => ({ dataUrl: item.dataUrl, nome: item.nome })),
       });
       setTarefa(atualizada);

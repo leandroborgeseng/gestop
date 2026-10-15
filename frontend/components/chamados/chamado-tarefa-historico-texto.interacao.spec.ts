@@ -130,6 +130,13 @@ for (const ponto of ['execucao', 'chamado'] as const) {
       expect(p.style.whiteSpace).toBe('pre-wrap');
     });
 
+    it('Q5: envia e mostra o texto exatamente como digitado (espaços/quebras nas pontas)', async () => {
+      await abrir(ponto);
+      await registrar('Registrar andamento', 'Registro de andamento', '  inicio\n...\nfim  \n');
+      expect(servidor.payloads[0].observacao).toBe('  inicio\n...\nfim  \n');
+      expect(textos()).toEqual(['  inicio\n...\nfim  \n']);
+    });
+
     it('dois andamentos seguidos: dois registros, na ordem, nenhum sobrescreve', async () => {
       await abrir(ponto);
       await registrar('Registrar andamento', 'Registro de andamento', 'Primeiro');
