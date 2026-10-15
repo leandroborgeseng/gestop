@@ -124,5 +124,7 @@ describe.skipIf(!local)('287 · integração (Postgres local)', () => {
     const id = await novoDocumento(DocumentoSituacao.GERADO);
     await service.cancelar(id, {}, gestor);
     await expect(service.updateVinculos(id, { chamadoIds: [] } as never, gestor)).rejects.toBeInstanceOf(ConflictException);
+    const editor = { ...gestor, permissoes: [...gestor.permissoes, 'documentos.criar_avulso'] };
+    await expect(service.salvarRespostas(id, { respostas: [] } as never, editor)).rejects.toBeInstanceOf(ConflictException);
   });
 });
