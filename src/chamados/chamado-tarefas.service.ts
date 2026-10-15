@@ -691,6 +691,8 @@ export class ChamadoTarefasService {
           secretaria: typeof meta.secretariaAtiva === 'string' ? meta.secretariaAtiva : null,
           temAnexos: meta.temAnexos === true || anexoIds.length > 0,
           anexoIds,
+          // 293: registros antigos sem `texto` ficam null (sem backfill, sem placeholder).
+          texto: typeof meta.texto === 'string' ? meta.texto : null,
         };
       }),
     };
@@ -822,6 +824,8 @@ export class ChamadoTarefasService {
       secretariaAtivaSigla: contexto.secretariaSigla,
       temAnexos: anexoIds.length > 0,
       anexoIds,
+      // 293: texto digitado pelo usuário, íntegro (quebras de linha preservadas), por evento.
+      ...(textoDoEventoTarefa(acao, detalhe) != null ? { texto: textoDoEventoTarefa(acao, detalhe) } : {}),
       ...(extras?.valorAnterior != null ? { valorAnterior: extras.valorAnterior } : {}),
       ...(extras?.valorNovo != null ? { valorNovo: extras.valorNovo } : {}),
       resumo: [
@@ -1128,6 +1132,14 @@ function motivoTarefa(acao: string, titulo: string) {
   if (acao === 'prazo') return `Prazo da tarefa atualizado: ${titulo}`;
   if (acao === 'atribuicao') return `Atribuição da tarefa atualizada: ${titulo}`;
   return `Tarefa atualizada: ${titulo}`;
+}
+
+/** 293: ações cujo `detalhe` é texto livre digitado no modal (andamento, conclusão, justificativa de cancelamento). */
+export const ACOES_TAREFA_COM_TEXTO = ['andamento', 'concluida', 'cancelada'] as const;
+
+export function textoDoEventoTarefa(acao: string, detalhe: string | null) {
+  if (!(ACOES_TAREFA_COM_TEXTO as readonly string[]).includes(acao)) return null;
+  return detalhe && detalhe.trim() ? detalhe : null;
 }
 
 function encerradaTarefa(status: string) {
