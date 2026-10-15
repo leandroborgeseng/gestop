@@ -10,6 +10,8 @@ import {
 import type { ChamadoMapPoint } from './types';
 
 const panelSrc = readFileSync(join(__dirname, '../components/chamados/execucao-tarefas-panel.tsx'), 'utf8');
+const cardSrc = readFileSync(join(__dirname, '../components/chamados/tarefas-execucao-list.tsx'), 'utf8');
+const cardHelperSrc = readFileSync(join(__dirname, './tarefa-card.ts'), 'utf8');
 const mapSrc = readFileSync(join(__dirname, '../components/chamados/chamados-execucao-map-client.tsx'), 'utf8');
 
 function resumoBase(overrides: Partial<ChamadoTarefaResumo> = {}): ChamadoTarefaResumo {
@@ -68,10 +70,10 @@ describe('251 — coluna Resumo do chamado', () => {
     expect(resumoDoChamado({ titulo: '   ', descricao: '   ' })).toBe('—');
   });
 
-  it('a grade da aba Tarefas tem a coluna Resumo do chamado preenchida pelo helper', () => {
-    expect(panelSrc).toContain('<th className="p-2">Resumo do chamado</th>');
-    expect(panelSrc).toContain('resumoDoChamado(item.chamado)');
-    expect(panelSrc.indexOf('Resumo do chamado')).toBeLessThan(panelSrc.indexOf('<th className="p-2">Tarefa</th>'));
+  it('286: o card da aba Tarefas mostra o resumo do chamado pelo helper (substitui a coluna da tabela)', () => {
+    expect(panelSrc).not.toContain('<table');
+    expect(cardSrc).toContain('resumoTipoTarefa(item)');
+    expect(cardHelperSrc).toContain('resumoDoChamado(item.chamado)');
   });
 });
 
@@ -109,8 +111,9 @@ describe('251 — responsável no pop-up do pin', () => {
     expect(html).toContain('Ana Souza');
     expect(html).toContain('Prazo:');
     expect(html).toContain('Executar tarefa');
-    expect(panelSrc).toContain('popupActionLabel="Executar tarefa"');
-    expect(panelSrc).toContain('tarefaExecucaoToMapPoint');
+    // 286: o popup do pin oferece "Abrir tarefa" e os pins vêm de tarefaExecucaoToMapPoint (agrupados).
+    expect(panelSrc).toContain('popupActionLabel="Abrir tarefa"');
+    expect(cardHelperSrc).toContain('tarefaExecucaoToMapPoint');
     expect(mapSrc).toContain("from '@/lib/chamado-map-popup'");
   });
 });

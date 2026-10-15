@@ -31,7 +31,7 @@ import {
 function createChamadoIcon(point: ChamadoMapPoint, emphasis: 'normal' | 'hover' | 'selected') {
   const scale = emphasis === 'selected' ? 1.28 : emphasis === 'hover' ? 1.12 : 1;
   const color = chamadoPinColor(point.prioridade);
-  const icon = chamadoPinIcon(Boolean(point.programado));
+  const icon = point.contagem && point.contagem > 1 ? String(point.contagem) : chamadoPinIcon(Boolean(point.programado));
   const ring =
     emphasis === 'selected'
       ? `0 0 0 4px color-mix(in srgb, ${color} 28%, transparent), 0 6px 16px rgba(15,27,45,.4)`
