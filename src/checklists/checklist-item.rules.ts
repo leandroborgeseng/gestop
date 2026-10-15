@@ -39,6 +39,11 @@ function isNotaInRange(nota: number): boolean {
   return nota >= 0 && nota <= 10;
 }
 
+/** 294: limite de opções por pergunta de múltipla escolha (front usa o mesmo valor). */
+export const MAX_OPCOES_MULTIPLA_ESCOLHA = 500;
+/** 294: tamanho máximo do texto de uma opção. */
+export const MAX_TAMANHO_OPCAO_MULTIPLA_ESCOLHA = 500;
+
 function parseMultiplaEscolhaOpcoes(opcoes: unknown): MultiplaEscolhaOpcoes {
   if (Array.isArray(opcoes)) {
     const values = opcoes.map(String).map((value) => value.trim()).filter(Boolean);
@@ -157,6 +162,14 @@ export function validateChecklistItemOpcoes(
     const config = parseMultiplaEscolhaOpcoes(opcoes);
     if (config.opcoes.length < 2) {
       return `Item "${label}": cadastre ao menos 2 opcoes de multipla escolha.`;
+    }
+    // 294: limite e validade também no backend (importação de lista ou cadastro manual).
+    if (config.opcoes.length > MAX_OPCOES_MULTIPLA_ESCOLHA) {
+      return `Item "${label}": no maximo ${MAX_OPCOES_MULTIPLA_ESCOLHA} opcoes de multipla escolha (recebidas ${config.opcoes.length}).`;
+    }
+    const longa = config.opcoes.findIndex((opcao) => opcao.length > MAX_TAMANHO_OPCAO_MULTIPLA_ESCOLHA);
+    if (longa >= 0) {
+      return `Item "${label}": a opcao ${longa + 1} passa de ${MAX_TAMANHO_OPCAO_MULTIPLA_ESCOLHA} caracteres.`;
     }
 
     if (!ignorarAvaliacao && config.notas) {
