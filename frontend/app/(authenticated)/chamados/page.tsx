@@ -42,7 +42,7 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { ListPagination } from '@/components/ui/list-pagination';
 import { downloadChamadoPdf, excluirChamadoLogicamente, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTarefasDoChamado, listTiposChamadoOpcoes, notificarChamadoEquipe, restaurarChamadoExcluido, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
-import { buildChamadoAcoes, type ChamadoAcaoId } from '@/lib/chamado-acoes';
+import { buildChamadoAcoes, executarAcaoChamado, type ChamadoAcaoId } from '@/lib/chamado-acoes';
 import { cn } from '@/lib/cn';
 import {
   DETALHE_ACOES_DESKTOP_BASE,
@@ -860,10 +860,12 @@ function ChamadoDetailPanel({
   });
 
   function executarAcao(id: ChamadoAcaoId) {
-    if (id === 'excluir' || id === 'restaurar') abrirExclusao(id);
-    else if (id === 'pdf') gerarPdf();
-    else if (id === 'documentos') setDocsOpen((current) => !current);
-    else setTarefasOpen((current) => !current);
+    executarAcaoChamado(id, {
+      abrirExclusao,
+      gerarPdf,
+      alternarDocumentos: () => setDocsOpen((current) => !current),
+      alternarTarefas: () => setTarefasOpen((current) => !current),
+    });
   }
 
   return (

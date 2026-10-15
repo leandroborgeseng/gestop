@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { buildChamadoAcoes } from './chamado-acoes';
+import { describe, expect, it, vi } from 'vitest';
+import { buildChamadoAcoes, executarAcaoChamado } from './chamado-acoes';
 
 const base = {
   podeExcluir: false,
@@ -35,5 +35,30 @@ describe('291 ações do cabeçalho do chamado (menu "⋯" no celular)', () => {
     expect(byId.documentos.disabled).toBe(false);
     expect(byId.tarefas).toMatchObject({ disabled: false, badge: 3 });
     expect(buildChamadoAcoes({ ...base, busy: true }).every((a) => a.disabled)).toBe(true);
+  });
+});
+
+describe('291 executarAcaoChamado (id → ação)', () => {
+  function handlers() {
+    return {
+      abrirExclusao: vi.fn(),
+      gerarPdf: vi.fn(),
+      alternarDocumentos: vi.fn(),
+      alternarTarefas: vi.fn(),
+    };
+  }
+  const chamadas = (h: ReturnType<typeof handlers>) =>
+    Object.fromEntries(Object.entries(h).map(([k, fn]) => [k, fn.mock.calls]));
+
+  it.each([
+    ['excluir', { abrirExclusao: [['excluir']], gerarPdf: [], alternarDocumentos: [], alternarTarefas: [] }],
+    ['restaurar', { abrirExclusao: [['restaurar']], gerarPdf: [], alternarDocumentos: [], alternarTarefas: [] }],
+    ['pdf', { abrirExclusao: [], gerarPdf: [[]], alternarDocumentos: [], alternarTarefas: [] }],
+    ['documentos', { abrirExclusao: [], gerarPdf: [], alternarDocumentos: [[]], alternarTarefas: [] }],
+    ['tarefas', { abrirExclusao: [], gerarPdf: [], alternarDocumentos: [], alternarTarefas: [[]] }],
+  ] as const)('%s chama só o handler certo', (id, esperado) => {
+    const h = handlers();
+    executarAcaoChamado(id, h);
+    expect(chamadas(h)).toEqual(esperado);
   });
 });

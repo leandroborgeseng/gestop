@@ -38,3 +38,19 @@ export function buildChamadoAcoes(input: {
   });
   return acoes;
 }
+
+export type ChamadoAcaoHandlers = {
+  abrirExclusao: (acao: 'excluir' | 'restaurar') => void;
+  gerarPdf: () => void;
+  alternarDocumentos: () => void;
+  alternarTarefas: () => void;
+};
+
+/** 291: id da ação (desktop ou menu "⋯") → o que a tela faz. Função pura para teste. */
+export function executarAcaoChamado(id: ChamadoAcaoId, handlers: ChamadoAcaoHandlers): void {
+  const { abrirExclusao, gerarPdf, alternarDocumentos, alternarTarefas } = handlers;
+  if (id === 'excluir' || id === 'restaurar') abrirExclusao(id);
+  else if (id === 'pdf') gerarPdf();
+  else if (id === 'documentos') alternarDocumentos();
+  else if (id === 'tarefas') alternarTarefas();
+}
