@@ -54,8 +54,8 @@ describe('287 · cancelarDocumentoLogico', () => {
   it('grava histórico e auditoria com situação anterior, usuário e motivo opcional', async () => {
     const tx = fakeTx();
     await cancelarDocumentoLogico(tx, { documentoId: 'd1', situacaoAnterior: DocumentoSituacao.GERADO, user, motivo: '  duplicado  ' });
-    expect(tx.historicoStatus.create.mock.calls[0][0].data).toMatchObject({ statusAnterior: 'GERADO', statusNovo: 'CANCELADO', motivo: 'duplicado', alteradoPorId: 'u-287' });
-    const audit = tx.logAuditoria.create.mock.calls[0][0].data;
+    expect((tx.historicoStatus.create.mock.calls as unknown as [[{ data: unknown }]])[0][0].data).toMatchObject({ statusAnterior: 'GERADO', statusNovo: 'CANCELADO', motivo: 'duplicado', alteradoPorId: 'u-287' });
+    const audit = (tx.logAuditoria.create.mock.calls as unknown as [[{ data: Record<string, any> }]])[0][0].data;
     expect(audit).toMatchObject({ acao: AuditAction.STATUS_CHANGE, entidadeTipo: 'Documento', entidadeId: 'd1', usuarioId: 'u-287', funcao: 'cancelar' });
     expect(audit.valorNovo).toMatchObject({ situacao: 'CANCELADO', canceladoPorId: 'u-287', motivo: 'duplicado' });
   });
