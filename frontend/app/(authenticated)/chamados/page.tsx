@@ -24,6 +24,7 @@ import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
 import { ChamadoHistoricoForm } from '@/components/chamados/chamado-historico-form';
 import { ChamadoAberturaSection } from '@/components/chamados/chamado-abertura-section';
 import { ChamadoDescricaoExpandivel } from '@/components/chamados/chamado-descricao-expandivel';
+import { ChamadoAcoesMobile } from '@/components/chamados/chamado-acoes-mobile';
 import { ChamadoObservadoresSection } from '@/components/chamados/chamado-observadores-section';
 import { ChamadosFiltrosPanel, ChamadosFiltrosValue } from '@/components/chamados/chamados-filtros-panel';
 import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
@@ -41,7 +42,21 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { ListPagination } from '@/components/ui/list-pagination';
 import { downloadChamadoPdf, excluirChamadoLogicamente, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTarefasDoChamado, listTiposChamadoOpcoes, notificarChamadoEquipe, restaurarChamadoExcluido, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
+import { buildChamadoAcoes, executarAcaoChamado, type ChamadoAcaoId } from '@/lib/chamado-acoes';
 import { cn } from '@/lib/cn';
+import {
+  DETALHE_ACOES_DESKTOP_BASE,
+  DETALHE_ACOES_DESKTOP_MOBILE,
+  DETALHE_BLOCOS_BASE,
+  DETALHE_BLOCOS_MOBILE,
+  DETALHE_CABECALHO_BASE,
+  DETALHE_CABECALHO_MOBILE,
+  DETALHE_LINHA_FIXA,
+  DETALHE_LINHA_FIXA_SOMBRA,
+  DETALHE_SCROLL_BASE,
+  DETALHE_SCROLL_MOBILE,
+  DETALHE_SECTION_MOBILE,
+} from '@/lib/chamado-detalhe-layout';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import { toInputDate } from '@/lib/cronograma';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
@@ -631,7 +646,7 @@ function ChamadosPageContent() {
               </div>
             </section>
 
-            <section className={cn('flex min-h-0 flex-col overflow-hidden', ALTURA_PAINEL_CHAMADOS)}>
+            <section className={cn('flex min-h-0 flex-col overflow-hidden', ALTURA_PAINEL_CHAMADOS, DETALHE_SECTION_MOBILE)} data-testid="chamado-detalhe-section">
               <ChamadoDetailPanel
                 resumo={selected}
                 detail={detail?.id === selected?.id ? detail : null}
@@ -731,6 +746,7 @@ function ChamadoDetailPanel({
   const [docsOpen, setDocsOpen] = useState(false);
   const [tarefasOpen, setTarefasOpen] = useState(false);
   const [tarefasPendentes, setTarefasPendentes] = useState(0);
+  const [mobileRolado, setMobileRolado] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
   const [pendingEquipePlanejamentoId, setPendingEquipePlanejamentoId] = useState('');
@@ -819,12 +835,64 @@ function ChamadoDetailPanel({
     }
   }
 
+  function abrirExclusao(acao: 'excluir' | 'restaurar') {
+    setJustificativaExclusao('');
+    setExclusaoModal(acao);
+  }
+
+  function gerarPdf() {
+    if (!resumo) return;
+    setPdfBusy(true);
+    void downloadChamadoPdf(resumo.id, resumo.codigo)
+      .then(() => snackbar.show('PDF gerado.', 'success'))
+      .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao gerar PDF.', 'error'))
+      .finally(() => setPdfBusy(false));
+  }
+
+  const acoesCabecalho = buildChamadoAcoes({
+    podeExcluir,
+    podeRestaurar,
+    excluido: Boolean(resumo.excluidoEm),
+    busy,
+    exclusaoBusy,
+    pdfBusy,
+    tarefasPendentes,
+  });
+
+  function executarAcao(id: ChamadoAcaoId) {
+    executarAcaoChamado(id, {
+      abrirExclusao,
+      gerarPdf,
+      alternarDocumentos: () => setDocsOpen((current) => !current),
+      alternarTarefas: () => setTarefasOpen((current) => !current),
+    });
+  }
+
   return (
     <>
     <Card elevation={1} className="h-full overflow-hidden">
-      <CardContent className="flex h-full flex-col p-0">
-        <div className="border-b border-[var(--line-2)] p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+      <CardContent
+        className={cn(DETALHE_SCROLL_BASE, DETALHE_SCROLL_MOBILE)}
+        data-testid="chamado-detalhe-scroll"
+        onScroll={(event) => setMobileRolado(event.currentTarget.scrollTop > 0)}
+      >
+        {/* 291: no celular só esta linha de 48px fica fixa; o resto rola com o conteúdo. */}
+        <div
+          data-testid="chamado-linha-fixa"
+          className={cn(DETALHE_LINHA_FIXA, mobileRolado && DETALHE_LINHA_FIXA_SOMBRA)}
+        >
+          <span className="mono truncate text-[13px] font-semibold text-[var(--brand-hover)]">{resumo.codigo}</span>
+          <Badge variant={st.badge} className="shrink-0">{st.label}</Badge>
+          <span className="flex-1" />
+          <ChamadoAcoesMobile acoes={acoesCabecalho} onAcao={executarAcao} />
+        </div>
+        <div className={cn(DETALHE_CABECALHO_BASE, DETALHE_CABECALHO_MOBILE)} data-testid="chamado-cabecalho">
+          <div className="flex md:hidden flex-wrap items-center gap-1.5" data-testid="chamado-tags-mobile">
+            <Badge variant={prioridadeVariant(resumo.prioridade)}>{resumo.prioridade}</Badge>
+            {tarefasPendentes > 0 ? <Badge variant="warning">Tarefas pendentes · {tarefasPendentes}</Badge> : null}
+            {resumo.excluidoEm ? <Badge variant="danger">Excluído</Badge> : null}
+          </div>
+          <div className={cn(DETALHE_ACOES_DESKTOP_BASE, DETALHE_ACOES_DESKTOP_MOBILE)}>
             <span className="mono text-[13px] font-semibold text-[var(--brand-hover)]">{resumo.codigo}</span>
             <div className="flex flex-wrap items-center gap-1.5">
               {podeExcluir && !resumo.excluidoEm ? (
@@ -833,10 +901,7 @@ function ChamadoDetailPanel({
                   variant="danger"
                   size="sm"
                   disabled={busy || exclusaoBusy}
-                  onClick={() => {
-                    setJustificativaExclusao('');
-                    setExclusaoModal('excluir');
-                  }}
+                  onClick={() => abrirExclusao('excluir')}
                 >
                   Excluir chamado
                 </Button>
@@ -847,10 +912,7 @@ function ChamadoDetailPanel({
                   variant="outlined"
                   size="sm"
                   disabled={busy || exclusaoBusy}
-                  onClick={() => {
-                    setJustificativaExclusao('');
-                    setExclusaoModal('restaurar');
-                  }}
+                  onClick={() => abrirExclusao('restaurar')}
                 >
                   Restaurar chamado
                 </Button>
@@ -860,15 +922,7 @@ function ChamadoDetailPanel({
                 variant="outlined"
                 size="sm"
                 disabled={pdfBusy || busy}
-                onClick={() => {
-                  setPdfBusy(true);
-                  void downloadChamadoPdf(resumo.id, resumo.codigo)
-                    .then(() => snackbar.show('PDF gerado.', 'success'))
-                    .catch((err) =>
-                      snackbar.show(err instanceof Error ? err.message : 'Falha ao gerar PDF.', 'error'),
-                    )
-                    .finally(() => setPdfBusy(false));
-                }}
+                onClick={gerarPdf}
               >
                 <FileDown className="h-3.5 w-3.5" />
                 {pdfBusy ? 'Gerando…' : 'PDF'}
@@ -904,7 +958,7 @@ function ChamadoDetailPanel({
               {resumo.excluidoEm ? <Badge variant="danger">Excluído</Badge> : null}
             </div>
           </div>
-          <h2 className="mt-3 text-[17px] font-semibold leading-snug text-[var(--ink)]">{chamadoTitulo(resumo)}</h2>
+          <h2 className="mt-3 max-md:mt-2 text-[17px] font-semibold leading-snug text-[var(--ink)]">{chamadoTitulo(resumo)}</h2>
           <ChamadoDescricaoExpandivel className="mt-2" descricao={resumo.descricao} />
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--ink-3)]">
             <span className="inline-flex items-center gap-1.5">
@@ -929,7 +983,7 @@ function ChamadoDetailPanel({
           ) : null}
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+        <div className={cn(DETALHE_BLOCOS_BASE, DETALHE_BLOCOS_MOBILE)} data-testid="chamado-detalhe-blocos">
           {tarefasOpen ? (
             <ChamadoTarefasPanel
               chamadoId={resumo.id}
