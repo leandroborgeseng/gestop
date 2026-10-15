@@ -9,6 +9,8 @@
 :root {
   /* 284: altura do menu inferior mobile (itens 4.5rem + respiro), antes fixa em 5.75rem. */
   --bottom-nav-h: 5.75rem;
+  /* 291: altura do header mobile (min-h 58px + borda), usada no detalhe do chamado. */
+  --mobile-appbar-h: 59px;
   /* Marca */
   --brand: #0066cc;
   --brand-hover: #005bb5;
