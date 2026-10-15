@@ -137,6 +137,13 @@ for (const ponto of ['execucao', 'chamado'] as const) {
       expect(textos()).toEqual(['  inicio\n...\nfim  \n']);
     });
 
+    it('Q5: conclusão envia conclusaoTexto exatamente como digitado', async () => {
+      await abrir(ponto);
+      await registrar('Concluir tarefa', 'Texto de conclusão', '  fim\n');
+      expect(servidor.payloads[0].status).toBe('CONCLUIDA');
+      expect(servidor.payloads[0].conclusaoTexto).toBe('  fim\n');
+    });
+
     it('dois andamentos seguidos: dois registros, na ordem, nenhum sobrescreve', async () => {
       await abrir(ponto);
       await registrar('Registrar andamento', 'Registro de andamento', 'Primeiro');
