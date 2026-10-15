@@ -1664,12 +1664,15 @@ export function listDocumentos(params?: {
   assinatura?: string;
   pendentesAssinatura?: string;
   avulso?: string;
+  /** 287: `1` inclui documentos cancelados. */
+  historico?: string;
   limit?: number;
   offset?: number;
 }) {
   const query = new URLSearchParams();
   if (params?.search) query.set('search', params.search);
   if (params?.tipo) query.set('tipo', params.tipo);
+  if (params?.historico) query.set('historico', params.historico);
   if (params?.situacao) query.set('situacao', params.situacao);
   if (params?.origem) query.set('origem', params.origem);
   if (params?.secretariaId) query.set('secretariaId', params.secretariaId);
@@ -1924,6 +1927,15 @@ export function toggleAssinaturaPendenteDocumento(id: string) {
 /** @deprecated use toggleAssinaturaPendenteDocumento */
 export function marcarAssinaturaPendenteDocumento(id: string) {
   return toggleAssinaturaPendenteDocumento(id);
+}
+
+/** 287: cancelamento lógico (nunca DELETE). Motivo opcional. */
+export function cancelarDocumento(id: string, motivo?: string) {
+  return request<DocumentoResumo>(`/documentos/${id}/cancelar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(motivo?.trim() ? { motivo: motivo.trim() } : {}),
+  });
 }
 
 export function cancelarDocumentoAssinado(id: string, motivo: string) {

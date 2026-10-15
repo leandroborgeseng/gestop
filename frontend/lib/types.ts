@@ -1478,6 +1478,8 @@ export type DocumentoOrigem = 'VISTORIA' | 'CHAMADO_EXECUCAO' | 'AVULSO' | 'SIST
 
 export type DocumentoResumo = {
   id: string;
+  /** 287: cancelamento lógico (data, usuário e motivo opcional). */
+  cancelamento?: { em: string; motivo: string | null; por: { id: string; nome: string } | null } | null;
   codigo: string;
   codigoValidacao: string;
   tipo: DocumentoTipo;
@@ -1562,6 +1564,8 @@ export type DocumentoRespostaItem = {
 };
 
 export type DocumentoDetalhe = DocumentoResumo & {
+  /** 287: o backend libera o botão Cancelar documento (permissão documentos.cancelar). */
+  podeCancelar?: boolean;
   podeEditarChamados?: boolean;
   conteudoTravado?: boolean;
   checklistItens?: ChecklistItem[];
