@@ -2,7 +2,10 @@
 
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useEffect, useRef, useState } from 'react';
+import { ImportarOpcoesDialog } from '@/components/checklists/importar-opcoes-dialog';
+import { useSnackbar } from '@/components/ui/snackbar';
+import { aplicarImportacao, opcoesAtuaisPreenchidas, type FinalidadeImportacao } from '@/lib/checklist-importar-opcoes';
 import { ChevronDown, ChevronUp, ClipboardList, GitBranch, Minus, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -961,6 +964,7 @@ export function VersionEditor({
               <MultiplaEscolhaEditor
                 opcoes={item.opcoes}
                 simplified={semAvaliacao}
+                finalidade={finalidade}
                 onChange={(opcoes) => updateItem(items, setItems, index, { opcoes })}
               />
             ) : null}
@@ -997,16 +1001,28 @@ export function VersionEditor({
   );
 }
 
-function MultiplaEscolhaEditor({
+export function MultiplaEscolhaEditor({
   opcoes,
   onChange,
   simplified = false,
+  finalidade = 'VISTORIA',
 }: {
   opcoes: unknown;
   onChange: (opcoes: unknown) => void;
   simplified?: boolean;
+  finalidade?: FinalidadeImportacao;
 }) {
   const config = parseMultiplaEscolhaOpcoes(opcoes);
+  const snackbar = useSnackbar();
+  const [importarAberto, setImportarAberto] = useState(false);
+  const [focarOpcao, setFocarOpcao] = useState<number | null>(null);
+  const listaRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (focarOpcao == null) return;
+    listaRef.current?.querySelector<HTMLInputElement>(`[data-opcao-index="${focarOpcao}"]`)?.focus();
+    setFocarOpcao(null);
+  }, [focarOpcao, opcoes]);
   const notas = config.notas ?? config.opcoes.map(() => null as number | null);
 
   function commit(nextOpcoes: string[], nextNotas: Array<number | null>) {
@@ -1025,12 +1041,13 @@ function MultiplaEscolhaEditor({
           Nota opcional por opção (0 a 10). Se uma tiver nota, todas devem ter.
         </p>
       ) : null}
-      <div className="space-y-2">
+      <div ref={listaRef} className="space-y-2">
         {config.opcoes.map((opcao, optionIndex) => (
           <div key={optionIndex} className="flex flex-wrap items-end gap-2">
             <Field label={`Opção ${optionIndex + 1}`} className="min-w-0 flex-1 basis-48">
               <Input
                 value={opcao}
+                data-opcao-index={optionIndex}
                 placeholder={`Digite a opção ${optionIndex + 1}`}
                 onChange={(e) => {
                   const next = [...config.opcoes];
@@ -1077,16 +1094,40 @@ function MultiplaEscolhaEditor({
           </div>
         ))}
       </div>
-      <Button
-        type="button"
-        variant="tonal"
-        size="sm"
-        className="mt-2 gap-1.5"
-        onClick={() => commit([...config.opcoes, ''], [...notas, null])}
-      >
-        <Plus className="h-4 w-4" />
-        Cadastrar mais opções
-      </Button>
+      <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+        <Button
+          type="button"
+          variant="tonal"
+          size="sm"
+          className="min-h-11 w-full gap-1.5 sm:min-h-8 sm:w-auto"
+          onClick={() => commit([...config.opcoes, ''], [...notas, null])}
+        >
+          <Plus className="h-4 w-4" />
+          Cadastrar mais opções
+        </Button>
+        <Button
+          type="button"
+          variant="outlined"
+          size="sm"
+          className="min-h-11 w-full sm:min-h-8 sm:w-auto"
+          onClick={() => setImportarAberto(true)}
+        >
+          Importar lista de opções
+        </Button>
+      </div>
+      <ImportarOpcoesDialog
+        open={importarAberto}
+        finalidade={finalidade}
+        opcoesAtuais={opcoesAtuaisPreenchidas(opcoes)}
+        onClose={() => setImportarAberto(false)}
+        onImportar={(importadas, modo) => {
+          const { config: nova, primeiraImportada } = aplicarImportacao(opcoes, importadas, modo, simplified);
+          onChange(nova);
+          setImportarAberto(false);
+          snackbar.show(`${importadas.length} ${importadas.length === 1 ? 'opção importada' : 'opções importadas'}. Salve o rascunho para manter.`, 'success');
+          setFocarOpcao(primeiraImportada);
+        }}
+      />
       <Field label="Forma de seleção" className="mt-3 max-w-md">
         <Select
           value={config.selecao === 'MULTIPLA' ? 'MULTIPLA' : 'UNICA'}
