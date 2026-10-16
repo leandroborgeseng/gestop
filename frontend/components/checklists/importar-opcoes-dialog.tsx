@@ -225,7 +225,7 @@ export function ImportarOpcoesDialog({
                     .join(' · ')}
                 </p>
                 {erros.length ? (
-                  <ul data-testid="importar-opcoes-erros" role="alert" className="space-y-0.5 rounded-[10px] border border-[var(--danger-bd,#f2c9c9)] bg-[var(--danger-bg)] p-2 text-[12px] text-[var(--danger)]">
+                  <ul data-testid="importar-opcoes-erros" role="alert" className="space-y-0.5 rounded-[10px] border border-[var(--danger-bd,#f2c9c9)] bg-[var(--danger-bg)] p-2 text-[12px] text-[var(--danger-ink)]">
                     {erros.map((e, i) => (
                       <li key={i}>{e.mensagem}</li>
                     ))}
