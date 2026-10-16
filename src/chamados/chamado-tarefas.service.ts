@@ -32,6 +32,7 @@ import {
 } from './chamado-tarefa.regras';
 import { montarAnexosAberturaLeitura, serializarAnexoHistoricoLeitura } from './chamado-leitura-via-tarefa';
 import { projetarMetadataHistoricoChamado } from './chamado-historico.projecao';
+import { aplicarTextoTarefaNaLinhaDoTempo, resolverTextoEventoTarefa } from './chamado-tarefa-texto-legado';
 import { AnexoChamadoTarefaDto, CreateChamadoTarefaDto, UpdateChamadoTarefaDto } from './chamado-tarefas.dto';
 
 const TAREFA_EXPORT_HEADERS = [
@@ -270,7 +271,7 @@ export class ChamadoTarefasService {
       data.justificativa = justificativa;
       data.canceladaEm = new Date();
       acao = 'cancelada';
-      detalhe = justificativa;
+      detalhe = dto.justificativa ?? justificativa; // 293: texto do evento exatamente como digitado
     } else if (dto.status === ChamadoTarefaStatus.CONCLUIDA) {
       if (encerrada) throw new BadRequestException('Tarefa concluída ou cancelada não muda de status.');
       if (!this.podeConcluir(user) && !designado) throw new ForbiddenException('Sem permissão para concluir a tarefa.');
@@ -281,7 +282,7 @@ export class ChamadoTarefasService {
       data.concluidaEm = new Date();
       data.concluidaPor = { connect: { id: user.sub } };
       acao = 'concluida';
-      detalhe = texto;
+      detalhe = dto.conclusaoTexto ?? texto; // 293: texto do evento exatamente como digitado
     } else if (dto.status === ChamadoTarefaStatus.EM_ANDAMENTO) {
       if (encerrada) throw new BadRequestException('Tarefa concluída ou cancelada não muda de status.');
       if (!this.podeAndamento(user) && !designado) throw new ForbiddenException('Sem permissão para registrar andamento.');
@@ -290,7 +291,7 @@ export class ChamadoTarefasService {
       data.status = ChamadoTarefaStatus.EM_ANDAMENTO;
       data.observacao = texto;
       acao = 'andamento';
-      detalhe = texto;
+      detalhe = dto.observacao ?? texto; // 293: texto do evento exatamente como digitado
     } else if (dto.status && dto.status !== before.status) {
       throw new BadRequestException('Transição de status não permitida.');
     } else if (mudaCampo) {
@@ -344,7 +345,7 @@ export class ChamadoTarefasService {
       codigo: tarefa.chamado.codigo,
       somenteLeitura: true,
       anexosAbertura: montarAnexosAberturaLeitura(chamado, evidencias),
-      historico: historico.map((entry) => {
+      historico: await aplicarTextoTarefaNaLinhaDoTempo(this.prisma, historico.map((entry) => {
         const metadata =
           entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata)
             ? (entry.metadata as Record<string, unknown>)
@@ -365,7 +366,7 @@ export class ChamadoTarefasService {
             .filter((item): item is NonNullable<typeof item> => Boolean(item))
             .map(serializarAnexoHistoricoLeitura),
         };
-      }),
+      }).map((saida, i) => ({ bruta: (historico[i].metadata ?? {}) as Record<string, unknown>, saida }))),
     };
   }
 
@@ -691,6 +692,11 @@ export class ChamadoTarefasService {
           secretaria: typeof meta.secretariaAtiva === 'string' ? meta.secretariaAtiva : null,
           temAnexos: meta.temAnexos === true || anexoIds.length > 0,
           anexoIds,
+          // 293: evento novo usa metadata.texto; legado: conclusão → conclusaoTexto, andamento → resumo ("Registro anterior").
+          ...(() => {
+            const r = resolverTextoEventoTarefa(meta, tarefa.conclusaoTexto);
+            return { texto: r?.texto ?? null, textoOrigem: r?.origem ?? null };
+          })(),
         };
       }),
     };
@@ -822,6 +828,8 @@ export class ChamadoTarefasService {
       secretariaAtivaSigla: contexto.secretariaSigla,
       temAnexos: anexoIds.length > 0,
       anexoIds,
+      // 293: texto digitado pelo usuário, íntegro (quebras de linha preservadas), por evento.
+      ...(textoDoEventoTarefa(acao, detalhe) != null ? { texto: textoDoEventoTarefa(acao, detalhe) } : {}),
       ...(extras?.valorAnterior != null ? { valorAnterior: extras.valorAnterior } : {}),
       ...(extras?.valorNovo != null ? { valorNovo: extras.valorNovo } : {}),
       resumo: [
@@ -1128,6 +1136,14 @@ function motivoTarefa(acao: string, titulo: string) {
   if (acao === 'prazo') return `Prazo da tarefa atualizado: ${titulo}`;
   if (acao === 'atribuicao') return `Atribuição da tarefa atualizada: ${titulo}`;
   return `Tarefa atualizada: ${titulo}`;
+}
+
+/** 293: ações cujo `detalhe` é texto livre digitado no modal (andamento, conclusão, justificativa de cancelamento). */
+export const ACOES_TAREFA_COM_TEXTO = ['andamento', 'concluida', 'cancelada'] as const;
+
+export function textoDoEventoTarefa(acao: string, detalhe: string | null) {
+  if (!(ACOES_TAREFA_COM_TEXTO as readonly string[]).includes(acao)) return null;
+  return detalhe && detalhe.trim() ? detalhe : null;
 }
 
 function encerradaTarefa(status: string) {

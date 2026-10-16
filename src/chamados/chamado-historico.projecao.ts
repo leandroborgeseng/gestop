@@ -25,6 +25,12 @@ export const CAMPOS_METADATA_HISTORICO_CHAMADO = [
   'membrosExternos',
   'participantes',
   'checklistComplementar',
+  // 293: linha do tempo do chamado mostra o texto do evento e de qual tarefa ele é.
+  'tarefaId',
+  'tarefaTitulo',
+  'acao',
+  'texto',
+  'textoOrigem',
 ] as const;
 
 export type CampoMetadataHistoricoChamado = (typeof CAMPOS_METADATA_HISTORICO_CHAMADO)[number];

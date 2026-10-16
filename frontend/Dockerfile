@@ -5,6 +5,8 @@ WORKDIR /app
 
 FROM base AS builder
 COPY package.json package-lock.json ./
+# SheetJS vendorizado (file:vendor/xlsx-0.20.3.tgz no package.json): precisa existir antes do npm ci
+COPY vendor ./vendor
 RUN npm ci
 
 COPY . ./

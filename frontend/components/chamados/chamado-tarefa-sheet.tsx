@@ -1,5 +1,6 @@
 'use client';
 
+import { TextoExpansivel } from '@/components/ui/texto-expansivel';
 import { useEffect, useState } from 'react';
 import { Paperclip, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -182,9 +183,10 @@ export function ChamadoTarefaSheet({
     try {
       const atualizada = await updateChamadoTarefa(tarefa.id, {
         status,
-        observacao: status === 'EM_ANDAMENTO' ? texto.trim() : undefined,
-        conclusaoTexto: status === 'CONCLUIDA' ? texto.trim() : undefined,
-        justificativa: status === 'CANCELADA' ? texto.trim() : undefined,
+        // 293: envia o texto como digitado (espaços e quebras preservados); a validação usa trim.
+        observacao: status === 'EM_ANDAMENTO' ? texto : undefined,
+        conclusaoTexto: status === 'CONCLUIDA' ? texto : undefined,
+        justificativa: status === 'CANCELADA' ? texto : undefined,
         anexos: anexos.map((item) => ({ dataUrl: item.dataUrl, nome: item.nome })),
       });
       setTarefa(atualizada);
@@ -421,7 +423,7 @@ export function ChamadoTarefaSheet({
 function ChamadoTarefaHistoricoView({
   tarefa,
 }: {
-  tarefa: Pick<ChamadoTarefaDetalhe, 'podeVerHistorico' | 'historico' | 'anexos'>;
+  tarefa: Pick<ChamadoTarefaDetalhe, 'titulo' | 'podeVerHistorico' | 'historico' | 'anexos'>;
 }) {
   if (!tarefa.podeVerHistorico) return null;
   return (
@@ -434,10 +436,15 @@ function ChamadoTarefaHistoricoView({
               .map((id) => tarefa.anexos.find((anexo) => anexo.id === id))
               .filter((anexo): anexo is ChamadoTarefaDetalhe['anexos'][number] => Boolean(anexo));
             return (
-              <li key={item.id} className="rounded-[10px] bg-[var(--surface-2)] p-2 text-[12px]">
-                <p className="font-semibold text-[var(--ink)]">
+              <li key={item.id} data-testid="historico-item" className="rounded-[10px] bg-[var(--surface-2)] p-2 text-[12px]">
+                <p data-testid="historico-cabecalho" className="font-semibold text-[var(--ink)]">
                   {ACAO_HISTORICO[item.acao ?? ''] ?? 'Registro'}
-                  {item.motivo ? ` · ${item.motivo}` : ''}
+                  {` · ${tarefa.titulo}`}
+                  {item.acao === 'concluida' ? (
+                    <span className="ml-1.5 rounded-full bg-[var(--ok-bg,#e7f6ee)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--ok-ink)]">
+                      Concluída
+                    </span>
+                  ) : null}
                 </p>
                 <p className="text-[var(--ink-3)]">
                   {[new Date(item.createdAt).toLocaleString('pt-BR'), item.alteradoPor?.nome, item.perfil, item.secretaria]
@@ -445,8 +452,12 @@ function ChamadoTarefaHistoricoView({
                     .join(' · ')}
                   {item.temAnexos ? ' · Há anexos' : ''}
                 </p>
+                {item.texto && item.textoOrigem === 'registro_anterior' ? (
+                  <p data-testid="historico-registro-anterior" className="mt-1 text-[11px] font-semibold text-[var(--ink-3)]">Registro anterior</p>
+                ) : null}
+                {item.texto ? <TextoExpansivel texto={item.texto} testId="historico-texto" /> : null}
                 {ligados.length ? (
-                  <ul className="mt-2 space-y-2">
+                  <ul data-testid="historico-anexos" className="mt-2 space-y-2">
                     {ligados.map((anexo) => (
                       <AnexoLinha key={anexo.id} anexo={anexo} />
                     ))}
