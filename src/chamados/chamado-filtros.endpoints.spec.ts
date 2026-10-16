@@ -148,7 +148,7 @@ describe('295 · GET /chamados (Triagem) com Data de abertura', () => {
 describe('295 · GET /operacional/chamados-mapa (CCO) com Data de abertura', () => {
   it('mesmos IDs que a Triagem para os mesmos filtros (lista, mapa e calor usam esses itens)', async () => {
     const agora = new Date();
-    for (const q of [{ abertoAte: '2026-09-30' }, { abertoDe: '2026-10-01' }, { abertoDe: '2026-10-01', abertoAte: '2026-10-01' }, { diasMinimos: '10' }, {}]) {
+    for (const q of <Array<Record<string, string>>>[{ abertoAte: '2026-09-30' }, { abertoDe: '2026-10-01' }, { abertoDe: '2026-10-01', abertoAte: '2026-10-01' }, { diasMinimos: '10' }, {}]) {
       const s = servicos(base());
       expect(await idsCco(s, q, global, agora)).toEqual(await idsTriagem(s, q));
     }

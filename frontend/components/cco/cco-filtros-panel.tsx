@@ -296,7 +296,7 @@ export function CcoFiltrosPanel({
             <p className="text-[13px] font-semibold text-[var(--ink)]">
               {tab === 'proprios' ? 'Filtros de próprios' : 'Filtros de chamados'}
             </p>
-            {!open ? <p data-testid="cco-filtros-resumo" className="mt-0.5 line-clamp-2 text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
+            {!open ? <p data-testid="cco-filtros-resumo" className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
           </div>
           <span
             onClick={(event) => event.stopPropagation()}

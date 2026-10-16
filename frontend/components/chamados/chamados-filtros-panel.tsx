@@ -159,7 +159,7 @@ export function ChamadosFiltrosPanel({
       >
         <div className="min-w-0">
           <p className="text-[13px] font-semibold text-[var(--ink)]">Filtros de chamados</p>
-          {!open ? <p data-testid="chamados-filtros-resumo" className="mt-0.5 line-clamp-2 text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
+          {!open ? <p className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
         </div>
         <ChevronDown
           className={cn('h-4 w-4 shrink-0 text-[var(--ink-3)] transition-transform', open ? 'rotate-180' : '')}

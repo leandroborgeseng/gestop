@@ -111,7 +111,8 @@ describe('295 · Triagem', () => {
     await tick(250);
     fireEvent.change(screen.getByLabelText('Data inicial'), { target: { value: '2026-10-01' } });
     await tick(400);
-    fireEvent.click(screen.getByRole('button', { name: /Filtros de chamados/ }));
-    expect(screen.getByTestId('chamados-filtros-resumo').textContent).toBe('Abertos a partir de 01/10/2026');
+    const cab = screen.getByRole('button', { name: /Filtros de chamados/ });
+    fireEvent.click(cab);
+    expect(cab.querySelectorAll('p')[1].textContent).toBe('Abertos a partir de 01/10/2026');
   });
 });
