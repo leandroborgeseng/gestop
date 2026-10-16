@@ -31,6 +31,7 @@ export function OperationalMap({
   onClearSelection,
   onHover,
   popupActionKind = 'modal',
+  notaCorte,
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -42,6 +43,8 @@ export function OperationalMap({
   onSelect?: (id: string) => void;
   onClearSelection?: () => void;
   onHover?: (id: string | null) => void;
+  /** 295: nota quando o resultado foi cortado (mapa de calor e legenda). */
+  notaCorte?: string;
   popupActionKind?: import('@/lib/map-popup-action').MapPopupActionKind;
 }) {
   return (
@@ -57,6 +60,7 @@ export function OperationalMap({
       onClearSelection={onClearSelection}
       onHover={onHover}
       popupActionKind={popupActionKind}
+      notaCorte={notaCorte}
     />
   );
 }

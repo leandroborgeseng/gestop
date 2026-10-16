@@ -113,6 +113,9 @@ export class ChamadosController {
     @Query('secretariaExecucaoId') secretariaExecucaoId?: string,
     @Query('tipoChamadoId') tipoChamadoId?: string,
     @Query('incluirExcluidos') incluirExcluidos?: string,
+    @Query('abertoDe') abertoDe?: string,
+    @Query('abertoAte') abertoAte?: string,
+    @Query('diasMinimos') diasMinimos?: string,
   ) {
     return this.chamadosService.listChamados(
       {
@@ -129,6 +132,9 @@ export class ChamadosController {
         secretariaExecucaoId,
         tipoChamadoId,
         incluirExcluidos: incluirExcluidos === 'true' || incluirExcluidos === '1',
+        abertoDe,
+        abertoAte,
+        diasMinimos,
       },
       user,
     );

@@ -23,6 +23,7 @@ import { UnidadeDrawer } from '@/components/cco/unidade-drawer';
 import { ChamadoMapaList } from '@/components/cco/chamado-mapa-list';
 import { ChamadoMapaDrawer } from '@/components/cco/chamado-mapa-drawer';
 import { CcoFiltrosPanel } from '@/components/cco/cco-filtros-panel';
+import { AvisoChamadosCortados, notaMapaCortado } from '@/components/cco/aviso-chamados-cortados';
 import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 import { TipBanner } from '@/components/help/tip-banner';
 import { ErrorState, LoadingState } from '@/components/ui-states';
@@ -40,7 +41,9 @@ const DEFAULT_TIPOS_PENDENCIA: TipoPendencia[] = ['CHAMADOS', 'NAO_CONFORMIDADES
 /** Primeira entrada, recarga e “Limpar filtros” da aba Chamados. */
 const DEFAULT_CHAMADO_FILTERS: ChamadosMapaFilters = {
   status: [...CHAMADO_STATUS_NAO_FINALIZADOS],
+  abertura: {},
 };
+const DEBOUNCE_CCO_CHAMADOS_MS = 300;
 
 export default function CcoPage() {
   return (
@@ -68,6 +71,9 @@ function CcoPageContent() {
   const [opcoesFiltro, setOpcoesFiltro] = useState<UnidadeFiltroOpcoes | null>(null);
   const [unidades, setUnidades] = useState<UnidadeOperacional[]>([]);
   const [chamados, setChamados] = useState<ChamadoMapaItem[]>([]);
+  const [chamadosTotal, setChamadosTotal] = useState(0);
+  const [chamadosTruncado, setChamadosTruncado] = useState(false);
+  const [abrirFiltros, setAbrirFiltros] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bootLoading, setBootLoading] = useState(true);
@@ -165,25 +171,30 @@ function CcoPageContent() {
   useEffect(() => {
     if (tab !== 'chamados') return;
 
+    // 295: debounce (busca não consulta a cada tecla) e só a resposta mais recente é aplicada.
     let active = true;
-    setLoading(true);
-    setError(null);
-
-    listChamadosMapa(chamadoFilters)
-      .then((data) => {
-        if (!active) return;
-        setChamados(data);
-      })
-      .catch((err) => {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : 'Erro inesperado ao carregar chamados.');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      listChamadosMapa(chamadoFilters)
+        .then((data) => {
+          if (!active) return;
+          setChamados(data.items);
+          setChamadosTotal(data.total);
+          setChamadosTruncado(data.truncado);
+        })
+        .catch((err) => {
+          if (!active) return;
+          setError(err instanceof Error ? err.message : 'Erro inesperado ao carregar chamados.');
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, DEBOUNCE_CCO_CHAMADOS_MS);
 
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, [chamadoFilters, tab]);
 
@@ -284,7 +295,12 @@ function CcoPageContent() {
     setKpiFilter('none');
   }
 
-  const resultCount = tab === 'proprios' ? unidades.length : chamados.length;
+  // 295: contador mostra o total real (o mapa recebe no máximo 2.000).
+  const resultCount = tab === 'proprios' ? unidades.length : chamadosTotal;
+  const avisoCorte =
+    tab === 'chamados' && chamadosTruncado ? (
+      <AvisoChamadosCortados total={chamadosTotal} mostrados={chamados.length} onAjustar={() => setAbrirFiltros((n) => n + 1)} />
+    ) : null;
 
   return (
     <RequirePermissions permissions={['dashboard.visualizar']}>
@@ -356,8 +372,11 @@ function CcoPageContent() {
           onCategoriaFiltroChange={setCategoriaFiltroId}
           onClear={clearFilters}
           resultCount={resultCount}
+          abrirSinal={abrirFiltros}
           defaultTiposPendencia={DEFAULT_TIPOS_PENDENCIA}
         />
+
+        {avisoCorte}
 
         <div className="cco-workspace grid min-h-0 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-stretch">
           <div className="cco-list-panel flex min-h-0 flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
@@ -391,8 +410,14 @@ function CcoPageContent() {
             )}
           </div>
 
-          <div className="cco-map-host flex min-h-0 min-w-0 flex-col overflow-hidden">
+          <div className="cco-map-host relative flex min-h-0 min-w-0 flex-col overflow-hidden">
+            {tab === 'chamados' && chamadosTruncado ? (
+              <div className="pointer-events-none absolute inset-x-2 top-2 z-[500] xl:hidden">
+                <AvisoChamadosCortados espelho total={chamadosTotal} mostrados={chamados.length} />
+              </div>
+            ) : null}
             <OperationalMap
+              notaCorte={tab === 'chamados' && chamadosTruncado ? notaMapaCortado(chamados.length) : undefined}
               view={tab === 'chamados' ? 'chamados' : 'unidades'}
               unidades={unidades}
               chamados={chamados}

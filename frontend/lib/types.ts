@@ -1,3 +1,4 @@
+import type { FiltroDataAberturaValue } from '@/lib/filtro-data-abertura';
 /** Codigo do catalogo TipoProprio (string aberta; literals legado para autocompletar). */
 export type UnidadeTipo =
   | 'ESCOLA'
@@ -244,6 +245,15 @@ export type ChamadosMapaFilters = {
   bairro?: string;
   bairros?: string[];
   comUnidade?: 'TODOS' | 'COM' | 'SEM';
+  /** 295: Data de abertura (mesmo valor do componente compartilhado). */
+  abertura?: FiltroDataAberturaValue;
+};
+
+/** 295: `items` vem limitado a 2.000 (ordem createdAt desc, id desc); `total` é o real. */
+export type ChamadosMapaResposta = {
+  items: ChamadoMapaItem[];
+  total: number;
+  truncado: boolean;
 };
 
 export type ChamadoMapaItem = {

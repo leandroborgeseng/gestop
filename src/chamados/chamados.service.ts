@@ -18,6 +18,7 @@ import {
   resolveChamadoSecretariaFilter,
   resolveEquipeSecretariaFilter,
 } from '../auth/secretaria-scope';
+import { lerFiltroAbertura, whereAbertura } from './chamado-filtros';
 import { resolveMeusChamadosTimelineCaps } from './meus-chamados-timeline.permissions';
 import { DocumentosService } from '../documentos/documentos.service';
 import { buildRelatorioExecucaoPdf } from '../documentos/relatorio-execucao-pdf';
@@ -122,10 +123,17 @@ export class ChamadosService {
           secretariaExecucaoId?: string;
           tipoChamadoId?: string;
           incluirExcluidos?: boolean;
+          abertoDe?: string;
+          abertoAte?: string;
+          diasMinimos?: string;
         }
       | undefined,
     user: JwtPayload,
   ) {
+    // 295: período de abertura (mesma função do CCO); entra nos itens, no total e nos contadores por status.
+    const abertura = lerFiltroAbertura(params);
+    if ('erro' in abertura) throw new BadRequestException(abertura.erro);
+    const aberturaWhere = whereAbertura(abertura.filtro);
     const all = Boolean(params?.all);
     const requested = all ? 5000 : (params?.limit ?? 50);
     const limit = Math.min(Math.max(requested, 1), 5000);
@@ -133,6 +141,10 @@ export class ChamadosService {
     const scoped = resolveChamadoSecretariaFilter(user);
     const extra = await this.buildTriagemFiltros(params, user);
     const extraSemStatus = await this.buildTriagemFiltros({ ...params, statuses: undefined }, user);
+    if (aberturaWhere) {
+      extra.push(aberturaWhere);
+      extraSemStatus.push(aberturaWhere);
+    }
     const incluirExcluidos = Boolean(params?.incluirExcluidos) && podeVisualizarChamadosExcluidos(user);
     const aplicarVisibilidade = (base: Prisma.ChamadoWhereInput) =>
       incluirExcluidos ? andChamadoComExcluidos(base) : andChamadoAtivo(base);
@@ -146,7 +158,8 @@ export class ChamadosService {
     const [items, total, grouped, hasSemSla] = await Promise.all([
       this.prisma.chamado.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        // 295: desempate por id — paginação e corte determinísticos (igual ao CCO).
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limit,
         skip: offset,
         include: this.includeRelations('lista'),

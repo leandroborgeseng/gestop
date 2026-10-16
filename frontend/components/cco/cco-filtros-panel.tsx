@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search, SlidersHorizontal } from 'lucide-react';
 import { Hint } from '@/components/help/hint';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,8 @@ import {
 } from '@/lib/types';
 import { CcoMapMode } from '@/components/operational-map';
 import { FilterMultiSelect } from '@/components/cco/filter-multi-select';
+import { FiltroDataAbertura } from '@/components/chamados/filtro-data-abertura';
+import { resumoDataAbertura } from '@/lib/filtro-data-abertura';
 
 const SELECT_CLASS =
   'h-9 w-full min-w-0 max-w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs';
@@ -131,6 +133,9 @@ function summarizeCcoFiltros(opts: {
     else if (opts.filters.sla === 'DENTRO') parts.push('SLA dentro');
     if (opts.filters.search?.trim()) parts.push(`“${opts.filters.search.trim()}”`);
   } else {
+    // 295: o período vem antes dos demais filtros.
+    const periodo = resumoDataAbertura(opts.chamadoFilters.abertura);
+    if (periodo) parts.push(periodo);
     const status = opts.chamadoFilters.status ?? [];
     if (status.length) {
       parts.push(summarizeList(status.map((st) => CHAMADO_STATUS_META[st]?.label ?? st)));
@@ -181,6 +186,7 @@ export function CcoFiltrosPanel({
   onClear,
   resultCount,
   defaultTiposPendencia,
+  abrirSinal = 0,
 }: {
   tab: 'proprios' | 'chamados';
   filters: UnidadeFilters;
@@ -201,8 +207,22 @@ export function CcoFiltrosPanel({
   onClear: () => void;
   resultCount: number;
   defaultTiposPendencia: TipoPendencia[];
+  /** 295: incrementar abre a sanfona e foca o primeiro campo ("Ajustar filtros"). */
+  abrirSinal?: number;
 }) {
   const [open, setOpen] = useState(false);
+  const painelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!abrirSinal) return;
+    setOpen(true);
+    window.setTimeout(() => {
+      const alvo =
+        painelRef.current?.querySelector<HTMLElement>('[data-autofocus-filtro]') ??
+        painelRef.current?.querySelector<HTMLElement>('input, select, button[aria-pressed]');
+      alvo?.focus();
+    }, 0);
+  }, [abrirSinal]);
 
   const tiposPendenciaSelected = filters.tiposPendencia ?? defaultTiposPendencia;
   const chamadosPendenciaAtivo = tiposPendenciaSelected.includes('CHAMADOS');
@@ -276,7 +296,7 @@ export function CcoFiltrosPanel({
             <p className="text-[13px] font-semibold text-[var(--ink)]">
               {tab === 'proprios' ? 'Filtros de próprios' : 'Filtros de chamados'}
             </p>
-            {!open ? <p className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
+            {!open ? <p data-testid="cco-filtros-resumo" className="mt-0.5 line-clamp-2 text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
           </div>
           <span
             onClick={(event) => event.stopPropagation()}
@@ -296,7 +316,7 @@ export function CcoFiltrosPanel({
       </button>
 
       {open ? (
-        <div className="min-w-0 space-y-3 overflow-hidden border-t border-[var(--line-2)] px-3.5 py-3.5">
+        <div ref={painelRef} className="min-w-0 space-y-3 overflow-hidden border-t border-[var(--line-2)] px-3.5 py-3.5">
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <div className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
@@ -473,6 +493,13 @@ export function CcoFiltrosPanel({
                 selected={chamadoFilters.status ?? []}
                 onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, status: next }))}
               />
+              <div className="min-w-0 sm:col-span-2 lg:col-span-3">
+                <FiltroDataAbertura
+                  idPrefixo="cco-abertura"
+                  value={chamadoFilters.abertura ?? {}}
+                  onChange={(abertura) => onChamadoFiltersChange((prev) => ({ ...prev, abertura }))}
+                />
+              </div>
               <FilterMultiSelect
                 label="Prioridade"
                 placeholder="Selecionar prioridade…"

@@ -10,6 +10,8 @@ import { SlaFilter, AtribuicaoFilter, summarizeChamadoFiltros } from '@/lib/cham
 import { ChamadoStatus, EquipeOpcao, SecretariaOption, TipoChamadoOpcao } from '@/lib/types';
 import { CHAMADO_STATUS_META } from '@/lib/chamado-status';
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
+import { FiltroDataAbertura } from '@/components/chamados/filtro-data-abertura';
+import { type FiltroDataAberturaValue, resumoDataAbertura } from '@/lib/filtro-data-abertura';
 
 type PrioridadeFilter = 'TODAS' | string;
 
@@ -51,6 +53,8 @@ export type ChamadosFiltrosValue = {
   secretariaProprioId: string;
   secretariaExecucaoId: string;
   tipoChamadoId: string;
+  /** 295: Data de abertura (só na Triagem; ausente = grupo não aparece, ex.: Programação). */
+  abertura?: FiltroDataAberturaValue;
 };
 
 export function ChamadosFiltrosPanel({
@@ -62,6 +66,7 @@ export function ChamadosFiltrosPanel({
   secretariasProprio,
   secretariasExecucao,
   showSemSla = true,
+  onClear,
   className,
 }: {
   value: ChamadosFiltrosValue;
@@ -72,6 +77,8 @@ export function ChamadosFiltrosPanel({
   secretariasProprio: SecretariaOption[];
   secretariasExecucao: SecretariaOption[];
   showSemSla?: boolean;
+  /** 295: "Limpar filtros" (volta ao padrão da tela, inclusive o período). */
+  onClear?: () => void;
   className?: string;
 }) {
   const [open, setOpen] = useState(true);
@@ -94,7 +101,7 @@ export function ChamadosFiltrosPanel({
       value.equipeId === 'sem-equipe'
         ? 'Sem equipe'
         : equipes.find((item) => item.id === value.equipeId)?.nome;
-    return summarizeChamadoFiltros({
+    const outros = summarizeChamadoFiltros({
       statusTodos,
       statusCount,
       prioridade: value.prioridade,
@@ -109,7 +116,11 @@ export function ChamadosFiltrosPanel({
       secretariaProprioNome: secretariasProprio.find((item) => item.id === value.secretariaProprioId)?.sigla,
       secretariaExecucaoNome: secretariasExecucao.find((item) => item.id === value.secretariaExecucaoId)?.sigla,
     });
+    // 295: o período vem antes dos demais filtros.
+    const periodo = resumoDataAbertura(value.abertura);
+    return periodo ? (outros === 'Nenhum filtro ativo' ? periodo : `${periodo} · ${outros}`) : outros;
   }, [
+    value.abertura,
     equipes,
     secretariasExecucao,
     secretariasProprio,
@@ -148,7 +159,7 @@ export function ChamadosFiltrosPanel({
       >
         <div className="min-w-0">
           <p className="text-[13px] font-semibold text-[var(--ink)]">Filtros de chamados</p>
-          {!open ? <p className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
+          {!open ? <p data-testid="chamados-filtros-resumo" className="mt-0.5 line-clamp-2 text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
         </div>
         <ChevronDown
           className={cn('h-4 w-4 shrink-0 text-[var(--ink-3)] transition-transform', open ? 'rotate-180' : '')}
@@ -156,7 +167,18 @@ export function ChamadosFiltrosPanel({
       </button>
 
       {open ? (
-        <div className="space-y-4 border-t border-[var(--line-2)] px-3.5 py-3.5">
+        <div className="min-w-0 space-y-4 border-t border-[var(--line-2)] px-3.5 py-3.5">
+          {onClear ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center rounded-[var(--r-md)] px-2 text-[12px] font-semibold text-[var(--brand-hover)] hover:bg-[var(--surface-2)] sm:min-h-8"
+                onClick={onClear}
+              >
+                Limpar filtros
+              </button>
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Status</p>
             <div className="situ-chips flex flex-wrap gap-1.5">
@@ -178,6 +200,14 @@ export function ChamadosFiltrosPanel({
               })}
             </div>
           </div>
+
+          {value.abertura ? (
+            <FiltroDataAbertura
+              idPrefixo="triagem-abertura"
+              value={value.abertura}
+              onChange={(abertura) => onChange({ ...value, abertura })}
+            />
+          ) : null}
 
           <div className="space-y-1.5">
             <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Prioridade</p>
