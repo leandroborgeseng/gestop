@@ -18,6 +18,10 @@ import { computeVistoriaNotas } from '../domain/vistoria-nota';
 import { startOfDay } from '../cronograma/cronograma.rules';
 import { PrismaService } from '../prisma/prisma.service';
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
+import { lerFiltroAbertura, whereAbertura } from '../chamados/chamado-filtros';
+
+/** 295: limite de itens do mapa (o total real vem em `total`). */
+export const LIMITE_CHAMADOS_MAPA = 2000;
 import {
   applyInMemoryUnidadeFilters,
   countPendenciasUnicas,
@@ -30,6 +34,7 @@ import {
 import {
   ChamadoMapaItem,
   ChamadosMapaQuery,
+  ChamadosMapaResposta,
   VistoriaAtrasadaResumo,
   TipoPendencia,
   UnidadeListQuery,
@@ -429,7 +434,11 @@ export class OperacionalService {
     return filtered;
   }
 
-  async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload): Promise<ChamadoMapaItem[]> {
+  async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload, agora: Date = new Date()): Promise<ChamadosMapaResposta> {
+    // 295: período de abertura — mesma função da Triagem.
+    const abertura = lerFiltroAbertura(query);
+    if ('erro' in abertura) throw new BadRequestException(abertura.erro);
+    const aberturaWhere = whereAbertura(abertura.filtro, agora);
     const bairros = query.bairros?.length ? query.bairros : query.bairro ? [query.bairro] : undefined;
 
     const conditions: Prisma.ChamadoWhereInput[] = [{ excluidoEm: null }, resolveChamadoSecretariaFilter(user)];
@@ -440,6 +449,18 @@ export class OperacionalService {
     if (query.equipeIds?.length) conditions.push({ equipeId: { in: query.equipeIds } });
     if (query.comUnidade === 'COM') conditions.push({ unidadeId: { not: null } });
     if (query.comUnidade === 'SEM') conditions.push({ unidadeId: null });
+    if (aberturaWhere) conditions.push(aberturaWhere);
+    // 295: SLA aplicado no banco ANTES do corte (antes filtrava em memória depois do take).
+    // Mesma regra de isChamadoForaPrazo (dia do prazo <= hoje, fuso do servidor — bug conhecido, fora do escopo).
+    if (query.sla === 'FORA' || query.sla === 'DENTRO') {
+      const amanha = new Date(agora);
+      amanha.setHours(0, 0, 0, 0);
+      amanha.setDate(amanha.getDate() + 1);
+      conditions.push({
+        status: { in: CHAMADO_OPEN_STATUSES },
+        prazoEm: query.sla === 'FORA' ? { lt: amanha } : { gte: amanha },
+      });
+    }
 
     if (bairros?.length) {
       conditions.push({
@@ -466,10 +487,11 @@ export class OperacionalService {
 
     const where: Prisma.ChamadoWhereInput = { AND: conditions };
 
-    const chamados = await this.prisma.chamado.findMany({
+    const [chamados, total] = await Promise.all([this.prisma.chamado.findMany({
       where,
-      orderBy: [{ createdAt: 'desc' }],
-      take: 2000,
+      // 295: ordem estável para o corte (desempate por id).
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: LIMITE_CHAMADOS_MAPA,
       select: {
         id: true,
         codigo: true,
@@ -501,9 +523,9 @@ export class OperacionalService {
         tipoChamado: { select: { id: true, nome: true } },
         responsavel: { select: { id: true, nome: true } },
       },
-    });
+    }), this.prisma.chamado.count({ where })]);
 
-    const now = new Date();
+    const now = agora;
     const items = chamados.map((chamado): ChamadoMapaItem => {
       const latitude = chamado.latitude != null ? Number(chamado.latitude) : null;
       const longitude = chamado.longitude != null ? Number(chamado.longitude) : null;
@@ -555,8 +577,7 @@ export class OperacionalService {
       };
     });
 
-    if (!query.sla) return items;
-    return items.filter((item) => item.slaMapa === query.sla);
+    return { items, total, truncado: total > items.length };
   }
 
   async getUnidadeDetalhe(id: string) {

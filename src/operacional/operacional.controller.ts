@@ -58,6 +58,9 @@ export class OperacionalController {
     @Query('bairro') bairro?: string,
     @Query('bairros') bairros?: string | string[],
     @Query('comUnidade') comUnidade?: 'TODOS' | 'COM' | 'SEM',
+    @Query('abertoDe') abertoDe?: string,
+    @Query('abertoAte') abertoAte?: string,
+    @Query('diasMinimos') diasMinimos?: string,
   ) {
     const query: ChamadosMapaQuery = {
       search: normalizeText(search),
@@ -69,6 +72,9 @@ export class OperacionalController {
       bairro: normalizeText(bairro),
       bairros: normalizeStringArray(bairros),
       comUnidade: comUnidade === 'COM' || comUnidade === 'SEM' ? comUnidade : undefined,
+      abertoDe: normalizeText(abertoDe),
+      abertoAte: normalizeText(abertoAte),
+      diasMinimos: normalizeText(diasMinimos),
     };
 
     return this.operacionalService.listChamadosMapa(query, user);

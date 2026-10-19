@@ -18,6 +18,7 @@ export function Chip({
   count,
   dotColor,
   onClick,
+  pressed,
   children,
 }: {
   className?: string;
@@ -26,6 +27,8 @@ export function Chip({
   count?: number;
   dotColor?: string;
   onClick?: () => void;
+  /** 295: estado de seleção para leitor de tela (aria-pressed), em grupos de escolha. */
+  pressed?: boolean;
   children: React.ReactNode;
 }) {
   const Tag = onClick ? 'button' : 'span';
@@ -34,6 +37,7 @@ export function Chip({
     <Tag
       type={onClick ? 'button' : undefined}
       onClick={onClick}
+      aria-pressed={onClick && pressed !== undefined ? pressed : undefined}
       className={cn(
         'inline-flex h-[30px] items-center gap-1.5 rounded-[var(--r-pill)] border px-[11px] text-[12.5px] font-semibold whitespace-nowrap transition-all duration-[var(--md-duration-short)]',
         active

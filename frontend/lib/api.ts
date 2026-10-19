@@ -34,6 +34,7 @@ import {
   ChamadoProgramacaoResponse,
   ChamadoProtocoloPublico,
   ChamadoMapaItem,
+  ChamadosMapaResposta,
   ChamadosMapaFilters,
   FiscalizacaoDetalhe,
   FiscalizacaoOpcoesManuais,
@@ -61,6 +62,7 @@ import {
   DocumentosListResponse,
   DocumentoValidacaoPublica,
 } from './types';
+import { aberturaParaQuery } from '@/lib/filtro-data-abertura';
 import { toGeoCheckin } from '@/lib/geolocation';
 import { notifyAuthExpired } from './security';
 import { extractApiErrorMessage, readForbiddenMessage } from './api-errors';
@@ -289,8 +291,11 @@ export function getUnidades(filters: UnidadeFilters) {
 
 export function listChamadosMapa(filters: ChamadosMapaFilters = {}) {
   const params = new URLSearchParams();
+  // 295: o período vira abertoDe/abertoAte ou diasMinimos (mesma regra da Triagem).
+  const { abertura, ...resto } = filters;
+  Object.entries(aberturaParaQuery(abertura)).forEach(([key, value]) => params.set(key, value));
 
-  Object.entries(filters).forEach(([key, value]) => {
+  Object.entries(resto).forEach(([key, value]) => {
     if (Array.isArray(value)) {
       value.forEach((item) => {
         if (item) params.append(key, String(item));
@@ -303,7 +308,7 @@ export function listChamadosMapa(filters: ChamadosMapaFilters = {}) {
   });
 
   const query = params.toString();
-  return request<ChamadoMapaItem[]>(`/operacional/chamados-mapa${query ? `?${query}` : ''}`);
+  return request<ChamadosMapaResposta>(`/operacional/chamados-mapa${query ? `?${query}` : ''}`);
 }
 
 export function getUnidadeDetalhe(id: string) {
@@ -988,8 +993,15 @@ export function listChamados(params?: {
   secretariaExecucaoId?: string;
   tipoChamadoId?: string;
   incluirExcluidos?: boolean;
+  /** 295 */
+  abertoDe?: string;
+  abertoAte?: string;
+  diasMinimos?: string;
 }) {
   const search = new URLSearchParams();
+  if (params?.abertoDe) search.set('abertoDe', params.abertoDe);
+  if (params?.abertoAte) search.set('abertoAte', params.abertoAte);
+  if (params?.diasMinimos) search.set('diasMinimos', params.diasMinimos);
   if (params?.limit != null) search.set('limit', String(params.limit));
   if (params?.offset != null) search.set('offset', String(params.offset));
   if (params?.all) search.set('all', 'true');

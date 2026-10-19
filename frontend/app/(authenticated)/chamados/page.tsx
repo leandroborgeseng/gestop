@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   CalendarDays,
@@ -32,6 +32,7 @@ import { DocumentosRelacionadosPanel } from '@/components/documentos/documentos-
 import { ChamadoTarefasPanel } from '@/components/chamados/chamado-tarefas-panel';
 import { ChamadoAnexosAberturaView } from '@/components/chamados/chamado-anexos-abertura-view';
 import { PageShell } from '@/components/layout/page-shell';
+import { aberturaParaQuery } from '@/lib/filtro-data-abertura';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -95,6 +96,7 @@ const DEFAULT_FILTROS: ChamadosFiltrosValue = {
   secretariaProprioId: '',
   secretariaExecucaoId: '',
   tipoChamadoId: '',
+  abertura: {},
 };
 
 function origemMeta(origem: ChamadoOrigem) {
@@ -138,6 +140,7 @@ function ChamadosPageContent() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<ChamadosFiltrosValue>(DEFAULT_FILTROS);
+  const triagemSeq = useRef(0);
   const [view, setView] = useState<ChamadosView>('triagem');
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
   const [searchDraft, setSearchDraft] = useState(() => searchParams.get('search') ?? '');
@@ -189,6 +192,7 @@ function ChamadosPageContent() {
       secretariaProprioId: filtros.secretariaProprioId || undefined,
       secretariaExecucaoId: filtros.secretariaExecucaoId || undefined,
       tipoChamadoId: filtros.tipoChamadoId || undefined,
+      ...aberturaParaQuery(filtros.abertura),
       incluirExcluidos: podeVerExcluidos && exibirExcluidos ? true : undefined,
       all: nextAll || undefined,
       limit: nextAll ? TRIAGEM_ALL_MAX : nextSize,
@@ -204,10 +208,13 @@ function ChamadosPageContent() {
   useEffect(() => {
     if (view !== 'triagem') return;
 
+    // 295: só a resposta da consulta mais recente é aplicada (respostas atrasadas não sobrescrevem).
+    const seq = ++triagemSeq.current;
     const timer = window.setTimeout(() => {
       setLoading(true);
       listChamados(triagemQuery())
         .then((response) => {
+          if (seq !== triagemSeq.current) return;
           if (response.total > TRIAGEM_ALL_MAX && allSelected) {
             setError(`Há ${response.total} chamados. Use filtros ou uma quantidade menor que ${TRIAGEM_ALL_MAX}.`);
             setAllSelected(false);
@@ -222,8 +229,12 @@ function ChamadosPageContent() {
               : response.items[0]?.id ?? null,
           );
         })
-        .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
-        .finally(() => setLoading(false));
+        .catch((err) => {
+          if (seq === triagemSeq.current) setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.');
+        })
+        .finally(() => {
+          if (seq === triagemSeq.current) setLoading(false);
+        });
     }, 250);
 
     return () => window.clearTimeout(timer);
@@ -487,6 +498,7 @@ function ChamadosPageContent() {
             <ChamadosFiltrosPanel
               value={filtros}
               onChange={setFiltros}
+              onClear={() => setFiltros(DEFAULT_FILTROS)}
               statusCounts={counts}
               equipes={equipes}
               tiposChamado={tiposChamado}

@@ -291,6 +291,7 @@ export function OperationalMapClient({
   onClearSelection,
   onHover,
   popupActionKind = 'modal',
+  notaCorte,
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -302,6 +303,8 @@ export function OperationalMapClient({
   onSelect?: (id: string) => void;
   onClearSelection?: () => void;
   onHover?: (id: string | null) => void;
+  /** 295: nota quando o resultado foi cortado (mapa de calor e legenda). */
+  notaCorte?: string;
   popupActionKind?: MapPopupActionKind;
 }) {
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -862,6 +865,11 @@ export function OperationalMapClient({
 
         <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-[500] max-w-[280px] min-w-[168px] rounded-[var(--r-md)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-3 shadow-[var(--sh-md)] backdrop-blur-md">
           <div className="mb-1.5 text-[10.5px] font-bold tracking-[0.05em] uppercase text-[var(--ink-3)]">Legenda</div>
+          {view === 'chamados' && notaCorte ? (
+            <p data-testid="nota-mapa-cortado" className="mb-1.5 text-[12px] text-[var(--ink-3)]">
+              {notaCorte}
+            </p>
+          ) : null}
           {view === 'chamados' && mapMode === 'calor' ? (
             <HeatLegendBox points={locatedChamados.map(({ latLng }) => ({ lat: latLng[0], lng: latLng[1] }))} />
           ) : view === 'chamados' || mapMode === 'situacao' ? (
