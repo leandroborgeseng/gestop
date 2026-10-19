@@ -99,6 +99,13 @@ describe('295 · validação', () => {
     expect(lerFiltroAbertura({ abertoAte: '2026-02-30' })).toEqual({ erro: 'Data final inválida.' });
     expect(lerFiltroAbertura({ abertoDe: '2026-13-01' })).toEqual({ erro: 'Data inicial inválida.' });
   });
+  it('M1: ano abaixo de 1900 recusado (0002, 0020, 0202, 1899); 1900 aceito', () => {
+    for (const v of ['0002-09-05', '0020-09-05', '0202-09-05', '1899-12-31']) {
+      expect(lerFiltroAbertura({ abertoDe: v })).toEqual({ erro: 'Data inicial inválida.' });
+      expect(lerFiltroAbertura({ abertoAte: v })).toEqual({ erro: 'Data final inválida.' });
+    }
+    expect(lerFiltroAbertura({ abertoDe: '1900-01-01' })).toEqual({ filtro: { abertoDe: '1900-01-01', abertoAte: undefined, diasMinimos: undefined } });
+  });
   it('rápido só nos valores da demanda; número vindo como texto', () => {
     expect(lerFiltroAbertura({ diasMinimos: '30' })).toEqual({ filtro: { abertoDe: undefined, abertoAte: undefined, diasMinimos: 30 } });
     for (const v of ['7', '0', '-30', '30.5', 'abc', '365']) {

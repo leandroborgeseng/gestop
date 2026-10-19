@@ -59,7 +59,9 @@ export function FiltroDataAbertura({
   }, []);
 
   const invalido = periodoInvertido(rascunho) && dataCompleta(rascunho.de) && dataCompleta(rascunho.ate);
-  const rapido = editado && !invalido ? undefined : value.rapido;
+  // Só desmarca o rápido quando a edição pode virar consulta: datas completas e período válido (A1).
+  const completas = dataCompleta(rascunho.de) && dataCompleta(rascunho.ate);
+  const rapido = editado && completas && !invalido ? undefined : value.rapido;
   const ajuda = rapido ? referenciaRapido(rapido, agora?.() ?? new Date()).ajuda : null;
 
   function editarData(campo: 'de' | 'ate', texto: string) {

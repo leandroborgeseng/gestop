@@ -135,6 +135,12 @@ describe('295 · GET /chamados (Triagem) com Data de abertura', () => {
     await expect(s.chamados.listChamados({ abertoDe: '2026-10-02', abertoAte: '2026-10-01' }, global)).rejects.toEqual(new BadRequestException(MSG_PERIODO_INVERTIDO));
     expect(s.prisma.chamado.findMany).not.toHaveBeenCalled();
   });
+  it('M1: ano 0202 (digitação incompleta) → 400 e nenhuma consulta', async () => {
+    const s = servicos(base());
+    await expect(s.chamados.listChamados({ abertoDe: '0202-09-05' }, global)).rejects.toEqual(new BadRequestException('Data inicial inválida.'));
+    await expect(s.chamados.listChamados({ abertoAte: '0202-09-05' }, global)).rejects.toEqual(new BadRequestException('Data final inválida.'));
+    expect(s.prisma.chamado.findMany).not.toHaveBeenCalled();
+  });
   it('escopo da secretaria e exclusão lógica continuam no where', async () => {
     const s = servicos(base());
     await s.chamados.listChamados({ abertoDe: '2026-10-01' }, daSecretaria);
@@ -189,6 +195,11 @@ describe('295 · GET /operacional/chamados-mapa (CCO) com Data de abertura', () 
     const s = servicos(base());
     await expect(s.operacional.listChamadosMapa({ abertoDe: '2026-10-02', abertoAte: '2026-10-01' }, global)).rejects.toEqual(new BadRequestException(MSG_PERIODO_INVERTIDO));
     await expect(s.operacional.listChamadosMapa({ diasMinimos: '7' }, global)).rejects.toBeInstanceOf(BadRequestException);
+    expect(s.prisma.chamado.findMany).not.toHaveBeenCalled();
+  });
+  it('M1: ano 0202 (digitação incompleta) → 400 e nenhuma consulta', async () => {
+    const s = servicos(base());
+    await expect(s.operacional.listChamadosMapa({ abertoDe: '0202-09-05' }, global)).rejects.toEqual(new BadRequestException('Data inicial inválida.'));
     expect(s.prisma.chamado.findMany).not.toHaveBeenCalled();
   });
   it('escopo da secretaria e exclusão lógica continuam no where', async () => {

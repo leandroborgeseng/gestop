@@ -160,4 +160,15 @@ describe('295 · A1/M1 (revisão UX da #28)', () => {
     act(() => vi.advanceTimersByTime(DEBOUNCE_DATA_ABERTURA_MS));
     expect(mudancas).toEqual([{ de: '2026-09-01', ate: '2026-09-05' }]);
   });
+  it('A1 (borda M1): rápido ativo + ano incompleto na Data inicial → chip continua marcado e nada é aplicado', () => {
+    render(createElement(Harness));
+    fireEvent.click(chip('Há mais de 30 dias'));
+    fireEvent.change(inicial(), { target: { value: '0002-09-05' } });
+    act(() => vi.advanceTimersByTime(5000));
+    expect(pressionados()).toEqual(['Há mais de 30 dias']);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(mudancas).toEqual([{ rapido: 30, ate: '2026-09-16' }]);
+    fireEvent.change(inicial(), { target: { value: '2026-09-05' } });
+    expect(pressionados()).toEqual(['Todos']);
+  });
 });

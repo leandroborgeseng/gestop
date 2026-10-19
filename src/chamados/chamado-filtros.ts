@@ -36,9 +36,13 @@ export function lerFiltroAbertura(entrada: FiltroAberturaEntrada | undefined): {
   return { filtro: { abertoDe: de, abertoAte: ate, diasMinimos } };
 }
 
+/** 295 · M1: anos abaixo disso são recusados (400). */
+export const ANO_MINIMO = 1900;
+
 function validoDateKey(valor: string) {
   if (!DATE_KEY_RE.test(valor)) return false;
   const [a, m, d] = valor.split('-').map(Number);
+  if (a < ANO_MINIMO) return false; // ano incompleto/digitado pela metade (0202, 0020…) não vira consulta
   const data = new Date(Date.UTC(a, m - 1, d));
   return data.getUTCFullYear() === a && data.getUTCMonth() === m - 1 && data.getUTCDate() === d;
 }
