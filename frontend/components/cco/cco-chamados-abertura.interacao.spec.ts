@@ -105,7 +105,9 @@ describe('295 · CCO › Todos os chamados', () => {
     await abrirChamados();
     await act(async () => api.pendentes.at(-1)!.resolve({ items: itens(2000), total: 12345, truncado: true }));
     const faixa = screen.getByTestId('aviso-cortados');
-    expect(faixa.getAttribute('role')).toBe('status');
+    expect(faixa.getAttribute('role')).toBeNull();
+    expect(faixa.parentElement!.getAttribute('role')).toBe('status');
+    expect(faixa.parentElement!.getAttribute('data-testid')).toBe('aviso-cortados-regiao');
     expect(faixa.textContent).toContain('Mostrando 2.000 de 12.345 chamados. Refine os filtros para ver todos no mapa.');
     expect(faixa.className).toContain('bg-[var(--warn-bg)]');
     expect(faixa.className).toContain('text-[var(--warn-ink)]');
@@ -123,6 +125,9 @@ describe('295 · CCO › Todos os chamados', () => {
     await tick(300);
     await act(async () => api.pendentes.at(-1)!.resolve({ items: itens(5), total: 5, truncado: false }));
     expect(screen.queryByTestId('aviso-cortados')).toBeNull();
+    // a região de status continua montada (vazia) para o próximo corte ser anunciado
+    expect(screen.getByTestId('aviso-cortados-regiao').getAttribute('role')).toBe('status');
+    expect(screen.getByTestId('aviso-cortados-regiao').textContent).toBe('');
     expect(screen.getByTestId('mapa').textContent).toBe('');
   });
   it('Limpar filtros remove o período e volta a Não finalizados', async () => {

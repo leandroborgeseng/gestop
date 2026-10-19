@@ -20,6 +20,13 @@ import {
 
 export const DEBOUNCE_DATA_ABERTURA_MS = 400;
 
+/** Vazio ou YYYY-MM-DD com ano ≥ 1900 (evita consultar com o ano ainda sendo digitado). */
+export function dataCompleta(d: string): boolean {
+  if (!d) return true;
+  const m = /^(\d{4})-\d{2}-\d{2}$/.exec(d);
+  return Boolean(m && Number(m[1]) >= 1900);
+}
+
 const INPUT =
   'h-11 w-full min-w-0 rounded-[var(--r-md)] border bg-[var(--surface)] px-3 text-[13px] text-[var(--ink)] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)] sm:h-9';
 
@@ -39,7 +46,7 @@ export function FiltroDataAbertura({
   const timer = useRef<number | null>(null);
   // Edição manual desmarca o rápido na hora (o período manual é aplicado depois do debounce).
   const [editado, setEditado] = useState(false);
-  const rapido = editado ? undefined : value.rapido;
+  // Período inválido não é aplicado: o chip continua mostrando o que está aplicado (A1).
 
   // Valor externo (Limpar filtros, chip) manda no rascunho.
   useEffect(() => {
@@ -51,7 +58,8 @@ export function FiltroDataAbertura({
     if (timer.current) window.clearTimeout(timer.current);
   }, []);
 
-  const invalido = periodoInvertido(rascunho);
+  const invalido = periodoInvertido(rascunho) && dataCompleta(rascunho.de) && dataCompleta(rascunho.ate);
+  const rapido = editado && !invalido ? undefined : value.rapido;
   const ajuda = rapido ? referenciaRapido(rapido, agora?.() ?? new Date()).ajuda : null;
 
   function editarData(campo: 'de' | 'ate', texto: string) {
@@ -60,7 +68,9 @@ export function FiltroDataAbertura({
     setEditado(true);
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = null;
-    if (periodoInvertido(proximo)) return; // não consulta enquanto inválido
+    // não consulta enquanto inválido nem com ano incompleto (Chrome Android manda 0002, 0020… ao digitar)
+    if (!dataCompleta(proximo.de) || !dataCompleta(proximo.ate)) return;
+    if (periodoInvertido(proximo)) return;
     timer.current = window.setTimeout(() => {
       timer.current = null;
       onChange({ de: proximo.de || undefined, ate: proximo.ate || undefined });
@@ -70,11 +80,16 @@ export function FiltroDataAbertura({
   function escolherRapido(n: DiasAberturaRapido | null) {
     if (timer.current) window.clearTimeout(timer.current);
     timer.current = null;
+    // Sincroniza a tela direto (sem depender do efeito): reclicar o chip já aplicado também restaura (A1).
+    setEditado(false);
     if (n === null) {
+      setRascunho({ de: '', ate: '' });
       onChange({});
       return;
     }
-    onChange({ rapido: n, ate: referenciaRapido(n, agora?.() ?? new Date()).ate });
+    const ate = referenciaRapido(n, agora?.() ?? new Date()).ate;
+    setRascunho({ de: '', ate });
+    onChange({ rapido: n, ate });
   }
 
   const ativo = filtroAberturaAtivo(value) || Boolean(rascunho.de || rascunho.ate);

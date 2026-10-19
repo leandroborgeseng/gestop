@@ -298,8 +298,13 @@ function CcoPageContent() {
   // 295: contador mostra o total real (o mapa recebe no máximo 2.000).
   const resultCount = tab === 'proprios' ? unidades.length : chamadosTotal;
   const avisoCorte =
-    tab === 'chamados' && chamadosTruncado ? (
-      <AvisoChamadosCortados total={chamadosTotal} mostrados={chamados.length} onAjustar={() => setAbrirFiltros((n) => n + 1)} />
+    tab === 'chamados' ? (
+      <AvisoChamadosCortados
+        visivel={chamadosTruncado}
+        total={chamadosTotal}
+        mostrados={chamados.length}
+        onAjustar={() => setAbrirFiltros((n) => n + 1)}
+      />
     ) : null;
 
   return (

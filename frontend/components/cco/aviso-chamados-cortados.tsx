@@ -23,16 +23,39 @@ export function AvisoChamadosCortados({
   mostrados,
   onAjustar,
   espelho = false,
+  visivel = true,
 }: {
   total: number;
   mostrados: number;
   onAjustar?: () => void;
   /** cópia visual sobre o mapa no mobile (não é anunciada de novo) */
   espelho?: boolean;
+  /** a região role="status" fica sempre montada; só o conteúdo entra/sai (VoiceOver/TalkBack anunciam a troca) */
+  visivel?: boolean;
+}) {
+  if (!espelho) {
+    return (
+      <div role="status" data-testid="aviso-cortados-regiao" className={visivel ? undefined : 'sr-only'}>
+        {visivel ? <Faixa total={total} mostrados={mostrados} onAjustar={onAjustar} /> : null}
+      </div>
+    );
+  }
+  return <Faixa total={total} mostrados={mostrados} espelho />;
+}
+
+function Faixa({
+  total,
+  mostrados,
+  onAjustar,
+  espelho = false,
+}: {
+  total: number;
+  mostrados: number;
+  onAjustar?: () => void;
+  espelho?: boolean;
 }) {
   return (
     <div
-      role={espelho ? undefined : 'status'}
       aria-hidden={espelho || undefined}
       data-testid={espelho ? 'aviso-cortados-mapa' : 'aviso-cortados'}
       className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2 text-[13px] text-[var(--warn-ink)]"

@@ -124,3 +124,40 @@ describe('295 · Data de abertura (componente compartilhado)', () => {
     expect(grade.className).toContain('min-w-0');
   });
 });
+
+describe('295 · A1/M1 (revisão UX da #28)', () => {
+  it('A1: rápido + Data inicial posterior à referência → nada aplicado e o chip continua marcado (tela = valor aplicado)', () => {
+    render(createElement(Harness));
+    fireEvent.click(chip('Há mais de 30 dias'));
+    fireEvent.change(inicial(), { target: { value: '2026-10-01' } });
+    act(() => vi.advanceTimersByTime(5000));
+    expect(mudancas).toEqual([{ rapido: 30, ate: '2026-09-16' }]);
+    expect(screen.getByRole('alert').textContent).toBe('A data inicial não pode ser posterior à data final.');
+    expect(pressionados()).toEqual(['Há mais de 30 dias']);
+  });
+  it('A1: reclicar o chip já aplicado restaura a tela (limpa a Data inicial, some o erro, mostra a ajuda)', () => {
+    render(createElement(Harness));
+    fireEvent.click(chip('Há mais de 30 dias'));
+    fireEvent.change(inicial(), { target: { value: '2026-10-01' } });
+    fireEvent.click(chip('Há mais de 30 dias'));
+    expect(inicial().value).toBe('');
+    expect(final().value).toBe('2026-09-16');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(pressionados()).toEqual(['Há mais de 30 dias']);
+    expect(screen.getByText(/Abertos antes de 16\/09\/2026/)).toBeTruthy();
+    act(() => vi.advanceTimersByTime(5000));
+    expect(mudancas.every((m) => m.rapido === 30 && !m.de)).toBe(true);
+  });
+  it('M1: ano incompleto (0002, 0020, 0202) não consulta nem acende erro; ano completo aplica', () => {
+    render(createElement(Harness, { inicial: { de: '2026-09-01', ate: '2026-09-30' } }));
+    for (const v of ['0002-09-05', '0020-09-05', '0202-09-05']) {
+      fireEvent.change(final(), { target: { value: v } });
+      act(() => vi.advanceTimersByTime(DEBOUNCE_DATA_ABERTURA_MS));
+      expect(screen.queryByRole('alert')).toBeNull();
+    }
+    expect(mudancas).toEqual([]);
+    fireEvent.change(final(), { target: { value: '2026-09-05' } });
+    act(() => vi.advanceTimersByTime(DEBOUNCE_DATA_ABERTURA_MS));
+    expect(mudancas).toEqual([{ de: '2026-09-01', ate: '2026-09-05' }]);
+  });
+});
