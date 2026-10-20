@@ -248,6 +248,9 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
     const fim = await service.status();
     expect(fim.emAndamento).toBeNull();
     expect(fim.ultimaImportacao).toMatchObject({ id: r.importacaoId, status: 'PARCIAL' });
+    // A3: GET de status sem vírgula entre data e hora
+    expect(fim.ultimaImportacao!.concluidoEmBrt).toMatch(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2} \(BRT\)$/);
+    expect(fim.ultimaImportacao!.iniciadoEmBrt).not.toContain(',');
     const csv = await service.errosCsv();
     expect(csv.split('\n')[0]).toBe('grupo;camada;elemento;motivo');
     expect(csv).toContain('"SANEAMENTO";"AREA_RISCO"');

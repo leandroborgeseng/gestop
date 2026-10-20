@@ -45,7 +45,8 @@ export function textoConfirmacaoAplicar(invalidos: number): string | null {
 
 /** Pacote (d): "Parcial · 20/10/2026 15:40 (BRT) · Tester Importação" (resultado · dd/mm/aaaa HH:mm (BRT) · usuário). */
 export function linhaUltimaAplicacao(status: string, dataHoraBrt: string, usuario: string): string {
-  const quando = dataHoraBrt.replace(/(\d{2}:\d{2}):\d{2}/, '$1');
+  // aceita o formato do backend com ou sem a vírgula do Intl e sem segundos
+  const quando = dataHoraBrt.replace(/(\d{4}),\s*/, '$1 ').replace(/(\d{2}:\d{2}):\d{2}/, '$1');
   return `${RESULTADO_LABEL[status] ?? status} · ${quando} · ${usuario}`;
 }
 

@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
 vi.mock('@/lib/api', () => api);
 
 import { WebmapCamadasPanel, linhaUltimaAplicacao } from './webmap-camadas-panel';
+import { dataHoraBrt } from '../../../src/webmap-camadas/webmap-camadas.service';
 
 const base = { fonte: 'github', emAndamento: null, ultima: null, ultimaImportacao: null, camadas: 0, ativas: 0, removidasOrigem: 0 };
 const sim = (totalErros: number) => ({
@@ -121,5 +122,23 @@ describe('296 pacote (d) · linha da última aplicação', () => {
     api.getWebmapCamadasHistorico.mockResolvedValue([]);
     await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
     expect(screen.getByText('Última aplicação: Parcial · 20/10/2026 15:40 (BRT) · Tester Importação')).toBeTruthy();
+  });
+});
+
+describe('296 · A3 · string real do backend (Intl pt-BR)', () => {
+  const real = dataHoraBrt(new Date('2026-10-20T19:23:41Z'));
+  it('Parcial e Falha sem vírgula, sem segundos', async () => {
+    expect(real).toBe('20/10/2026 16:23:41 (BRT)');
+    expect(linhaUltimaAplicacao('PARCIAL', real, 'Tester Importação')).toBe('Parcial · 20/10/2026 16:23 (BRT) · Tester Importação');
+    // tolera o formato antigo com vírgula (registro gravado antes da correção)
+    expect(linhaUltimaAplicacao('FALHA', '20/10/2026, 16:23:41 (BRT)', 'Tester Importação')).toBe('Falha · 20/10/2026 16:23 (BRT) · Tester Importação');
+    api.getWebmapCamadasStatus.mockResolvedValue({ ...base, ultimaImportacao: { id: 'j', status: 'PARCIAL', usuario: 'Tester Importação', iniciadoEmBrt: real, concluidoEmBrt: real, motivo: null, resultado: { ...sim(3), resultado: 'PARCIAL' } } });
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    expect(screen.getByText('Última aplicação: Parcial · 20/10/2026 16:23 (BRT) · Tester Importação')).toBeTruthy();
+    cleanup();
+    api.getWebmapCamadasStatus.mockResolvedValue({ ...base, ultimaImportacao: { id: 'j', status: 'FALHA', usuario: 'Tester Importação', iniciadoEmBrt: real, concluidoEmBrt: null, motivo: 'x', resultado: null } });
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    expect(screen.getByText('Última aplicação: Falha · 20/10/2026 16:23 (BRT) · Tester Importação')).toBeTruthy();
   });
 });
