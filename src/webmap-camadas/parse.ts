@@ -1,4 +1,6 @@
 import { nomeBase } from './normalize';
+import { repararGeometria } from './repair';
+import { FeatureStreamSplitter } from './stream';
 
 export type GeometriaFamilia = 'POINT' | 'LINE' | 'POLYGON';
 export type CamadaDeclarada = { variavel: string; titulo: string; grupo: string; ordem: number; grupoOrdem: number };
@@ -47,40 +49,45 @@ export type ElementoLido = {
   geometriaTipo: string;
   familia: GeometriaFamilia;
   geometria: { type: string; coordinates: unknown };
+  geometriaOriginal: unknown | null;
+  corrigida: boolean;
+  motivoCorrecao: string | null;
   atributos: Record<string, unknown>;
   bbox: [number, number, number, number];
 };
-export type ErroLeitura = { camada: string; elemento: string | null; motivo: string };
+export type ErroLeitura = { grupo?: string; camada: string; elemento: string | null; motivo: string };
 
-const FAMILIA: Record<string, GeometriaFamilia> = {
+export const FAMILIA: Record<string, GeometriaFamilia> = {
   Point: 'POINT', MultiPoint: 'POINT', LineString: 'LINE', MultiLineString: 'LINE', Polygon: 'POLYGON', MultiPolygon: 'POLYGON',
 };
 
-function isPos(p: unknown): p is number[] {
-  return Array.isArray(p) && p.length >= 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]) && Math.abs(p[0] as number) <= 180 && Math.abs(p[1] as number) <= 90;
-}
-function line(c: unknown, min: number): c is number[][] {
-  return Array.isArray(c) && c.length >= min && c.every(isPos);
-}
-function validCoords(type: string, c: unknown): boolean {
-  switch (type) {
-    case 'Point': return isPos(c);
-    case 'MultiPoint': return Array.isArray(c) && c.length > 0 && c.every(isPos);
-    case 'LineString': return line(c, 2);
-    case 'MultiLineString': return Array.isArray(c) && c.length > 0 && c.every((l) => line(l, 2));
-    case 'Polygon': return Array.isArray(c) && c.length > 0 && c.every((r) => line(r, 4));
-    case 'MultiPolygon': return Array.isArray(c) && c.length > 0 && c.every((p) => Array.isArray(p) && p.length > 0 && p.every((r) => line(r, 4)));
-    default: return false;
-  }
-}
 function bboxOf(c: unknown, acc = [Infinity, Infinity, -Infinity, -Infinity]): number[] {
-  if (isPos(c) && !Array.isArray(c[0])) {
-    acc[0] = Math.min(acc[0], c[0]); acc[1] = Math.min(acc[1], c[1]); acc[2] = Math.max(acc[2], c[0]); acc[3] = Math.max(acc[3], c[1]);
+  if (Array.isArray(c) && typeof c[0] === 'number') {
+    acc[0] = Math.min(acc[0], c[0]); acc[1] = Math.min(acc[1], c[1] as number); acc[2] = Math.max(acc[2], c[0]); acc[3] = Math.max(acc[3], c[1] as number);
   } else if (Array.isArray(c)) for (const x of c) bboxOf(x, acc);
   return acc;
 }
 
-/** Extrai o objeto JSON de `var json_X = {...};`. Falha aqui = camada inteira ilegível (aborta, D-296b). */
+/** Valida/corrige uma feature já parseada. Retorna elemento (ok/corrigido) ou erro irreparável. */
+export function processarFeature(raw: unknown, index: number, label: string, grupo?: string): { elemento: ElementoLido } | { erro: ErroLeitura } {
+  const f = raw as { properties?: Record<string, unknown> | null; geometry?: { type?: string; coordinates?: unknown } | null };
+  const props = (f && typeof f.properties === 'object' && f.properties) || {};
+  const fid = props.fid != null ? String(props.fid) : null;
+  const ref = fid ?? `#${index + 1}`;
+  const r = repararGeometria(f?.geometry);
+  if (r.status === 'invalida') return { erro: { grupo, camada: label, elemento: ref, motivo: r.motivo } };
+  const familia = FAMILIA[r.geometria.type];
+  const bbox = bboxOf(r.geometria.coordinates) as [number, number, number, number];
+  return {
+    elemento: {
+      fidOrigem: fid, geometriaTipo: r.geometria.type, familia, geometria: r.geometria,
+      geometriaOriginal: r.status === 'corrigida' ? f.geometry ?? null : null, corrigida: r.status === 'corrigida', motivoCorrecao: r.status === 'corrigida' ? r.motivo : null,
+      atributos: props, bbox,
+    },
+  };
+}
+
+/** Extrai o objeto JSON de `var json_X = {...};` (usado só em testes/arquivos pequenos). */
 export function extractLayerJson(content: string, label: string): { features?: unknown[] } {
   const start = content.indexOf('{');
   const end = content.lastIndexOf('}');
@@ -95,32 +102,40 @@ export function extractLayerJson(content: string, label: string): { features?: u
 }
 
 export function readFeatures(content: string, label: string): { elementos: ElementoLido[]; erros: ErroLeitura[] } {
-  const parsed = extractLayerJson(content, label);
   const elementos: ElementoLido[] = [];
   const erros: ErroLeitura[] = [];
-  (parsed.features ?? []).forEach((raw, index) => {
-    const f = raw as { properties?: Record<string, unknown> | null; geometry?: { type?: string; coordinates?: unknown } | null };
-    const props = (f && typeof f.properties === 'object' && f.properties) || {};
-    const fid = props.fid != null ? String(props.fid) : null;
-    const ref = fid ?? `#${index + 1}`;
-    const g = f?.geometry;
-    if (!g || typeof g.type !== 'string') {
-      erros.push({ camada: label, elemento: ref, motivo: 'Elemento sem geometria' });
-      return;
-    }
-    const familia = FAMILIA[g.type];
-    if (!familia) {
-      erros.push({ camada: label, elemento: ref, motivo: `Tipo de geometria não suportado: ${g.type}` });
-      return;
-    }
-    if (!validCoords(g.type, g.coordinates)) {
-      erros.push({ camada: label, elemento: ref, motivo: `Coordenadas inválidas ou incompletas (${g.type})` });
-      return;
-    }
-    const b = bboxOf(g.coordinates) as [number, number, number, number];
-    elementos.push({ fidOrigem: fid, geometriaTipo: g.type, familia, geometria: { type: g.type, coordinates: g.coordinates }, atributos: props, bbox: b });
+  (extractLayerJson(content, label).features ?? []).forEach((raw, i) => {
+    const r = processarFeature(raw, i, label);
+    if ('erro' in r) erros.push(r.erro);
+    else elementos.push(r.elemento);
   });
   return { elementos, erros };
+}
+
+/** Leitura em fluxo: chama onElemento/onErro por feature. Lança se o GeoJSON da camada for ilegível. */
+export async function lerElementosStream(
+  chunks: AsyncIterable<string>, label: string, grupo: string | undefined,
+  onElemento: (e: ElementoLido) => Promise<void> | void, onErro: (e: ErroLeitura) => void,
+) {
+  let index = 0;
+  const pend: unknown[] = [];
+  const splitter = new FeatureStreamSplitter((json) => {
+    pend.push(JSON.parse(json));
+  });
+  try {
+    for await (const chunk of chunks) {
+      splitter.push(chunk);
+      while (pend.length) {
+        const r = processarFeature(pend.shift(), index++, label, grupo);
+        if ('erro' in r) onErro(r.erro);
+        else await onElemento(r.elemento);
+      }
+      if (splitter.terminou) break;
+    }
+    splitter.end();
+  } catch (error) {
+    throw new Error(`Camada ${label}: GeoJSON inválido (${error instanceof Error ? error.message : String(error)})`);
+  }
 }
 
 export type EstiloNormalizado = {

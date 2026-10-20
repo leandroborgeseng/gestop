@@ -1,0 +1,1 @@
+var json_ETE_2_102 = {"type": "FeatureCollection", "name": "ETE_2_102", "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}}, "xy_coordinate_resolution": 1e-07, "features": [{"type": "Feature", "properties": {"fid": "1"}, "geometry": {"type": "Point", "coordinates": [-47.37, -20.4995]}}]};

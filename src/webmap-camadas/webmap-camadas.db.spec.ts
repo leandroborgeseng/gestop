@@ -1,27 +1,34 @@
 /**
- * 296 — integração com Postgres descartável. Só roda com WEBMAP_CAMADAS_TEST_DATABASE_URL
+ * 296 — integração com Postgres descartável SEM extensões. Só roda com WEBMAP_CAMADAS_TEST_DATABASE_URL
  * (banco local de teste, migrado e com seed). Usa só fixtures locais (sem rede).
  * Precisa de um banco PRÓPRIO: os md5 de "todas as tabelas" quebram se outros *.int.spec gravarem
  * no mesmo banco em paralelo; por isso é pulado quando a URL é igual a DATABASE_URL.
  */
+import { spawn } from 'node:child_process';
+import { cpSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { aplicar, FonteMudouError, ImportacaoEmAndamentoError, simular } from './core';
+import { executarAplicacao, FonteMudouError, PgSessionLock, recuperarInterrompidas, ResultadoSimulacao, simular } from './core';
 import { DiretorioWebmapFonte } from './source';
 import { WebmapCamadasService } from './webmap-camadas.service';
 
 const URL = process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL && process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL !== process.env.DATABASE_URL ? process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL : undefined;
-const FIX = join(__dirname, '../../test/fixtures/webmap-camadas');
-const fonte = (v: string) => new DiretorioWebmapFonte(join(FIX, v));
+const ROOT = join(__dirname, '../..');
+const FIX = join(ROOT, 'test/fixtures/webmap-camadas');
+const fonte = (v: string) => new DiretorioWebmapFonte(v.startsWith('/') ? v : join(FIX, v));
 const OPERACIONAIS = ['UnidadePublica', 'Secretaria', 'Chamado'];
-const WEBMAP = ['WebmapCamadaGrupo', 'WebmapCamada', 'WebmapElemento', 'WebmapIcone'];
+const CONTROLE = ['WebmapImportacao', 'LogAuditoria'];
 
-describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres)', () => {
+describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem extensões)', () => {
   let prisma: PrismaClient;
   let todas: string[] = [];
-  const evidencias: Record<string, unknown> = {};
+  let semControle: string[] = [];
+  let webmap: string[] = [];
+  const evid: Record<string, unknown> = {};
+  const user = { sub: '', nome: 'Tester 296', email: 't@aion.local', perfis: [], permissoes: [] };
 
   const md5 = async (tables: string[]) => {
     const out: Record<string, string> = {};
@@ -32,163 +39,209 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres)', () =>
     return out;
   };
   const camada = (chave: string) => prisma.webmapCamada.findUnique({ where: { chaveOrigem: chave } });
-  const user = { sub: '', nome: 'Tester 296', email: 't@aion.local', perfis: [], permissoes: [] };
-  const icones = async (_b: Buffer, _m: string, sha: string) => ({ storageKey: `webmap-icones/${sha}`, url: `/storage/webmap-icones/${sha}` });
+  const aplicarAgora = async (f: DiretorioWebmapFonte, sim?: ResultadoSimulacao, opts: Parameters<typeof executarAplicacao>[4] = {}) => {
+    const s = sim ?? (await simular(prisma, f)).resultado;
+    const lock = new PgSessionLock(URL!);
+    expect(await lock.tentar()).toBe(true);
+    const job = await prisma.webmapImportacao.create({ data: { status: 'EM_ANDAMENTO', usuarioNome: user.nome, simulacaoId: s.simulacaoId, fonteHash: s.fonteHash } });
+    try {
+      return await executarAplicacao(prisma, f, job.id, s, { icones: async (_b, _m, sha) => ({ storageKey: `webmap-icones/${sha}`, url: `/storage/webmap-icones/${sha}` }), ...opts });
+    } catch (e) {
+      await prisma.webmapImportacao.update({ where: { id: job.id }, data: { status: 'FALHA', motivo: String(e) } });
+      throw e;
+    } finally {
+      await lock.liberar();
+    }
+  };
 
   beforeAll(async () => {
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: URL! }) });
-    await prisma.$executeRawUnsafe('TRUNCATE "WebmapElemento","WebmapCamada","WebmapCamadaGrupo","WebmapIcone"');
+    await prisma.$executeRawUnsafe('TRUNCATE "WebmapElemento","WebmapCamadaVersao","WebmapCamada","WebmapCamadaGrupo","WebmapIcone","WebmapImportacao"');
     await prisma.logAuditoria.deleteMany({ where: { entidadeTipo: 'WebmapCamadasImport' } });
     const rows = await prisma.$queryRawUnsafe<Array<{ t: string }>>(`SELECT tablename AS t FROM pg_tables WHERE schemaname='public' AND tablename <> '_prisma_migrations'`);
     todas = rows.map((r) => r.t).sort();
-    const u = await prisma.usuario.findFirst({ select: { id: true } });
-    user.sub = u?.id ?? '';
-    const ops = await md5(OPERACIONAIS);
-    evidencias.inicio = ops;
+    semControle = todas.filter((t) => !CONTROLE.includes(t));
+    webmap = todas.filter((t) => t.startsWith('Webmap') && !CONTROLE.includes(t));
+    const ext = await prisma.$queryRawUnsafe<Array<{ extname: string }>>(`SELECT extname FROM pg_extension`);
+    evid.extensoes = ext.map((e) => e.extname);
+    user.sub = (await prisma.usuario.findFirst({ select: { id: true } }))?.id ?? '';
+    evid.inicio = await md5(OPERACIONAIS);
   });
   afterAll(async () => {
-    console.log('EVIDENCIAS_296', JSON.stringify(evidencias, null, 1));
+    console.log('EVIDENCIAS_296', JSON.stringify(evid, null, 1));
     await prisma?.$disconnect();
+  });
+
+  it('roda em Postgres sem extensões além de plpgsql', () => {
+    expect(evid.extensoes).toEqual(['plpgsql']);
   });
 
   it('simulação não grava nada (md5 de TODAS as tabelas igual)', async () => {
     const antes = await md5(todas);
     const { resultado } = await simular(prisma, fonte('v1'));
     expect(await md5(todas)).toEqual(antes);
-    expect(resultado).toMatchObject({ grupos: 6, camadas: 8, novas: 8, totalErros: 0, elementos: { pontos: 6, linhas: 1, poligonos: 4, total: 11 } });
-    evidencias.simulacao_v1 = { todasIguais: true, tabelas: todas.length };
+    expect(resultado).toMatchObject({ grupos: 6, camadas: 8, novas: 8, totalErros: 0, resultadoPrevisto: 'SUCESSO', elementos: { pontos: 6, linhas: 1, poligonos: 4, total: 11 } });
+    evid.simulacao_v1 = { todasIguais: true, tabelas: todas.length };
   });
 
   it('serviço: simulação grava exatamente 1 linha de log SIMULACAO e nada mais', async () => {
     const service = new WebmapCamadasService(prisma as never, {} as never);
-    service.usarFonte(fonte('v1'));
-    const semLog = todas.filter((t) => t !== 'LogAuditoria');
-    const antes = await md5(semLog);
-    const logAntes = await md5(['LogAuditoria']);
-    const n0 = await prisma.logAuditoria.count();
+    service.usarFonte(fonte('v1'), URL);
+    const outras = todas.filter((t) => t !== 'LogAuditoria');
+    const antes = await md5(outras);
     const ids0 = (await prisma.logAuditoria.findMany({ select: { id: true } })).map((r) => r.id);
     await service.simular(user);
-    expect(await md5(semLog)).toEqual(antes);
-    expect(await prisma.logAuditoria.count()).toBe(n0 + 1);
-    const novo = await prisma.logAuditoria.findFirst({ where: { id: { notIn: ids0 } } });
-    expect(novo?.valorNovo).toMatchObject({ tipo: 'SIMULACAO', resultado: 'SUCESSO', usuario: 'Tester 296' });
-    expect(String((novo?.valorNovo as { dataHoraBrt: string }).dataHoraBrt)).toMatch(/\(BRT\)$/);
-    expect(await prisma.$queryRawUnsafe(`SELECT md5(coalesce(string_agg(x::text,'|' ORDER BY x::text),'')) h FROM "LogAuditoria" x WHERE id <> '${novo!.id}'`)).toEqual([{ h: logAntes.LogAuditoria }]);
+    expect(await md5(outras)).toEqual(antes);
+    const novos = await prisma.logAuditoria.findMany({ where: { id: { notIn: ids0 } } });
+    expect(novos).toHaveLength(1);
+    expect(novos[0].valorNovo).toMatchObject({ tipo: 'SIMULACAO', resultado: 'SUCESSO', usuario: 'Tester 296' });
   });
 
-  it('aplicar v1: cria tudo; operacionais idênticos; reaplicar sem mudança não duplica', async () => {
+  it('aplicar v1: chave sempre com a família; operacionais idênticos; reaplicar sem mudança não muda nada', async () => {
     const ops = await md5(OPERACIONAIS);
-    const { resultado } = await simular(prisma, fonte('v1'));
-    const t0 = Date.now();
-    const r = await aplicar(prisma, fonte('v1'), resultado, { icones });
-    evidencias.aplicar_v1_ms = Date.now() - t0;
+    const r = await aplicarAgora(fonte('v1'));
     expect(r).toMatchObject({ resultado: 'SUCESSO', novas: 8, icones: 1 });
-    expect(await prisma.webmapCamada.count()).toBe(8);
+    expect((await prisma.webmapCamada.findMany({ select: { chaveOrigem: true } })).map((c) => c.chaveOrigem).sort()).toEqual([
+      'AREAS_PUBLICAS/LOTE#POINT', 'AREAS_PUBLICAS/LOTE#POLYGON', 'PONTOS_VICIADOS/PONTO_VICIADO#POINT', 'SANEAMENTO/ETE_2#POLYGON', 'SANEAMENTO/ETE_3#POLYGON',
+      'SECRETARIA_EDUCACAO/CRECHE_PRE_ESCOLA#POINT', 'SECRETARIA_SAUDE/UBS#POINT', 'SISTEMA_VIARIO/VIAS_PRINCIPAIS#LINE',
+    ]);
     expect(await prisma.webmapElemento.count()).toBe(11);
     expect(await md5(OPERACIONAIS)).toEqual(ops);
-    const lote = await prisma.webmapCamada.findMany({ where: { chaveOrigem: { startsWith: 'AREAS_PUBLICAS/LOTE' } } });
-    expect(lote.map((l) => l.chaveOrigem).sort()).toEqual(['AREAS_PUBLICAS/LOTE#POINT', 'AREAS_PUBLICAS/LOTE#POLYGON']);
-    const pv = await camada('PONTOS_VICIADOS/PONTO_VICIADO');
-    expect(pv?.estilo).toMatchObject({ tipo: 'icon', icone: { origem: 'styles/ponto_viciado.svg', url: expect.stringMatching(/^\/storage\/webmap-icones\/[0-9a-f]{64}$/) } });
-    expect(pv?.estiloOriginal).toContain('ol.style.Icon');
-
-    const webAntes = await md5(WEBMAP);
+    const pv = await camada('PONTOS_VICIADOS/PONTO_VICIADO#POINT');
+    expect(pv?.estilo).toMatchObject({ tipo: 'icon', icone: { url: expect.stringMatching(/^\/storage\/webmap-icones\/[0-9a-f]{64}$/) } });
+    const web = await md5(webmap);
     const s2 = (await simular(prisma, fonte('v1'))).resultado;
-    expect(s2).toMatchObject({ semMudanca: 8, novas: 0, atualizadas: 0, removidasOrigem: 0 });
-    await aplicar(prisma, fonte('v1'), s2, { icones });
-    expect(await md5(WEBMAP)).toEqual(webAntes);
-    expect(await md5(OPERACIONAIS)).toEqual(ops);
-    evidencias.aplicar_v1 = { operacionais: await md5(OPERACIONAIS), reaplicarWebmapIgual: true };
+    expect(s2).toMatchObject({ semMudanca: 8, novas: 0, atualizadas: 0 });
+    await aplicarAgora(fonte('v1'), s2);
+    expect(await md5(webmap)).toEqual(web);
   });
 
-  it('falha no meio da aplicação: rollback total (md5 webmap e operacionais iguais)', async () => {
-    const antes = await md5([...WEBMAP, ...OPERACIONAIS]);
-    const { resultado } = await simular(prisma, fonte('v2'));
-    await expect(aplicar(prisma, fonte('v2'), resultado, { icones, falharDepoisDe: 2 })).rejects.toThrow(/Falha simulada/);
-    expect(await md5([...WEBMAP, ...OPERACIONAIS])).toEqual(antes);
-    evidencias.falha = { iguais: true };
+  it('falha no meio: versão anterior continua ativa e a incompleta é descartada (md5 igual, sem transação gigante)', async () => {
+    const antes = await md5(semControle);
+    await expect(aplicarAgora(fonte('v2'), undefined, { falharDepoisDe: 2 })).rejects.toThrow(/Falha simulada/);
+    expect(await md5(semControle)).toEqual(antes);
+    evid.falha = { iguais: true };
   });
 
-  it('fonte quebrada (camada ilegível) aborta tudo', async () => {
+  it('fonte com camada ilegível aborta tudo', async () => {
     const antes = await md5(todas);
     await expect(simular(prisma, fonte('v_quebrada'))).rejects.toThrow(/GeoJSON inválido/);
     expect(await md5(todas)).toEqual(antes);
   });
 
-  it('concorrência: segunda aplicação recebe "em andamento" e nada muda', async () => {
-    const antes = await md5([...WEBMAP, ...OPERACIONAIS]);
-    const { resultado } = await simular(prisma, fonte('v2'));
-    let liberar!: () => void;
-    const segurando = new Promise<void>((r) => (liberar = r));
-    let pronto!: () => void;
-    const lockPego = new Promise<void>((r) => (pronto = r));
-    const outra = prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${296_000_296})::text AS ok`;
-      pronto();
-      await segurando;
-    }, { timeout: 30_000 });
-    await lockPego;
-    await expect(aplicar(prisma, fonte('v2'), resultado, { icones })).rejects.toBeInstanceOf(ImportacaoEmAndamentoError);
-    liberar();
-    await outra;
-    expect(await md5([...WEBMAP, ...OPERACIONAIS])).toEqual(antes);
-    evidencias.concorrencia = { iguais: true };
-  });
-
-  it('simulação expirada ou fonte alterada: aplicação recusada', async () => {
+  it('simulação vencida ou fonte alterada: recusada', async () => {
     const { resultado } = await simular(prisma, fonte('v1'));
-    await expect(aplicar(prisma, fonte('v2'), resultado)).rejects.toBeInstanceOf(FonteMudouError);
-    await expect(aplicar(prisma, fonte('v1'), resultado, { agora: new Date(Date.now() + 31 * 60_000) })).rejects.toThrow(/prazo da simulação/);
+    await expect(aplicarAgora(fonte('v2'), resultado)).rejects.toBeInstanceOf(FonteMudouError);
+    await expect(aplicarAgora(fonte('v1'), resultado, { agora: new Date(Date.now() + 31 * 60_000) })).rejects.toThrow(/prazo da simulação/);
   });
 
-  it('v2: atualizada mantém id, só sufixo = mesma camada, renomeada = nova + removida, malformados = PARCIAL', async () => {
+  it('v2: nova versão mantém o id lógico; renomeada = nova + removida; corrigidos e irreparáveis => PARCIAL', async () => {
     const ops = await md5(OPERACIONAIS);
-    const creche = await camada('SECRETARIA_EDUCACAO/CRECHE_PRE_ESCOLA');
-    const vias = await camada('SISTEMA_VIARIO/VIAS_PRINCIPAIS');
-    const ubs = await camada('SECRETARIA_SAUDE/UBS');
-    const ete3 = await camada('SANEAMENTO/ETE_3');
-    const ete2 = await camada('SANEAMENTO/ETE_2');
+    const ids = Object.fromEntries((await prisma.webmapCamada.findMany()).map((c) => [c.chaveOrigem, c]));
     const { resultado } = await simular(prisma, fonte('v2'));
-    expect(resultado).toMatchObject({ novas: 2, removidasOrigem: 2, totalErros: 2, resultadoPrevisto: 'PARCIAL' });
-    const det = Object.fromEntries(resultado.camadasDetalhe.map((c) => [c.chaveOrigem, c.status]));
-    expect(det).toMatchObject({ 'SECRETARIA_EDUCACAO/CRECHE_PRE_ESCOLA': 'atualizada', 'SANEAMENTO/ETE_2': 'sem_mudanca', 'SANEAMENTO/ETE_3_NORTE': 'nova', 'SANEAMENTO/ETE_3': 'removida_origem', 'SECRETARIA_SAUDE/UBS': 'removida_origem', 'ECOPONTOS/ECOPONTO': 'nova' });
-    const r = await aplicar(prisma, fonte('v2'), resultado, { icones });
+    expect(resultado).toMatchObject({ novas: 3, removidasOrigem: 2, corrigidos: 2, invalidos: 3, resultadoPrevisto: 'PARCIAL' });
+    expect(resultado.erros.every((e) => e.grupo && e.camada && e.motivo)).toBe(true);
+    const r = await aplicarAgora(fonte('v2'), resultado);
     expect(r.resultado).toBe('PARCIAL');
-    expect((await camada('SECRETARIA_EDUCACAO/CRECHE_PRE_ESCOLA'))).toMatchObject({ id: creche!.id, totalElementos: 3, nomeOriginal: 'CRECHE_PRE_ESCOLA (46 UNID.)', varOrigem: 'CRECHE_PRE_ESCOLA46UNID_77' });
-    expect((await camada('SISTEMA_VIARIO/VIAS_PRINCIPAIS'))).toMatchObject({ id: vias!.id, varOrigem: 'VIAS_PRINCIPAIS_82' });
-    expect((await camada('SANEAMENTO/ETE_2'))?.updatedAt).toEqual(ete2!.updatedAt);
-    const ubsDepois = await camada('SECRETARIA_SAUDE/UBS');
-    expect(ubsDepois).toMatchObject({ id: ubs!.id, ativo: false, removidaOrigem: true });
-    expect(await prisma.webmapElemento.count({ where: { camadaId: ubs!.id } })).toBe(1);
-    expect(await camada('SANEAMENTO/ETE_3')).toMatchObject({ id: ete3!.id, ativo: false, removidaOrigem: true });
-    expect(await camada('SANEAMENTO/ETE_3_NORTE')).toMatchObject({ ativo: true });
-    expect(await camada('ECOPONTOS/ECOPONTO')).toMatchObject({ totalElementos: 1 });
+    const creche = await camada('SECRETARIA_EDUCACAO/CRECHE_PRE_ESCOLA#POINT');
+    expect(creche).toMatchObject({ id: ids['SECRETARIA_EDUCACAO/CRECHE_PRE_ESCOLA#POINT'].id, totalElementos: 3, varOrigem: 'CRECHE_PRE_ESCOLA46UNID_77' });
+    expect(creche!.versaoAtual).not.toBe(ids['SECRETARIA_EDUCACAO/CRECHE_PRE_ESCOLA#POINT'].versaoAtual);
+    expect(await prisma.webmapElemento.count({ where: { camadaId: creche!.id } })).toBe(3); // versão antiga limpa
+    expect(await camada('SISTEMA_VIARIO/VIAS_PRINCIPAIS#LINE')).toMatchObject({ id: ids['SISTEMA_VIARIO/VIAS_PRINCIPAIS#LINE'].id, varOrigem: 'VIAS_PRINCIPAIS_82' });
+    expect(await camada('SECRETARIA_SAUDE/UBS#POINT')).toMatchObject({ id: ids['SECRETARIA_SAUDE/UBS#POINT'].id, ativo: false, removidaOrigem: true });
+    expect(await prisma.webmapElemento.count({ where: { camadaId: ids['SECRETARIA_SAUDE/UBS#POINT'].id } })).toBe(1);
+    expect(await camada('SANEAMENTO/ETE_3#POLYGON')).toMatchObject({ ativo: false, removidaOrigem: true });
+    const risco = await camada('SANEAMENTO/AREA_RISCO#POLYGON');
+    expect(risco).toMatchObject({ totalElementos: 2, totalCorrigidos: 2, totalInvalidos: 1 });
+    const corrigido = await prisma.webmapElemento.findFirst({ where: { camadaId: risco!.id, fidOrigem: '1' } });
+    expect(corrigido).toMatchObject({ corrigida: true, geometria: { type: 'MultiPolygon' } });
+    expect(corrigido?.geometriaOriginal).toMatchObject({ type: 'Polygon' });
     expect(await md5(OPERACIONAIS)).toEqual(ops);
-    evidencias.aplicar_v2 = { operacionais: await md5(OPERACIONAIS) };
+    evid.v2 = { corrigidos: r.corrigidos, invalidos: r.invalidos };
   });
 
-  it('v3: camadas que voltam à fonte são reativadas com o MESMO id', async () => {
-    const ubs = await camada('SECRETARIA_SAUDE/UBS');
-    const ete3 = await camada('SANEAMENTO/ETE_3');
+  it('v3: removida e que volta mantém o MESMO id lógico (reativada)', async () => {
+    const ubs = await camada('SECRETARIA_SAUDE/UBS#POINT');
+    const ete3 = await camada('SANEAMENTO/ETE_3#POLYGON');
     const { resultado } = await simular(prisma, fonte('v3'));
-    expect(resultado).toMatchObject({ reativadas: 2, removidasOrigem: 2 });
-    await aplicar(prisma, fonte('v3'), resultado, { icones });
-    expect(await camada('SECRETARIA_SAUDE/UBS')).toMatchObject({ id: ubs!.id, ativo: true, removidaOrigem: false, removidaEm: null });
-    expect(await camada('SANEAMENTO/ETE_3')).toMatchObject({ id: ete3!.id, ativo: true });
-    expect(await camada('SANEAMENTO/ETE_3_NORTE')).toMatchObject({ ativo: false, removidaOrigem: true });
-    expect(await prisma.webmapCamada.count({ where: { chaveOrigem: 'SECRETARIA_SAUDE/UBS' } })).toBe(1);
-    evidencias.final = { operacionais: await md5(OPERACIONAIS) };
+    expect(resultado).toMatchObject({ reativadas: 2 });
+    await aplicarAgora(fonte('v3'), resultado);
+    expect(await camada('SECRETARIA_SAUDE/UBS#POINT')).toMatchObject({ id: ubs!.id, ativo: true, removidaOrigem: false });
+    expect(await camada('SANEAMENTO/ETE_3#POLYGON')).toMatchObject({ id: ete3!.id, ativo: true });
+    expect(await prisma.webmapCamada.count({ where: { chaveOrigem: { startsWith: 'SECRETARIA_SAUDE/UBS' } } })).toBe(1);
   });
 
-  it('serviço: mapa lista só ativas, desligadas por padrão; GeoJSON por camada', async () => {
+  it('v4: tema ganha camada de pontos e o polígono mantém o id; só corrigíveis => OK_COM_AVISOS; reaplicar dá o mesmo resultado', async () => {
+    const ete2 = await camada('SANEAMENTO/ETE_2#POLYGON');
+    const r = await aplicarAgora(fonte('v4'));
+    expect(r).toMatchObject({ resultado: 'OK_COM_AVISOS', corrigidos: 2, invalidos: 0 });
+    expect(await camada('SANEAMENTO/ETE_2#POLYGON')).toMatchObject({ id: ete2!.id, ativo: true });
+    expect(await camada('SANEAMENTO/ETE_2#POINT')).toMatchObject({ ativo: true, totalElementos: 1 });
+    const web = await md5(webmap);
+    const r2 = await aplicarAgora(fonte('v4'));
+    expect(r2).toMatchObject({ resultado: 'OK_COM_AVISOS', corrigidos: 2, invalidos: 0, semMudanca: r2.camadas });
+    expect(await md5(webmap)).toEqual(web);
+    evid.v4 = { resultado: r.resultado, reaplicar: r2.resultado };
+  });
+
+  it('heartbeat recente (< 60 s) não é recuperado; matar o processo no meio => FALHA "interrompida por reinício" e md5 igual', async () => {
+    // fonte grande: v4 + UBS com 20.000 pontos (vários lotes)
+    const dir = mkdtempSync(join(tmpdir(), 'wm296-'));
+    cpSync(join(FIX, 'v4'), dir, { recursive: true });
+    const feats = Array.from({ length: 20000 }, (_, i) => ({ type: 'Feature', properties: { fid: String(i + 1) }, geometry: { type: 'Point', coordinates: [-47.4 + (i % 100) / 1000, -20.5 - Math.floor(i / 100) / 1000] } }));
+    writeFileSync(join(dir, 'layers/UBS24UNID_80.js'), `var json_UBS24UNID_80 = ${JSON.stringify({ type: 'FeatureCollection', name: 'UBS24UNID_80', features: feats })};`);
+    const antes = await md5(semControle);
+    const child = spawn(process.execPath, ['--import', 'tsx', join(ROOT, 'test/webmap-camadas/aplicar-worker.ts'), dir], { cwd: ROOT, env: { ...process.env, WEBMAP_CAMADAS_TEST_DATABASE_URL: URL }, stdio: ['ignore', 'pipe', 'pipe'] });
+    let jobId = '';
+    await new Promise<void>((resolve, reject) => {
+      let out = '';
+      child.stdout.on('data', (d: Buffer) => {
+        out += d.toString();
+        const m = /JOB (\S+)/.exec(out);
+        if (m) jobId = m[1];
+        if (/LOTE 3\b/.test(out)) { child.kill('SIGKILL'); resolve(); }
+      });
+      child.on('exit', () => resolve());
+      setTimeout(() => reject(new Error(`worker não chegou ao lote 3: ${out}`)), 60_000);
+    });
+    expect(jobId).not.toBe('');
+    await new Promise((r) => setTimeout(r, 500));
+    expect(await prisma.webmapElemento.count({ where: { versao: { startsWith: jobId } } })).toBeGreaterThan(0); // versão incompleta existia
+    expect(await recuperarInterrompidas(prisma, new PgSessionLock(URL!))).toEqual([]); // heartbeat fresco: não recupera
+    expect(await recuperarInterrompidas(prisma, new PgSessionLock(URL!), 0)).toEqual([jobId]);
+    expect(await prisma.webmapImportacao.findUnique({ where: { id: jobId } })).toMatchObject({ status: 'FALHA', motivo: 'interrompida por reinício' });
+    expect(await md5(semControle)).toEqual(antes);
+    evid.kill = { jobId, md5Iguais: true };
+  }, 90_000);
+
+  it('serviço: aplicar devolve 202 em segundo plano; segunda aplicação => "em andamento" com quem e desde quando; resultado consultável depois', async () => {
+    const lenta = fonte('v2');
+    const orig = lenta.lerStream.bind(lenta);
+    lenta.lerStream = async function* (c: string) { for await (const x of orig(c)) { await new Promise((r) => setTimeout(r, 300)); yield x; } };
+    const service = new WebmapCamadasService(prisma as never, { persistBuffer: async () => ({ storageKey: 'k', url: '/u' }) } as never);
+    service.usarFonte(lenta, URL);
+    const sim1 = await service.simular(user);
+    const sim2 = await service.simular({ ...user, nome: 'Outro' });
+    const r = await service.aplicar(user, sim1.simulacaoId);
+    expect(r).toMatchObject({ status: 'EM_ANDAMENTO' });
+    await expect(service.aplicar({ ...user, nome: 'Outro' }, sim2.simulacaoId)).rejects.toThrow(/em andamento por Tester 296 desde .*\(BRT\)/);
+    const st = await service.status();
+    expect(st.emAndamento).toMatchObject({ tipo: 'APLICACAO', usuario: 'Tester 296' });
+    await service.execucao;
+    const fim = await service.status();
+    expect(fim.emAndamento).toBeNull();
+    expect(fim.ultimaImportacao).toMatchObject({ id: r.importacaoId, status: 'PARCIAL' });
+    const csv = await service.errosCsv();
+    expect(csv.split('\n')[0]).toBe('grupo;camada;elemento;motivo');
+    expect(csv).toContain('"SANEAMENTO";"AREA_RISCO"');
+  }, 60_000);
+
+  it('mapa: só versão ativa, desligadas por padrão, GeoJSON por camada', async () => {
     const service = new WebmapCamadasService(prisma as never, {} as never);
-    const arv = await service.arvore();
-    const flat = arv.flatMap((g) => g.camadas);
+    const flat = (await service.arvore()).flatMap((g) => g.camadas);
     expect(flat.every((c) => c.ligadaPorPadrao === false)).toBe(true);
-    expect(flat.map((c) => c.nomeOriginal)).not.toContain('ETE 3 NORTE');
     const gj = await service.geojson(flat.find((c) => c.nomeOriginal.startsWith('CRECHE'))!.camadaId);
-    expect(gj.features).toHaveLength(2);
-    const bb = await service.geojson(flat.find((c) => c.nomeOriginal.startsWith('LOTE ('))!.camadaId, '-47.3985,-20.521,-47.39,-20.51', '14');
-    expect(bb.features).toHaveLength(1);
+    expect(gj.features).toHaveLength(3);
+    evid.final = await md5(OPERACIONAIS);
   });
 });

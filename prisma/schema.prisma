@@ -1363,65 +1363,99 @@ model ConfiguracaoEmail {
 }
 
 /// 296 — camadas geográficas do Webmap, separadas dos cadastros operacionais (sem FK para eles).
+/// Versionamento: elementos de cada importação entram com `versao` = id da importação; a troca da versão ativa é atômica.
 model WebmapCamadaGrupo {
-  id             String         @id @default(uuid())
-  chaveOrigem    String         @unique
-  titulo         String
-  ordem          Int
-  ativo          Boolean        @default(true)
-  removidaOrigem Boolean        @default(false)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  camadas        WebmapCamada[]
+  id                  String         @id @default(uuid())
+  chaveOrigem         String         @unique
+  titulo              String
+  ordem               Int
+  ativo               Boolean        @default(true)
+  removidaOrigem      Boolean        @default(false)
+  /// Preenchido enquanto o grupo só existe numa importação ainda não ativada (descartável em falha).
+  criadaPorImportacao String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  camadas             WebmapCamada[]
 }
 
 model WebmapCamada {
-  id             String            @id @default(uuid())
-  chaveOrigem    String            @unique
-  grupoId        String
-  grupo          WebmapCamadaGrupo @relation(fields: [grupoId], references: [id])
-  nomeOriginal   String
-  varOrigem      String
-  arquivoOrigem  String
-  ordem          Int
-  geometriaTipo  String
-  estilo         Json
-  estiloOriginal String
-  shaArquivo     String
-  shaEstilo      String?
-  totalElementos Int
-  totalPontos    Int               @default(0)
-  totalLinhas    Int               @default(0)
-  totalPoligonos Int               @default(0)
-  bytesOrigem    Int               @default(0)
-  bbox           Json?
-  versaoAtual    String
-  ativo          Boolean           @default(true)
-  removidaOrigem Boolean           @default(false)
-  removidaEm     DateTime?
-  commitSha      String
-  importadoEm    DateTime
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @updatedAt
-  elementos      WebmapElemento[]
+  id                  String            @id @default(uuid())
+  chaveOrigem         String            @unique
+  grupoId             String
+  grupo               WebmapCamadaGrupo @relation(fields: [grupoId], references: [id])
+  nomeOriginal        String
+  varOrigem           String
+  arquivoOrigem       String
+  ordem               Int
+  geometriaTipo       String
+  estilo              Json
+  estiloOriginal      String
+  shaArquivo          String
+  shaEstilo           String?
+  totalElementos      Int
+  totalPontos         Int               @default(0)
+  totalLinhas         Int               @default(0)
+  totalPoligonos      Int               @default(0)
+  totalCorrigidos     Int               @default(0)
+  totalInvalidos      Int               @default(0)
+  errosLeitura        Json?
+  bytesOrigem         Int               @default(0)
+  bbox                Json?
+  /// Versão ativa dos elementos (id da importação). Nulo = camada ainda não ativada.
+  versaoAtual         String?
+  ativo               Boolean           @default(true)
+  removidaOrigem      Boolean           @default(false)
+  removidaEm          DateTime?
+  criadaPorImportacao String?
+  commitSha           String
+  importadoEm         DateTime
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  elementos           WebmapElemento[]
+  versoes             WebmapCamadaVersao[]
 
   @@index([grupoId])
   @@index([ativo])
 }
 
+/// Dados de uma versão da camada lógica (uma por importação que mudou o conteúdo). A camada lógica (id estável) aponta para a ativa.
+model WebmapCamadaVersao {
+  id              String       @id
+  camadaId        String
+  camada          WebmapCamada @relation(fields: [camadaId], references: [id], onDelete: Cascade)
+  importacaoId    String
+  status          String
+  shaArquivo      String
+  totalElementos  Int          @default(0)
+  totalPontos     Int          @default(0)
+  totalLinhas     Int          @default(0)
+  totalPoligonos  Int          @default(0)
+  totalCorrigidos Int          @default(0)
+  totalInvalidos  Int          @default(0)
+  errosLeitura    Json?
+  bbox            Json?
+  createdAt       DateTime     @default(now())
+
+  @@index([camadaId])
+  @@index([importacaoId])
+}
+
 model WebmapElemento {
-  id            String       @id @default(uuid())
-  camadaId      String
-  camada        WebmapCamada @relation(fields: [camadaId], references: [id], onDelete: Cascade)
-  versao        String
-  fidOrigem     String?
-  geometriaTipo String
-  geometria     Json
-  atributos     Json
-  minLng        Float
-  minLat        Float
-  maxLng        Float
-  maxLat        Float
+  id                String       @id @default(uuid())
+  camadaId          String
+  camada            WebmapCamada @relation(fields: [camadaId], references: [id], onDelete: Cascade)
+  versao            String
+  fidOrigem         String?
+  geometriaTipo     String
+  geometria         Json
+  /// Geometria como veio da fonte, quando foi corrigida.
+  geometriaOriginal Json?
+  corrigida         Boolean      @default(false)
+  atributos         Json
+  minLng            Float
+  minLat            Float
+  maxLng            Float
+  maxLat            Float
 
   @@index([camadaId, versao])
   @@index([camadaId, minLng, maxLng, minLat, maxLat])
@@ -1435,4 +1469,23 @@ model WebmapIcone {
   storageKey String
   url        String
   createdAt  DateTime @default(now())
+}
+
+/// Execução de "aplicar" (job em segundo plano): fase, heartbeat e resultado. Histórico de usuário continua no LogAuditoria.
+model WebmapImportacao {
+  id           String    @id @default(uuid())
+  status       String
+  fase         String?
+  usuarioId    String?
+  usuarioNome  String
+  simulacaoId  String?
+  fonteHash    String?
+  iniciadoEm   DateTime  @default(now())
+  heartbeatEm  DateTime  @default(now())
+  concluidoEm  DateTime?
+  resultado    Json?
+  motivo       String?
+
+  @@index([status])
+  @@index([iniciadoEm])
 }

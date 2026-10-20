@@ -2147,16 +2147,17 @@ export function simularWebmapCamadas() {
 }
 
 export function aplicarWebmapCamadas(simulacaoId: string) {
-  return request<import('./types').WebmapCamadasAplicacao>('/admin/importacao/webmap-camadas/aplicar', {
+  return request<import('./types').WebmapCamadasAplicacaoIniciada>('/admin/importacao/webmap-camadas/aplicar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ simulacaoId }),
   });
 }
 
-export async function downloadWebmapCamadasErrosCsv(simulacaoId: string) {
+export async function downloadWebmapCamadasErrosCsv(simulacaoId?: string) {
   const token = getStoredAuth()?.accessToken;
-  const response = await fetch(`${API_BASE_URL}/admin/importacao/webmap-camadas/erros.csv?simulacaoId=${encodeURIComponent(simulacaoId)}`, {
+  const query = simulacaoId ? `?simulacaoId=${encodeURIComponent(simulacaoId)}` : '';
+  const response = await fetch(`${API_BASE_URL}/admin/importacao/webmap-camadas/erros.csv${query}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!response.ok) {
@@ -2166,7 +2167,7 @@ export async function downloadWebmapCamadasErrosCsv(simulacaoId: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `erros-camadas-webmap-${simulacaoId.slice(0, 8)}.csv`;
+  anchor.download = `erros-camadas-webmap-${(simulacaoId ?? 'ultima').slice(0, 8)}.csv`;
   anchor.click();
   URL.revokeObjectURL(url);
 }

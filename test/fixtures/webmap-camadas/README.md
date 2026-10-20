@@ -3,4 +3,6 @@ Gerados por `gerar.py`. `layers/layers.js` (lyr_/group_/layersList), `layers/<VA
 - v1: 8 camadas / 6 grupos — pontos, linha, polígonos, ícone SVG (PONTO_VICIADO), categorias (ETE 2), par polígono/ponto com o mesmo nome base (LOTE).
 - v2: CRECHE_PRE_ESCOLA45UNID_78 → CRECHE_PRE_ESCOLA46UNID_77 (atualizada, mesma chave); UBS removida; VIAS_PRINCIPAIS_81 → _82 (só sufixo: mesma camada); ETE 3 → ETE 3 NORTE (renomeada: nova + antiga removida); ECOPONTO nova com 2 elementos malformados (PARCIAL); ETE 2 sem mudança.
 - v3 = v1: UBS e ETE 3 voltam (reativadas, mesmo id); ETE 3 NORTE removida.
+- v2 também: AREA_RISCO (polígono em gravata = auto-interseção, anel aberto: corrigidos; polígono vazio: irreparável).
+- v4 = v1 + ETE 2 em pontos (mesmo tema, outra geometria: o polígono mantém o id) + CORRIGIVEL (só corrigíveis → OK com avisos).
 - v_quebrada: VIAS com GeoJSON truncado → FALHA, nada gravado.

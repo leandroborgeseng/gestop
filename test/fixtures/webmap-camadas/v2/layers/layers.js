@@ -119,12 +119,27 @@ var lyr_ECOPONTO3UNID_90 = new ol.layer.Vector({
                 interactive: true,
                 title: '<img src="styles/legend/ECOPONTO3UNID_90.png" /> ECOPONTO (3 UNID.)'
             });
+var format_AREA_RISCO_200 = new ol.format.GeoJSON();
+var features_AREA_RISCO_200 = format_AREA_RISCO_200.readFeatures(json_AREA_RISCO_200, 
+            {dataProjection: 'EPSG:4326', featureProjection: 'EPSG:31983'});
+var jsonSource_AREA_RISCO_200 = new ol.source.Vector({
+    attributions: ' ',
+});
+jsonSource_AREA_RISCO_200.addFeatures(features_AREA_RISCO_200);
+var lyr_AREA_RISCO_200 = new ol.layer.Vector({
+                declutter: false,
+                source:jsonSource_AREA_RISCO_200, 
+                style: style_AREA_RISCO_200,
+                popuplayertitle: 'AREA_RISCO',
+                interactive: true,
+                title: '<img src="styles/legend/AREA_RISCO_200.png" /> AREA_RISCO'
+            });
 var group_AREAS_PUBLICAS = new ol.layer.Group({
                                 layers: [lyr_LOTE252UNID7530210M_458,lyr_LOTE_459,],
                                 fold: 'close',
                                 title: 'AREAS_PUBLICAS'});
 var group_SANEAMENTO = new ol.layer.Group({
-                                layers: [lyr_ETE_2_100,lyr_ETE_3_NORTE_101,],
+                                layers: [lyr_ETE_2_100,lyr_ETE_3_NORTE_101,lyr_AREA_RISCO_200,],
                                 fold: 'close',
                                 title: 'SANEAMENTO'});
 var group_PONTOS_VICIADOS = new ol.layer.Group({

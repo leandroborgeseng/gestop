@@ -14,11 +14,11 @@ vi.mock('@/lib/api', () => api);
 
 import { WebmapCamadasPanel } from './webmap-camadas-panel';
 
-const base = { fonte: 'github', emAndamento: null, ultima: null, camadas: 0, ativas: 0, removidasOrigem: 0 };
+const base = { fonte: 'github', emAndamento: null, ultima: null, ultimaImportacao: null, camadas: 0, ativas: 0, removidasOrigem: 0 };
 const sim = (totalErros: number) => ({
   simulacaoId: 's1', fonte: 'g', commitSha: 'c', fonteHash: 'h', criadaEm: new Date().toISOString(), expiraEm: new Date(Date.now() + 1800_000).toISOString(),
-  grupos: 2, camadas: 3, elementos: { pontos: 4, linhas: 1, poligonos: 2, total: 7 }, novas: 3, atualizadas: 0, semMudanca: 0, reativadas: 0, removidasOrigem: 0,
-  camadasDetalhe: [{ chaveOrigem: 'G/A', grupo: 'G', nomeOriginal: 'A', variavel: 'A_1', ordem: 0, status: 'nova', elementos: { pontos: 1, linhas: 0, poligonos: 0 }, erros: 0, bytes: 1 }],
+  grupos: 2, camadas: 3, elementos: { pontos: 4, linhas: 1, poligonos: 2, total: 7 }, corrigidos: 0, invalidos: totalErros, novas: 3, atualizadas: 0, semMudanca: 0, reativadas: 0, removidasOrigem: 0,
+  camadasDetalhe: [{ chaveOrigem: 'G/A', grupo: 'G', nomeOriginal: 'A', variavel: 'A_1', ordem: 0, status: 'nova', elementos: { pontos: 1, linhas: 0, poligonos: 0 }, corrigidos: 0, invalidos: 0, bytes: 1 }],
   erros: Array.from({ length: Math.min(totalErros, 50) }, (_, i) => ({ camada: 'A', elemento: String(i), motivo: 'Elemento sem geometria' })),
   totalErros, resultadoPrevisto: totalErros ? 'PARCIAL' : 'SUCESSO',
 });
@@ -40,15 +40,23 @@ describe('296 · WebmapCamadasPanel', () => {
     await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
     expect(screen.queryByRole('button', { name: 'Aplicar' })).toBeNull();
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
-    expect(screen.getByText('Erros de leitura (50 de 120)')).toBeTruthy();
+    expect(screen.getByText('Elementos irreparáveis (50 de 120)')).toBeTruthy();
     expect(screen.getAllByText(/Elemento sem geometria/)).toHaveLength(50);
     expect(screen.getByRole('button', { name: 'Baixar CSV com todos os erros' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Aplicar' })).toBeTruthy();
     expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
   });
 
+  it('resultado da última aplicação aparece ao voltar à tela (OK com avisos)', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue({ ...base, ultimaImportacao: { id: 'j', status: 'OK_COM_AVISOS', usuario: 'Ana', iniciadoEmBrt: 'x', concluidoEmBrt: '20/10/2026 13:00:00 (BRT)', motivo: null, resultado: { ...sim(0), corrigidos: 7, resultado: 'OK_COM_AVISOS' } } });
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    expect(screen.getByText(/Última aplicação: OK com avisos/)).toBeTruthy();
+    expect(screen.getByText('7')).toBeTruthy();
+  });
+
   it('em andamento: mostra quem e desde quando e bloqueia o botão', async () => {
-    api.getWebmapCamadasStatus.mockResolvedValue({ ...base, emAndamento: { tipo: 'APLICACAO', usuario: 'Ana', desde: '', desdeBrt: '20/10/2026 12:40:00 (BRT)', fase: 'gravando' } });
+    api.getWebmapCamadasStatus.mockResolvedValue({ ...base, emAndamento: { tipo: 'APLICACAO', usuario: 'Ana', desde: '', desdeBrt: '20/10/2026 12:40:00 (BRT)', fase: 'gravando', importacaoId: 'j' } });
     api.getWebmapCamadasHistorico.mockResolvedValue([]);
     await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
     expect(screen.getByText(/Ana desde 20\/10\/2026 12:40:00 \(BRT\)/)).toBeTruthy();

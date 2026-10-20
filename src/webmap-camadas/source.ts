@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { githubHeaders } from '../../prisma/webmap-github';
@@ -12,6 +13,8 @@ export interface WebmapCamadasFonte {
   listar(): Promise<ListagemFonte>;
   lerTexto(caminho: string): Promise<string>;
   lerBinario(caminho: string): Promise<Buffer>;
+  /** Conteúdo em pedaços de texto (UTF-8), sem carregar o arquivo inteiro. */
+  lerStream(caminho: string): AsyncIterable<string>;
 }
 
 export function gitBlobSha(buf: Buffer) {
@@ -63,6 +66,25 @@ export class GithubWebmapFonte implements WebmapCamadasFonte {
   async lerTexto(caminho: string) {
     return (await this.lerBinario(caminho)).toString('utf8');
   }
+  async *lerStream(caminho: string): AsyncIterable<string> {
+    const url = `${this.rawRoot}/${caminho}`;
+    const res = await fetch(url);
+    if (!res.ok || !res.body) throw new Error(`Fonte ${res.status} em ${url}`);
+    const decoder = new TextDecoder('utf-8');
+    const reader = res.body.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        yield decoder.decode(value, { stream: true });
+      }
+      const tail = decoder.decode();
+      if (tail) yield tail;
+    } finally {
+      reader.releaseLock();
+      await res.body.cancel().catch(() => undefined);
+    }
+  }
 }
 
 export class DiretorioWebmapFonte implements WebmapCamadasFonte {
@@ -94,5 +116,9 @@ export class DiretorioWebmapFonte implements WebmapCamadasFonte {
   }
   async lerTexto(caminho: string) {
     return (await this.lerBinario(caminho)).toString('utf8');
+  }
+  async *lerStream(caminho: string): AsyncIterable<string> {
+    const stream = createReadStream(join(this.root, caminho), { encoding: 'utf8', highWaterMark: 256 * 1024 });
+    for await (const chunk of stream) yield chunk as string;
   }
 }

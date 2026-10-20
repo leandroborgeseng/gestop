@@ -1632,33 +1632,36 @@ export type DocumentoValidacaoPublica = {
 
 // 296 — camadas Webmap (somente aditivo)
 export type WebmapCamadasStatusCamada = 'nova' | 'atualizada' | 'sem_mudanca' | 'reativada' | 'removida_origem';
-export type WebmapCamadasErro = { camada: string; elemento: string | null; motivo: string };
+export type WebmapCamadasResultado = 'SUCESSO' | 'OK_COM_AVISOS' | 'PARCIAL' | 'FALHA';
+export type WebmapCamadasErro = { grupo?: string; camada: string; elemento: string | null; motivo: string };
 export type WebmapCamadasContagem = { pontos: number; linhas: number; poligonos: number };
-export type WebmapCamadasSimulacao = {
+export type WebmapCamadasResumo = {
   simulacaoId: string;
   fonte: string;
   commitSha: string;
   fonteHash: string;
-  criadaEm: string;
-  expiraEm: string;
   grupos: number;
   camadas: number;
   elementos: WebmapCamadasContagem & { total: number };
+  corrigidos: number;
+  invalidos: number;
   novas: number;
   atualizadas: number;
   semMudanca: number;
   reativadas: number;
   removidasOrigem: number;
-  camadasDetalhe: Array<{ chaveOrigem: string; grupo: string; nomeOriginal: string; variavel: string; ordem: number; status: WebmapCamadasStatusCamada; elementos: WebmapCamadasContagem; erros: number; bytes: number }>;
+  camadasDetalhe?: Array<{ chaveOrigem: string; grupo: string; nomeOriginal: string; variavel: string; ordem: number; status: WebmapCamadasStatusCamada; elementos: WebmapCamadasContagem; corrigidos: number; invalidos: number; bytes: number }>;
   erros: WebmapCamadasErro[];
   totalErros: number;
-  resultadoPrevisto: 'SUCESSO' | 'PARCIAL';
 };
-export type WebmapCamadasAplicacao = Omit<WebmapCamadasSimulacao, 'resultadoPrevisto'> & { aplicadaEm: string; resultado: 'SUCESSO' | 'PARCIAL'; duracaoMs: number; icones: number };
-export type WebmapCamadasHistoricoItem = { id: string; createdAt: string; dataHoraBrt: string; tipo: 'SIMULACAO' | 'APLICACAO'; resultado: 'SUCESSO' | 'PARCIAL' | 'FALHA'; usuario: string; camadas?: number; totalErros?: number; motivo?: string };
+export type WebmapCamadasSimulacao = WebmapCamadasResumo & { criadaEm: string; expiraEm: string; resultadoPrevisto: Exclude<WebmapCamadasResultado, 'FALHA'> };
+export type WebmapCamadasAplicacaoIniciada = { importacaoId: string; status: 'EM_ANDAMENTO'; iniciadoEm: string; iniciadoEmBrt: string };
+export type WebmapCamadasHistoricoItem = { id: string; createdAt: string; dataHoraBrt: string; tipo: 'SIMULACAO' | 'APLICACAO'; resultado: WebmapCamadasResultado; usuario: string; camadas?: number; totalErros?: number; motivo?: string };
+export type WebmapCamadasFase = 'lendo_fonte' | 'comparando' | 'gravando' | 'ativando' | 'limpando';
 export type WebmapCamadasStatus = {
   fonte: string;
-  emAndamento: { tipo: 'SIMULACAO' | 'APLICACAO'; usuario: string; desde: string; desdeBrt: string; fase: 'lendo_fonte' | 'comparando' | 'gravando' } | null;
+  emAndamento: { tipo: 'SIMULACAO' | 'APLICACAO'; usuario: string; desde: string; desdeBrt: string; fase: WebmapCamadasFase; importacaoId: string | null } | null;
+  ultimaImportacao: { id: string; status: WebmapCamadasResultado | 'EM_ANDAMENTO'; usuario: string; iniciadoEmBrt: string; concluidoEmBrt: string | null; motivo: string | null; resultado: (WebmapCamadasResumo & { resultado: WebmapCamadasResultado }) | null } | null;
   ultima: WebmapCamadasHistoricoItem | null;
   camadas: number;
   ativas: number;

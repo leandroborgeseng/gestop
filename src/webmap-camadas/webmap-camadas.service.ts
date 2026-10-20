@@ -1,12 +1,15 @@
-import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { AuditAction, Prisma } from '@prisma/client';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { AuditAction, Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import type { JwtPayload } from '../auth/jwt';
-import { aplicar, Fase, FonteMudouError, ImportacaoEmAndamentoError, MAX_ERROS_TELA, ResultadoSimulacao, SIMULACAO_TTL_MS, simplificarGeometria, simular, toleranciaPorZoom, WEBMAP_CAMADAS_ENTIDADE } from './core';
+import {
+  executarAplicacao, Fase, FonteMudouError, HEARTBEAT_MS, MAX_ERROS_TELA, PgSessionLock, recuperarInterrompidas, ResultadoSimulacao,
+  SIMULACAO_TTL_MS, simplificarGeometria, simular, toleranciaPorZoom, WEBMAP_CAMADAS_ENTIDADE,
+} from './core';
+import type { ErroLeitura } from './parse';
 import { GithubWebmapFonte, WebmapCamadasFonte } from './source';
 
-export const WEBMAP_CAMADAS_FONTE = Symbol('WEBMAP_CAMADAS_FONTE');
 const LIMITE_ELEMENTOS_RESPOSTA = 5000;
 const CAMADA_PESADA_ELEMENTOS = 2000;
 
@@ -14,65 +17,92 @@ export function dataHoraBrt(d: Date) {
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'medium' }).format(d) + ' (BRT)';
 }
 
-type EmAndamento = { tipo: 'SIMULACAO' | 'APLICACAO'; usuarioId: string; usuarioNome: string; desde: Date; fase: Fase };
+type ResultadoLog = 'SUCESSO' | 'OK_COM_AVISOS' | 'PARCIAL' | 'FALHA';
 
 @Injectable()
-export class WebmapCamadasService {
+export class WebmapCamadasService implements OnModuleInit {
   private readonly logger = new Logger(WebmapCamadasService.name);
   private readonly simulacoes = new Map<string, ResultadoSimulacao & { usuarioId: string }>();
-  private emAndamento: EmAndamento | null = null;
+  private simulando: { usuarioNome: string; desde: Date; fase: Fase } | null = null;
   private fonte: WebmapCamadasFonte;
+  private lockUrl = process.env.WEBMAP_CAMADAS_LOCK_DATABASE_URL || process.env.DATABASE_URL || '';
+  /** Última execução em segundo plano deste processo (testes aguardam por ela). */
+  execucao: Promise<void> | null = null;
 
   constructor(private readonly prisma: PrismaService, private readonly storage: StorageService) {
     this.fonte = new GithubWebmapFonte();
   }
 
-  /** Testes: troca a fonte por um diretório local. */
-  usarFonte(fonte: WebmapCamadasFonte) {
+  private get db() {
+    return this.prisma as unknown as PrismaClient;
+  }
+
+  /** Testes: troca a fonte e a conexão do lock. */
+  usarFonte(fonte: WebmapCamadasFonte, lockUrl?: string) {
     this.fonte = fonte;
+    if (lockUrl) this.lockUrl = lockUrl;
   }
 
-  private ocupar(tipo: EmAndamento['tipo'], user: JwtPayload) {
-    if (this.emAndamento) {
-      const a = this.emAndamento;
-      throw new ConflictException(`Importação de camadas em andamento por ${a.usuarioNome} desde ${dataHoraBrt(a.desde)}.`);
+  async onModuleInit() {
+    if (!this.lockUrl) return;
+    try {
+      const ids = await recuperarInterrompidas(this.db, new PgSessionLock(this.lockUrl));
+      if (ids.length) this.logger.warn(`Importações de camadas interrompidas marcadas como FALHA: ${ids.join(', ')}`);
+    } catch (error) {
+      this.logger.warn(`Recuperação de importações de camadas não executada: ${error instanceof Error ? error.message : String(error)}`);
     }
-    this.emAndamento = { tipo, usuarioId: user.sub, usuarioNome: user.nome, desde: new Date(), fase: 'lendo_fonte' };
   }
 
-  private async log(user: JwtPayload, tipo: 'SIMULACAO' | 'APLICACAO', resultado: 'SUCESSO' | 'PARCIAL' | 'FALHA', dados: Record<string, unknown>) {
+  private async log(user: { sub: string | null; nome: string }, tipo: 'SIMULACAO' | 'APLICACAO', resultado: ResultadoLog, dados: Record<string, unknown>) {
     const agora = new Date();
-    await this.prisma.logAuditoria.create({
+    await this.db.logAuditoria.create({
       data: {
-        usuarioId: user.sub, acao: AuditAction.SYNC, entidadeTipo: WEBMAP_CAMADAS_ENTIDADE, entidadeId: (dados.simulacaoId as string) ?? null,
+        usuarioId: user.sub || undefined, acao: AuditAction.SYNC, entidadeTipo: WEBMAP_CAMADAS_ENTIDADE,
+        entidadeId: ((dados.importacaoId ?? dados.simulacaoId) as string) ?? null,
         tela: 'Administração > Importação', valorAntigo: Prisma.JsonNull,
         valorNovo: { tipo, resultado, usuario: user.nome, dataHora: agora.toISOString(), dataHoraBrt: dataHoraBrt(agora), ...dados } as Prisma.InputJsonValue,
       },
     });
   }
 
-  private resumoLog(r: ResultadoSimulacao) {
+  private semDetalhe<T extends { camadasDetalhe?: unknown; erros: ErroLeitura[] }>(r: T) {
     const { camadasDetalhe: _d, erros, ...rest } = r;
     return { ...rest, erros: erros.slice(0, MAX_ERROS_TELA) };
   }
 
+  private async emAndamento() {
+    const job = await this.db.webmapImportacao.findFirst({ where: { status: 'EM_ANDAMENTO' }, orderBy: { iniciadoEm: 'desc' } });
+    if (job) return { tipo: 'APLICACAO' as const, usuario: job.usuarioNome, desde: job.iniciadoEm, fase: (job.fase ?? 'lendo_fonte') as Fase, importacaoId: job.id };
+    if (this.simulando) return { tipo: 'SIMULACAO' as const, usuario: this.simulando.usuarioNome, desde: this.simulando.desde, fase: this.simulando.fase, importacaoId: null };
+    return null;
+  }
+
+  private conflito(a: { usuario: string; desde: Date }) {
+    return new ConflictException(`Importação de camadas em andamento por ${a.usuario} desde ${dataHoraBrt(a.desde)}.`);
+  }
+
   async simular(user: JwtPayload) {
-    this.ocupar('SIMULACAO', user);
+    if (this.simulando) throw this.conflito({ usuario: this.simulando.usuarioNome, desde: this.simulando.desde });
+    this.simulando = { usuarioNome: user.nome, desde: new Date(), fase: 'lendo_fonte' };
     try {
-      const { resultado } = await simular(this.prisma, this.fonte, (f) => (this.emAndamento!.fase = f));
+      const job = await this.db.webmapImportacao.findFirst({ where: { status: 'EM_ANDAMENTO' }, orderBy: { iniciadoEm: 'desc' } });
+      if (job) throw this.conflito({ usuario: job.usuarioNome, desde: job.iniciadoEm });
+      const { resultado } = await simular(this.db, this.fonte, (f) => { if (this.simulando) this.simulando.fase = f; });
       this.purgar();
       this.simulacoes.set(resultado.simulacaoId, { ...resultado, usuarioId: user.sub });
-      await this.log(user, 'SIMULACAO', resultado.resultadoPrevisto, this.resumoLog(resultado));
+      await this.log(user, 'SIMULACAO', resultado.resultadoPrevisto, this.semDetalhe(resultado));
       return { ...resultado, erros: resultado.erros.slice(0, MAX_ERROS_TELA) };
     } catch (error) {
+      if (error instanceof ConflictException) throw error;
       const motivo = error instanceof Error ? error.message : String(error);
       await this.log(user, 'SIMULACAO', 'FALHA', { motivo, fonte: this.fonte.descricao }).catch(() => undefined);
       throw new BadRequestException(`Não foi possível ler a fonte do Webmap: ${motivo}`);
     } finally {
-      this.emAndamento = null;
+      this.simulando = null;
     }
   }
 
+  /** 202: inicia em segundo plano; acompanhe por GET status. */
   async aplicar(user: JwtPayload, simulacaoId: string | undefined) {
     const sim = simulacaoId ? this.simulacoes.get(simulacaoId) : undefined;
     if (!sim) throw new BadRequestException('Simule a importação antes de aplicar.');
@@ -80,34 +110,60 @@ export class WebmapCamadasService {
       this.simulacoes.delete(sim.simulacaoId);
       throw new ConflictException('O prazo da simulação (30 min) venceu; simule novamente.');
     }
-    this.ocupar('APLICACAO', user);
+    await recuperarInterrompidas(this.db, new PgSessionLock(this.lockUrl)).catch(() => undefined);
+    const lock = new PgSessionLock(this.lockUrl);
+    if (!(await lock.tentar())) {
+      const a = await this.emAndamento();
+      throw this.conflito(a ?? { usuario: 'outro usuário', desde: new Date() });
+    }
+    const job = await this.db.webmapImportacao.create({
+      data: { status: 'EM_ANDAMENTO', fase: 'lendo_fonte', usuarioId: user.sub || null, usuarioNome: user.nome, simulacaoId: sim.simulacaoId, fonteHash: sim.fonteHash },
+    });
+    this.simulacoes.delete(sim.simulacaoId);
+    this.execucao = this.rodar(job.id, user, sim, lock);
+    return { importacaoId: job.id, status: 'EM_ANDAMENTO', iniciadoEm: job.iniciadoEm, iniciadoEmBrt: dataHoraBrt(job.iniciadoEm) };
+  }
+
+  private async rodar(importacaoId: string, user: JwtPayload, sim: ResultadoSimulacao, lock: PgSessionLock) {
+    let fase: Fase = 'lendo_fonte';
+    const hb = setInterval(() => {
+      void this.db.webmapImportacao.update({ where: { id: importacaoId }, data: { heartbeatEm: new Date(), fase } }).catch(() => undefined);
+    }, HEARTBEAT_MS);
     try {
-      const r = await aplicar(this.prisma, this.fonte, sim, {
-        onFase: (f) => (this.emAndamento!.fase = f),
+      const r = await executarAplicacao(this.db, this.fonte, importacaoId, sim, {
+        onFase: (f) => {
+          fase = f;
+          void this.db.webmapImportacao.update({ where: { id: importacaoId }, data: { fase: f, heartbeatEm: new Date() } }).catch(() => undefined);
+        },
         icones: async (buf, mime) => {
           const s = await this.storage.persistBuffer(buf, mime, 'webmap-icones');
           return { storageKey: s.storageKey, url: s.url };
         },
       });
-      this.simulacoes.delete(sim.simulacaoId);
-      const { camadasDetalhe: _d, erros, ...rest } = r;
-      await this.log(user, 'APLICACAO', r.resultado, { ...rest, erros: erros.slice(0, MAX_ERROS_TELA) });
-      return { ...r, erros: erros.slice(0, MAX_ERROS_TELA) };
+      await this.db.webmapImportacao.update({ where: { id: importacaoId }, data: { resultado: this.semDetalhe(r) as unknown as Prisma.InputJsonValue } });
+      await this.log(user, 'APLICACAO', r.resultado, this.semDetalhe(r)).catch(() => undefined);
     } catch (error) {
       const motivo = error instanceof Error ? error.message : String(error);
-      await this.log(user, 'APLICACAO', 'FALHA', { simulacaoId: sim.simulacaoId, motivo }).catch(() => undefined);
-      if (error instanceof FonteMudouError || error instanceof ImportacaoEmAndamentoError) throw new ConflictException(motivo);
-      throw new BadRequestException(`A importação falhou e nada foi alterado: ${motivo}`);
+      await this.db.webmapImportacao.update({ where: { id: importacaoId }, data: { status: 'FALHA', fase: null, concluidoEm: new Date(), motivo } }).catch(() => undefined);
+      await this.log(user, 'APLICACAO', 'FALHA', { importacaoId, simulacaoId: sim.simulacaoId, motivo, fonteMudou: error instanceof FonteMudouError }).catch(() => undefined);
     } finally {
-      this.emAndamento = null;
+      clearInterval(hb);
+      await lock.liberar();
     }
   }
 
-  errosCsv(simulacaoId: string) {
-    const sim = this.simulacoes.get(simulacaoId);
-    if (!sim) throw new NotFoundException('Simulação não encontrada ou expirada.');
-    const esc = (v: string | null) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    return ['camada;elemento;motivo', ...sim.erros.map((e) => [esc(e.camada), esc(e.elemento), esc(e.motivo)].join(';'))].join('\n');
+  async errosCsv(simulacaoId?: string) {
+    let erros: ErroLeitura[];
+    if (simulacaoId) {
+      const sim = this.simulacoes.get(simulacaoId);
+      if (!sim) throw new NotFoundException('Simulação não encontrada ou expirada.');
+      erros = sim.erros;
+    } else {
+      const camadas = await this.db.webmapCamada.findMany({ where: { ativo: true, totalInvalidos: { gt: 0 } }, select: { errosLeitura: true } });
+      erros = camadas.flatMap((c) => (c.errosLeitura as ErroLeitura[] | null) ?? []);
+    }
+    const esc = (v: string | null | undefined) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    return ['grupo;camada;elemento;motivo', ...erros.map((e) => [esc(e.grupo), esc(e.camada), esc(e.elemento), esc(e.motivo)].join(';'))].join('\n');
   }
 
   private purgar() {
@@ -116,7 +172,7 @@ export class WebmapCamadasService {
   }
 
   async historico(limit = 20) {
-    const rows = await this.prisma.logAuditoria.findMany({
+    const rows = await this.db.logAuditoria.findMany({
       where: { entidadeTipo: WEBMAP_CAMADAS_ENTIDADE }, orderBy: { createdAt: 'desc' }, take: Math.min(Math.max(limit, 1), 100),
       select: { id: true, createdAt: true, usuarioId: true, valorNovo: true },
     });
@@ -124,23 +180,33 @@ export class WebmapCamadasService {
   }
 
   async status() {
-    const [ultima] = await this.historico(1);
+    const [ultimaLog] = await this.historico(1);
+    const ultimaImportacao = await this.db.webmapImportacao.findFirst({ orderBy: { iniciadoEm: 'desc' } });
     const [camadas, ativas, removidas] = await Promise.all([
-      this.prisma.webmapCamada.count(), this.prisma.webmapCamada.count({ where: { ativo: true } }), this.prisma.webmapCamada.count({ where: { removidaOrigem: true } }),
+      this.db.webmapCamada.count({ where: { versaoAtual: { not: null } } }), this.db.webmapCamada.count({ where: { ativo: true } }), this.db.webmapCamada.count({ where: { removidaOrigem: true } }),
     ]);
-    const a = this.emAndamento;
+    const a = await this.emAndamento();
     return {
       fonte: this.fonte.descricao,
-      emAndamento: a ? { tipo: a.tipo, usuario: a.usuarioNome, desde: a.desde.toISOString(), desdeBrt: dataHoraBrt(a.desde), fase: a.fase } : null,
-      ultima: ultima ?? null, camadas, ativas, removidasOrigem: removidas,
+      emAndamento: a ? { tipo: a.tipo, usuario: a.usuario, desde: a.desde.toISOString(), desdeBrt: dataHoraBrt(a.desde), fase: a.fase, importacaoId: a.importacaoId } : null,
+      ultimaImportacao: ultimaImportacao
+        ? { id: ultimaImportacao.id, status: ultimaImportacao.status, usuario: ultimaImportacao.usuarioNome, iniciadoEmBrt: dataHoraBrt(ultimaImportacao.iniciadoEm), concluidoEmBrt: ultimaImportacao.concluidoEm ? dataHoraBrt(ultimaImportacao.concluidoEm) : null, motivo: ultimaImportacao.motivo, resultado: ultimaImportacao.resultado }
+        : null,
+      ultima: ultimaLog ?? null, camadas, ativas, removidasOrigem: removidas,
     };
+  }
+
+  /** Para quem NÃO tem a permissão de Importação (mapa): só o aviso, sem fase, nome ou horário. */
+  async statusPublico() {
+    const a = await this.emAndamento();
+    return { emAndamento: Boolean(a && a.tipo === 'APLICACAO'), mensagem: a && a.tipo === 'APLICACAO' ? 'Importação em andamento' : null };
   }
 
   /** Árvore para o mapa (D-296c: todos os usuários do mapa; camadas desligadas por padrão). */
   async arvore() {
-    const grupos = await this.prisma.webmapCamadaGrupo.findMany({
+    const grupos = await this.db.webmapCamadaGrupo.findMany({
       where: { ativo: true }, orderBy: { ordem: 'asc' },
-      include: { camadas: { where: { ativo: true }, orderBy: { ordem: 'asc' }, select: { id: true, nomeOriginal: true, geometriaTipo: true, estilo: true, totalElementos: true, bbox: true, versaoAtual: true, bytesOrigem: true } } },
+      include: { camadas: { where: { ativo: true, versaoAtual: { not: null } }, orderBy: { ordem: 'asc' }, select: { id: true, nomeOriginal: true, geometriaTipo: true, estilo: true, totalElementos: true, bbox: true, versaoAtual: true, bytesOrigem: true } } },
     });
     return grupos.filter((g) => g.camadas.length).map((g) => ({
       id: g.id, titulo: g.titulo,
@@ -148,24 +214,24 @@ export class WebmapCamadasService {
     }));
   }
 
-  /** GeoJSON sob demanda; camadas pesadas exigem bbox e são simplificadas pelo zoom. */
+  /** GeoJSON sob demanda da versão ATIVA; camadas pesadas exigem bbox e são simplificadas pelo zoom. */
   async geojson(camadaId: string, bboxParam?: string, zoomParam?: string) {
-    const camada = await this.prisma.webmapCamada.findFirst({ where: { id: camadaId, ativo: true }, select: { id: true, totalElementos: true, versaoAtual: true } });
+    const camada = await this.db.webmapCamada.findFirst({ where: { id: camadaId, ativo: true, versaoAtual: { not: null } }, select: { id: true, totalElementos: true, versaoAtual: true } });
     if (!camada) throw new NotFoundException('Camada não encontrada.');
     const bbox = bboxParam?.split(',').map(Number);
     if (bbox && (bbox.length !== 4 || bbox.some((n) => !Number.isFinite(n)))) throw new BadRequestException('bbox inválido (minLng,minLat,maxLng,maxLat).');
     const pesada = camada.totalElementos > CAMADA_PESADA_ELEMENTOS;
     if (pesada && !bbox) throw new BadRequestException('Camada pesada: informe bbox e zoom.');
     const zoom = zoomParam ? Number(zoomParam) : 18;
-    const where: Prisma.WebmapElementoWhereInput = { camadaId: camada.id };
+    const where: Prisma.WebmapElementoWhereInput = { camadaId: camada.id, versao: camada.versaoAtual! };
     if (bbox) Object.assign(where, { minLng: { lte: bbox[2] }, maxLng: { gte: bbox[0] }, minLat: { lte: bbox[3] }, maxLat: { gte: bbox[1] } });
-    const rows = await this.prisma.webmapElemento.findMany({ where, take: LIMITE_ELEMENTOS_RESPOSTA + 1, select: { fidOrigem: true, geometria: true, atributos: true } });
+    const rows = await this.db.webmapElemento.findMany({ where, take: LIMITE_ELEMENTOS_RESPOSTA + 1, select: { fidOrigem: true, geometria: true, atributos: true, corrigida: true } });
     const truncado = rows.length > LIMITE_ELEMENTOS_RESPOSTA;
     const tol = pesada ? toleranciaPorZoom(zoom) : 0;
     return {
       type: 'FeatureCollection', versao: camada.versaoAtual, truncado, total: camada.totalElementos,
       features: rows.slice(0, LIMITE_ELEMENTOS_RESPOSTA).map((r) => ({
-        type: 'Feature', id: r.fidOrigem ?? undefined, properties: r.atributos,
+        type: 'Feature', id: r.fidOrigem ?? undefined, properties: { ...(r.atributos as Record<string, unknown>), ...(r.corrigida ? { _geometriaCorrigida: true } : {}) },
         geometry: tol ? simplificarGeometria(r.geometria as { type: string; coordinates: unknown }, tol) : r.geometria,
       })),
     };

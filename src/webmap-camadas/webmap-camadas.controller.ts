@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Header, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -22,6 +22,7 @@ export class WebmapCamadasAdminController {
 
   @RequireAnyPermissions(...adminTabPermissionKeys('importacao', 'executar'))
   @Post('aplicar')
+  @HttpCode(202)
   aplicar(@Body() body: { simulacaoId?: string }, @CurrentUser() user: JwtPayload) {
     return this.service.aplicar(user, body?.simulacaoId);
   }
@@ -30,8 +31,8 @@ export class WebmapCamadasAdminController {
   @Get('erros.csv')
   @Header('Content-Type', 'text/csv; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="erros-camadas-webmap.csv"')
-  errosCsv(@Query('simulacaoId') simulacaoId: string) {
-    return '\uFEFF' + this.service.errosCsv(simulacaoId);
+  async errosCsv(@Query('simulacaoId') simulacaoId?: string) {
+    return '\uFEFF' + (await this.service.errosCsv(simulacaoId));
   }
 
   @RequireAnyPermissions(...adminTabPermissionKeys('importacao', 'visualizar'))
@@ -53,6 +54,12 @@ export class WebmapCamadasAdminController {
 @Controller('mapa/camadas')
 export class WebmapCamadasMapaController {
   constructor(private readonly service: WebmapCamadasService) {}
+
+  /** Sem a permissão de Importação: só "importação em andamento" (fase, quem e desde quando ficam no status do Admin). */
+  @Get('status')
+  status() {
+    return this.service.statusPublico();
+  }
 
   @Get()
   arvore() {

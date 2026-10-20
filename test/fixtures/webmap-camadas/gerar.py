@@ -51,6 +51,14 @@ V2["ETE_3_NORTE_101"]=(g,"ETE 3 NORTE",k,c,f)               # renomeada: nova + 
 V2["ECOPONTO3UNID_90"]=("ECOPONTOS","ECOPONTO (3 UNID.)","point","rgba(255,127,0,1.0)",[pt(1,-47.38,-20.51,NOME="Ecoponto Norte"),
   {"type":"Feature","properties":{"fid":"2"},"geometry":{"type":"Point","coordinates":[-47.5]}},
   {"type":"Feature","properties":{"fid":"3"},"geometry":None}])  # nova + 2 elementos malformados
+def bow(fid): return {"type":"Feature","properties":{"fid":str(fid)},"geometry":{"type":"Polygon","coordinates":[[[-47.35,-20.50],[-47.34,-20.51],[-47.34,-20.50],[-47.35,-20.51],[-47.35,-20.50]]]}}
+def aberto(fid): return {"type":"Feature","properties":{"fid":str(fid)},"geometry":{"type":"Polygon","coordinates":[[[-47.33,-20.50],[-47.32,-20.50],[-47.32,-20.51],[-47.33,-20.51]]]}}
+vazio={"type":"Feature","properties":{"fid":"9"},"geometry":{"type":"Polygon","coordinates":[]}}
+V2["AREA_RISCO_200"]=("SANEAMENTO","AREA_RISCO","polygon","rgba(227,26,28,0.5)",[bow(1),aberto(2),vazio])  # 2 corrigíveis + 1 irreparável
 write("v2",V2)
 write("v3",V1)   # volta ao v1: UBS e ETE 3 reativadas (mesmo id), ETE 3 NORTE removida
+V4=dict(V1)
+V4["ETE_2_102"]=("SANEAMENTO","ETE 2","point","rgba(31,120,180,1.0)",[pt(1,-47.37,-20.4995)])  # tema ganha camada de pontos: polígono mantém id
+V4["CORRIGIVEL_201"]=("SANEAMENTO","CORRIGIVEL","polygon","rgba(227,26,28,0.5)",[bow(1),aberto(2)])  # só corrigíveis => OK com avisos
+write("v4",V4)
 write("v_quebrada",V1,broken="VIAS_PRINCIPAIS_81")  # GeoJSON truncado: camada inteira ilegível => FALHA, nada gravado
