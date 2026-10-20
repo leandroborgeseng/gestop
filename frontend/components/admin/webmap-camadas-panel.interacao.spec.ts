@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/api', () => api);
 
-import { WebmapCamadasPanel } from './webmap-camadas-panel';
+import { WebmapCamadasPanel, linhaUltimaAplicacao } from './webmap-camadas-panel';
 
 const base = { fonte: 'github', emAndamento: null, ultima: null, ultimaImportacao: null, camadas: 0, ativas: 0, removidasOrigem: 0 };
 const sim = (totalErros: number) => ({
@@ -61,5 +61,65 @@ describe('296 · WebmapCamadasPanel', () => {
     await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
     expect(screen.getByText(/Ana desde 20\/10\/2026 12:40:00 \(BRT\)/)).toBeTruthy();
     expect((screen.getByRole('button', { name: /Importar apenas camadas Webmap/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe('296 pacote (c) · reordenadas', () => {
+  it('contador informativo separado aparece só quando > 0', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockResolvedValue({ ...sim(0), reordenadas: 3 });
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    expect(screen.getByTestId('webmap-reordenadas').textContent).toMatch(/^Reordenadas: 3 \(informativo/);
+    cleanup();
+    api.simularWebmapCamadas.mockResolvedValue({ ...sim(0), reordenadas: 0 });
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    expect(screen.queryByTestId('webmap-reordenadas')).toBeNull();
+  });
+});
+
+describe('296 pacote (a) · confirmação antes de aplicar', () => {
+  it('N > 0: diálogo literal; Cancelar não aplica; Aplicar no diálogo aplica', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockResolvedValue(sim(425));
+    api.aplicarWebmapCamadas.mockResolvedValue({});
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Aplicar' })); });
+    const dlg = screen.getByRole('alertdialog');
+    expect(dlg.textContent).toContain('Aplicar importação? 425 elementos serão gravados como inválidos e não aparecerão no mapa (detalhes no CSV).');
+    expect(api.aplicarWebmapCamadas).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancelar' })); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(api.aplicarWebmapCamadas).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Aplicar' })); });
+    const dentro = screen.getByRole('alertdialog').querySelectorAll('button');
+    await act(async () => { fireEvent.click(dentro[dentro.length - 1]); });
+    expect(api.aplicarWebmapCamadas).toHaveBeenCalledWith('s1');
+  });
+
+  it('N = 0: aplica direto, sem diálogo', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockResolvedValue(sim(0));
+    api.aplicarWebmapCamadas.mockResolvedValue({});
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Aplicar' })); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(api.aplicarWebmapCamadas).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('296 pacote (d) · linha da última aplicação', () => {
+  it('formato resultado · dd/mm/aaaa HH:mm (BRT) · usuário', async () => {
+    expect(linhaUltimaAplicacao('PARCIAL', '20/10/2026 15:40:12 (BRT)', 'Tester Importação')).toBe('Parcial · 20/10/2026 15:40 (BRT) · Tester Importação');
+    api.getWebmapCamadasStatus.mockResolvedValue({ ...base, ultimaImportacao: { id: 'j', status: 'PARCIAL', usuario: 'Tester Importação', iniciadoEmBrt: 'x', concluidoEmBrt: '20/10/2026 15:40:00 (BRT)', motivo: null, resultado: { ...sim(3), resultado: 'PARCIAL' } } });
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    expect(screen.getByText('Última aplicação: Parcial · 20/10/2026 15:40 (BRT) · Tester Importação')).toBeTruthy();
   });
 });

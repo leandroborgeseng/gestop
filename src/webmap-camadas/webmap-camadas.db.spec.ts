@@ -146,7 +146,19 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
     const { resultado } = await simular(prisma, fonte('v2'));
     expect(resultado).toMatchObject({ novas: 3, removidasOrigem: 2, corrigidos: 2, invalidos: 3, resultadoPrevisto: 'PARCIAL' });
     expect(resultado.erros.every((e) => e.grupo && e.camada && e.motivo)).toBe(true);
+    // pacote (c): só reordenadas = "Sem mudança"; contador informativo à parte
+    const st = Object.fromEntries(resultado.camadasDetalhe.map((c) => [c.chaveOrigem, c]));
+    for (const k of ['SANEAMENTO/ETE_2#POLYGON', 'AREAS_PUBLICAS/LOTE#POINT', 'AREAS_PUBLICAS/LOTE#POLYGON', 'PONTOS_VICIADOS/PONTO_VICIADO#POINT']) {
+      expect(st[k]?.status, k).toBe('sem_mudanca');
+    }
+    const reord = resultado.camadasDetalhe.filter((c) => c.reordenada);
+    expect(resultado.reordenadas).toBe(reord.length);
+    expect(reord.length).toBeGreaterThan(0);
     const r = await aplicarAgora(fonte('v2'), resultado);
+    // ordem nova continua gravada para as só reordenadas
+    for (const c of reord.filter((x) => x.status === 'sem_mudanca')) {
+      expect((await camada(c.chaveOrigem))?.ordem, c.chaveOrigem).toBe(c.ordem);
+    }
     expect(r.resultado).toBe('PARCIAL');
     const creche = await camada('SECRETARIA_EDUCACAO/CRECHE_PRE_ESCOLA#POINT');
     expect(creche).toMatchObject({ id: ids['SECRETARIA_EDUCACAO/CRECHE_PRE_ESCOLA#POINT'].id, totalElementos: 3, varOrigem: 'CRECHE_PRE_ESCOLA46UNID_77' });

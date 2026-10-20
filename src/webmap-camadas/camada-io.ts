@@ -7,8 +7,9 @@ import { randomUUID } from 'node:crypto';
 import { ElementoLido, ErroLeitura, lerElementosStream } from './parse';
 import type { WebmapCamadasFonte } from './source';
 
-export const LOTE_ELEMENTOS = 500;
-export const LOTE_BYTES = 1024 * 1024;
+/** Pacote (b): lote menor para baixar o pico do aplicar (antes 500 / 1 MiB). Contagens não dependem do lote. */
+export const LOTE_ELEMENTOS = 200;
+export const LOTE_BYTES = 256 * 1024;
 
 export type Contagem = { pontos: number; linhas: number; poligonos: number };
 export type Stats = Contagem & { corrigidos: number; invalidos: number; erros: ErroLeitura[]; bbox: number[]; hash?: string };
@@ -56,10 +57,14 @@ export async function gravarCamada(
   let nLote = 0;
   const flush = async () => {
     if (!partes.length) return;
-    const json = `[${partes.join(',')}]`;
+    // o texto do lote só existe durante o INSERT; as partes são soltas antes de esperar o banco
+    let json: string | null = `[${partes.join(',')}]`;
     partes = [];
     bytes = 0;
-    await exec(INSERT, [json]);
+    const params: unknown[] = [json];
+    json = null;
+    await exec(INSERT, params);
+    params.length = 0;
     nLote++;
     await ganchos.aposLote?.(nLote);
   };

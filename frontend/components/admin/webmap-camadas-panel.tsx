@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Layers } from 'lucide-react';
 import {
   aplicarWebmapCamadas,
@@ -36,6 +36,19 @@ const STATUS_LABEL: Record<string, string> = {
   removida_origem: 'Removida da origem',
 };
 
+/** Pacote (a): texto do diálogo; só existe quando N > 0. */
+export function textoConfirmacaoAplicar(invalidos: number): string | null {
+  if (!invalidos || invalidos <= 0) return null;
+  const n = invalidos.toLocaleString('pt-BR');
+  return `Aplicar importação? ${n} elementos serão gravados como inválidos e não aparecerão no mapa (detalhes no CSV).`;
+}
+
+/** Pacote (d): "Parcial · 20/10/2026 15:40 (BRT) · Tester Importação" (resultado · dd/mm/aaaa HH:mm (BRT) · usuário). */
+export function linhaUltimaAplicacao(status: string, dataHoraBrt: string, usuario: string): string {
+  const quando = dataHoraBrt.replace(/(\d{2}:\d{2}):\d{2}/, '$1');
+  return `${RESULTADO_LABEL[status] ?? status} · ${quando} · ${usuario}`;
+}
+
 function horaBrt(iso: string) {
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
 }
@@ -65,6 +78,11 @@ function Resumo({ titulo, resumo, csv }: { titulo: string; resumo: WebmapCamadas
           </div>
         ))}
       </dl>
+      {resumo.reordenadas ? (
+        <p className="md-body-sm text-[var(--md-on-surface-variant)]" data-testid="webmap-reordenadas">
+          Reordenadas: {resumo.reordenadas} (informativo; só mudou a posição, contam como Sem mudança e a ordem nova é gravada)
+        </p>
+      ) : null}
       {resumo.camadasDetalhe?.some((c) => c.status !== 'sem_mudanca') ? (
         <ul className="md-body-md list-disc pl-5">
           {resumo.camadasDetalhe
@@ -142,7 +160,20 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
     }
   }
 
+  const [confirmando, setConfirmando] = useState(false);
+  const confirmarRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (confirmando) confirmarRef.current?.focus();
+  }, [confirmando]);
+
+  function pedirAplicar() {
+    if (!simulacao) return;
+    if (textoConfirmacaoAplicar(simulacao.invalidos)) setConfirmando(true);
+    else void aplicar();
+  }
+
   async function aplicar() {
+    setConfirmando(false);
     if (!simulacao) return;
     setErro(null);
     try {
@@ -190,10 +221,32 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
               {simulando ? 'Simulando…' : 'Importar apenas camadas Webmap'}
             </Button>
             {simulacao ? (
-              <Button variant="tonal" className="min-h-11" disabled={ocupado || expirada} onClick={() => void aplicar()}>
+              <Button variant="tonal" className="min-h-11" disabled={ocupado || expirada} onClick={pedirAplicar}>
                 Aplicar
               </Button>
             ) : null}
+          </div>
+        ) : null}
+
+        {confirmando && simulacao ? (
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="webmap-confirmar-titulo"
+            aria-describedby="webmap-confirmar-texto"
+            className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setConfirmando(false);
+            }}
+          >
+            <div className="w-full max-w-md space-y-4 rounded-[var(--md-shape-lg,16px)] bg-[var(--md-surface,#fff)] p-5 shadow-[var(--sh-md)]">
+              <h3 id="webmap-confirmar-titulo" className="md-title-md">Confirmar aplicação</h3>
+              <p id="webmap-confirmar-texto" className="md-body-md">{textoConfirmacaoAplicar(simulacao.invalidos)}</p>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button variant="ghost" className="min-h-11" onClick={() => setConfirmando(false)}>Cancelar</Button>
+                <Button ref={confirmarRef} variant="filled" className="min-h-11" onClick={() => void aplicar()}>Aplicar</Button>
+              </div>
+            </div>
           </div>
         ) : null}
 
@@ -208,12 +261,12 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
 
         {!simulacao && ultima && ultima.status !== 'EM_ANDAMENTO' ? (
           ultima.status === 'FALHA' ? (
-            <Alert variant="error" title={`Última aplicação: Falha (${ultima.iniciadoEmBrt}, ${ultima.usuario})`}>
+            <Alert variant="error" title={`Última aplicação: ${linhaUltimaAplicacao('FALHA', ultima.iniciadoEmBrt, ultima.usuario)}`}>
               {ultima.motivo ?? 'Erro desconhecido'}. Nada foi alterado: a versão anterior das camadas continua ativa.
             </Alert>
           ) : ultima.resultado ? (
             <Resumo
-              titulo={`Última aplicação: ${RESULTADO_LABEL[ultima.status]} (${ultima.concluidoEmBrt ?? ultima.iniciadoEmBrt}, ${ultima.usuario})`}
+              titulo={`Última aplicação: ${linhaUltimaAplicacao(ultima.status, ultima.concluidoEmBrt ?? ultima.iniciadoEmBrt, ultima.usuario)}`}
               resumo={ultima.resultado}
               csv={() => void downloadWebmapCamadasErrosCsv()}
             />
