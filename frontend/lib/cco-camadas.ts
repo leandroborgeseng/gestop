@@ -108,8 +108,8 @@ export function webmapLigadas(estado: CcoCamadasEstado, arvore?: MapaCamadaGrupo
 }
 
 /** Selo do botão Camadas: camadas ligadas além do padrão (Webmap ligadas + SIGMA fora do padrão). */
-export function contarCamadasAlemDoPadrao(estado: CcoCamadasEstado, calorLigado = false): number {
-  const webmap = webmapLigadas(estado).length;
+export function contarCamadasAlemDoPadrao(estado: CcoCamadasEstado, calorLigado = false, webmapAtivo = true): number {
+  const webmap = webmapAtivo ? webmapLigadas(estado).length : 0; // 299 W-OCULTO: flag desligada não conta Webmap
   const sigmaDesligadas = SIGMA_CAMADAS_PADRAO.filter((id) => !camadaLigada(estado, id)).length;
   return webmap + (calorLigado ? 1 : 0) + sigmaDesligadas;
 }

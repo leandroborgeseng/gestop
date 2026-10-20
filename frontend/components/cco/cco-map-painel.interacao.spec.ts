@@ -130,8 +130,8 @@ describe('299 · painel #cco-map-painel', () => {
     expect(onFechar).toHaveBeenCalledTimes(1);
   });
 
-  it('Camadas: grupo SIGMA, Webmap vazio literal e rodapé sem Aplicar', () => {
-    render(painel({ aba: 'camadas' }));
+  it('Camadas (flag on): grupo SIGMA, Webmap vazio literal e rodapé sem Aplicar', () => {
+    render(painel({ aba: 'camadas', camadas: camadasBase({ webmapAtivo: true }) }));
     expect(screen.getByLabelText('Próprios públicos')).toBeTruthy();
     expect((screen.getByLabelText('Chamados') as HTMLInputElement).checked).toBe(true);
     expect((screen.getByLabelText('Mapa de calor dos chamados') as HTMLInputElement).checked).toBe(false);
@@ -140,16 +140,16 @@ describe('299 · painel #cco-map-painel', () => {
     expect(screen.queryByRole('button', { name: 'Desligar todas' })).toBeNull(); // 299-U2: nada ligado
   });
 
-  it('299-U2: "Desligar todas" só com camada ligada', () => {
+  it('299-U2 (flag on): "Desligar todas" só com camada ligada', () => {
     const onDesligarTodas = vi.fn();
-    render(painel({ aba: 'camadas', camadas: camadasBase({ algumaLigada: true, onDesligarTodas }) }));
+    render(painel({ aba: 'camadas', camadas: camadasBase({ algumaLigada: true, onDesligarTodas, webmapAtivo: true }) }));
     fireEvent.click(screen.getByRole('button', { name: 'Desligar todas' }));
     expect(onDesligarTodas).toHaveBeenCalled();
   });
 
-  it('Camadas: erro com Tentar novamente; Webmap desligado por padrão e "N de M ligadas"', () => {
+  it('Camadas (flag on): erro com Tentar novamente; Webmap desligado por padrão e "N de M ligadas"', () => {
     const onTentarNovamente = vi.fn();
-    const { unmount } = render(painel({ aba: 'camadas', camadas: camadasBase({ erro: true, onTentarNovamente }) }));
+    const { unmount } = render(painel({ aba: 'camadas', camadas: camadasBase({ erro: true, onTentarNovamente, webmapAtivo: true }) }));
     expect(screen.getByRole('alert').textContent).toContain(MSG_CAMADAS_ERRO);
     fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
     expect(onTentarNovamente).toHaveBeenCalled();
@@ -157,7 +157,7 @@ describe('299 · painel #cco-map-painel', () => {
     const estado = { ...estadoCamadasPadrao(), gruposAbertos: ['sigma', 'webmap', 'webmap-grupo:g'] };
     const onAlternar = vi.fn();
     const arvore = [{ id: 'g', titulo: 'Drenagem', camadas: [{ id: 'webmap:a', camadaId: 'a', nomeOriginal: 'Bocas de lobo', geometriaTipo: 'Point', estilo: null, totalElementos: 1, bbox: null, versaoAtual: 1, ligadaPorPadrao: false, pesada: false }] }];
-    render(painel({ aba: 'camadas', camadas: camadasBase({ estado, arvore, onAlternar }) }));
+    render(painel({ aba: 'camadas', camadas: camadasBase({ estado, arvore, onAlternar, webmapAtivo: true }) }));
     const cb = screen.getByLabelText('Bocas de lobo') as HTMLInputElement;
     expect(cb.checked).toBe(false);
     expect(screen.getByTestId('cco-webmap-resumo').textContent).toBe(' · 0 de 1 ligadas');
@@ -171,5 +171,32 @@ describe('299 · painel #cco-map-painel', () => {
     render(painel({ onAba }));
     fireEvent.click(screen.getByRole('tab', { name: 'Camadas' }));
     expect(onAba).toHaveBeenCalledWith('camadas');
+  });
+
+  // 299 W-OCULTO: flag NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA desligada (padrão)
+  it('W-OCULTO (flag off, padrão): só SIGMA + mapa de calor; sem cabeçalho Webmap nem texto do L4', () => {
+    const arvore = [{ id: 'g', titulo: 'Drenagem', camadas: [{ id: 'webmap:a', camadaId: 'a', nomeOriginal: 'Bocas de lobo', geometriaTipo: 'Point', estilo: null, totalElementos: 1, bbox: null, versaoAtual: 1, ligadaPorPadrao: false, pesada: false }] }];
+    for (const extra of [{}, { arvore }, { erro: true }]) {
+      const { unmount, container } = render(painel({ aba: 'camadas', camadas: camadasBase(extra) }));
+      expect(screen.getByLabelText('Próprios públicos')).toBeTruthy();
+      expect(screen.getByLabelText('Chamados')).toBeTruthy();
+      expect(screen.getByLabelText('Mapa de calor dos chamados')).toBeTruthy();
+      expect(screen.queryByTestId('cco-secao-webmap')).toBeNull();
+      expect(container.textContent).not.toMatch(/Webmap/i);
+      expect(container.textContent).not.toContain(MSG_CAMADAS_VAZIO);
+      expect(container.textContent).not.toContain(MSG_CAMADAS_ERRO);
+      expect(screen.queryByLabelText('Bocas de lobo')).toBeNull();
+      unmount();
+    }
+  });
+
+  it('W-OCULTO (flag off): "Desligar todas" só com o mapa de calor ligado', () => {
+    const { unmount } = render(painel({ aba: 'camadas', camadas: camadasBase({ algumaLigada: true, calorLigado: false }) }));
+    expect(screen.queryByRole('button', { name: 'Desligar todas' })).toBeNull();
+    unmount();
+    const onDesligarTodas = vi.fn();
+    render(painel({ aba: 'camadas', camadas: camadasBase({ algumaLigada: true, calorLigado: true, onDesligarTodas }) }));
+    fireEvent.click(screen.getByRole('button', { name: 'Desligar todas' }));
+    expect(onDesligarTodas).toHaveBeenCalled();
   });
 });

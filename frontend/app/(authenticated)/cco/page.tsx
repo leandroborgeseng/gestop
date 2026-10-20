@@ -4,12 +4,11 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { useSearchParams } from 'next/navigation';
 import { Activity, AlertTriangle, Building2, ClipboardCheck, DatabaseZap } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
-import { getMapaCamadas, getOpcoesFiltroUnidades, getResumoOperacional, getUnidades, listChamadosMapa } from '@/lib/api';
+import { getOpcoesFiltroUnidades, getResumoOperacional, getUnidades, listChamadosMapa } from '@/lib/api';
 import { countChamadosPendenciasUnicas, countUnidadesPendenciasUnicas } from '@/lib/cco-pendencias';
 import {
   ChamadoMapaItem,
   ChamadosMapaFilters,
-  MapaCamadaGrupo,
   OperacionalResumo,
   UnidadeFilters,
   UnidadeFiltroOpcoes,
@@ -58,6 +57,8 @@ import {
   salvarCamadasSessao,
   webmapLigadas,
 } from '@/lib/cco-camadas';
+import { webmapCamadasMapaAtivo } from '@/lib/feature-flags';
+import { useArvoreCamadasWebmap } from '@/lib/use-arvore-camadas-webmap';
 
 export const MSG_ERRO_ATUALIZAR_MAPA = 'Não foi possível atualizar o mapa. Tente novamente.';
 
@@ -121,16 +122,16 @@ function CcoPageContent() {
   const [statusMapa, setStatusMapa] = useState('');
   const [camadas, setCamadas] = useState<CcoCamadasEstado>(estadoCamadasPadrao);
   const camadasCarregadasRef = useRef(false);
-  const [arvoreCamadas, setArvoreCamadas] = useState<MapaCamadaGrupo[] | null>(null);
-  const [arvoreCarregando, setArvoreCarregando] = useState(false);
-  const [arvoreErro, setArvoreErro] = useState(false);
   const botaoFiltrosRef = useRef<HTMLButtonElement | null>(null);
   const botaoCamadasRef = useRef<HTMLButtonElement | null>(null);
   const origemPainelRef = useRef<CcoPainelAba>('filtros');
 
   // D-296c: escolha das camadas vale para a sessão (Webmap desligado por padrão).
+  // 299 W-OCULTO: flag desligada => nada do Webmap (sem seção, sem requisição, sem contar no selo).
+  const webmapAtivo = webmapCamadasMapaAtivo();
   useEffect(() => {
-    setCamadas(lerCamadasSessao());
+    const salvo = lerCamadasSessao();
+    setCamadas(webmapAtivo ? salvo : desligarWebmap(salvo));
     camadasCarregadasRef.current = true;
   }, []);
   useEffect(() => {
@@ -391,7 +392,7 @@ function CcoPageContent() {
   const filtrosAtivos = useMemo(() => contarFiltrosAtivos(tab, aplicado), [tab, aplicado]);
   const rascunhoPendente = Boolean(rascunho && !snapshotsIguais(rascunho, aplicado));
   const calorLigado = chamadoMapMode === 'calor';
-  const camadasAlemDoPadrao = contarCamadasAlemDoPadrao(camadas, calorLigado);
+  const camadasAlemDoPadrao = contarCamadasAlemDoPadrao(camadas, calorLigado, webmapAtivo);
 
   // Sanfona mudou algo com o painel aberto: o rascunho recomeça do aplicado.
   useEffect(() => {
@@ -408,14 +409,8 @@ function CcoPageContent() {
     return () => window.clearTimeout(t);
   }, [statusMapa]);
 
-  const carregarArvoreCamadas = useCallback(() => {
-    setArvoreCarregando(true);
-    setArvoreErro(false);
-    getMapaCamadas()
-      .then((data) => setArvoreCamadas(Array.isArray(data) ? data : []))
-      .catch(() => setArvoreErro(true))
-      .finally(() => setArvoreCarregando(false));
-  }, []);
+  const { arvore: arvoreCamadas, carregando: arvoreCarregando, erro: arvoreErro, carregar: carregarArvoreCamadas, garantir: garantirArvoreCamadas } =
+    useArvoreCamadasWebmap(webmapAtivo);
 
   function abrirPainel(aba: CcoPainelAba) {
     if (painelAba === aba) {
@@ -428,12 +423,12 @@ function CcoPageContent() {
       setRascunho(aplicado);
       setAvisoExterno(false);
     }
-    if (aba === 'camadas' && !arvoreCamadas && !arvoreCarregando) carregarArvoreCamadas();
+    if (aba === 'camadas') garantirArvoreCamadas();
     setPainelAba(aba);
   }
 
   function trocarAba(aba: CcoPainelAba) {
-    if (aba === 'camadas' && !arvoreCamadas && !arvoreCarregando) carregarArvoreCamadas();
+    if (aba === 'camadas') garantirArvoreCamadas();
     setPainelAba(aba);
   }
 
@@ -764,7 +759,8 @@ function CcoPageContent() {
                         setChamadoMapMode('situacao');
                       },
                       calorLigado,
-                      algumaLigada: calorLigado || webmapLigadas(camadas, arvoreCamadas).length > 0,
+                      algumaLigada: calorLigado || (webmapAtivo && webmapLigadas(camadas, arvoreCamadas).length > 0),
+                      webmapAtivo,
                       onCalor: (ligar) => setChamadoMapMode(ligar ? 'calor' : 'situacao'),
                     }}
                   />

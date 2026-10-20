@@ -67,6 +67,8 @@ export type CcoCamadasProps = {
   onCalor: (ligar: boolean) => void;
   /** 299-U2: há camada do Webmap (ou o calor) ligada → mostra "Desligar todas". */
   algumaLigada: boolean;
+  /** 299 W-OCULTO: flag NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA (padrão desligada) — sem ela não há seção Webmap. */
+  webmapAtivo?: boolean;
 };
 
 function CamadasConteudo(p: CcoCamadasProps) {
@@ -104,7 +106,8 @@ function CamadasConteudo(p: CcoCamadasProps) {
         ) : null}
       </section>
 
-      <section>
+      {p.webmapAtivo ? (
+      <section data-testid="cco-secao-webmap">
         <button
           type="button"
           className="flex min-h-11 w-full items-center justify-between rounded-[var(--r-md)] px-2 text-left text-[12px] font-bold tracking-[0.04em] text-[var(--ink-3)] uppercase hover:bg-[var(--surface-2)]"
@@ -174,6 +177,7 @@ function CamadasConteudo(p: CcoCamadasProps) {
           </div>
         ) : null}
       </section>
+      ) : null}
     </div>
   );
 }
@@ -362,7 +366,7 @@ export function CcoMapPainel({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            {camadas.algumaLigada ? (
+            {camadas.algumaLigada && (camadas.webmapAtivo || camadas.calorLigado) ? (
               <Button variant="ghost" size="lg" className="px-3" onClick={camadas.onDesligarTodas}>Desligar todas</Button>
             ) : null}
             <span className="flex-1" />
