@@ -1,0 +1,57 @@
+import '@/test-utils/jsdom-global';
+import { createElement } from 'react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const api = vi.hoisted(() => ({
+  getWebmapCamadasStatus: vi.fn(),
+  getWebmapCamadasHistorico: vi.fn(),
+  simularWebmapCamadas: vi.fn(),
+  aplicarWebmapCamadas: vi.fn(),
+  downloadWebmapCamadasErrosCsv: vi.fn(),
+}));
+vi.mock('@/lib/api', () => api);
+
+import { WebmapCamadasPanel } from './webmap-camadas-panel';
+
+const base = { fonte: 'github', emAndamento: null, ultima: null, camadas: 0, ativas: 0, removidasOrigem: 0 };
+const sim = (totalErros: number) => ({
+  simulacaoId: 's1', fonte: 'g', commitSha: 'c', fonteHash: 'h', criadaEm: new Date().toISOString(), expiraEm: new Date(Date.now() + 1800_000).toISOString(),
+  grupos: 2, camadas: 3, elementos: { pontos: 4, linhas: 1, poligonos: 2, total: 7 }, novas: 3, atualizadas: 0, semMudanca: 0, reativadas: 0, removidasOrigem: 0,
+  camadasDetalhe: [{ chaveOrigem: 'G/A', grupo: 'G', nomeOriginal: 'A', variavel: 'A_1', ordem: 0, status: 'nova', elementos: { pontos: 1, linhas: 0, poligonos: 0 }, erros: 0, bytes: 1 }],
+  erros: Array.from({ length: Math.min(totalErros, 50) }, (_, i) => ({ camada: 'A', elemento: String(i), motivo: 'Elemento sem geometria' })),
+  totalErros, resultadoPrevisto: totalErros ? 'PARCIAL' : 'SUCESSO',
+});
+
+afterEach(() => { cleanup(); vi.clearAllMocks(); });
+
+describe('296 · WebmapCamadasPanel', () => {
+  it('sem permissão de executar: não mostra o botão', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: false })); });
+    expect(screen.queryByRole('button', { name: /Importar apenas camadas Webmap/ })).toBeNull();
+  });
+
+  it('simula, mostra contagens, no máximo 50 erros + CSV; Aplicar só depois da simulação', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockResolvedValue(sim(120));
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    expect(screen.queryByRole('button', { name: 'Aplicar' })).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    expect(screen.getByText('Erros de leitura (50 de 120)')).toBeTruthy();
+    expect(screen.getAllByText(/Elemento sem geometria/)).toHaveLength(50);
+    expect(screen.getByRole('button', { name: 'Baixar CSV com todos os erros' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Aplicar' })).toBeTruthy();
+    expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
+  });
+
+  it('em andamento: mostra quem e desde quando e bloqueia o botão', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue({ ...base, emAndamento: { tipo: 'APLICACAO', usuario: 'Ana', desde: '', desdeBrt: '20/10/2026 12:40:00 (BRT)', fase: 'gravando' } });
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    expect(screen.getByText(/Ana desde 20\/10\/2026 12:40:00 \(BRT\)/)).toBeTruthy();
+    expect((screen.getByRole('button', { name: /Importar apenas camadas Webmap/ }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});

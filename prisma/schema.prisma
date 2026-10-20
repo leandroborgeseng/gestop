@@ -1361,3 +1361,78 @@ model ConfiguracaoEmail {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
+
+/// 296 — camadas geográficas do Webmap, separadas dos cadastros operacionais (sem FK para eles).
+model WebmapCamadaGrupo {
+  id             String         @id @default(uuid())
+  chaveOrigem    String         @unique
+  titulo         String
+  ordem          Int
+  ativo          Boolean        @default(true)
+  removidaOrigem Boolean        @default(false)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  camadas        WebmapCamada[]
+}
+
+model WebmapCamada {
+  id             String            @id @default(uuid())
+  chaveOrigem    String            @unique
+  grupoId        String
+  grupo          WebmapCamadaGrupo @relation(fields: [grupoId], references: [id])
+  nomeOriginal   String
+  varOrigem      String
+  arquivoOrigem  String
+  ordem          Int
+  geometriaTipo  String
+  estilo         Json
+  estiloOriginal String
+  shaArquivo     String
+  shaEstilo      String?
+  totalElementos Int
+  totalPontos    Int               @default(0)
+  totalLinhas    Int               @default(0)
+  totalPoligonos Int               @default(0)
+  bytesOrigem    Int               @default(0)
+  bbox           Json?
+  versaoAtual    String
+  ativo          Boolean           @default(true)
+  removidaOrigem Boolean           @default(false)
+  removidaEm     DateTime?
+  commitSha      String
+  importadoEm    DateTime
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  elementos      WebmapElemento[]
+
+  @@index([grupoId])
+  @@index([ativo])
+}
+
+model WebmapElemento {
+  id            String       @id @default(uuid())
+  camadaId      String
+  camada        WebmapCamada @relation(fields: [camadaId], references: [id], onDelete: Cascade)
+  versao        String
+  fidOrigem     String?
+  geometriaTipo String
+  geometria     Json
+  atributos     Json
+  minLng        Float
+  minLat        Float
+  maxLng        Float
+  maxLat        Float
+
+  @@index([camadaId, versao])
+  @@index([camadaId, minLng, maxLng, minLat, maxLat])
+}
+
+model WebmapIcone {
+  id         String   @id @default(uuid())
+  sha256     String   @unique
+  origem     String
+  mimeType   String
+  storageKey String
+  url        String
+  createdAt  DateTime @default(now())
+}

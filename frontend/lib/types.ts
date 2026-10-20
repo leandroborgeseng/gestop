@@ -1629,3 +1629,38 @@ export type DocumentoValidacaoPublica = {
   }>;
   valido: boolean;
 };
+
+// 296 — camadas Webmap (somente aditivo)
+export type WebmapCamadasStatusCamada = 'nova' | 'atualizada' | 'sem_mudanca' | 'reativada' | 'removida_origem';
+export type WebmapCamadasErro = { camada: string; elemento: string | null; motivo: string };
+export type WebmapCamadasContagem = { pontos: number; linhas: number; poligonos: number };
+export type WebmapCamadasSimulacao = {
+  simulacaoId: string;
+  fonte: string;
+  commitSha: string;
+  fonteHash: string;
+  criadaEm: string;
+  expiraEm: string;
+  grupos: number;
+  camadas: number;
+  elementos: WebmapCamadasContagem & { total: number };
+  novas: number;
+  atualizadas: number;
+  semMudanca: number;
+  reativadas: number;
+  removidasOrigem: number;
+  camadasDetalhe: Array<{ chaveOrigem: string; grupo: string; nomeOriginal: string; variavel: string; ordem: number; status: WebmapCamadasStatusCamada; elementos: WebmapCamadasContagem; erros: number; bytes: number }>;
+  erros: WebmapCamadasErro[];
+  totalErros: number;
+  resultadoPrevisto: 'SUCESSO' | 'PARCIAL';
+};
+export type WebmapCamadasAplicacao = Omit<WebmapCamadasSimulacao, 'resultadoPrevisto'> & { aplicadaEm: string; resultado: 'SUCESSO' | 'PARCIAL'; duracaoMs: number; icones: number };
+export type WebmapCamadasHistoricoItem = { id: string; createdAt: string; dataHoraBrt: string; tipo: 'SIMULACAO' | 'APLICACAO'; resultado: 'SUCESSO' | 'PARCIAL' | 'FALHA'; usuario: string; camadas?: number; totalErros?: number; motivo?: string };
+export type WebmapCamadasStatus = {
+  fonte: string;
+  emAndamento: { tipo: 'SIMULACAO' | 'APLICACAO'; usuario: string; desde: string; desdeBrt: string; fase: 'lendo_fonte' | 'comparando' | 'gravando' } | null;
+  ultima: WebmapCamadasHistoricoItem | null;
+  camadas: number;
+  ativas: number;
+  removidasOrigem: number;
+};

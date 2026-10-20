@@ -2128,3 +2128,45 @@ export function getPublicDocumentoValidacaoPorDocumento(codigoDocumento: string,
     `/public/documentos/validar-por-documento?${query.toString()}`,
   );
 }
+
+// 296 — Importar apenas camadas Webmap (somente aditivo)
+export function getWebmapCamadasStatus() {
+  return request<import('./types').WebmapCamadasStatus>('/admin/importacao/webmap-camadas/status');
+}
+
+export function getWebmapCamadasHistorico(limit = 10) {
+  return request<import('./types').WebmapCamadasHistoricoItem[]>(`/admin/importacao/webmap-camadas/historico?limit=${limit}`);
+}
+
+export function simularWebmapCamadas() {
+  return request<import('./types').WebmapCamadasSimulacao>('/admin/importacao/webmap-camadas/simular', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+}
+
+export function aplicarWebmapCamadas(simulacaoId: string) {
+  return request<import('./types').WebmapCamadasAplicacao>('/admin/importacao/webmap-camadas/aplicar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ simulacaoId }),
+  });
+}
+
+export async function downloadWebmapCamadasErrosCsv(simulacaoId: string) {
+  const token = getStoredAuth()?.accessToken;
+  const response = await fetch(`${API_BASE_URL}/admin/importacao/webmap-camadas/erros.csv?simulacaoId=${encodeURIComponent(simulacaoId)}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error('Não foi possível baixar o CSV de erros.');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `erros-camadas-webmap-${simulacaoId.slice(0, 8)}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
