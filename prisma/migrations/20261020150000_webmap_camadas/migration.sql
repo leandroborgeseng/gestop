@@ -81,10 +81,11 @@ CREATE TABLE "WebmapElemento" (
     "geometriaOriginal" JSONB,
     "corrigida" BOOLEAN NOT NULL DEFAULT false,
     "atributos" JSONB NOT NULL,
-    "minLng" DOUBLE PRECISION NOT NULL,
-    "minLat" DOUBLE PRECISION NOT NULL,
-    "maxLng" DOUBLE PRECISION NOT NULL,
-    "maxLat" DOUBLE PRECISION NOT NULL,
+    "minLng" DOUBLE PRECISION,
+    "minLat" DOUBLE PRECISION,
+    "maxLng" DOUBLE PRECISION,
+    "maxLat" DOUBLE PRECISION,
+    "geometriaInvalida" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "WebmapElemento_pkey" PRIMARY KEY ("id")
 );
@@ -143,6 +144,9 @@ CREATE INDEX "WebmapElemento_camadaId_versao_idx" ON "WebmapElemento"("camadaId"
 
 -- CreateIndex
 CREATE INDEX "WebmapElemento_camadaId_minLng_maxLng_minLat_maxLat_idx" ON "WebmapElemento"("camadaId", "minLng", "maxLng", "minLat", "maxLat");
+
+-- CreateIndex (versão/camada + bbox; o índice acima, sem versão, é mantido por decisão do TL)
+CREATE INDEX "WebmapElemento_camadaId_versao_minLng_maxLng_minLat_maxLat_idx" ON "WebmapElemento"("camadaId", "versao", "minLng", "maxLng", "minLat", "maxLat");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "WebmapIcone_sha256_key" ON "WebmapIcone"("sha256");
