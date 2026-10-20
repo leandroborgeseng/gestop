@@ -1629,3 +1629,43 @@ export type DocumentoValidacaoPublica = {
   }>;
   valido: boolean;
 };
+
+// 296 — camadas Webmap (somente aditivo)
+export type WebmapCamadasStatusCamada = 'nova' | 'atualizada' | 'sem_mudanca' | 'reativada' | 'removida_origem';
+export type WebmapCamadasResultado = 'SUCESSO' | 'OK_COM_AVISOS' | 'PARCIAL' | 'FALHA';
+export type WebmapCamadasErro = { grupo?: string; camada: string; elemento: string | null; motivo: string };
+export type WebmapCamadasContagem = { pontos: number; linhas: number; poligonos: number };
+export type WebmapCamadasResumo = {
+  simulacaoId: string;
+  fonte: string;
+  commitSha: string;
+  fonteHash: string;
+  grupos: number;
+  camadas: number;
+  elementos: WebmapCamadasContagem & { total: number };
+  corrigidos: number;
+  invalidos: number;
+  novas: number;
+  atualizadas: number;
+  semMudanca: number;
+  reativadas: number;
+  removidasOrigem: number;
+  /** Informativo: camadas só com posição nova (já contadas no seu status). */
+  reordenadas?: number;
+  camadasDetalhe?: Array<{ chaveOrigem: string; grupo: string; nomeOriginal: string; variavel: string; ordem: number; status: WebmapCamadasStatusCamada; reordenada?: boolean; elementos: WebmapCamadasContagem; corrigidos: number; invalidos: number; bytes: number }>;
+  erros: WebmapCamadasErro[];
+  totalErros: number;
+};
+export type WebmapCamadasSimulacao = WebmapCamadasResumo & { criadaEm: string; expiraEm: string; resultadoPrevisto: Exclude<WebmapCamadasResultado, 'FALHA'> };
+export type WebmapCamadasAplicacaoIniciada = { importacaoId: string; status: 'EM_ANDAMENTO'; iniciadoEm: string; iniciadoEmBrt: string };
+export type WebmapCamadasHistoricoItem = { id: string; createdAt: string; dataHoraBrt: string; tipo: 'SIMULACAO' | 'APLICACAO'; resultado: WebmapCamadasResultado; usuario: string; camadas?: number; totalErros?: number; motivo?: string };
+export type WebmapCamadasFase = 'lendo_fonte' | 'comparando' | 'gravando' | 'ativando' | 'limpando';
+export type WebmapCamadasStatus = {
+  fonte: string;
+  emAndamento: { tipo: 'SIMULACAO' | 'APLICACAO'; usuario: string; desde: string; desdeBrt: string; fase: WebmapCamadasFase; importacaoId: string | null } | null;
+  ultimaImportacao: { id: string; status: WebmapCamadasResultado | 'EM_ANDAMENTO'; usuario: string; iniciadoEmBrt: string; concluidoEmBrt: string | null; motivo: string | null; resultado: (WebmapCamadasResumo & { resultado: WebmapCamadasResultado }) | null } | null;
+  ultima: WebmapCamadasHistoricoItem | null;
+  camadas: number;
+  ativas: number;
+  removidasOrigem: number;
+};

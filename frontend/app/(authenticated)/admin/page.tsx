@@ -15,6 +15,7 @@ import { BookOpen, Building2, Briefcase, ClipboardList, DatabaseBackup, Download
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
+import { WebmapCamadasPanel } from '@/components/admin/webmap-camadas-panel';
 import { BackupPanel } from '@/components/admin/backup-panel';
 import { EmailConfigPanel } from '@/components/admin/email-config-panel';
 import { PageShell } from '@/components/layout/page-shell';
@@ -171,6 +172,7 @@ export default function AdminPage() {
   const user = useSessionUser();
   const permissoes = user?.permissoes ?? [];
   const [tab, setTab] = useState<Tab | null>(null);
+  const importacaoCaps = useAdminCaps('importacao');
   const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
   const [unidades, setUnidades] = useState<AdminUnidade[]>([]);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
@@ -351,7 +353,10 @@ export default function AdminPage() {
         {tab === 'backup' ? <BackupPanel /> : null}
         {tab === 'email' ? <EmailConfigPanel /> : null}
         {!loading && tab === 'importacao' ? (
-          <ImportacaoPanel onSynced={() => void load()} />
+          <div className="space-y-6">
+            <ImportacaoPanel onSynced={() => void load()} />
+            <WebmapCamadasPanel canExec={importacaoCaps.canExec} />
+          </div>
         ) : null}
         {!loading && tab === 'auditoria' ? <AuditoriaPanel /> : null}
         {tab === 'documentacao' ? <DocumentacaoEngenhariaPanel /> : null}
