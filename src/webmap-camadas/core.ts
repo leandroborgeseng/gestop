@@ -97,6 +97,8 @@ export function fonteHashDe(list: ListagemFonte, declaradas: Array<{ arquivo: st
 export type PlanoCamada = {
   chaveOrigem: string; grupo: string; grupoChave: string; nomeOriginal: string; variavel: string; arquivo: string; familia: GeometriaFamilia;
   ordem: number; shaArquivo: string; shaEstilo: string | null; status: StatusCamada; conteudoMudou: boolean; metaMudou: boolean; bytes: number; camadaId: string | null;
+  /** Só a posição mudou (camada ou grupo). Não muda o status; a ordem nova é gravada. */
+  reordenada: boolean;
 };
 
 type Existente = Prisma.WebmapCamadaGetPayload<{ include: { grupo: true } }>;
@@ -109,30 +111,34 @@ function planejar(leitura: Leitura, existentes: Existente[]): PlanoCamada[] {
     const shaArquivo = leitura.list.layers.get(d.arquivo)!.sha;
     const shaEstilo = d.estiloArquivo ? leitura.list.styles.get(d.estiloArquivo)!.sha : null;
     const conteudoMudou = !ativo || ativo.shaArquivo !== shaArquivo;
-    const metaMudou = !!ativo && (ativo.shaEstilo !== shaEstilo || ativo.nomeOriginal !== d.titulo || ativo.grupo.chaveOrigem !== d.grupoChave || ativo.ordem !== d.ordem || ativo.varOrigem !== d.variavel || ativo.grupo.titulo !== d.grupo || ativo.grupo.ordem !== d.grupoOrdem);
+    const metaMudou = !!ativo && (ativo.shaEstilo !== shaEstilo || ativo.nomeOriginal !== d.titulo || ativo.grupo.chaveOrigem !== d.grupoChave || ativo.varOrigem !== d.variavel || ativo.grupo.titulo !== d.grupo);
+    // `ordem` fora da comparação: camada só reordenada é "Sem mudança" (contador informativo à parte).
+    const reordenada = !!ativo && (ativo.ordem !== d.ordem || ativo.grupo.ordem !== d.grupoOrdem);
     const status: StatusCamada = !ativo ? 'nova' : !ativo.ativo || ativo.removidaOrigem ? 'reativada' : conteudoMudou || metaMudou ? 'atualizada' : 'sem_mudanca';
-    return { chaveOrigem: d.chave, grupo: d.grupo, grupoChave: d.grupoChave, nomeOriginal: d.titulo, variavel: d.variavel, arquivo: d.arquivo, familia: d.familia, ordem: d.ordem, shaArquivo, shaEstilo, status, conteudoMudou, metaMudou, bytes: leitura.list.layers.get(d.arquivo)!.bytes, camadaId: ex?.id ?? null };
+    return { chaveOrigem: d.chave, grupo: d.grupo, grupoChave: d.grupoChave, nomeOriginal: d.titulo, variavel: d.variavel, arquivo: d.arquivo, familia: d.familia, ordem: d.ordem, shaArquivo, shaEstilo, status, conteudoMudou, metaMudou, reordenada, bytes: leitura.list.layers.get(d.arquivo)!.bytes, camadaId: ex?.id ?? null };
   });
   const naFonte = new Set(plano.map((p) => p.chaveOrigem));
   for (const ex of existentes) {
     if (naFonte.has(ex.chaveOrigem) || ex.removidaOrigem || !ex.versaoAtual) continue;
-    plano.push({ chaveOrigem: ex.chaveOrigem, grupo: ex.grupo.titulo, grupoChave: ex.grupo.chaveOrigem, nomeOriginal: ex.nomeOriginal, variavel: ex.varOrigem, arquivo: ex.arquivoOrigem, familia: (ex.geometriaTipo as GeometriaFamilia) ?? 'POINT', ordem: ex.ordem, shaArquivo: ex.shaArquivo, shaEstilo: ex.shaEstilo, status: 'removida_origem', conteudoMudou: false, metaMudou: false, bytes: ex.bytesOrigem, camadaId: ex.id });
+    plano.push({ chaveOrigem: ex.chaveOrigem, grupo: ex.grupo.titulo, grupoChave: ex.grupo.chaveOrigem, nomeOriginal: ex.nomeOriginal, variavel: ex.varOrigem, arquivo: ex.arquivoOrigem, familia: (ex.geometriaTipo as GeometriaFamilia) ?? 'POINT', ordem: ex.ordem, shaArquivo: ex.shaArquivo, shaEstilo: ex.shaEstilo, status: 'removida_origem', conteudoMudou: false, metaMudou: false, reordenada: false, bytes: ex.bytesOrigem, camadaId: ex.id });
   }
   return plano;
 }
 
-export type ResumoCamada = { chaveOrigem: string; grupo: string; nomeOriginal: string; variavel: string; ordem: number; status: StatusCamada; elementos: Contagem; corrigidos: number; invalidos: number; bytes: number };
+export type ResumoCamada = { chaveOrigem: string; grupo: string; nomeOriginal: string; variavel: string; ordem: number; status: StatusCamada; reordenada?: boolean; elementos: Contagem; corrigidos: number; invalidos: number; bytes: number };
 export type ResultadoSimulacao = {
   simulacaoId: string; fonte: string; commitSha: string; fonteHash: string; criadaEm: string; expiraEm: string;
   grupos: number; camadas: number; elementos: Contagem & { total: number }; corrigidos: number; invalidos: number;
   novas: number; atualizadas: number; semMudanca: number; reativadas: number; removidasOrigem: number;
+  /** Informativo: camadas com posição nova (já contadas no seu status). */
+  reordenadas: number;
   camadasDetalhe: ResumoCamada[]; erros: ErroLeitura[]; totalErros: number; resultadoPrevisto: Resultado;
 };
 
 function resumir(base: { fonte: string; commitSha: string; fonteHash: string; grupos: number }, plano: PlanoCamada[], stats: Map<string, { contagem: Contagem; corrigidos: number; invalidos: number; erros: ErroLeitura[] }>): Omit<ResultadoSimulacao, 'simulacaoId' | 'criadaEm' | 'expiraEm' | 'resultadoPrevisto'> & { resultadoPrevisto: Resultado } {
   const det: ResumoCamada[] = plano.map((p) => {
     const s = stats.get(p.chaveOrigem) ?? { contagem: { pontos: 0, linhas: 0, poligonos: 0 }, corrigidos: 0, invalidos: 0, erros: [] };
-    return { chaveOrigem: p.chaveOrigem, grupo: p.grupo, nomeOriginal: p.nomeOriginal, variavel: p.variavel, ordem: p.ordem, status: p.status, elementos: s.contagem, corrigidos: s.corrigidos, invalidos: s.invalidos, bytes: p.bytes };
+    return { chaveOrigem: p.chaveOrigem, grupo: p.grupo, nomeOriginal: p.nomeOriginal, variavel: p.variavel, ordem: p.ordem, status: p.status, ...(p.reordenada ? { reordenada: true } : {}), elementos: s.contagem, corrigidos: s.corrigidos, invalidos: s.invalidos, bytes: p.bytes };
   });
   const ativos = det.filter((d) => d.status !== 'removida_origem');
   const tot = ativos.reduce((a, d) => ({ pontos: a.pontos + d.elementos.pontos, linhas: a.linhas + d.elementos.linhas, poligonos: a.poligonos + d.elementos.poligonos }), { pontos: 0, linhas: 0, poligonos: 0 });
@@ -142,7 +148,7 @@ function resumir(base: { fonte: string; commitSha: string; fonteHash: string; gr
   const by = (s: StatusCamada) => det.filter((d) => d.status === s).length;
   return {
     ...base, camadas: ativos.length, elementos: { ...tot, total: tot.pontos + tot.linhas + tot.poligonos }, corrigidos, invalidos,
-    novas: by('nova'), atualizadas: by('atualizada'), semMudanca: by('sem_mudanca'), reativadas: by('reativada'), removidasOrigem: by('removida_origem'),
+    novas: by('nova'), atualizadas: by('atualizada'), semMudanca: by('sem_mudanca'), reativadas: by('reativada'), removidasOrigem: by('removida_origem'), reordenadas: det.filter((d) => d.reordenada).length,
     camadasDetalhe: det, erros, totalErros: erros.length, resultadoPrevisto: resultadoDe(corrigidos, invalidos),
   };
 }
@@ -398,7 +404,10 @@ export async function executarAplicacao(
           await tx.webmapCamada.update({ where: { chaveOrigem: p.chaveOrigem }, data: { ativo: false, removidaOrigem: true, removidaEm: agora } });
           continue;
         }
-        if (p.status === 'sem_mudanca') continue;
+        if (p.status === 'sem_mudanca') {
+          if (p.reordenada) await tx.webmapCamada.update({ where: { chaveOrigem: p.chaveOrigem }, data: { ordem: p.ordem } });
+          continue;
+        }
         const d = decl.get(p.chaveOrigem)!;
         const estilo = parseStyle(d.estiloTexto);
         if (estilo.icone) {

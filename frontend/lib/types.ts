@@ -1650,7 +1650,9 @@ export type WebmapCamadasResumo = {
   semMudanca: number;
   reativadas: number;
   removidasOrigem: number;
-  camadasDetalhe?: Array<{ chaveOrigem: string; grupo: string; nomeOriginal: string; variavel: string; ordem: number; status: WebmapCamadasStatusCamada; elementos: WebmapCamadasContagem; corrigidos: number; invalidos: number; bytes: number }>;
+  /** Informativo: camadas só com posição nova (já contadas no seu status). */
+  reordenadas?: number;
+  camadasDetalhe?: Array<{ chaveOrigem: string; grupo: string; nomeOriginal: string; variavel: string; ordem: number; status: WebmapCamadasStatusCamada; reordenada?: boolean; elementos: WebmapCamadasContagem; corrigidos: number; invalidos: number; bytes: number }>;
   erros: WebmapCamadasErro[];
   totalErros: number;
 };

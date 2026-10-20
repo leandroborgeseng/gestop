@@ -65,6 +65,11 @@ function Resumo({ titulo, resumo, csv }: { titulo: string; resumo: WebmapCamadas
           </div>
         ))}
       </dl>
+      {resumo.reordenadas ? (
+        <p className="md-body-sm text-[var(--md-on-surface-variant)]" data-testid="webmap-reordenadas">
+          Reordenadas: {resumo.reordenadas} (informativo; só mudou a posição, contam como Sem mudança e a ordem nova é gravada)
+        </p>
+      ) : null}
       {resumo.camadasDetalhe?.some((c) => c.status !== 'sem_mudanca') ? (
         <ul className="md-body-md list-disc pl-5">
           {resumo.camadasDetalhe

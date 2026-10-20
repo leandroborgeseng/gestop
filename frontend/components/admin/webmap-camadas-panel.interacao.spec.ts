@@ -63,3 +63,19 @@ describe('296 · WebmapCamadasPanel', () => {
     expect((screen.getByRole('button', { name: /Importar apenas camadas Webmap/ }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
+
+describe('296 pacote (c) · reordenadas', () => {
+  it('contador informativo separado aparece só quando > 0', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockResolvedValue({ ...sim(0), reordenadas: 3 });
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    expect(screen.getByTestId('webmap-reordenadas').textContent).toMatch(/^Reordenadas: 3 \(informativo/);
+    cleanup();
+    api.simularWebmapCamadas.mockResolvedValue({ ...sim(0), reordenadas: 0 });
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    expect(screen.queryByTestId('webmap-reordenadas')).toBeNull();
+  });
+});
