@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { repararGeometria } from './repair';
+import { MAX_VERTICES_REPARO, repararGeometria } from './repair';
 import { FeatureStreamSplitter } from './stream';
 
 describe('296 — correção de geometria (sem PostGIS)', () => {
@@ -29,5 +31,21 @@ describe('296 — correção de geometria (sem PostGIS)', () => {
     const t = new FeatureStreamSplitter(() => undefined);
     t.push(txt.slice(0, 80));
     expect(() => t.end()).toThrow(/truncado/);
+  });
+  it('polígono real que estoura a pilha do polygon-clipping vira "irreparável" sem lançar', () => {
+    const f = JSON.parse(readFileSync(join(__dirname, '../../test/fixtures/webmap-camadas/pilha/poligono-estouro-pilha.json'), 'utf8'));
+    const r = repararGeometria(f.geometry);
+    expect(r).toMatchObject({ status: 'invalida' });
+    expect((r as { motivo: string }).motivo).toMatch(/^Polígono irreparável/);
+  });
+
+  it('auto-interseção num polígono acima do limite de vértices não roda a união (erro, sem estourar memória)', () => {
+    const n = MAX_VERTICES_REPARO + 10;
+    const ring = Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2; return [Math.cos(a) * (i % 2 ? 1 : 0.5), Math.sin(a) * (i % 2 ? 1 : 0.5)]; });
+    ring.push([1.2, 0.0], [-1.2, 0.01]);
+    ring.push(ring[0]);
+    const r = repararGeometria({ type: 'Polygon', coordinates: [ring] });
+    expect(r).toMatchObject({ status: 'invalida' });
+    expect((r as { motivo: string }).motivo).toMatch(/grande demais/);
   });
 });

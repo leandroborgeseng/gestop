@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseLayersJs, parseStyle, readFeatures } from './parse';
+import { parseLayersJs, parseStyle, processarFeature, readFeatures } from './parse';
 import { simplificar, simplificarGeometria } from './core';
 
 const FIX = join(__dirname, '../../test/fixtures/webmap-camadas');
@@ -41,5 +41,15 @@ describe('296 — parser qgis2web (fixtures locais, sem rede)', () => {
     expect(simplificar(line, 1e-3)).toEqual([line[0], line[100]]);
     const poly = simplificarGeometria({ type: 'Polygon', coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] }, 10);
     expect((poly.coordinates as number[][][])[0]).toHaveLength(4);
+  });
+  it('bbox por feição (minLng, minLat, maxLng, maxLat) para polígono, linha e ponto', () => {
+    const bbox = (geometry: unknown) => {
+      const r = processarFeature({ properties: { fid: '1' }, geometry }, 0, 'X');
+      if ('erro' in r) throw new Error(r.erro.motivo);
+      return r.elemento.bbox;
+    };
+    expect(bbox({ type: 'Polygon', coordinates: [[[-47.5, -20.6], [-47.3, -20.6], [-47.3, -20.4], [-47.5, -20.4], [-47.5, -20.6]]] })).toEqual([-47.5, -20.6, -47.3, -20.4]);
+    expect(bbox({ type: 'MultiLineString', coordinates: [[[-47.41, -20.52], [-47.40, -20.50]], [[-47.45, -20.55], [-47.44, -20.51]]] })).toEqual([-47.45, -20.55, -47.4, -20.5]);
+    expect(bbox({ type: 'Point', coordinates: [-47.4, -20.53] })).toEqual([-47.4, -20.53, -47.4, -20.53]);
   });
 });

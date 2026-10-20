@@ -5,13 +5,13 @@
  * no mesmo banco em paralelo; por isso é pulado quando a URL é igual a DATABASE_URL.
  */
 import { spawn } from 'node:child_process';
-import { cpSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { executarAplicacao, FonteMudouError, PgSessionLock, recuperarInterrompidas, ResultadoSimulacao, simular } from './core';
+import { executarAplicacao, FonteMudouError, HEARTBEAT_LIMITE_MS, PgSessionLock, recuperarInterrompidas, ResultadoSimulacao, simular } from './core';
 import { DiretorioWebmapFonte } from './source';
 import { WebmapCamadasService } from './webmap-camadas.service';
 
@@ -74,6 +74,11 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
 
   it('roda em Postgres sem extensões além de plpgsql', () => {
     expect(evid.extensoes).toEqual(['plpgsql']);
+  });
+
+  it('índice composto versão/camada + bbox existe (migration aditiva, sem PostGIS)', async () => {
+    const ix = await prisma.$queryRawUnsafe<Array<{ indexdef: string }>>(`SELECT indexdef FROM pg_indexes WHERE tablename = 'WebmapElemento'`);
+    expect(ix.map((i) => i.indexdef).join('\n')).toContain('("camadaId", versao, "minLng", "maxLng", "minLat", "maxLat")');
   });
 
   it('simulação não grava nada (md5 de TODAS as tabelas igual)', async () => {
@@ -242,6 +247,77 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
     expect(flat.every((c) => c.ligadaPorPadrao === false)).toBe(true);
     const gj = await service.geojson(flat.find((c) => c.nomeOriginal.startsWith('CRECHE'))!.camadaId);
     expect(gj.features).toHaveLength(3);
+    // bbox gravado por feição confere com a geometria
+    const errados = await prisma.$queryRawUnsafe<Array<{ n: bigint }>>(`SELECT count(*) n FROM "WebmapElemento" WHERE "minLng" > "maxLng" OR "minLat" > "maxLat"`);
+    expect(Number(errados[0].n)).toBe(0);
     evid.final = await md5(OPERACIONAIS);
   });
+  /** Cópia temporária de uma fixture com um arquivo de camada alterado. */
+  const variante = (base: string, arquivo: string, mudar: (txt: string) => string) => {
+    const dir = mkdtempSync(join(tmpdir(), 'webmap296-'));
+    cpSync(join(FIX, base), dir, { recursive: true });
+    const p = join(dir, 'layers', arquivo);
+    writeFileSync(p, mudar(readFileSync(p, 'utf8')));
+    return dir;
+  };
+  const acrescentarFeature = (txt: string, feat: string) => { const i = txt.lastIndexOf(']'); return `${txt.slice(0, i)}, ${feat}${txt.slice(i)}`; };
+
+  it('polígono real que estoura a pilha do reparo (FAZENDA_NOVA_ESPERANCA fid 431) vira erro do elemento no CSV; camada e job seguem (no worker)', async () => {
+    const enorme = readFileSync(join(FIX, 'pilha/poligono-estouro-pilha.json'), 'utf8');
+    const dir = variante('v1', 'ETE_2_100.js', (t) => acrescentarFeature(t, enorme));
+    const service = new WebmapCamadasService(prisma as never, { persistBuffer: async () => ({ storageKey: 'k', url: '/u' }) } as never);
+    service.usarFonte(fonte(dir), URL);
+    const operAntes = await md5(OPERACIONAIS);
+    const sim = await service.simular(user);
+    expect(sim.erros.some((e) => e.camada.startsWith('ETE 2') || e.camada.startsWith('ETE_2'))).toBe(true);
+    await service.aplicar(user, sim.simulacaoId);
+    await service.execucao;
+    const st = await service.status();
+    expect(st.ultimaImportacao).toMatchObject({ status: 'PARCIAL' });
+    const ete = (await prisma.webmapCamada.findMany({ where: { arquivoOrigem: 'ETE_2_100.js' } }))[0];
+    expect(ete.ativo).toBe(true);
+    expect(ete.totalInvalidos).toBe(1);
+    expect(ete.totalElementos).toBeGreaterThan(0);
+    const csv = await service.errosCsv();
+    expect(csv).toMatch(/"431";"Polígono irreparável \(Maximum call stack size exceeded\)"/);
+    expect(await md5(OPERACIONAIS)).toEqual(operAntes);
+  }, 120_000);
+
+  it('heartbeat bate por lote: camada pesada mais longa que o limite não vira FALHA no meio', async () => {
+    const pts = Array.from({ length: 3000 }, (_, i) => `{"type": "Feature", "properties": {"fid": "hb${i}"}, "geometry": {"type": "Point", "coordinates": [${-47.4 + i * 1e-5}, -20.5]}}`).join(', ');
+    const dir = variante('v1', 'PONTO_VICIADO_120.js', (t) => acrescentarFeature(t, pts));
+    const f = fonte(dir);
+    const s = (await simular(prisma, f)).resultado;
+    const limiteMs = 800; // no teste o "limite" é 0,8 s; cada lote demora 0,3 s e a camada ~2 s (> limite)
+    const lock = new PgSessionLock(URL!);
+    expect(await lock.tentar()).toBe(true);
+    const job = await prisma.webmapImportacao.create({ data: { status: 'EM_ANDAMENTO', usuarioNome: user.nome, simulacaoId: s.simulacaoId, fonteHash: s.fonteHash, heartbeatEm: new Date() } });
+    const idades: number[] = [];
+    let lotesCamadaPesada = 0;
+    const inicio = Date.now();
+    try {
+      const r = await executarAplicacao(prisma, f, job.id, s, {
+        icones: async (_b, _m, sha) => ({ storageKey: `webmap-icones/${sha}`, url: `/u/${sha}` }),
+        batimento: async () => { await prisma.webmapImportacao.update({ where: { id: job.id }, data: { heartbeatEm: new Date() } }); },
+        aposLote: async ({ camada }) => {
+          if (!camada.includes('PONTO_VICIADO')) return;
+          lotesCamadaPesada++;
+          await new Promise((res) => setTimeout(res, 300));
+          const j = await prisma.webmapImportacao.findUniqueOrThrow({ where: { id: job.id } });
+          idades.push(Date.now() - j.heartbeatEm.getTime());
+          // o mesmo critério da recuperação: sem heartbeat há > limite => seria FALHA
+          expect(await prisma.webmapImportacao.count({ where: { id: job.id, status: 'EM_ANDAMENTO', heartbeatEm: { lt: new Date(Date.now() - limiteMs) } } })).toBe(0);
+        },
+      });
+      expect(r.resultado).not.toBe('FALHA');
+    } finally {
+      await lock.liberar();
+    }
+    expect(lotesCamadaPesada).toBeGreaterThanOrEqual(6);
+    expect(Date.now() - inicio).toBeGreaterThan(limiteMs * 2);
+    expect(Math.max(...idades)).toBeLessThan(limiteMs);
+    expect(HEARTBEAT_LIMITE_MS).toBe(60_000);
+    await prisma.webmapImportacao.update({ where: { id: job.id }, data: { status: 'SUCESSO', concluidoEm: new Date() } });
+    expect(await recuperarInterrompidas(prisma, new PgSessionLock(URL!), limiteMs)).toEqual([]);
+  }, 60_000);
 });

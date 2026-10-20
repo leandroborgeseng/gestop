@@ -8,6 +8,7 @@ import {
   SIMULACAO_TTL_MS, simplificarGeometria, simular, toleranciaPorZoom, WEBMAP_CAMADAS_ENTIDADE,
 } from './core';
 import type { ErroLeitura } from './parse';
+import { leitorEmWorker } from './job';
 import { GithubWebmapFonte, WebmapCamadasFonte } from './source';
 
 const LIMITE_ELEMENTOS_RESPOSTA = 5000;
@@ -41,6 +42,12 @@ export class WebmapCamadasService implements OnModuleInit {
   usarFonte(fonte: WebmapCamadasFonte, lockUrl?: string) {
     this.fonte = fonte;
     if (lockUrl) this.lockUrl = lockUrl;
+  }
+
+  /** Job em worker com heap limitado (padrão). WEBMAP_CAMADAS_WORKER=0 roda no próprio processo. */
+  private usarWorker() {
+    if (process.env.WEBMAP_CAMADAS_WORKER === '0' || !this.lockUrl) return null;
+    return this.fonte.config ?? null;
   }
 
   async onModuleInit() {
@@ -87,7 +94,15 @@ export class WebmapCamadasService implements OnModuleInit {
     try {
       const job = await this.db.webmapImportacao.findFirst({ where: { status: 'EM_ANDAMENTO' }, orderBy: { iniciadoEm: 'desc' } });
       if (job) throw this.conflito({ usuario: job.usuarioNome, desde: job.iniciadoEm });
-      const { resultado } = await simular(this.db, this.fonte, (f) => { if (this.simulando) this.simulando.fase = f; });
+      const onFase = (f: Fase) => { if (this.simulando) this.simulando.fase = f; };
+      const cfg = this.usarWorker();
+      const leitor = cfg ? leitorEmWorker(this.lockUrl, cfg) : undefined;
+      let resultado: ResultadoSimulacao;
+      try {
+        resultado = (await simular(this.db, this.fonte, onFase, leitor)).resultado;
+      } finally {
+        await leitor?.fechar();
+      }
       this.purgar();
       this.simulacoes.set(resultado.simulacaoId, { ...resultado, usuarioId: user.sub });
       await this.log(user, 'SIMULACAO', resultado.resultadoPrevisto, this.semDetalhe(resultado));
@@ -130,16 +145,32 @@ export class WebmapCamadasService implements OnModuleInit {
       void this.db.webmapImportacao.update({ where: { id: importacaoId }, data: { heartbeatEm: new Date(), fase } }).catch(() => undefined);
     }, HEARTBEAT_MS);
     try {
-      const r = await executarAplicacao(this.db, this.fonte, importacaoId, sim, {
-        onFase: (f) => {
+      let ultimoBatimento = 0;
+      const cb = {
+        onFase: (f: Fase) => {
           fase = f;
           void this.db.webmapImportacao.update({ where: { id: importacaoId }, data: { fase: f, heartbeatEm: new Date() } }).catch(() => undefined);
         },
-        icones: async (buf, mime) => {
+        // heartbeat também por lote (além do timer): camada pesada > 60 s continua dando sinal de vida
+        batimento: () => {
+          if (Date.now() - ultimoBatimento < 2000) return;
+          ultimoBatimento = Date.now();
+          void this.db.webmapImportacao.update({ where: { id: importacaoId }, data: { heartbeatEm: new Date() } }).catch(() => undefined);
+        },
+        leitor: undefined as ReturnType<typeof leitorEmWorker> | undefined,
+        icones: async (buf: Buffer, mime: string) => {
           const s = await this.storage.persistBuffer(buf, mime, 'webmap-icones');
           return { storageKey: s.storageKey, url: s.url };
         },
-      });
+      };
+      const cfg = this.usarWorker();
+      if (cfg) cb.leitor = leitorEmWorker(this.lockUrl, cfg);
+      let r;
+      try {
+        r = await executarAplicacao(this.db, this.fonte, importacaoId, sim, cb);
+      } finally {
+        await cb.leitor?.fechar();
+      }
       await this.db.webmapImportacao.update({ where: { id: importacaoId }, data: { resultado: this.semDetalhe(r) as unknown as Prisma.InputJsonValue } });
       await this.log(user, 'APLICACAO', r.resultado, this.semDetalhe(r)).catch(() => undefined);
     } catch (error) {

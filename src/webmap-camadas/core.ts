@@ -6,6 +6,8 @@ import {
   CamadaDeclarada, ElementoLido, ErroLeitura, EstiloNormalizado, FAMILIA, GeometriaFamilia, lerElementosStream, nomeBaseCamada, parseLayersJs, parseStyle,
 } from './parse';
 import type { ListagemFonte, WebmapCamadasFonte } from './source';
+import { AlvoCamada, AlvoGravacao, contarCamada, Contagem, gravarCamada, novoStats, Stats } from './camada-io';
+export type { Contagem, Stats } from './camada-io';
 
 export const WEBMAP_CAMADAS_ENTIDADE = 'WebmapCamadasImport';
 export const SIMULACAO_TTL_MS = 30 * 60 * 1000;
@@ -13,14 +15,10 @@ export const MAX_ERROS_TELA = 50;
 export const HEARTBEAT_MS = 10_000;
 export const HEARTBEAT_LIMITE_MS = 60_000;
 export const LOCK_KEY = 296_000_296;
-const LOTE_ELEMENTOS = 500;
-const LOTE_BYTES = 4 * 1024 * 1024;
 
 export type Fase = 'lendo_fonte' | 'comparando' | 'gravando' | 'ativando' | 'limpando';
 export type StatusCamada = 'nova' | 'atualizada' | 'sem_mudanca' | 'reativada' | 'removida_origem';
 export type Resultado = 'SUCESSO' | 'OK_COM_AVISOS' | 'PARCIAL';
-export type Contagem = { pontos: number; linhas: number; poligonos: number };
-export type Stats = Contagem & { corrigidos: number; invalidos: number; erros: ErroLeitura[]; bbox: number[] };
 
 export class FonteMudouError extends Error {}
 export class ImportacaoEmAndamentoError extends Error {}
@@ -123,17 +121,6 @@ function planejar(leitura: Leitura, existentes: Existente[]): PlanoCamada[] {
   return plano;
 }
 
-function novoStats(): Stats {
-  return { pontos: 0, linhas: 0, poligonos: 0, corrigidos: 0, invalidos: 0, erros: [], bbox: [Infinity, Infinity, -Infinity, -Infinity] };
-}
-function somar(s: Stats, e: ElementoLido) {
-  if (e.familia === 'POINT') s.pontos++;
-  else if (e.familia === 'LINE') s.linhas++;
-  else s.poligonos++;
-  if (e.corrigida) s.corrigidos++;
-  s.bbox = [Math.min(s.bbox[0], e.bbox[0]), Math.min(s.bbox[1], e.bbox[1]), Math.max(s.bbox[2], e.bbox[2]), Math.max(s.bbox[3], e.bbox[3])];
-}
-
 export type ResumoCamada = { chaveOrigem: string; grupo: string; nomeOriginal: string; variavel: string; ordem: number; status: StatusCamada; elementos: Contagem; corrigidos: number; invalidos: number; bytes: number };
 export type ResultadoSimulacao = {
   simulacaoId: string; fonte: string; commitSha: string; fonteHash: string; criadaEm: string; expiraEm: string;
@@ -168,7 +155,21 @@ function statsGuardados(ex: Existente | undefined) {
 }
 
 /** Simulação: só lê (fonte em fluxo e banco). Não grava nada. */
-export async function simular(prisma: PrismaClient, fonte: WebmapCamadasFonte, onFase?: (f: Fase) => void): Promise<{ resultado: ResultadoSimulacao; plano: PlanoCamada[] }> {
+/** Quem lê/grava as camadas: no processo (padrão) ou no worker do job. */
+export type LeitorCamadas = {
+  contar: (a: AlvoCamada) => Promise<Stats>;
+  gravar: (a: AlvoGravacao, aposLote: (lote: number) => Promise<void> | void) => Promise<Stats>;
+  /** Libera o worker assim que a leitura acaba (antes de ativar a versão). */
+  fechar?: () => Promise<void>;
+};
+export function leitorNoProcesso(prisma: PrismaClient, fonte: WebmapCamadasFonte): LeitorCamadas {
+  return {
+    contar: (a) => contarCamada(fonte, a),
+    gravar: (a, aposLote) => gravarCamada((sql, params) => prisma.$executeRawUnsafe(sql, ...params), fonte, a, { aposLote }),
+  };
+}
+
+export async function simular(prisma: PrismaClient, fonte: WebmapCamadasFonte, onFase?: (f: Fase) => void, leitor: LeitorCamadas = leitorNoProcesso(prisma, fonte)): Promise<{ resultado: ResultadoSimulacao; plano: PlanoCamada[] }> {
   onFase?.('lendo_fonte');
   const leitura = await lerEstrutura(fonte);
   onFase?.('comparando');
@@ -176,15 +177,15 @@ export async function simular(prisma: PrismaClient, fonte: WebmapCamadasFonte, o
   const porChave = new Map(existentes.map((e) => [e.chaveOrigem, e]));
   const plano = planejar(leitura, existentes);
   const stats = new Map<string, { contagem: Contagem; corrigidos: number; invalidos: number; erros: ErroLeitura[] }>();
-  await mapLimit(plano, 2, async (p) => {
+  await mapLimit(plano, 1, async (p) => {
     if (!p.conteudoMudou || p.status === 'removida_origem') {
       stats.set(p.chaveOrigem, statsGuardados(porChave.get(p.chaveOrigem)));
       return;
     }
-    const s = novoStats();
-    await lerElementosStream(fonte.lerStream(`layers/${p.arquivo}`), p.nomeOriginal, p.grupo, (e) => somar(s, e), (e) => { s.invalidos++; s.erros.push(e); });
+    const s = await leitor.contar({ arquivo: p.arquivo, label: p.nomeOriginal, grupo: p.grupo });
     stats.set(p.chaveOrigem, { contagem: { pontos: s.pontos, linhas: s.linhas, poligonos: s.poligonos }, corrigidos: s.corrigidos, invalidos: s.invalidos, erros: s.erros });
   });
+  await leitor.fechar?.();
   const agora = new Date();
   const r = resumir({ fonte: fonte.descricao, commitSha: leitura.list.commitSha, fonteHash: fonteHashDe(leitura.list, leitura.declaradas), grupos: leitura.grupos.length }, plano, stats);
   return { resultado: { ...r, simulacaoId: randomUUID(), criadaEm: agora.toISOString(), expiraEm: new Date(agora.getTime() + SIMULACAO_TTL_MS).toISOString() }, plano };
@@ -259,6 +260,12 @@ export type OpcoesAplicacao = {
   aposLote?: (info: { camada: string; lote: number }) => Promise<void> | void;
   /** Testes: falha simulada depois de N camadas gravadas. */
   falharDepoisDe?: number;
+  /** Heartbeat por lote (além do timer do serviço): prova de vida mesmo se o laço ficar ocupado. */
+  batimento?: () => Promise<void> | void;
+  /** Medição/diagnóstico: chamado após cada camada gravada. */
+  aposCamada?: (chave: string) => void;
+  /** Leitura/gravação das camadas (padrão: no processo). O serviço usa o worker com heap limitado. */
+  leitor?: LeitorCamadas;
   tentativasPorCamada?: number;
 };
 
@@ -337,35 +344,14 @@ export async function executarAplicacao(
       await prisma.webmapCamadaVersao.upsert({ where: { id: versaoId }, create: { id: versaoId, camadaId, importacaoId, status: 'GRAVANDO', shaArquivo: p.shaArquivo }, update: { status: 'GRAVANDO' } });
       const tentativas = opts.tentativasPorCamada ?? 3;
       let s = novoStats();
+      const leitor = opts.leitor ?? leitorNoProcesso(prisma, fonte);
       for (let t = 1; ; t++) {
-        // retentativa da camada nunca duplica: apaga o que esta versão já tinha gravado
-        await prisma.webmapElemento.deleteMany({ where: { versao: versaoId } });
-        s = novoStats();
-        let lote: Prisma.WebmapElementoCreateManyInput[] = [];
-        let bytes = 0;
-        let nLote = 0;
-        const flush = async () => {
-          if (!lote.length) return;
-          await prisma.webmapElemento.createMany({ data: lote });
-          lote = [];
-          bytes = 0;
-          nLote++;
-          await opts.aposLote?.({ camada: p.chaveOrigem, lote: nLote });
-        };
         try {
-          await lerElementosStream(fonte.lerStream(`layers/${p.arquivo}`), p.nomeOriginal, p.grupo, async (e) => {
-            somar(s, e);
-            const row: Prisma.WebmapElementoCreateManyInput = {
-              camadaId: camadaId!, versao: versaoId, fidOrigem: e.fidOrigem, geometriaTipo: e.geometriaTipo,
-              geometria: e.geometria as Prisma.InputJsonValue, atributos: e.atributos as Prisma.InputJsonValue, corrigida: e.corrigida,
-              geometriaOriginal: e.geometriaOriginal == null ? Prisma.JsonNull : (e.geometriaOriginal as Prisma.InputJsonValue),
-              minLng: e.bbox[0], minLat: e.bbox[1], maxLng: e.bbox[2], maxLat: e.bbox[3],
-            };
-            lote.push(row);
-            bytes += JSON.stringify(e.geometria.coordinates).length;
-            if (lote.length >= LOTE_ELEMENTOS || bytes >= LOTE_BYTES) await flush();
-          }, (e) => { s.invalidos++; s.erros.push(e); });
-          await flush();
+          // retentativa da camada nunca duplica: gravarCamada apaga antes o que esta versão já tinha
+          s = await leitor.gravar({ arquivo: p.arquivo, label: p.nomeOriginal, grupo: p.grupo, camadaId: camadaId!, versaoId }, async (lote) => {
+            await opts.batimento?.();
+            await opts.aposLote?.({ camada: p.chaveOrigem, lote });
+          });
           break;
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
@@ -383,6 +369,7 @@ export async function executarAplicacao(
       statsPorChave.set(p.chaveOrigem, { contagem: { pontos: s.pontos, linhas: s.linhas, poligonos: s.poligonos }, corrigidos: s.corrigidos, invalidos: s.invalidos, erros: s.erros });
       versaoPorChave.set(p.chaveOrigem, versaoId);
       gravadas++;
+      opts.aposCamada?.(p.chaveOrigem);
       if (opts.falharDepoisDe !== undefined && gravadas >= opts.falharDepoisDe) throw new Error('Falha simulada (teste)');
       void d;
     }
@@ -393,6 +380,7 @@ export async function executarAplicacao(
     };
 
     // troca atômica da versão ativa (transação curta: só metadados)
+    await opts.leitor?.fechar?.();
     opts.onFase?.('ativando');
     const antigas: Array<{ camadaId: string; versao: string }> = [];
     await prisma.$transaction(async (tx) => {

@@ -1459,6 +1459,7 @@ model WebmapElemento {
 
   @@index([camadaId, versao])
   @@index([camadaId, minLng, maxLng, minLat, maxLat])
+  @@index([camadaId, versao, minLng, maxLng, minLat, maxLat])
 }
 
 model WebmapIcone {

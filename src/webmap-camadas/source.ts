@@ -15,6 +15,14 @@ export interface WebmapCamadasFonte {
   lerBinario(caminho: string): Promise<Buffer>;
   /** Conteúdo em pedaços de texto (UTF-8), sem carregar o arquivo inteiro. */
   lerStream(caminho: string): AsyncIterable<string>;
+  /** Serializável: permite recriar a mesma fonte dentro do worker do job (memória limitada). */
+  config?: FonteConfig;
+}
+
+export type FonteConfig = { tipo: 'github'; repo: string; branch: string; rawRoot: string } | { tipo: 'dir'; root: string };
+
+export function criarFonte(c: FonteConfig): WebmapCamadasFonte {
+  return c.tipo === 'github' ? new GithubWebmapFonte(c.repo, c.branch, c.rawRoot) : new DiretorioWebmapFonte(c.root);
 }
 
 export function gitBlobSha(buf: Buffer) {
@@ -29,6 +37,9 @@ export class GithubWebmapFonte implements WebmapCamadasFonte {
     private readonly rawRoot = (process.env.WEBMAP_RAW_BASE?.trim() || `https://raw.githubusercontent.com/${process.env.WEBMAP_GITHUB_REPO?.trim() || 'SMMAFRANCA/webmap'}/${process.env.WEBMAP_GITHUB_BRANCH?.trim() || 'main'}/layers`).replace(/\/layers\/?$/, ''),
   ) {
     this.descricao = `github:${this.repo}@${this.branch}`;
+  }
+  get config(): FonteConfig {
+    return { tipo: 'github', repo: this.repo, branch: this.branch, rawRoot: this.rawRoot };
   }
   private async api<T>(path: string): Promise<T> {
     const url = `https://api.github.com/repos/${this.repo}/${path}`;
@@ -92,6 +103,9 @@ export class DiretorioWebmapFonte implements WebmapCamadasFonte {
   constructor(private readonly root: string) {
     this.descricao = `dir:${root}`;
   }
+  get config(): FonteConfig {
+    return { tipo: 'dir', root: this.root };
+  }
   async listar(): Promise<ListagemFonte> {
     const dir = async (d: string) => {
       const out = new Map<string, ArquivoFonte>();
@@ -100,8 +114,10 @@ export class DiretorioWebmapFonte implements WebmapCamadasFonte {
       for (const n of names) {
         const p = join(this.root, d, n);
         if (!(await stat(p)).isFile()) continue;
-        const buf = await readFile(p);
-        out.set(n, { nome: n, sha: gitBlobSha(buf), bytes: buf.length });
+        const st = await stat(p);
+        const h = createHash('sha1').update(`blob ${st.size}\0`);
+        for await (const ch of createReadStream(p, { highWaterMark: 256 * 1024 })) h.update(ch as Buffer);
+        out.set(n, { nome: n, sha: h.digest('hex'), bytes: st.size });
       }
       return out;
     };

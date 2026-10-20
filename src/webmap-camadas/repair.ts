@@ -47,27 +47,54 @@ function segIntersect(a: Pos, b: Pos, c: Pos, d: Pos) {
   return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
 }
 
-/** Detecta auto-interseção de anel (força bruta com pré-filtro por bbox; anéis grandes vão direto ao reparo). */
-function anelAutoIntersecta(r: Pos[]): boolean {
+/** Acima disto não roda a união (polygon-clipping usa recursão/memória proporcionais): vira erro do elemento, no CSV. */
+export const MAX_VERTICES_REPARO = 20_000;
+
+/**
+ * Detecta auto-interseção de anel com grade espacial (memória O(n), sem montar estruturas grandes).
+ * Segmentos adjacentes (que compartilham vértice) não contam.
+ */
+export function anelAutoIntersecta(r: Pos[]): boolean {
   const n = r.length - 1;
-  if (n > 3000) return true;
+  if (n < 4) return false;
+  let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
+  for (const p of r) { if (p[0] < minx) minx = p[0]; if (p[0] > maxx) maxx = p[0]; if (p[1] < miny) miny = p[1]; if (p[1] > maxy) maxy = p[1]; }
+  const lado = Math.max(1, Math.ceil(Math.sqrt(n)));
+  const cw = (maxx - minx) / lado || 1, ch = (maxy - miny) / lado || 1;
+  const grade = new Map<number, number[]>();
+  const marca = new Int32Array(n).fill(-1);
+  let orcamento = 1_000_000; // comparações; acima disso (anel patológico) trata como suspeito e deixa a união decidir
+  const cel = (v: number, min: number, w: number) => Math.min(lado - 1, Math.floor((v - min) / w));
   for (let i = 0; i < n; i++) {
     const a = r[i], b = r[i + 1];
-    const minx = Math.min(a[0], b[0]), maxx = Math.max(a[0], b[0]), miny = Math.min(a[1], b[1]), maxy = Math.max(a[1], b[1]);
-    for (let j = i + 2; j < n; j++) {
-      if (i === 0 && j === n - 1) continue;
-      const c = r[j], d = r[j + 1];
-      if (Math.max(c[0], d[0]) < minx || Math.min(c[0], d[0]) > maxx || Math.max(c[1], d[1]) < miny || Math.min(c[1], d[1]) > maxy) continue;
-      if (segIntersect(a, b, c, d)) return true;
+    const x0 = cel(Math.min(a[0], b[0]), minx, cw), x1 = cel(Math.max(a[0], b[0]), minx, cw);
+    const y0 = cel(Math.min(a[1], b[1]), miny, ch), y1 = cel(Math.max(a[1], b[1]), miny, ch);
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+      const k = x * lado + y;
+      let lst = grade.get(k);
+      if (!lst) grade.set(k, (lst = []));
+      for (const j of lst) {
+        if (marca[j] === i) continue;
+        marca[j] = i;
+        if (--orcamento < 0) return true;
+        if (j === i - 1 || (j === 0 && i === n - 1)) continue;
+        if (segIntersect(a, b, r[j], r[j + 1])) return true;
+      }
+      lst.push(i);
     }
   }
   return false;
 }
 
+function uniao(rings: Pos[][]): Pos[][][] {
+  return polygonClipping.union(rings as unknown as polygonClipping.Polygon) as unknown as Pos[][][];
+}
+
+/** Corrige cada polígono separadamente (memória limitada ao maior polígono, não à feature inteira). */
 function repararPoligonos(polys: unknown[], tipo: 'Polygon' | 'MultiPolygon'): Reparo {
-  const limpos: Pos[][][] = [];
+  const out: Pos[][][] = [];
   let mudou = false;
-  let suspeito = false;
+  let autoIntersecao = false;
   for (const poly of polys) {
     if (!Array.isArray(poly) || !poly.length) { mudou = true; continue; }
     const outer = fecharAnel(poly[0]);
@@ -80,21 +107,25 @@ function repararPoligonos(polys: unknown[], tipo: 'Polygon' | 'MultiPolygon'): R
       if (hr.mudou) mudou = true;
       rings.push(hr.ring);
     }
-    if (rings.some(anelAutoIntersecta)) suspeito = true;
-    limpos.push(rings);
-  }
-  if (!limpos.length) return { status: 'invalida', motivo: 'Polígono vazio ou sem anel válido' };
-  if (suspeito || (limpos.length > 1 && mudou)) {
+    if (!rings.some(anelAutoIntersecta)) { out.push(rings); continue; }
+    const vertices = rings.reduce((t, x) => t + x.length, 0);
+    if (vertices > MAX_VERTICES_REPARO) {
+      return { status: 'invalida', motivo: `Polígono irreparável: auto-interseção em polígono grande demais para correção automática (${vertices} vértices)` };
+    }
+    let partes: Pos[][][];
     try {
-      const out = polygonClipping.union(...(limpos as unknown as [polygonClipping.Polygon]));
-      if (!out.length) return { status: 'invalida', motivo: 'Polígono degenerado (área zero após correção)' };
-      return { status: 'corrigida', motivo: suspeito ? 'Auto-interseção corrigida' : 'Anéis corrigidos', geometria: out.length === 1 ? { type: 'Polygon', coordinates: out[0] } : { type: 'MultiPolygon', coordinates: out } };
+      partes = uniao(rings);
     } catch (error) {
       return { status: 'invalida', motivo: `Polígono irreparável (${error instanceof Error ? error.message : String(error)})` };
     }
+    autoIntersecao = true;
+    out.push(...partes);
   }
-  if (!mudou) return { status: 'ok', geometria: { type: tipo, coordinates: tipo === 'Polygon' ? limpos[0] : limpos } };
-  return { status: 'corrigida', motivo: 'Anel aberto, pontos repetidos ou anel degenerado corrigidos', geometria: limpos.length === 1 ? { type: 'Polygon', coordinates: limpos[0] } : { type: 'MultiPolygon', coordinates: limpos } };
+  if (!out.length) return { status: 'invalida', motivo: autoIntersecao ? 'Polígono degenerado (área zero após correção)' : 'Polígono vazio ou sem anel válido' };
+  const geometria = out.length === 1 ? { type: 'Polygon', coordinates: out[0] } : { type: 'MultiPolygon', coordinates: out };
+  if (autoIntersecao) return { status: 'corrigida', motivo: 'Auto-interseção corrigida', geometria };
+  if (!mudou) return { status: 'ok', geometria: { type: tipo, coordinates: tipo === 'Polygon' ? out[0] : out } };
+  return { status: 'corrigida', motivo: 'Anel aberto, pontos repetidos ou anel degenerado corrigidos', geometria };
 }
 
 export function repararGeometria(g: { type?: string; coordinates?: unknown } | null | undefined): Reparo {
