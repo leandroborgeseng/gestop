@@ -18,6 +18,7 @@ describe('checklist-item.rules', () => {
       opcoes: ['A', 'B'],
       notas: [8, 5],
       modoExibicao: 'LISTA',
+      selecao: 'UNICA',
     });
   });
 
