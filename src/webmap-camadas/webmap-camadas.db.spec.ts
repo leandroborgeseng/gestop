@@ -1,6 +1,8 @@
 /**
  * 296 — integração com Postgres descartável. Só roda com WEBMAP_CAMADAS_TEST_DATABASE_URL
  * (banco local de teste, migrado e com seed). Usa só fixtures locais (sem rede).
+ * Precisa de um banco PRÓPRIO: os md5 de "todas as tabelas" quebram se outros *.int.spec gravarem
+ * no mesmo banco em paralelo; por isso é pulado quando a URL é igual a DATABASE_URL.
  */
 import { join } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -10,7 +12,7 @@ import { aplicar, FonteMudouError, ImportacaoEmAndamentoError, simular } from '.
 import { DiretorioWebmapFonte } from './source';
 import { WebmapCamadasService } from './webmap-camadas.service';
 
-const URL = process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL;
+const URL = process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL && process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL !== process.env.DATABASE_URL ? process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL : undefined;
 const FIX = join(__dirname, '../../test/fixtures/webmap-camadas');
 const fonte = (v: string) => new DiretorioWebmapFonte(join(FIX, v));
 const OPERACIONAIS = ['UnidadePublica', 'Secretaria', 'Chamado'];
