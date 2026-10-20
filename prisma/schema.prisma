@@ -1452,10 +1452,13 @@ model WebmapElemento {
   geometriaOriginal Json?
   corrigida         Boolean      @default(false)
   atributos         Json
-  minLng            Float
-  minLat            Float
-  maxLng            Float
-  maxLat            Float
+  /// 296: sem conserto; gravada com a geometria original e não desenhada no mapa.
+  geometriaInvalida Boolean      @default(false)
+  /// null só para geometria inválida sem coordenadas aproveitáveis.
+  minLng            Float?
+  minLat            Float?
+  maxLng            Float?
+  maxLat            Float?
 
   @@index([camadaId, versao])
   @@index([camadaId, minLng, maxLng, minLat, maxLat])

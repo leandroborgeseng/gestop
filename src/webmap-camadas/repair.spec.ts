@@ -39,13 +39,21 @@ describe('296 — correção de geometria (sem PostGIS)', () => {
     expect((r as { motivo: string }).motivo).toMatch(/^Polígono irreparável/);
   });
 
+  it('polígono VÁLIDO acima de 20 mil vértices nunca vira erro (o limite só bloqueia a tentativa de reparo)', () => {
+    const n = MAX_VERTICES_REPARO * 2;
+    const ring = Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2; return [-47.4 + Math.cos(a) * 0.1, -20.5 + Math.sin(a) * 0.1]; });
+    ring.push(ring[0]);
+    const r = repararGeometria({ type: 'Polygon', coordinates: [ring] });
+    expect(r.status).toBe('ok');
+  });
+
   it('auto-interseção num polígono acima do limite de vértices não roda a união (erro, sem estourar memória)', () => {
     const n = MAX_VERTICES_REPARO + 10;
-    const ring = Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2; return [Math.cos(a) * (i % 2 ? 1 : 0.5), Math.sin(a) * (i % 2 ? 1 : 0.5)]; });
+    const ring = Array.from({ length: n }, (_, i) => { const a = (i / n) * Math.PI * 2; return [Math.cos(a), Math.sin(a)]; });
     ring.push([1.2, 0.0], [-1.2, 0.01]);
     ring.push(ring[0]);
     const r = repararGeometria({ type: 'Polygon', coordinates: [ring] });
     expect(r).toMatchObject({ status: 'invalida' });
-    expect((r as { motivo: string }).motivo).toMatch(/grande demais/);
+    expect((r as { motivo: string }).motivo).toMatch(/reparo não tentado/);
   });
 });

@@ -47,13 +47,17 @@ export function parseLayersJs(content: string): { grupos: Array<{ titulo: string
 export type ElementoLido = {
   fidOrigem: string | null;
   geometriaTipo: string;
-  familia: GeometriaFamilia;
-  geometria: { type: string; coordinates: unknown };
+  familia: GeometriaFamilia | null;
+  /** Para geometriaInvalida = true: a geometria original como veio (pode ser null). */
+  geometria: { type: string; coordinates: unknown } | null;
   geometriaOriginal: unknown | null;
   corrigida: boolean;
   motivoCorrecao: string | null;
   atributos: Record<string, unknown>;
-  bbox: [number, number, number, number];
+  /** null só quando a geometria inválida não tem nenhuma coordenada aproveitável. */
+  bbox: [number, number, number, number] | null;
+  /** TL: feição sem conserto é gravada com a geometria original e não é desenhada no mapa. */
+  geometriaInvalida: boolean;
 };
 export type ErroLeitura = { grupo?: string; camada: string; elemento: string | null; motivo: string };
 
@@ -68,21 +72,35 @@ function bboxOf(c: unknown, acc = [Infinity, Infinity, -Infinity, -Infinity]): n
   return acc;
 }
 
-/** Valida/corrige uma feature já parseada. Retorna elemento (ok/corrigido) ou erro irreparável. */
-export function processarFeature(raw: unknown, index: number, label: string, grupo?: string): { elemento: ElementoLido } | { erro: ErroLeitura } {
+/**
+ * Valida/corrige uma feature já parseada. Sempre devolve o elemento a gravar; quando não há conserto,
+ * o elemento leva a geometria original com geometriaInvalida = true e vem junto o erro (CSV / PARCIAL).
+ */
+export function processarFeature(raw: unknown, index: number, label: string, grupo?: string): { elemento: ElementoLido; erro?: ErroLeitura } {
   const f = raw as { properties?: Record<string, unknown> | null; geometry?: { type?: string; coordinates?: unknown } | null };
   const props = (f && typeof f.properties === 'object' && f.properties) || {};
   const fid = props.fid != null ? String(props.fid) : null;
   const ref = fid ?? `#${index + 1}`;
   const r = repararGeometria(f?.geometry);
-  if (r.status === 'invalida') return { erro: { grupo, camada: label, elemento: ref, motivo: r.motivo } };
+  if (r.status === 'invalida') {
+    const g = f?.geometry && typeof f.geometry === 'object' ? (f.geometry as { type: string; coordinates: unknown }) : null;
+    const b = g ? bboxOf(g.coordinates) : null;
+    const bbox = b && b.every(Number.isFinite) ? (b as [number, number, number, number]) : null;
+    return {
+      elemento: {
+        fidOrigem: fid, geometriaTipo: typeof g?.type === 'string' ? g.type : 'DESCONHECIDO', familia: (g && FAMILIA[g.type]) || null, geometria: g,
+        geometriaOriginal: null, corrigida: false, motivoCorrecao: null, atributos: props, bbox, geometriaInvalida: true,
+      },
+      erro: { grupo, camada: label, elemento: ref, motivo: r.motivo },
+    };
+  }
   const familia = FAMILIA[r.geometria.type];
   const bbox = bboxOf(r.geometria.coordinates) as [number, number, number, number];
   return {
     elemento: {
       fidOrigem: fid, geometriaTipo: r.geometria.type, familia, geometria: r.geometria,
       geometriaOriginal: r.status === 'corrigida' ? f.geometry ?? null : null, corrigida: r.status === 'corrigida', motivoCorrecao: r.status === 'corrigida' ? r.motivo : null,
-      atributos: props, bbox,
+      atributos: props, bbox, geometriaInvalida: false,
     },
   };
 }
@@ -106,8 +124,8 @@ export function readFeatures(content: string, label: string): { elementos: Eleme
   const erros: ErroLeitura[] = [];
   (extractLayerJson(content, label).features ?? []).forEach((raw, i) => {
     const r = processarFeature(raw, i, label);
-    if ('erro' in r) erros.push(r.erro);
-    else elementos.push(r.elemento);
+    if (r.erro) erros.push(r.erro);
+    if (!r.elemento.geometriaInvalida) elementos.push(r.elemento);
   });
   return { elementos, erros };
 }
@@ -127,8 +145,8 @@ export async function lerElementosStream(
       splitter.push(chunk);
       while (pend.length) {
         const r = processarFeature(pend.shift(), index++, label, grupo);
-        if ('erro' in r) onErro(r.erro);
-        else await onElemento(r.elemento);
+        if (r.erro) onErro(r.erro);
+        await onElemento(r.elemento);
       }
       if (splitter.terminou) break;
     }

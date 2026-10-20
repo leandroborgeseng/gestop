@@ -17,6 +17,7 @@ export function novoStats(): Stats {
   return { pontos: 0, linhas: 0, poligonos: 0, corrigidos: 0, invalidos: 0, erros: [], bbox: [Infinity, Infinity, -Infinity, -Infinity] };
 }
 export function somar(s: Stats, e: ElementoLido) {
+  if (e.geometriaInvalida || !e.bbox) return; // contada em `invalidos` (via erro)
   if (e.familia === 'POINT') s.pontos++;
   else if (e.familia === 'LINE') s.linhas++;
   else s.poligonos++;
@@ -36,9 +37,9 @@ export async function contarCamada(fonte: WebmapCamadasFonte, a: AlvoCamada): Pr
   return s;
 }
 
-const INSERT = `INSERT INTO "WebmapElemento" ("id","camadaId","versao","fidOrigem","geometriaTipo","geometria","geometriaOriginal","corrigida","atributos","minLng","minLat","maxLng","maxLat")
-SELECT x.id, x."camadaId", x.versao, x."fidOrigem", x."geometriaTipo", x.geometria, x."geometriaOriginal", x.corrigida, x.atributos, x."minLng", x."minLat", x."maxLng", x."maxLat"
-FROM jsonb_to_recordset($1::jsonb) AS x(id text, "camadaId" text, versao text, "fidOrigem" text, "geometriaTipo" text, geometria jsonb, "geometriaOriginal" jsonb, corrigida boolean, atributos jsonb, "minLng" float8, "minLat" float8, "maxLng" float8, "maxLat" float8)`;
+const INSERT = `INSERT INTO "WebmapElemento" ("id","camadaId","versao","fidOrigem","geometriaTipo","geometria","geometriaOriginal","corrigida","atributos","minLng","minLat","maxLng","maxLat","geometriaInvalida")
+SELECT x.id, x."camadaId", x.versao, x."fidOrigem", x."geometriaTipo", coalesce(x.geometria, 'null'::jsonb), x."geometriaOriginal", x.corrigida, x.atributos, x."minLng", x."minLat", x."maxLng", x."maxLat", coalesce(x."geometriaInvalida", false)
+FROM jsonb_to_recordset($1::jsonb) AS x(id text, "camadaId" text, versao text, "fidOrigem" text, "geometriaTipo" text, geometria jsonb, "geometriaOriginal" jsonb, corrigida boolean, atributos jsonb, "minLng" float8, "minLat" float8, "maxLng" float8, "maxLat" float8, "geometriaInvalida" boolean)`;
 
 /**
  * Grava a camada na versão `versaoId` (apaga antes o que essa versão já tinha: retentativa nunca duplica).
@@ -67,7 +68,8 @@ export async function gravarCamada(
     const linha = JSON.stringify({
       id: randomUUID(), camadaId: a.camadaId, versao: a.versaoId, fidOrigem: e.fidOrigem, geometriaTipo: e.geometriaTipo,
       geometria: e.geometria, geometriaOriginal: e.geometriaOriginal ?? null, corrigida: e.corrigida, atributos: e.atributos,
-      minLng: e.bbox[0], minLat: e.bbox[1], maxLng: e.bbox[2], maxLat: e.bbox[3],
+      geometriaInvalida: e.geometriaInvalida,
+      minLng: e.bbox?.[0] ?? null, minLat: e.bbox?.[1] ?? null, maxLng: e.bbox?.[2] ?? null, maxLat: e.bbox?.[3] ?? null,
     });
     partes.push(linha);
     bytes += linha.length;

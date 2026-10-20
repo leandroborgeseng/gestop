@@ -254,7 +254,8 @@ export class WebmapCamadasService implements OnModuleInit {
     const pesada = camada.totalElementos > CAMADA_PESADA_ELEMENTOS;
     if (pesada && !bbox) throw new BadRequestException('Camada pesada: informe bbox e zoom.');
     const zoom = zoomParam ? Number(zoomParam) : 18;
-    const where: Prisma.WebmapElementoWhereInput = { camadaId: camada.id, versao: camada.versaoAtual! };
+    // feições sem conserto (geometriaInvalida) ficam gravadas, mas não são desenhadas
+    const where: Prisma.WebmapElementoWhereInput = { camadaId: camada.id, versao: camada.versaoAtual!, geometriaInvalida: false };
     if (bbox) Object.assign(where, { minLng: { lte: bbox[2] }, maxLng: { gte: bbox[0] }, minLat: { lte: bbox[3] }, maxLat: { gte: bbox[1] } });
     const rows = await this.db.webmapElemento.findMany({ where, take: LIMITE_ELEMENTOS_RESPOSTA + 1, select: { fidOrigem: true, geometria: true, atributos: true, corrigida: true } });
     const truncado = rows.length > LIMITE_ELEMENTOS_RESPOSTA;

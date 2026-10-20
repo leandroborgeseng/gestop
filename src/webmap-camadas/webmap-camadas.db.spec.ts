@@ -262,7 +262,7 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
   };
   const acrescentarFeature = (txt: string, feat: string) => { const i = txt.lastIndexOf(']'); return `${txt.slice(0, i)}, ${feat}${txt.slice(i)}`; };
 
-  it('polígono real que estoura a pilha do reparo (FAZENDA_NOVA_ESPERANCA fid 431) vira erro do elemento no CSV; camada e job seguem (no worker)', async () => {
+  it('polígono real que estoura a pilha do reparo (FAZENDA_NOVA_ESPERANCA fid 431) é GRAVADO como geometriaInvalida (original), fora do GeoJSON, e segue no CSV/PARCIAL (no worker)', async () => {
     const enorme = readFileSync(join(FIX, 'pilha/poligono-estouro-pilha.json'), 'utf8');
     const dir = variante('v1', 'ETE_2_100.js', (t) => acrescentarFeature(t, enorme));
     const service = new WebmapCamadasService(prisma as never, { persistBuffer: async () => ({ storageKey: 'k', url: '/u' }) } as never);
@@ -278,6 +278,14 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
     expect(ete.ativo).toBe(true);
     expect(ete.totalInvalidos).toBe(1);
     expect(ete.totalElementos).toBeGreaterThan(0);
+    const gravado = await prisma.webmapElemento.findFirstOrThrow({ where: { camadaId: ete.id, versao: ete.versaoAtual!, fidOrigem: '431' } });
+    expect(gravado.geometriaInvalida).toBe(true);
+    const original = JSON.parse(enorme).geometry;
+    expect((gravado.geometria as { coordinates: unknown[] }).coordinates.length).toBe(original.coordinates.length);
+    expect(gravado.minLng).not.toBeNull();
+    const gj = await service.geojson(ete.id, '-180,-90,180,90', '18');
+    expect(gj.features.some((f) => f.id === '431')).toBe(false);
+    expect(gj.features).toHaveLength(ete.totalElementos);
     const csv = await service.errosCsv();
     expect(csv).toMatch(/"431";"Polígono irreparável \(Maximum call stack size exceeded\)"/);
     expect(await md5(OPERACIONAIS)).toEqual(operAntes);

@@ -47,14 +47,14 @@ function segIntersect(a: Pos, b: Pos, c: Pos, d: Pos) {
   return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
 }
 
-/** Acima disto não roda a união (polygon-clipping usa recursão/memória proporcionais): vira erro do elemento, no CSV. */
+/** Acima disto não se TENTA a união (polygon-clipping usa recursão/memória proporcionais). Só vale para polígono inválido. */
 export const MAX_VERTICES_REPARO = 20_000;
 
 /**
  * Detecta auto-interseção de anel com grade espacial (memória O(n), sem montar estruturas grandes).
  * Segmentos adjacentes (que compartilham vértice) não contam.
  */
-export function anelAutoIntersecta(r: Pos[]): boolean {
+export function anelAutoIntersecta(r: Pos[]): boolean | 'indeterminado' {
   const n = r.length - 1;
   if (n < 4) return false;
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
@@ -63,7 +63,7 @@ export function anelAutoIntersecta(r: Pos[]): boolean {
   const cw = (maxx - minx) / lado || 1, ch = (maxy - miny) / lado || 1;
   const grade = new Map<number, number[]>();
   const marca = new Int32Array(n).fill(-1);
-  let orcamento = 1_000_000; // comparações; acima disso (anel patológico) trata como suspeito e deixa a união decidir
+  let orcamento = 1_000_000; // comparações; acima disso (anel patológico) o resultado é 'indeterminado'
   const cel = (v: number, min: number, w: number) => Math.min(lado - 1, Math.floor((v - min) / w));
   for (let i = 0; i < n; i++) {
     const a = r[i], b = r[i + 1];
@@ -76,7 +76,7 @@ export function anelAutoIntersecta(r: Pos[]): boolean {
       for (const j of lst) {
         if (marca[j] === i) continue;
         marca[j] = i;
-        if (--orcamento < 0) return true;
+        if (--orcamento < 0) return 'indeterminado';
         if (j === i - 1 || (j === 0 && i === n - 1)) continue;
         if (segIntersect(a, b, r[j], r[j + 1])) return true;
       }
@@ -107,10 +107,15 @@ function repararPoligonos(polys: unknown[], tipo: 'Polygon' | 'MultiPolygon'): R
       if (hr.mudou) mudou = true;
       rings.push(hr.ring);
     }
-    if (!rings.some(anelAutoIntersecta)) { out.push(rings); continue; }
+    const checks = rings.map(anelAutoIntersecta);
+    const intersecta = checks.includes(true);
+    const indeterminado = !intersecta && checks.includes('indeterminado');
+    if (!intersecta && !indeterminado) { out.push(rings); continue; }
     const vertices = rings.reduce((t, x) => t + x.length, 0);
     if (vertices > MAX_VERTICES_REPARO) {
-      return { status: 'invalida', motivo: `Polígono irreparável: auto-interseção em polígono grande demais para correção automática (${vertices} vértices)` };
+      // TL: o limite só bloqueia a TENTATIVA de reparo. Sem prova de invalidez, a feição grande entra como veio.
+      if (indeterminado) { out.push(rings); continue; }
+      return { status: 'invalida', motivo: `Polígono irreparável: auto-interseção em polígono acima de ${MAX_VERTICES_REPARO} vértices (${vertices}); reparo não tentado` };
     }
     let partes: Pos[][][];
     try {

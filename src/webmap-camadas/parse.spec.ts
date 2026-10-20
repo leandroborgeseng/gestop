@@ -45,7 +45,7 @@ describe('296 — parser qgis2web (fixtures locais, sem rede)', () => {
   it('bbox por feição (minLng, minLat, maxLng, maxLat) para polígono, linha e ponto', () => {
     const bbox = (geometry: unknown) => {
       const r = processarFeature({ properties: { fid: '1' }, geometry }, 0, 'X');
-      if ('erro' in r) throw new Error(r.erro.motivo);
+      if (r.erro) throw new Error(r.erro.motivo);
       return r.elemento.bbox;
     };
     expect(bbox({ type: 'Polygon', coordinates: [[[-47.5, -20.6], [-47.3, -20.6], [-47.3, -20.4], [-47.5, -20.4], [-47.5, -20.6]]] })).toEqual([-47.5, -20.6, -47.3, -20.4]);
