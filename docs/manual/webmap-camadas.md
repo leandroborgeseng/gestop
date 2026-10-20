@@ -16,11 +16,11 @@ Só quem tem a permissão de **Administração › Importação**. Sem ela, os b
 2. Desça até o bloco **Camadas do Webmap**. A linha de cima mostra quantas camadas estão ativas e quantas foram removidas da origem.
    ![Print W01 — bloco Camadas do Webmap](prints/w01-bloco-camadas-1280.png)
 3. Clique em **Importar apenas camadas Webmap**. O botão mostra "Simulando…" e, abaixo, as fases ("Lendo a fonte do Webmap…", "Comparando com as camadas já importadas…").
-4. A **simulação** não grava nada no mapa. Ao terminar, aparece "Simulação: Sucesso", "OK com avisos" ou "Parcial", com os totais: grupos, camadas, pontos, linhas, polígonos, corrigidos, irreparáveis, e camadas novas, atualizadas, sem mudança, reativadas e removidas da origem.
+4. A **simulação** não grava nada no mapa. Ao terminar, aparece "Simulação: Sucesso", "OK com avisos" ou "Parcial", com os totais: grupos, camadas, pontos, linhas, polígonos, corrigidos, irreparáveis, e camadas novas, atualizadas, sem mudança, reativadas e removidas da origem. "Reordenadas" é só informativo: a camada mudou de posição, mas conta como sem mudança.
    ![Print W02 — resultado da simulação](prints/w02-simulacao-1280.png)
 5. Confira o prazo: "Simulação válida até HH:MM (BRT)". A simulação vale por 30 minutos e enquanto a fonte não mudar.
 6. Se houver elementos irreparáveis, a lista mostra grupo › camada e o número do elemento. Clique em **Baixar CSV com todos os erros** para ver todos.
-7. Clique em **Aplicar**. A aplicação roda em segundo plano (cerca de 1 minuto na base de hoje). Você pode sair da tela; ao voltar, ela mostra a fase atual ou o resultado.
+7. Clique em **Aplicar**. Se houver elementos irreparáveis, o sistema pergunta: "Aplicar importação? N elementos serão gravados como inválidos e não aparecerão no mapa (detalhes no CSV)." Confirme para seguir. A aplicação roda em segundo plano (cerca de 1 minuto na base de hoje). Você pode sair da tela; ao voltar, ela mostra a fase atual ou o resultado.
    ![Print W03 — aplicação em andamento](prints/w03-aplicando-1280.png)
 8. Ao terminar, aparece "Última aplicação", no formato "Parcial · 20/10/2026 15:40 (BRT) · Tester Importação" (resultado · data e hora · usuário).
    ![Print W04 — última aplicação Parcial com CSV](prints/w04-ultima-parcial-1280.png)
