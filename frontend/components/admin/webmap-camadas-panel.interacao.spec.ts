@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/api', () => api);
 
-import { WebmapCamadasPanel } from './webmap-camadas-panel';
+import { WebmapCamadasPanel, linhaUltimaAplicacao } from './webmap-camadas-panel';
 
 const base = { fonte: 'github', emAndamento: null, ultima: null, ultimaImportacao: null, camadas: 0, ativas: 0, removidasOrigem: 0 };
 const sim = (totalErros: number) => ({
@@ -111,5 +111,15 @@ describe('296 pacote (a) · confirmação antes de aplicar', () => {
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Aplicar' })); });
     expect(screen.queryByRole('alertdialog')).toBeNull();
     expect(api.aplicarWebmapCamadas).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('296 pacote (d) · linha da última aplicação', () => {
+  it('formato resultado · dd/mm/aaaa HH:mm (BRT) · usuário', async () => {
+    expect(linhaUltimaAplicacao('PARCIAL', '20/10/2026 15:40:12 (BRT)', 'Tester Importação')).toBe('Parcial · 20/10/2026 15:40 (BRT) · Tester Importação');
+    api.getWebmapCamadasStatus.mockResolvedValue({ ...base, ultimaImportacao: { id: 'j', status: 'PARCIAL', usuario: 'Tester Importação', iniciadoEmBrt: 'x', concluidoEmBrt: '20/10/2026 15:40:00 (BRT)', motivo: null, resultado: { ...sim(3), resultado: 'PARCIAL' } } });
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    expect(screen.getByText('Última aplicação: Parcial · 20/10/2026 15:40 (BRT) · Tester Importação')).toBeTruthy();
   });
 });

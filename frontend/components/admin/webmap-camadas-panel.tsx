@@ -43,6 +43,12 @@ export function textoConfirmacaoAplicar(invalidos: number): string | null {
   return `Aplicar importação? ${n} elementos serão gravados como inválidos e não aparecerão no mapa (detalhes no CSV).`;
 }
 
+/** Pacote (d): "Parcial · 20/10/2026 15:40 (BRT) · Tester Importação" (resultado · dd/mm/aaaa HH:mm (BRT) · usuário). */
+export function linhaUltimaAplicacao(status: string, dataHoraBrt: string, usuario: string): string {
+  const quando = dataHoraBrt.replace(/(\d{2}:\d{2}):\d{2}/, '$1');
+  return `${RESULTADO_LABEL[status] ?? status} · ${quando} · ${usuario}`;
+}
+
 function horaBrt(iso: string) {
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
 }
@@ -255,12 +261,12 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
 
         {!simulacao && ultima && ultima.status !== 'EM_ANDAMENTO' ? (
           ultima.status === 'FALHA' ? (
-            <Alert variant="error" title={`Última aplicação: Falha (${ultima.iniciadoEmBrt}, ${ultima.usuario})`}>
+            <Alert variant="error" title={`Última aplicação: ${linhaUltimaAplicacao('FALHA', ultima.iniciadoEmBrt, ultima.usuario)}`}>
               {ultima.motivo ?? 'Erro desconhecido'}. Nada foi alterado: a versão anterior das camadas continua ativa.
             </Alert>
           ) : ultima.resultado ? (
             <Resumo
-              titulo={`Última aplicação: ${RESULTADO_LABEL[ultima.status]} (${ultima.concluidoEmBrt ?? ultima.iniciadoEmBrt}, ${ultima.usuario})`}
+              titulo={`Última aplicação: ${linhaUltimaAplicacao(ultima.status, ultima.concluidoEmBrt ?? ultima.iniciadoEmBrt, ultima.usuario)}`}
               resumo={ultima.resultado}
               csv={() => void downloadWebmapCamadasErrosCsv()}
             />
