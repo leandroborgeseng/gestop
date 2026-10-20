@@ -1486,6 +1486,8 @@ model WebmapImportacao {
   fonteHash    String?
   iniciadoEm   DateTime  @default(now())
   heartbeatEm  DateTime  @default(now())
+  /** Processo (boot) que está aplicando; outro bootId com heartbeat parado = processo morto. */
+  bootId       String?
   concluidoEm  DateTime?
   resultado    Json?
   motivo       String?

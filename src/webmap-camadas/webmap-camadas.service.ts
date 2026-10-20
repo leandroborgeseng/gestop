@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import type { JwtPayload } from '../auth/jwt';
 import {
-  executarAplicacao, Fase, FonteMudouError, HEARTBEAT_MS, MAX_ERROS_TELA, PgSessionLock, recuperarInterrompidas, ResultadoSimulacao,
+  BOOT_ID, executarAplicacao, Fase, FonteMudouError, HEARTBEAT_MS, MAX_ERROS_TELA, PgSessionLock, recuperarInterrompidas, ResultadoSimulacao,
   SIMULACAO_TTL_MS, simplificarGeometria, simular, toleranciaPorZoom, WEBMAP_CAMADAS_ENTIDADE,
 } from './core';
 import type { ErroLeitura } from './parse';
@@ -68,11 +68,25 @@ export class WebmapCamadasService implements OnModuleInit {
   async onModuleInit() {
     if (!this.lockUrl) return;
     try {
-      const ids = await recuperarInterrompidas(this.db, new PgSessionLock(this.lockUrl));
+      const ids = await this.recuperar();
       if (ids.length) this.logger.warn(`Importações de camadas interrompidas marcadas como FALHA: ${ids.join(', ')}`);
     } catch (error) {
       this.logger.warn(`Recuperação de importações de camadas não executada: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /** 296-ALTO: marca FALHA os jobs de processo morto e registra cada um no Histórico. Roda antes de qualquer 409. */
+  private async recuperar() {
+    if (!this.lockUrl) return [] as string[];
+    const ids = await recuperarInterrompidas(this.db, new PgSessionLock(this.lockUrl));
+    for (const id of ids) {
+      const job = await this.db.webmapImportacao.findUnique({ where: { id } });
+      if (!job) continue;
+      await this.log({ sub: job.usuarioId, nome: job.usuarioNome }, 'APLICACAO', 'FALHA', {
+        importacaoId: job.id, simulacaoId: job.simulacaoId, motivo: job.motivo ?? 'interrompida por reinício', interrompidaPorReinicio: true,
+      }).catch(() => undefined);
+    }
+    return ids;
   }
 
   private async log(user: { sub: string | null; nome: string }, tipo: 'SIMULACAO' | 'APLICACAO', resultado: ResultadoLog, dados: Record<string, unknown>) {
@@ -107,6 +121,7 @@ export class WebmapCamadasService implements OnModuleInit {
     if (this.simulando) throw this.conflito({ usuario: this.simulando.usuarioNome, desde: this.simulando.desde });
     this.simulando = { usuarioNome: user.nome, desde: new Date(), fase: 'lendo_fonte' };
     try {
+      await this.recuperar().catch(() => undefined); // 296-ALTO: antes do 409 de job EM_ANDAMENTO
       const job = await this.db.webmapImportacao.findFirst({ where: { status: 'EM_ANDAMENTO' }, orderBy: { iniciadoEm: 'desc' } });
       if (job) throw this.conflito({ usuario: job.usuarioNome, desde: job.iniciadoEm });
       const onFase = (f: Fase) => { if (this.simulando) this.simulando.fase = f; };
@@ -140,14 +155,14 @@ export class WebmapCamadasService implements OnModuleInit {
       this.simulacoes.delete(sim.simulacaoId);
       throw new ConflictException('O prazo da simulação (30 min) venceu; simule novamente.');
     }
-    await recuperarInterrompidas(this.db, new PgSessionLock(this.lockUrl)).catch(() => undefined);
+    await this.recuperar().catch(() => undefined);
     const lock = new PgSessionLock(this.lockUrl);
     if (!(await lock.tentar())) {
       const a = await this.emAndamento();
       throw this.conflito(a ?? { usuario: 'outro usuário', desde: new Date() });
     }
     const job = await this.db.webmapImportacao.create({
-      data: { status: 'EM_ANDAMENTO', fase: 'lendo_fonte', usuarioId: user.sub || null, usuarioNome: user.nome, simulacaoId: sim.simulacaoId, fonteHash: sim.fonteHash },
+      data: { status: 'EM_ANDAMENTO', bootId: BOOT_ID, fase: 'lendo_fonte', usuarioId: user.sub || null, usuarioNome: user.nome, simulacaoId: sim.simulacaoId, fonteHash: sim.fonteHash },
     });
     this.simulacoes.delete(sim.simulacaoId);
     this.execucao = this.rodar(job.id, user, sim, lock);
@@ -226,6 +241,7 @@ export class WebmapCamadasService implements OnModuleInit {
   }
 
   async status() {
+    await this.recuperar().catch(() => undefined);
     const [ultimaLog] = await this.historico(1);
     const ultimaImportacao = await this.db.webmapImportacao.findFirst({ orderBy: { iniciadoEm: 'desc' } });
     const [camadas, ativas, removidas] = await Promise.all([

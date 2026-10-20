@@ -114,6 +114,7 @@ CREATE TABLE "WebmapImportacao" (
     "fonteHash" TEXT,
     "iniciadoEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "heartbeatEm" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "bootId" TEXT,
     "concluidoEm" TIMESTAMP(3),
     "resultado" JSONB,
     "motivo" TEXT,

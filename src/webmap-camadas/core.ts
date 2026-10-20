@@ -14,6 +14,10 @@ export const SIMULACAO_TTL_MS = 30 * 60 * 1000;
 export const MAX_ERROS_TELA = 50;
 export const HEARTBEAT_MS = 10_000;
 export const HEARTBEAT_LIMITE_MS = 60_000;
+/** Job de OUTRO processo (bootId diferente) vira FALHA só com heartbeat parado há mais de 2 intervalos (seguro com réplicas/deploy sem downtime). */
+export const HEARTBEAT_BOOT_LIMITE_MS = 2 * HEARTBEAT_MS;
+/** Id aleatório deste processo; gravado no job ao aplicar. */
+export const BOOT_ID: string = randomUUID();
 export const LOCK_KEY = 296_000_296;
 
 export type Fase = 'lendo_fonte' | 'comparando' | 'gravando' | 'ativando' | 'limpando';
@@ -245,11 +249,26 @@ export async function descartarImportacao(prisma: PrismaClient, importacaoId: st
   await prisma.webmapCamadaGrupo.deleteMany({ where: { criadaPorImportacao: importacaoId, camadas: { none: {} } } });
 }
 
-/** No boot (ou antes de aplicar): job EM_ANDAMENTO sem heartbeat há > limite vira FALHA e sua versão incompleta é descartada. Só age se conseguir o lock (ninguém vivo aplicando). */
-export async function recuperarInterrompidas(prisma: PrismaClient, lock: PgSessionLock, limiteMs = HEARTBEAT_LIMITE_MS) {
+/**
+ * No boot e antes de simular/aplicar/status: job EM_ANDAMENTO vira FALHA (e a versão incompleta é descartada) quando
+ * (1) o heartbeat está parado há > limiteMs (60 s), ou (2) o job é de outro processo (bootId ≠ atual ou nulo) e o
+ * heartbeat está parado há > 2 intervalos (20 s) — ex.: kill -9 e reinício rápido. Só age com o lock (ninguém vivo aplicando).
+ */
+export async function recuperarInterrompidas(
+  prisma: PrismaClient, lock: PgSessionLock, limiteMs = HEARTBEAT_LIMITE_MS, bootAtual = BOOT_ID, limiteBootMs = HEARTBEAT_BOOT_LIMITE_MS,
+) {
   if (!(await lock.tentar())) return [] as string[];
   try {
-    const presos = await prisma.webmapImportacao.findMany({ where: { status: 'EM_ANDAMENTO', heartbeatEm: { lt: new Date(Date.now() - limiteMs) } } });
+    const agora = Date.now();
+    const presos = await prisma.webmapImportacao.findMany({
+      where: {
+        status: 'EM_ANDAMENTO',
+        OR: [
+          { heartbeatEm: { lt: new Date(agora - limiteMs) } },
+          { heartbeatEm: { lt: new Date(agora - limiteBootMs) }, OR: [{ bootId: null }, { bootId: { not: bootAtual } }] },
+        ],
+      },
+    });
     for (const job of presos) {
       await descartarImportacao(prisma, job.id);
       await prisma.webmapImportacao.update({ where: { id: job.id }, data: { status: 'FALHA', fase: null, concluidoEm: new Date(), motivo: 'interrompida por reinício' } });
