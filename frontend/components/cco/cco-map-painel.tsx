@@ -262,10 +262,10 @@ export function CcoMapPainel({
       data-testid="cco-map-painel"
       data-layout={celular ? 'sheet' : 'lateral'}
       className={cn(
-        'cco-map-painel pointer-events-auto absolute z-[600] flex flex-col overflow-hidden border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-md)]',
+        'cco-map-painel pointer-events-auto absolute flex flex-col overflow-hidden border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-md)]',
         celular
-          ? 'inset-x-0 bottom-0 h-[85%] rounded-t-[16px] pb-[env(safe-area-inset-bottom)]'
-          : 'top-[4.25rem] right-[4.25rem] bottom-3 w-[360px] max-w-[calc(100%-5rem)] min-w-[min(320px,calc(100%-5rem))] rounded-[var(--r-card)]',
+          ? 'inset-x-0 bottom-0 z-[600] h-[85%] rounded-t-[16px] pb-[env(safe-area-inset-bottom)]'
+          : 'z-[450] top-[4.25rem] right-[4.25rem] bottom-3 w-[360px] max-w-[calc(100%-5rem)] min-w-[min(320px,calc(100%-5rem))] rounded-[var(--r-card)]',
       )}
     >
       {celular ? <div aria-hidden="true" className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[var(--line)]" /> : null}
@@ -313,7 +313,7 @@ export function CcoMapPainel({
       </div>
 
       <div className="shrink-0 space-y-2 border-t border-[var(--line-2)] px-3.5 py-2.5">
-        <div className="min-h-[1em] text-[12px]">
+        <div className={cn('text-[12px]', aba === 'filtros' && (avisoExterno || rascunhoPendente) ? 'min-h-[1em]' : 'h-0 overflow-hidden')}>
           <span role="status" data-testid="cco-painel-status" className="text-[var(--warn-ink,var(--warn))]">
             {aba === 'filtros' && avisoExterno
               ? 'Os filtros foram alterados fora do painel.'
@@ -324,11 +324,11 @@ export function CcoMapPainel({
         </div>
         {isFullscreen ? <p className="text-[11.5px] text-[var(--ink-3)]" data-testid="cco-dica-esc">{MSG_ESC_TELA_CHEIA}</p> : null}
         {aba === 'filtros' ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="ghost" size="lg" className="px-3" onClick={onLimpar}>Limpar filtros</Button>
+          <div className={cn('flex items-center gap-1.5 whitespace-nowrap', celular ? 'flex-nowrap' : 'flex-wrap')}>
+            <Button variant="ghost" size="lg" className="px-2.5" aria-label="Limpar filtros" onClick={onLimpar}>{celular ? 'Limpar' : 'Limpar filtros'}</Button>
             <span className="flex-1" />
-            <Button variant="ghost" size="lg" className="px-3" onClick={onFechar}>Fechar filtros</Button>
-            <Button variant="filled" size="lg" className="px-4" onClick={onAplicar} disabled={!podeAplicar}>Aplicar filtros</Button>
+            <Button variant="ghost" size="lg" className="px-2.5" aria-label="Fechar filtros" onClick={onFechar}>{celular ? 'Fechar' : 'Fechar filtros'}</Button>
+            <Button variant="filled" size="lg" className="px-3.5" aria-label="Aplicar filtros" onClick={onAplicar} disabled={!podeAplicar}>{celular ? 'Aplicar' : 'Aplicar filtros'}</Button>
           </div>
         ) : (
           <div className="flex items-center gap-2">
