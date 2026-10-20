@@ -21,6 +21,20 @@ export const MSG_ESC_TELA_CHEIA = 'Esc sai da tela cheia. Use Fechar para fechar
 
 const LINHA = 'flex min-h-11 items-center gap-2.5 rounded-[var(--r-md)] px-2 text-[13px] text-[var(--ink)] hover:bg-[var(--surface-2)]';
 
+/** 299-U3: dica do Esc só com ponteiro fino (mouse/teclado), nunca no celular. */
+function usePonteiroFino() {
+  const [fino, setFino] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(pointer: fine)');
+    const sync = () => setFino(mq.matches);
+    sync();
+    mq.addEventListener?.('change', sync);
+    return () => mq.removeEventListener?.('change', sync);
+  }, []);
+  return fino;
+}
+
 function useCelular() {
   const [celular, setCelular] = useState(false);
   useEffect(() => {
@@ -50,6 +64,8 @@ export type CcoCamadasProps = {
   onDesligarTodas: () => void;
   calorLigado: boolean;
   onCalor: (ligar: boolean) => void;
+  /** 299-U2: há camada do Webmap (ou o calor) ligada → mostra "Desligar todas". */
+  algumaLigada: boolean;
 };
 
 function CamadasConteudo(p: CcoCamadasProps) {
@@ -97,7 +113,7 @@ function CamadasConteudo(p: CcoCamadasProps) {
           <span>
             Webmap
             {totalWebmap > 0 ? (
-              <span className="ml-2 font-semibold tracking-normal normal-case">{ligadasWebmap} de {totalWebmap} ligadas</span>
+              <span data-testid="cco-webmap-resumo" className="font-semibold tracking-normal normal-case"> · {ligadasWebmap} de {totalWebmap} ligadas</span>
             ) : null}
           </span>
           <ChevronDown className={cn('h-4 w-4 transition-transform', webmapAberto && 'rotate-180')} aria-hidden="true" />
@@ -196,6 +212,7 @@ export function CcoMapPainel({
   camadas: CcoCamadasProps;
 }) {
   const celular = useCelular();
+  const ponteiroFino = usePonteiroFino();
   const tituloId = useId();
   const ref = useRef<HTMLDivElement | null>(null);
   const tituloRef = useRef<HTMLHeadingElement | null>(null);
@@ -322,17 +339,19 @@ export function CcoMapPainel({
                 : ''}
           </span>
         </div>
-        {isFullscreen ? <p className="text-[11.5px] text-[var(--ink-3)]" data-testid="cco-dica-esc">{MSG_ESC_TELA_CHEIA}</p> : null}
+        {isFullscreen && ponteiroFino && !celular ? <p className="text-[11.5px] text-[var(--ink-3)]" data-testid="cco-dica-esc">{MSG_ESC_TELA_CHEIA}</p> : null}
         {aba === 'filtros' ? (
           <div className={cn('flex items-center gap-1.5 whitespace-nowrap', celular ? 'flex-nowrap' : 'flex-wrap')}>
-            <Button variant="ghost" size="lg" className="px-2.5" aria-label="Limpar filtros" onClick={onLimpar}>{celular ? 'Limpar' : 'Limpar filtros'}</Button>
+            <Button variant="ghost" size="lg" className="px-2.5" onClick={onLimpar}>Limpar filtros</Button>
             <span className="flex-1" />
-            <Button variant="ghost" size="lg" className="px-2.5" aria-label="Fechar filtros" onClick={onFechar}>{celular ? 'Fechar' : 'Fechar filtros'}</Button>
-            <Button variant="filled" size="lg" className="px-3.5" aria-label="Aplicar filtros" onClick={onAplicar} disabled={!podeAplicar}>{celular ? 'Aplicar' : 'Aplicar filtros'}</Button>
+            <Button variant="ghost" size="lg" className="px-2.5" onClick={onFechar}>Fechar</Button>
+            <Button variant="filled" size="lg" className="px-3.5" onClick={onAplicar} disabled={!podeAplicar}>Aplicar filtros</Button>
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="lg" className="px-3" onClick={camadas.onDesligarTodas}>Desligar todas</Button>
+            {camadas.algumaLigada ? (
+              <Button variant="ghost" size="lg" className="px-3" onClick={camadas.onDesligarTodas}>Desligar todas</Button>
+            ) : null}
             <span className="flex-1" />
             <Button variant="ghost" size="lg" className="px-3" onClick={onFechar}>Fechar</Button>
           </div>

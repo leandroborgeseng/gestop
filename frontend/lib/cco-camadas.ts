@@ -94,6 +94,11 @@ export function desligarTodas(estado: CcoCamadasEstado): CcoCamadasEstado {
   return { ...estado, ligadas: [] };
 }
 
+/** 299-U2: "Desligar todas" desliga as do Webmap (o calor é desligado pela página); SIGMA fica como está. */
+export function desligarWebmap(estado: CcoCamadasEstado): CcoCamadasEstado {
+  return { ...estado, ligadas: estado.ligadas.filter((id) => !id.startsWith('webmap:')) };
+}
+
 /** Para a 298: ids `webmap:<id>` ligados (ordem de ligação), opcionalmente só os que existem na árvore. */
 export function webmapLigadas(estado: CcoCamadasEstado, arvore?: MapaCamadaGrupo[] | null): string[] {
   const ids = estado.ligadas.filter((id) => id.startsWith('webmap:'));

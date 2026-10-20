@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CCO_CAMADAS_STORAGE_KEY, SIGMA_CAMADA_CHAMADOS, SIGMA_CAMADA_PROPRIOS, alternarCamada, alternarGrupoAberto,
-  camadaLigada, contarCamadasAlemDoPadrao, desligarTodas, estadoCamadasPadrao, lerCamadasSessao, resumoGrupo,
+  camadaLigada, contarCamadasAlemDoPadrao, desligarTodas, desligarWebmap, estadoCamadasPadrao, lerCamadasSessao, resumoGrupo,
   salvarCamadasSessao, webmapLigadas,
 } from './cco-camadas';
 import type { MapaCamadaGrupo } from './types';
@@ -65,5 +65,8 @@ describe('299 · camadas do CCO (D-296c)', () => {
     const off = desligarTodas(e);
     expect(resumoGrupo(off, arvore[0]).texto).toBe('0 de 2 ligadas');
     expect(contarCamadasAlemDoPadrao(off)).toBe(2);
+    const soWebmap = desligarWebmap(e);
+    expect(webmapLigadas(soWebmap)).toEqual([]);
+    expect(camadaLigada(soWebmap, SIGMA_CAMADA_PROPRIOS)).toBe(true);
   });
 });

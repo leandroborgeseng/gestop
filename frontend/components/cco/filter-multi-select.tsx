@@ -23,6 +23,7 @@ export function FilterMultiSelect({
   onChange,
   className,
   selectClassName,
+  textoSemOpcoes,
 }: {
   label?: string;
   placeholder: string;
@@ -31,7 +32,10 @@ export function FilterMultiSelect({
   onChange: (next: string[] | undefined) => void;
   className?: string;
   selectClassName?: string;
+  /** 299-U3: sem opções, o select fica desabilitado com este texto auxiliar (opt-in). */
+  textoSemOpcoes?: string;
 }) {
+  const semOpcoes = Boolean(textoSemOpcoes) && options.length === 0;
   const available = options.filter((option) => !selected.includes(option.value));
 
   function add(value: string) {
@@ -61,7 +65,9 @@ export function FilterMultiSelect({
       <select
         value=""
         onChange={(event) => add(event.target.value)}
-        className={cn(SELECT_CLASS, selectClassName)}
+        className={cn(SELECT_CLASS, selectClassName, semOpcoes && 'cursor-not-allowed opacity-60')}
+        disabled={semOpcoes}
+        aria-label={label}
       >
         <option value="">
           {available.length ? placeholder : options.length ? 'Todos já selecionados' : 'Nenhuma opção disponível'}
@@ -72,6 +78,7 @@ export function FilterMultiSelect({
           </option>
         ))}
       </select>
+      {semOpcoes ? <p className="mt-1 text-[11px] text-[var(--ink-3)]">{textoSemOpcoes}</p> : null}
       {selected.length ? (
         <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
           {selected.map((value) => {

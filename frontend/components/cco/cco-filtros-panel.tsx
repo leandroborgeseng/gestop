@@ -369,6 +369,7 @@ export function CcoFiltrosPanel({
                 <FilterMultiSelect
                   label="Tipo de chamado"
                   placeholder="Selecionar tipo de chamado…"
+                  textoSemOpcoes="Sem tipos para os filtros atuais"
                   options={tipoChamadoOptions}
                   selected={tiposChamadoSelecionados}
                   onChange={(next) => onFiltersChange((prev) => ({ ...prev, tiposChamadoId: next }))}
@@ -491,6 +492,7 @@ export function CcoFiltrosPanel({
               <FilterMultiSelect
                 label="Tipo de chamado"
                 placeholder="Selecionar tipo de chamado…"
+                  textoSemOpcoes="Sem tipos para os filtros atuais"
                 options={tipoChamadoOptions}
                 selected={chamadoFilters.tipoChamadoId ?? []}
                 onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, tipoChamadoId: next }))}

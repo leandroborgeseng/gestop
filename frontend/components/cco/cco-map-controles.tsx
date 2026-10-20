@@ -73,7 +73,6 @@ export function CcoMapControles({
   atualizando,
   onAtualizar,
   rascunhoPendente,
-  atualizadoAs,
   filtrosRef,
   camadasRef,
 }: {
@@ -84,8 +83,6 @@ export function CcoMapControles({
   atualizando: boolean;
   onAtualizar: () => void;
   rascunhoPendente: boolean;
-  /** "14h35" (BRT) da última carga bem-sucedida. */
-  atualizadoAs: string | null;
   filtrosRef?: Ref<HTMLButtonElement>;
   camadasRef?: Ref<HTMLButtonElement>;
 }) {
@@ -95,7 +92,7 @@ export function CcoMapControles({
   const dicaAtualizar = rascunhoPendente && !atualizando ? 'Atualizar mapa (usa os filtros aplicados)' : rotuloAtualizar;
 
   return (
-    <div className="mt-1 flex flex-col items-end gap-2 border-t border-[var(--line)] pt-2" data-testid="cco-map-controles">
+    <div className="mt-1 flex w-11 flex-col items-end gap-2 self-end border-t border-[var(--line)] pt-2" data-testid="cco-map-controles">
       <ComTooltip texto="Filtros">
         <button
           ref={filtrosRef}
@@ -138,16 +135,6 @@ export function CcoMapControles({
           <Selo n={camadasAlemDoPadrao} testId="cco-selo-camadas" />
         </button>
       </ComTooltip>
-      <span
-        role="status"
-        data-testid="cco-atualizado-as"
-        className={cn(
-          'rounded-[var(--r-pill)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-2 py-0.5 text-[11px] font-semibold text-[var(--ink-2)] shadow-[var(--sh-sm)]',
-          !atualizadoAs && 'sr-only',
-        )}
-      >
-        {atualizadoAs ? `Atualizado às ${atualizadoAs}` : ''}
-      </span>
     </div>
   );
 }

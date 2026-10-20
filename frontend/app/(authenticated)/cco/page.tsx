@@ -52,10 +52,11 @@ import {
   alternarGrupoAberto,
   camadaLigada,
   contarCamadasAlemDoPadrao,
-  desligarTodas,
+  desligarWebmap,
   estadoCamadasPadrao,
   lerCamadasSessao,
   salvarCamadasSessao,
+  webmapLigadas,
 } from '@/lib/cco-camadas';
 
 export const MSG_ERRO_ATUALIZAR_MAPA = 'Não foi possível atualizar o mapa. Tente novamente.';
@@ -648,13 +649,24 @@ function CcoPageContent() {
                   atualizando={atualizando}
                   onAtualizar={atualizarMapa}
                   rascunhoPendente={rascunhoPendente}
-                  atualizadoAs={atualizadoAs}
                   filtrosRef={botaoFiltrosRef}
                   camadasRef={botaoCamadasRef}
                 />
               }
               alertaMapa={
                 <>
+                  {/* 299-U1: chip no topo à esquerda (abaixo de "N no mapa"): nunca sobre o painel nem o zoom */}
+                  <span
+                    role="status"
+                    data-testid="cco-atualizado-as"
+                    className={
+                      atualizadoAs
+                        ? 'self-start rounded-[var(--r-pill)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--ink-2)] shadow-[var(--sh-sm)]'
+                        : 'sr-only'
+                    }
+                  >
+                    {atualizadoAs ? `Atualizado às ${atualizadoAs}` : ''}
+                  </span>
                   {erroMapa ? (
                     <div
                       role="alert"
@@ -748,10 +760,11 @@ function CcoPageContent() {
                       onAlternar: (id, ligar) => setCamadas((c) => alternarCamada(c, id, ligar)),
                       onAlternarGrupo: (g) => setCamadas((c) => alternarGrupoAberto(c, g)),
                       onDesligarTodas: () => {
-                        setCamadas((c) => desligarTodas(c));
+                        setCamadas((c) => desligarWebmap(c));
                         setChamadoMapMode('situacao');
                       },
                       calorLigado,
+                      algumaLigada: calorLigado || webmapLigadas(camadas, arvoreCamadas).length > 0,
                       onCalor: (ligar) => setChamadoMapMode(ligar ? 'calor' : 'situacao'),
                     }}
                   />

@@ -8,10 +8,18 @@ import { estadoCamadasPadrao } from '@/lib/cco-camadas';
 
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
+/** matchMedia falso para as consultas do painel; devolve a função que restaura. */
+function midia(map: Record<string, boolean>) {
+  const w = window as unknown as { matchMedia?: unknown };
+  const antes = w.matchMedia;
+  w.matchMedia = (q: string) => ({ matches: Boolean(map[q]), media: q, addEventListener() {}, removeEventListener() {} });
+  return () => { w.matchMedia = antes; };
+}
+
 const camadasBase = (over = {}) => ({
   estado: estadoCamadasPadrao(), arvore: [], carregando: false, erro: false,
   onTentarNovamente: vi.fn(), onAlternar: vi.fn(), onAlternarGrupo: vi.fn(), onDesligarTodas: vi.fn(),
-  calorLigado: false, onCalor: vi.fn(), ...over,
+  calorLigado: false, onCalor: vi.fn(), algumaLigada: false, ...over,
 });
 const painel = (over: Record<string, unknown> = {}) =>
   createElement(CcoMapPainel, {
@@ -21,7 +29,7 @@ const painel = (over: Record<string, unknown> = {}) =>
   } as never);
 
 describe('299 · controles do mapa', () => {
-  const base = { painelAberto: null, onAbrir: vi.fn(), filtrosAtivos: 0, camadasAlemDoPadrao: 0, atualizando: false, onAtualizar: vi.fn(), rascunhoPendente: false, atualizadoAs: null };
+  const base = { painelAberto: null, onAbrir: vi.fn(), filtrosAtivos: 0, camadasAlemDoPadrao: 0, atualizando: false, onAtualizar: vi.fn(), rascunhoPendente: false };
 
   it('rótulos, aria-controls e selo de filtros ativos', () => {
     render(createElement(CcoMapControles, { ...base, filtrosAtivos: 3 }));
@@ -34,11 +42,11 @@ describe('299 · controles do mapa', () => {
     expect(f.className).toContain('h-11');
   });
 
-  it('selo some com 0; chip "Atualizado às" em role=status', () => {
-    render(createElement(CcoMapControles, { ...base, atualizadoAs: '14h35' }));
+  it('selo some com 0; o chip "Atualizado às" não fica mais na pilha (299-U1)', () => {
+    render(createElement(CcoMapControles, base));
     expect(screen.queryByTestId('cco-selo-filtros')).toBeNull();
-    expect(screen.getByTestId('cco-atualizado-as').textContent).toBe('Atualizado às 14h35');
-    expect(screen.getByTestId('cco-atualizado-as').getAttribute('role')).toBe('status');
+    expect(screen.queryByTestId('cco-atualizado-as')).toBeNull();
+    expect(screen.getByTestId('cco-map-controles').className).toContain('w-11');
   });
 
   it('atualizando: aria-busy, rótulo "Atualizando mapa…" e clique ignorado', () => {
@@ -92,10 +100,27 @@ describe('299 · painel #cco-map-painel', () => {
     expect(onFechar).toHaveBeenCalledTimes(1);
     unmount();
     const onFechar2 = vi.fn();
+    const mm = midia({ '(pointer: fine)': true });
     render(painel({ onFechar: onFechar2, fullscreenMode: 'native' }));
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(onFechar2).not.toHaveBeenCalled();
     expect(screen.getByTestId('cco-dica-esc').textContent).toBe(MSG_ESC_TELA_CHEIA);
+    mm();
+  });
+
+  it('299-U3: celular (sem ponteiro fino) não mostra a dica do Esc; rodapé com os mesmos rótulos', () => {
+    const mm = midia({ '(max-width: 599px)': true, '(pointer: fine)': false });
+    render(painel({ fullscreenMode: 'native' }));
+    expect(screen.queryByTestId('cco-dica-esc')).toBeNull();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+    for (const n of ['Limpar filtros', 'Fechar', 'Aplicar filtros']) expect(screen.getByRole('button', { name: n })).toBeTruthy();
+    mm();
+  });
+
+  it('299-U3: desktop usa os mesmos rótulos do rodapé', () => {
+    render(painel());
+    for (const n of ['Limpar filtros', 'Fechar', 'Aplicar filtros']) expect(screen.getByRole('button', { name: n })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Fechar filtros' })).toBeNull();
   });
 
   it('Esc no fallback por classe fecha o painel (1º Esc)', () => {
@@ -112,7 +137,14 @@ describe('299 · painel #cco-map-painel', () => {
     expect((screen.getByLabelText('Mapa de calor dos chamados') as HTMLInputElement).checked).toBe(false);
     expect(screen.getByTestId('cco-camadas-vazio').textContent).toBe(MSG_CAMADAS_VAZIO);
     expect(screen.queryByRole('button', { name: 'Aplicar filtros' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Desligar todas' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Desligar todas' })).toBeNull(); // 299-U2: nada ligado
+  });
+
+  it('299-U2: "Desligar todas" só com camada ligada', () => {
+    const onDesligarTodas = vi.fn();
+    render(painel({ aba: 'camadas', camadas: camadasBase({ algumaLigada: true, onDesligarTodas }) }));
+    fireEvent.click(screen.getByRole('button', { name: 'Desligar todas' }));
+    expect(onDesligarTodas).toHaveBeenCalled();
   });
 
   it('Camadas: erro com Tentar novamente; Webmap desligado por padrão e "N de M ligadas"', () => {
@@ -128,7 +160,8 @@ describe('299 · painel #cco-map-painel', () => {
     render(painel({ aba: 'camadas', camadas: camadasBase({ estado, arvore, onAlternar }) }));
     const cb = screen.getByLabelText('Bocas de lobo') as HTMLInputElement;
     expect(cb.checked).toBe(false);
-    expect(screen.getAllByText('0 de 1 ligadas').length).toBe(2);
+    expect(screen.getByTestId('cco-webmap-resumo').textContent).toBe(' · 0 de 1 ligadas');
+    expect(screen.getAllByText(/0 de 1 ligadas/).length).toBe(2);
     fireEvent.click(cb);
     expect(onAlternar).toHaveBeenCalledWith('webmap:a', true);
   });
