@@ -13,7 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { executarAplicacao, FonteMudouError, HEARTBEAT_LIMITE_MS, PgSessionLock, recuperarInterrompidas, ResultadoSimulacao, simular } from './core';
 import { DiretorioWebmapFonte } from './source';
-import { WebmapCamadasService } from './webmap-camadas.service';
+import { FILTRO_EXIBICAO, WebmapCamadasService } from './webmap-camadas.service';
 
 const URL = process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL && process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL !== process.env.DATABASE_URL ? process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL : undefined;
 const ROOT = join(__dirname, '../..');
@@ -328,4 +328,26 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
     await prisma.webmapImportacao.update({ where: { id: job.id }, data: { status: 'SUCESSO', concluidoEm: new Date() } });
     expect(await recuperarInterrompidas(prisma, new PgSessionLock(URL!), limiteMs)).toEqual([]);
   }, 60_000);
+  it('mapa ignora explicitamente geometriaInvalida e bbox nulo: válida, inválida com bbox, inválida sem bbox => só a válida; com e sem bbox na consulta', async () => {
+    const feicoes = [
+      '{"type": "Feature", "properties": {"fid": "valida"}, "geometry": {"type": "Point", "coordinates": [-47.41, -20.51]}}',
+      '{"type": "Feature", "properties": {"fid": "invalida-com-bbox"}, "geometry": {"type": "LineString", "coordinates": [[-47.41, -20.51]]}}',
+      '{"type": "Feature", "properties": {"fid": "invalida-bbox-nulo"}, "geometry": null}',
+    ].join(', ');
+    const dir = variante('v1', 'PONTO_VICIADO_120.js', (t) => t.replace(/"features": \[[\s\S]*\]\s*\};?\s*$/, `"features": [${feicoes}]};`));
+    await aplicarAgora(fonte(dir));
+    const c = (await prisma.webmapCamada.findMany({ where: { arquivoOrigem: 'PONTO_VICIADO_120.js' } }))[0];
+    const gravados = await prisma.webmapElemento.findMany({ where: { camadaId: c.id, versao: c.versaoAtual! }, orderBy: { fidOrigem: 'asc' } });
+    expect(gravados.map((g) => [g.fidOrigem, g.geometriaInvalida, g.minLng === null])).toEqual([
+      ['invalida-bbox-nulo', true, true], ['invalida-com-bbox', true, false], ['valida', false, false],
+    ]);
+    // prova de que é a query (e não só a marca) que filtra: a inválida com bbox passa a ter geometriaInvalida=false mas bbox nulo
+    await prisma.webmapElemento.updateMany({ where: { camadaId: c.id, fidOrigem: 'invalida-com-bbox' }, data: { geometriaInvalida: false, minLng: null } });
+    const service = new WebmapCamadasService(prisma as never, {} as never);
+    for (const [bbox, zoom] of [[undefined, undefined], ['-180,-90,180,90', '14']] as const) {
+      const gj = await service.geojson(c.id, bbox, zoom);
+      expect(gj.features.map((f) => f.id)).toEqual(['valida']);
+    }
+    expect(FILTRO_EXIBICAO).toMatchObject({ geometriaInvalida: false, minLng: { not: null }, minLat: { not: null }, maxLng: { not: null }, maxLat: { not: null } });
+  });
 });

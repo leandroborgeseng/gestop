@@ -12,6 +12,15 @@ import { leitorEmWorker } from './job';
 import { GithubWebmapFonte, WebmapCamadasFonte } from './source';
 
 const LIMITE_ELEMENTOS_RESPOSTA = 5000;
+
+/**
+ * 296 (TL): toda consulta de EXIBIÇÃO no mapa ignora, explicitamente, feições sem conserto e feições com bbox nulo.
+ * Elas continuam gravadas (geometria original), no CSV e no resultado PARCIAL.
+ */
+export const FILTRO_EXIBICAO = {
+  geometriaInvalida: false,
+  minLng: { not: null }, minLat: { not: null }, maxLng: { not: null }, maxLat: { not: null },
+} satisfies Prisma.WebmapElementoWhereInput;
 const CAMADA_PESADA_ELEMENTOS = 2000;
 
 export function dataHoraBrt(d: Date) {
@@ -254,8 +263,7 @@ export class WebmapCamadasService implements OnModuleInit {
     const pesada = camada.totalElementos > CAMADA_PESADA_ELEMENTOS;
     if (pesada && !bbox) throw new BadRequestException('Camada pesada: informe bbox e zoom.');
     const zoom = zoomParam ? Number(zoomParam) : 18;
-    // feições sem conserto (geometriaInvalida) ficam gravadas, mas não são desenhadas
-    const where: Prisma.WebmapElementoWhereInput = { camadaId: camada.id, versao: camada.versaoAtual!, geometriaInvalida: false };
+    const where: Prisma.WebmapElementoWhereInput = { camadaId: camada.id, versao: camada.versaoAtual!, ...FILTRO_EXIBICAO };
     if (bbox) Object.assign(where, { minLng: { lte: bbox[2] }, maxLng: { gte: bbox[0] }, minLat: { lte: bbox[3] }, maxLat: { gte: bbox[1] } });
     const rows = await this.db.webmapElemento.findMany({ where, take: LIMITE_ELEMENTOS_RESPOSTA + 1, select: { fidOrigem: true, geometria: true, atributos: true, corrigida: true } });
     const truncado = rows.length > LIMITE_ELEMENTOS_RESPOSTA;
