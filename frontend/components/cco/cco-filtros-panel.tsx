@@ -379,6 +379,7 @@ export function CcoFiltrosPanel({
               <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <FilterMultiSelect
                   label="Secretaria"
+                  textoSemOpcoes="Sem secretarias para os filtros atuais"
                   placeholder="Selecionar secretaria…"
                   options={secretariaOptions}
                   selected={secretariaIdsSelected}
@@ -388,6 +389,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Bairro"
+                  textoSemOpcoes="Sem bairros para os filtros atuais"
                   placeholder="Selecionar bairro…"
                   options={bairroOptions}
                   selected={bairrosSelected}
@@ -395,6 +397,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Região"
+                  textoSemOpcoes="Sem regiões para os filtros atuais"
                   placeholder="Selecionar região…"
                   options={regiaoOptions}
                   selected={regioesSelected}
@@ -402,6 +405,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Tipo de próprio"
+                  textoSemOpcoes="Sem tipos de próprio para os filtros atuais"
                   placeholder="Selecionar tipo de próprio…"
                   options={tipoOptions}
                   selected={tiposSelected}
@@ -409,6 +413,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Equipe do chamado"
+                  textoSemOpcoes="Sem equipes para os filtros atuais"
                   placeholder="Selecionar equipe…"
                   options={equipeOptions}
                   selected={filters.equipeIds ?? []}
@@ -470,6 +475,7 @@ export function CcoFiltrosPanel({
               </div>
               <FilterMultiSelect
                 label="Status"
+                textoSemOpcoes="Sem status para os filtros atuais"
                 placeholder="Selecionar status…"
                 options={statusOptions}
                 selected={chamadoFilters.status ?? []}
@@ -484,6 +490,7 @@ export function CcoFiltrosPanel({
               </div>
               <FilterMultiSelect
                 label="Prioridade"
+                textoSemOpcoes="Sem prioridades para os filtros atuais"
                 placeholder="Selecionar prioridade…"
                 options={prioridadeOptions}
                 selected={chamadoFilters.prioridade ?? []}
@@ -492,13 +499,14 @@ export function CcoFiltrosPanel({
               <FilterMultiSelect
                 label="Tipo de chamado"
                 placeholder="Selecionar tipo de chamado…"
-                  textoSemOpcoes="Sem tipos para os filtros atuais"
+                textoSemOpcoes="Sem tipos para os filtros atuais"
                 options={tipoChamadoOptions}
                 selected={chamadoFilters.tipoChamadoId ?? []}
                 onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, tipoChamadoId: next }))}
               />
               <FilterMultiSelect
                 label="Bairro"
+                textoSemOpcoes="Sem bairros para os filtros atuais"
                 placeholder="Selecionar bairro…"
                 options={bairroOptions}
                 selected={chamadoBairrosSelected}
@@ -508,6 +516,7 @@ export function CcoFiltrosPanel({
               />
               <FilterMultiSelect
                 label="Equipe do chamado"
+                textoSemOpcoes="Sem equipes para os filtros atuais"
                 placeholder="Selecionar equipe…"
                 options={equipeOptions}
                 selected={chamadoFilters.equipeIds ?? []}

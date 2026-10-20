@@ -1,6 +1,7 @@
 'use client';
 
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -219,9 +220,14 @@ export function CcoMapPainel({
   const fecharRef = useRef(onFechar);
   fecharRef.current = onFechar;
 
+  const isFullscreen = fullscreenMode !== 'off';
+  // 299-F2: < 600 px fora da tela cheia, o sheet vai para a viewport (portal no body), sem forçar tela cheia.
+  const sheetViewport = celular && !isFullscreen && typeof document !== 'undefined';
+
+  // Ao trocar de lugar (inline ↔ portal) o nó é recriado: devolve o foco ao título.
   useEffect(() => {
     tituloRef.current?.focus();
-  }, []);
+  }, [sheetViewport]);
 
   // Roda/toque no painel não mexem no mapa.
   useEffect(() => {
@@ -254,6 +260,12 @@ export function CcoMapPainel({
         if (foco.length === 0) return;
         const primeiro = foco[0];
         const ultimo = foco[foco.length - 1];
+        // 299-F2: foco fora do sheet modal (ex.: perdido no body) volta para dentro.
+        if (!ref.current.contains(document.activeElement)) {
+          e.preventDefault();
+          (e.shiftKey ? ultimo : primeiro).focus();
+          return;
+        }
         if (e.shiftKey && document.activeElement === primeiro) {
           e.preventDefault();
           ultimo.focus();
@@ -267,9 +279,7 @@ export function CcoMapPainel({
     return () => document.removeEventListener('keydown', onKey, true);
   }, [fullscreenMode, celular]);
 
-  const isFullscreen = fullscreenMode !== 'off';
-
-  return (
+  const painel = (
     <div
       id="cco-map-painel"
       ref={ref}
@@ -278,11 +288,14 @@ export function CcoMapPainel({
       aria-labelledby={tituloId}
       data-testid="cco-map-painel"
       data-layout={celular ? 'sheet' : 'lateral'}
+      data-sheet-viewport={sheetViewport ? 'true' : undefined}
       className={cn(
-        'cco-map-painel pointer-events-auto absolute flex flex-col overflow-hidden border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-md)]',
+        'cco-map-painel pointer-events-auto flex flex-col overflow-hidden border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-md)]',
         celular
-          ? 'inset-x-0 bottom-0 z-[600] h-[85%] rounded-t-[16px] pb-[env(safe-area-inset-bottom)]'
-          : 'z-[450] top-[4.25rem] right-[4.25rem] bottom-3 w-[360px] max-w-[calc(100%-5rem)] min-w-[min(320px,calc(100%-5rem))] rounded-[var(--r-card)]',
+          ? sheetViewport
+            ? 'fixed inset-x-0 bottom-0 z-[1100] h-[85dvh] max-h-[85vh] rounded-t-[16px] pb-[env(safe-area-inset-bottom)]'
+            : 'absolute inset-x-0 bottom-0 z-[600] h-[85%] rounded-t-[16px] pb-[env(safe-area-inset-bottom)]'
+          : 'absolute z-[450] top-[4.25rem] right-[4.25rem] bottom-3 w-[360px] max-w-[calc(100%-5rem)] min-w-[min(320px,calc(100%-5rem))] rounded-[var(--r-card)]',
       )}
     >
       {celular ? <div aria-hidden="true" className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[var(--line)]" /> : null}
@@ -359,4 +372,6 @@ export function CcoMapPainel({
       </div>
     </div>
   );
+
+  return sheetViewport ? createPortal(painel, document.body) : painel;
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { Chip } from '@/components/ui/chip';
+import { useId } from 'react';
 import { cn } from '@/lib/cn';
 
 export type FilterMultiSelectOption = {
@@ -32,9 +33,10 @@ export function FilterMultiSelect({
   onChange: (next: string[] | undefined) => void;
   className?: string;
   selectClassName?: string;
-  /** 299-U3: sem opções, o select fica desabilitado com este texto auxiliar (opt-in). */
+  /** 299-U3/F3: sem opções, o select fica desabilitado com este texto auxiliar (opt-in; o painel da CCO usa em todos). */
   textoSemOpcoes?: string;
 }) {
+  const auxId = useId();
   const semOpcoes = Boolean(textoSemOpcoes) && options.length === 0;
   const available = options.filter((option) => !selected.includes(option.value));
 
@@ -67,7 +69,8 @@ export function FilterMultiSelect({
         onChange={(event) => add(event.target.value)}
         className={cn(SELECT_CLASS, selectClassName, semOpcoes && 'cursor-not-allowed opacity-60')}
         disabled={semOpcoes}
-        aria-label={label}
+        aria-label={label ?? placeholder}
+        aria-describedby={semOpcoes ? auxId : undefined}
       >
         <option value="">
           {available.length ? placeholder : options.length ? 'Todos já selecionados' : 'Nenhuma opção disponível'}
@@ -78,7 +81,7 @@ export function FilterMultiSelect({
           </option>
         ))}
       </select>
-      {semOpcoes ? <p className="mt-1 text-[11px] text-[var(--ink-3)]">{textoSemOpcoes}</p> : null}
+      {semOpcoes ? <p id={auxId} data-testid="filtro-sem-opcoes" className="mt-1 text-[11px] text-[var(--ink-3)]">{textoSemOpcoes}</p> : null}
       {selected.length ? (
         <div className="mt-2 flex min-w-0 flex-wrap gap-1.5">
           {selected.map((value) => {
