@@ -9,6 +9,23 @@ on:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: sigma
+          POSTGRES_PASSWORD: sigma
+          POSTGRES_DB: sigma_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U sigma" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # Banco descartável do runner; credenciais de CI, sem segredo real.
+      DATABASE_URL: postgresql://sigma:sigma@127.0.0.1:5432/sigma_ci?schema=public
+      JWT_SECRET: ci-e2e-jwt-secret-somente-runner-0123456789
+      INITIAL_ADMIN_PASSWORD: ci-e2e-admin-0123
+      NODE_ENV: test
+      BACKEND_INTERNAL_URL: http://127.0.0.1:3001
     defaults:
       run:
         working-directory: frontend
@@ -18,11 +35,29 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - name: Backend (migrate, seed, build, start)
+        working-directory: .
+        run: |
+          npm ci
+          npx prisma generate
+          npx prisma migrate deploy
+          npm run prisma:seed
+          npm run build
+          PORT=3001 nohup node dist/src/main.js > backend.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:3001/health && break; sleep 2; done
+          curl -fsS http://127.0.0.1:3001/health
       - run: npm ci
+      - run: npm run build
       - run: npx playwright install chromium --with-deps
       - name: E2E smoke (paginas publicas)
         run: npm run test:e2e -- e2e/smoke.spec.ts e2e/core-flows.spec.ts --grep "Health checks|Chamado publico"
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
           CI: 'true'
+      - name: Log do backend (em falha)
+        if: failure()
+        working-directory: .
+        run: tail -n 200 backend.log || true
