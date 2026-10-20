@@ -601,3 +601,14 @@ a {
     max-height: min(42vh, 380px);
   }
 }
+
+/* 299: filtros da sanfona reaproveitados no painel do mapa, em 1 coluna. */
+.cco-filtros-painel .grid {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+.cco-filtros-painel [class*='col-span'] {
+  grid-column: auto !important;
+}
+.cco-filtros-painel .flex-wrap > * {
+  max-width: 100%;
+}

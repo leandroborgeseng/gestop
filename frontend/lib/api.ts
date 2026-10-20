@@ -2134,6 +2134,11 @@ export function getWebmapCamadasStatus() {
   return request<import('./types').WebmapCamadasStatus>('/admin/importacao/webmap-camadas/status');
 }
 
+/** 299 — árvore das camadas do Webmap para o mapa (usuários do CCO). */
+export function getMapaCamadas() {
+  return request<import('./types').MapaCamadaGrupo[]>('/mapa/camadas');
+}
+
 export function getWebmapCamadasHistorico(limit = 10) {
   return request<import('./types').WebmapCamadasHistoricoItem[]>(`/admin/importacao/webmap-camadas/historico?limit=${limit}`);
 }

@@ -1667,3 +1667,20 @@ export type WebmapCamadasStatus = {
   ativas: number;
   removidasOrigem: number;
 };
+
+/** 299/298 — árvore de `GET /mapa/camadas` (D-296c: todas desligadas por padrão). */
+export type MapaCamada = {
+  /** `webmap:<camadaId>` */
+  id: string;
+  camadaId: string;
+  nomeOriginal: string;
+  geometriaTipo: string | null;
+  estilo: Record<string, unknown> | null;
+  totalElementos: number;
+  bbox: number[] | null;
+  versaoAtual: number | string | null;
+  bytesOrigem?: number | null;
+  ligadaPorPadrao: false;
+  pesada: boolean;
+};
+export type MapaCamadaGrupo = { id: string; titulo: string; camadas: MapaCamada[] };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import { MapPinOff } from 'lucide-react';
 import {
@@ -279,6 +279,13 @@ function HeatLegendBox({ points }: { points: Array<{ lat: number; lng: number }>
   );
 }
 
+/** 299: contexto passado ao painel dentro do shell. */
+export type MapaPainelContexto = {
+  isFullscreen: boolean;
+  /** `fallback` = classe CSS (sem Fullscreen API): aí a página controla o Esc. */
+  fullscreenMode: 'off' | 'native' | 'fallback';
+};
+
 export function OperationalMapClient({
   view = 'unidades',
   unidades = [],
@@ -292,6 +299,11 @@ export function OperationalMapClient({
   onHover,
   popupActionKind = 'modal',
   notaCorte,
+  controlesExtra,
+  renderPainel,
+  alertaMapa,
+  manterVista = false,
+  ocultarPinos = false,
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -306,7 +318,19 @@ export function OperationalMapClient({
   /** 295: nota quando o resultado foi cortado (mapa de calor e legenda). */
   notaCorte?: string;
   popupActionKind?: MapPopupActionKind;
+  /** 299: botões extras na pilha da direita, abaixo da tela cheia (pilha passa a 44 px). */
+  controlesExtra?: ReactNode;
+  /** 299: painel renderizado DENTRO do `.sigma-map-shell` (visível na tela cheia). */
+  renderPainel?: (ctx: MapaPainelContexto) => ReactNode;
+  /** 299: alertas/status no topo à esquerda, dentro do shell. */
+  alertaMapa?: ReactNode;
+  /** 299: dados novos vindos de Aplicar/Atualizar não mudam centro nem zoom (sem fitBounds). */
+  manterVista?: boolean;
+  /** 299: camada SIGMA da aba desligada no painel Camadas (pinos ocultos; calor segue o modo). */
+  ocultarPinos?: boolean;
 }) {
+  const manterVistaRef = useRef(manterVista);
+  manterVistaRef.current = manterVista;
   const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -639,7 +663,7 @@ export function OperationalMapClient({
     }
 
     // Modo calor: o clearLayers já removeu os pinos. Não recolocar marcadores de chamado nem de próprio.
-    if (!calor && view === 'chamados') {
+    if (!calor && !ocultarPinos && view === 'chamados') {
       locatedChamados.forEach(({ chamado, latLng }) => {
         const marker = L.marker(latLng, {
           icon: createUnitIcon(resolveChamadoMarkerColor(chamado.slaMapa), 'normal'),
@@ -670,7 +694,7 @@ export function OperationalMapClient({
         markerByIdRef.current.set(chamado.id, marker);
         chamadoByIdRef.current.set(chamado.id, chamado);
       });
-    } else if (!calor) {
+    } else if (!calor && !ocultarPinos && view !== 'chamados') {
       locatedUnidades.forEach(({ unidade, latLng }) => {
         const marker = L.marker(latLng, {
           icon: resolveUnidadeMarkerIcon(unidade, mapMode, categoriaFiltroId, 'normal'),
@@ -741,12 +765,16 @@ export function OperationalMapClient({
     }
 
     const shouldRefit = lastFitKeyRef.current !== locatedKey;
-    if (shouldRefit) {
+    if (shouldRefit && manterVistaRef.current && lastFitKeyRef.current !== '') {
+      // 299: Aplicar/Atualizar mantêm centro e zoom; só registra os dados como já enquadrados.
+      lastFitKeyRef.current = locatedKey;
+      refreshMapSize(map);
+    } else if (shouldRefit) {
       scheduleRefit(map, 'data');
     } else {
       refreshMapSize(map);
     }
-  }, [mapReady, locatedKey, locatedUnidades, locatedChamados, scheduleRefit, mapMode, categoriaFiltroId, view]);
+  }, [mapReady, locatedKey, locatedUnidades, locatedChamados, scheduleRefit, mapMode, categoriaFiltroId, view, ocultarPinos]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -852,7 +880,18 @@ export function OperationalMapClient({
           onBasemapChange={setBasemap}
           isFullscreen={isFullscreen}
           onToggleFullscreen={() => void toggleFullscreen()}
-        />
+          alvo44={Boolean(controlesExtra)}
+        >
+          {controlesExtra}
+        </MapViewControls>
+
+        {alertaMapa ? (
+          <div className="pointer-events-none absolute top-14 left-3.5 z-[520] flex max-w-[min(420px,calc(100%-5.5rem))] flex-col gap-2">
+            {alertaMapa}
+          </div>
+        ) : null}
+
+        {renderPainel ? renderPainel({ isFullscreen, fullscreenMode }) : null}
 
         <div className="pointer-events-none absolute top-3.5 left-3.5 z-[500]">
           <span className="inline-flex items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-3 py-1.5 text-xs font-semibold text-[var(--ink-2)] shadow-[var(--sh-sm)] backdrop-blur-md">
