@@ -11,10 +11,10 @@ export default defineConfig({
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: process.env.CI
     ? {
-        command: 'npm run start',
+        command: 'node ./scripts/e2e-webserver.mjs',
         url: 'http://127.0.0.1:3000/login',
         reuseExistingServer: false,
-        timeout: 120_000,
+        timeout: 600_000,
       }
     : undefined,
 });
