@@ -78,7 +78,7 @@ export class WebmapCamadasService {
     if (!sim) throw new BadRequestException('Simule a importação antes de aplicar.');
     if (Date.now() - new Date(sim.criadaEm).getTime() > SIMULACAO_TTL_MS) {
       this.simulacoes.delete(sim.simulacaoId);
-      throw new ConflictException('A simulação expirou (30 min). Simule de novo.');
+      throw new ConflictException('O prazo da simulação (30 min) venceu; simule novamente.');
     }
     this.ocupar('APLICACAO', user);
     try {

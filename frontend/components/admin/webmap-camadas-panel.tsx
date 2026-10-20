@@ -139,7 +139,7 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
 
         <div role="status" aria-live="polite" className="md-body-md">
           {executando ? FASE_LABEL[status?.emAndamento?.fase ?? 'lendo_fonte'] : null}
-          {simulacao && !executando ? (expirada ? 'A simulação expirou. Simule de novo.' : `Simulação válida até ${horaBrt(simulacao.expiraEm)} (BRT).`) : null}
+          {simulacao && !executando ? (expirada ? 'O prazo da simulação venceu; simule novamente.' : `Simulação válida até ${horaBrt(simulacao.expiraEm)} (BRT).`) : null}
         </div>
 
         {resumo ? (

@@ -166,9 +166,9 @@ export async function aplicar(
 ): Promise<ResultadoAplicacao> {
   const inicio = Date.now();
   const agora = opts.agora ?? new Date();
-  if (agora.getTime() - new Date(sim.criadaEm).getTime() > SIMULACAO_TTL_MS) throw new FonteMudouError('A simulação expirou (30 min). Simule de novo.');
+  if (agora.getTime() - new Date(sim.criadaEm).getTime() > SIMULACAO_TTL_MS) throw new FonteMudouError('O prazo da simulação (30 min) venceu; simule novamente.');
   const { resultado: atual, plano } = await simular(prisma, fonte, opts.onFase);
-  if (atual.fonteHash !== sim.fonteHash) throw new FonteMudouError('A fonte do Webmap mudou desde a simulação. Simule de novo.');
+  if (atual.fonteHash !== sim.fonteHash) throw new FonteMudouError('A fonte mudou desde a simulação; simule novamente.');
   const leitura = await lerEstrutura(fonte);
   const decl = new Map(leitura.declaradas.map((d) => [d.chave, d]));
 

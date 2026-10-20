@@ -138,7 +138,7 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres)', () =>
   it('simulação expirada ou fonte alterada: aplicação recusada', async () => {
     const { resultado } = await simular(prisma, fonte('v1'));
     await expect(aplicar(prisma, fonte('v2'), resultado)).rejects.toBeInstanceOf(FonteMudouError);
-    await expect(aplicar(prisma, fonte('v1'), resultado, { agora: new Date(Date.now() + 31 * 60_000) })).rejects.toThrow(/expirou/);
+    await expect(aplicar(prisma, fonte('v1'), resultado, { agora: new Date(Date.now() + 31 * 60_000) })).rejects.toThrow(/prazo da simulação/);
   });
 
   it('v2: atualizada mantém id, só sufixo = mesma camada, renomeada = nova + removida, malformados = PARCIAL', async () => {
