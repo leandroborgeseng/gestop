@@ -79,3 +79,37 @@ describe('296 pacote (c) · reordenadas', () => {
     expect(screen.queryByTestId('webmap-reordenadas')).toBeNull();
   });
 });
+
+describe('296 pacote (a) · confirmação antes de aplicar', () => {
+  it('N > 0: diálogo literal; Cancelar não aplica; Aplicar no diálogo aplica', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockResolvedValue(sim(425));
+    api.aplicarWebmapCamadas.mockResolvedValue({});
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Aplicar' })); });
+    const dlg = screen.getByRole('alertdialog');
+    expect(dlg.textContent).toContain('Aplicar importação? 425 elementos serão gravados como inválidos e não aparecerão no mapa (detalhes no CSV).');
+    expect(api.aplicarWebmapCamadas).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Cancelar' })); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(api.aplicarWebmapCamadas).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Aplicar' })); });
+    const dentro = screen.getByRole('alertdialog').querySelectorAll('button');
+    await act(async () => { fireEvent.click(dentro[dentro.length - 1]); });
+    expect(api.aplicarWebmapCamadas).toHaveBeenCalledWith('s1');
+  });
+
+  it('N = 0: aplica direto, sem diálogo', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockResolvedValue(sim(0));
+    api.aplicarWebmapCamadas.mockResolvedValue({});
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Aplicar' })); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    expect(api.aplicarWebmapCamadas).toHaveBeenCalledTimes(1);
+  });
+});
