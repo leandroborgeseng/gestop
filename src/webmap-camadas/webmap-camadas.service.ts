@@ -23,8 +23,14 @@ export const FILTRO_EXIBICAO = {
 } satisfies Prisma.WebmapElementoWhereInput;
 const CAMADA_PESADA_ELEMENTOS = 2000;
 
+/** "20/10/2026 16:23:05 (BRT)" — sem a vírgula que o Intl pt-BR põe entre data e hora (achado QA A3). */
 export function dataHoraBrt(d: Date) {
-  return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'medium' }).format(d) + ' (BRT)';
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).formatToParts(d).map((x) => [x.type, x.value]),
+  );
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}:${p.second} (BRT)`;
 }
 
 type ResultadoLog = 'SUCESSO' | 'OK_COM_AVISOS' | 'PARCIAL' | 'FALHA';

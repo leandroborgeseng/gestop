@@ -45,7 +45,7 @@ describe('296 — permissões e concorrência', () => {
     expect(publico).toEqual({ emAndamento: true, mensagem: 'Importação em andamento' });
     expect(JSON.stringify(publico)).not.toMatch(/Ana|gravando|2026/);
     const admin = await s.status();
-    expect(admin.emAndamento).toMatchObject({ usuario: 'Ana Admin', fase: 'gravando', desdeBrt: '20/10/2026, 12:40:00 (BRT)' });
+    expect(admin.emAndamento).toMatchObject({ usuario: 'Ana Admin', fase: 'gravando', desdeBrt: '20/10/2026 12:40:00 (BRT)' });
     const p = WebmapCamadasAdminController.prototype;
     expect(perms(p.status)).toEqual(adminTabPermissionKeys('importacao', 'visualizar'));
     expect(perms(WebmapCamadasMapaController)).not.toEqual(adminTabPermissionKeys('importacao', 'visualizar'));
