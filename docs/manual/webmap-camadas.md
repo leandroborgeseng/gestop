@@ -37,7 +37,7 @@ Só quem tem a permissão de **Administração › Importação**. Sem ela, os b
 - **"O prazo da simulação venceu; simule novamente."** Passaram 30 minutos ou a fonte mudou. Clique de novo em Importar apenas camadas Webmap.
 - **"Importação de camadas em andamento"**, com nome e horário: outra pessoa está aplicando. Aguarde terminar e simule de novo.
   Quem disparou a aplicação vê o mesmo alerta (print W03).
-- **Camadas no mapa:** as camadas importadas entram **desligadas** nos mapas. Quem usa o CCO liga cada uma quando quiser (ver capítulo da 299/298, quando entrarem).
+- **Camadas no mapa:** as camadas importadas entram **desligadas** nos mapas. A exibição dessas camadas no mapa do CCO entra numa próxima versão.
 
 ## Prints (Tester, app local com dados de teste, 1280 px, pt-BR, usuário de teste com permissão de Importação)
 | Nº | Arquivo | Estado |
