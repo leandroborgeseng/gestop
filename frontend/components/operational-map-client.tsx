@@ -304,6 +304,7 @@ export function OperationalMapClient({
   alertaMapa,
   manterVista = false,
   ocultarPinos = false,
+  onMapaPronto,
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -328,7 +329,11 @@ export function OperationalMapClient({
   manterVista?: boolean;
   /** 299: camada SIGMA da aba desligada no painel Camadas (pinos ocultos; calor segue o modo). */
   ocultarPinos?: boolean;
+  /** 298: instância do mapa (camadas do Webmap desenhadas por fora). null ao desmontar. */
+  onMapaPronto?: (map: import('leaflet').Map | null) => void;
 }) {
+  const onMapaProntoRef = useRef(onMapaPronto);
+  onMapaProntoRef.current = onMapaPronto;
   const manterVistaRef = useRef(manterVista);
   manterVistaRef.current = manterVista;
   const shellRef = useRef<HTMLDivElement | null>(null);
@@ -605,8 +610,10 @@ export function OperationalMapClient({
     mapRef.current = map;
     setMapReady(true);
     refreshMapSize(map);
+    onMapaProntoRef.current?.(map);
 
     return () => {
+      onMapaProntoRef.current?.(null);
       unbindPopupAction();
       unbindPinCleanup();
       setMapReady(false);

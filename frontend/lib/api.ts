@@ -2139,6 +2139,36 @@ export function getMapaCamadas() {
   return request<import('./types').MapaCamadaGrupo[]>('/mapa/camadas');
 }
 
+/**
+ * 298 — GeoJSON de UMA camada ligada (versão ativa), por bbox+zoom quando pesada. Cancelável (AbortSignal).
+ * 409 versao_mudou => VersaoMudouError (o mapa recarrega a lista; o cache da versão antiga não é usado).
+ */
+export async function getMapaCamadaGeojson(
+  camadaId: string,
+  opts: { bbox?: [number, number, number, number]; zoom?: number; versao?: string | number | null; signal?: AbortSignal },
+): Promise<{ dados: import('./webmap-mapa').RespostaGeojson; bytes: number }> {
+  const q = new URLSearchParams();
+  if (opts.bbox) q.set('bbox', opts.bbox.join(','));
+  if (opts.zoom !== undefined) q.set('zoom', String(opts.zoom));
+  if (opts.versao !== undefined && opts.versao !== null) q.set('v', String(opts.versao));
+  const token = getStoredAuth()?.accessToken;
+  const response = await fetch(`${API_BASE_URL}/mapa/camadas/${encodeURIComponent(camadaId)}/geojson${q.size ? `?${q}` : ''}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    signal: opts.signal,
+  });
+  if (response.status === 401) {
+    handleUnauthorized();
+    throw new Error('Sessão expirada. Faça login novamente.');
+  }
+  if (response.status === 409) {
+    const { VersaoMudouError } = await import('./webmap-mapa');
+    throw new VersaoMudouError();
+  }
+  if (!response.ok) throw new Error(`Falha ao carregar camada (${response.status})`);
+  const texto = await response.text();
+  return { dados: JSON.parse(texto), bytes: texto.length };
+}
+
 export function getWebmapCamadasHistorico(limit = 10) {
   return request<import('./types').WebmapCamadasHistoricoItem[]>(`/admin/importacao/webmap-camadas/historico?limit=${limit}`);
 }

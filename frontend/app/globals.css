@@ -612,3 +612,10 @@ a {
 .cco-filtros-painel .flex-wrap > * {
   max-width: 100%;
 }
+
+/* 298 — balão somente leitura das camadas do Webmap */
+.webmap-popup .webmap-balao { font-size: 12.5px; max-height: 240px; overflow: auto; }
+.webmap-popup .webmap-balao strong { display: block; margin-bottom: 4px; }
+.webmap-popup .webmap-balao table { border-collapse: collapse; }
+.webmap-popup .webmap-balao th { text-align: left; padding: 1px 8px 1px 0; color: var(--ink-3); font-weight: 600; vertical-align: top; }
+.webmap-popup .webmap-balao td { padding: 1px 0; word-break: break-word; }

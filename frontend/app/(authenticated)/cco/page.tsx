@@ -59,6 +59,8 @@ import {
 } from '@/lib/cco-camadas';
 import { webmapCamadasMapaAtivo } from '@/lib/feature-flags';
 import { useArvoreCamadasWebmap } from '@/lib/use-arvore-camadas-webmap';
+import { useWebmapNoMapa } from '@/components/cco/use-webmap-no-mapa';
+import type { Map as LeafletMap } from 'leaflet';
 
 export const MSG_ERRO_ATUALIZAR_MAPA = 'Não foi possível atualizar o mapa. Tente novamente.';
 
@@ -411,6 +413,20 @@ function CcoPageContent() {
 
   const { arvore: arvoreCamadas, carregando: arvoreCarregando, erro: arvoreErro, carregar: carregarArvoreCamadas, garantir: garantirArvoreCamadas } =
     useArvoreCamadasWebmap(webmapAtivo);
+  // 298: camadas do Webmap ligadas na sessão e existentes na lista (L3) => desenhadas no mapa, sob demanda.
+  const [mapaLeaflet, setMapaLeaflet] = useState<LeafletMap | null>(null);
+  const idsWebmapLigadas = webmapAtivo ? webmapLigadas(camadas) : [];
+  const temWebmapLigada = idsWebmapLigadas.length > 0;
+  useEffect(() => {
+    if (temWebmapLigada) garantirArvoreCamadas(); // sessão com Webmap ligada (F5): só a lista, sem geometria
+  }, [temWebmapLigada, garantirArvoreCamadas]);
+  const camadasWebmapLigadas = useMemo(() => {
+    if (!webmapAtivo || !arvoreCamadas) return [];
+    const porId = new Map(arvoreCamadas.flatMap((g) => g.camadas).map((c) => [c.id, c]));
+    return idsWebmapLigadas.map((id) => porId.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webmapAtivo, arvoreCamadas, idsWebmapLigadas.join(',')]);
+  const webmapMapa = useWebmapNoMapa(webmapAtivo ? mapaLeaflet : null, camadasWebmapLigadas, carregarArvoreCamadas);
 
   function abrirPainel(aba: CcoPainelAba) {
     if (painelAba === aba) {
@@ -635,6 +651,7 @@ function CcoPageContent() {
               onHover={handleMapHover}
               manterVista={manterVista}
               ocultarPinos={!camadaLigada(camadas, tab === 'chamados' ? SIGMA_CAMADA_CHAMADOS : SIGMA_CAMADA_PROPRIOS)}
+              onMapaPronto={setMapaLeaflet}
               controlesExtra={
                 <CcoMapControles
                   painelAberto={painelAba}
@@ -761,6 +778,8 @@ function CcoPageContent() {
                       calorLigado,
                       algumaLigada: calorLigado || (webmapAtivo && webmapLigadas(camadas, arvoreCamadas).length > 0),
                       webmapAtivo,
+                      statusWebmap: webmapMapa.status,
+                      onTentarCamada: webmapMapa.tentarNovamente,
                       onCalor: (ligar) => setChamadoMapMode(ligar ? 'calor' : 'situacao'),
                     }}
                   />

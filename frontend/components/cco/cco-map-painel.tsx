@@ -13,6 +13,7 @@ import {
   resumoGrupo,
 } from '@/lib/cco-camadas';
 import type { MapaCamadaGrupo } from '@/lib/types';
+import type { StatusCamadaWebmap } from '@/lib/webmap-mapa';
 import type { CcoPainelAba } from './cco-map-controles';
 
 export const MSG_CAMADAS_VAZIO =
@@ -69,7 +70,27 @@ export type CcoCamadasProps = {
   algumaLigada: boolean;
   /** 299 W-OCULTO: flag NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA (padrão desligada) — sem ela não há seção Webmap. */
   webmapAtivo?: boolean;
+  /** 298: estado de cada camada Webmap ligada no mapa (carregando, erro, truncado, fora da faixa de zoom). */
+  statusWebmap?: Record<string, StatusCamadaWebmap>;
+  onTentarCamada?: (camadaId: string) => void;
 };
+
+/** 298: linha de estado sob a camada ligada. */
+function StatusCamada({ nome, status, onTentar }: { nome: string; status?: StatusCamadaWebmap; onTentar?: () => void }) {
+  if (!status) return null;
+  if (status.estado === 'carregando') return <p role="status" data-testid="webmap-status-carregando" className="ml-9 text-[11.5px] text-[var(--ink-3)]">Carregando…</p>;
+  if (status.estado === 'erro')
+    return (
+      <p role="alert" data-testid="webmap-status-erro" className="ml-9 text-[11.5px] text-[var(--danger,#b42318)]">
+        Não foi possível carregar {nome}.{' '}
+        <button type="button" className="font-semibold underline" onClick={onTentar}>Tentar novamente</button>
+      </p>
+    );
+  if (status.estado === 'fora_zoom')
+    return <p data-testid="webmap-status-fora-zoom" className="ml-9 text-[11.5px] text-[var(--ink-3)]">{status.minZoom !== undefined ? `visível a partir do zoom ${status.minZoom}` : `visível até o zoom ${status.maxZoom}`}</p>;
+  if (status.truncado) return <p role="status" data-testid="webmap-status-truncado" className="ml-9 text-[11.5px] text-[var(--ink-3)]">Aproxime o mapa para ver todos os elementos de {nome}</p>;
+  return null;
+}
 
 function CamadasConteudo(p: CcoCamadasProps) {
   const sigmaAberto = p.estado.gruposAbertos.includes('sigma');
@@ -157,7 +178,8 @@ function CamadasConteudo(p: CcoCamadasProps) {
                     {aberto ? (
                       <div className="ml-2 space-y-0.5">
                         {grupo.camadas.map((c) => (
-                          <label key={c.id} className={LINHA}>
+                          <div key={c.id}>
+                          <label className={LINHA} aria-busy={p.statusWebmap?.[c.camadaId]?.estado === 'carregando' || undefined}>
                             <input
                               type="checkbox"
                               className="h-4 w-4"
@@ -167,6 +189,10 @@ function CamadasConteudo(p: CcoCamadasProps) {
                             <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: corAmostra(c.estilo) }} />
                             <span className="min-w-0 break-words">{c.nomeOriginal}</span>
                           </label>
+                          {camadaLigada(p.estado, c.id) ? (
+                            <StatusCamada nome={c.nomeOriginal} status={p.statusWebmap?.[c.camadaId]} onTentar={() => p.onTentarCamada?.(c.camadaId)} />
+                          ) : null}
+                          </div>
                         ))}
                       </div>
                     ) : null}

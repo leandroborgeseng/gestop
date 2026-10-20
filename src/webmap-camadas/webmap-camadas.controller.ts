@@ -67,7 +67,7 @@ export class WebmapCamadasMapaController {
   }
 
   @Get(':id/geojson')
-  geojson(@Param('id') id: string, @Query('bbox') bbox?: string, @Query('zoom') zoom?: string) {
-    return this.service.geojson(id, bbox, zoom);
+  geojson(@Param('id') id: string, @Query('bbox') bbox?: string, @Query('zoom') zoom?: string, @Query('v') v?: string) {
+    return this.service.geojson(id, bbox, zoom, v);
   }
 }

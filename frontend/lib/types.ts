@@ -1679,8 +1679,9 @@ export type MapaCamada = {
   geometriaTipo: string | null;
   estilo: Record<string, unknown> | null;
   totalElementos: number;
-  bbox: number[] | null;
+  bbox?: number[] | null;
   versaoAtual: number | string | null;
+  /** 298: a lista não traz mais bbox nem bytes (lista leve). */
   bytesOrigem?: number | null;
   ligadaPorPadrao: false;
   pesada: boolean;
