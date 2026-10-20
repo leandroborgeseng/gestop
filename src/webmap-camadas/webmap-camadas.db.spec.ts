@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { executarAplicacao, FonteMudouError, HEARTBEAT_LIMITE_MS, PgSessionLock, recuperarInterrompidas, ResultadoSimulacao, simular } from './core';
+import { BOOT_ID, executarAplicacao, FonteMudouError, HEARTBEAT_BOOT_LIMITE_MS, HEARTBEAT_LIMITE_MS, HEARTBEAT_MS, PgSessionLock, recuperarInterrompidas, ResultadoSimulacao, simular } from './core';
 import { DiretorioWebmapFonte } from './source';
 import { FILTRO_EXIBICAO, WebmapCamadasService } from './webmap-camadas.service';
 
@@ -230,6 +230,115 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
     expect(await md5(semControle)).toEqual(antes);
     evid.kill = { jobId, md5Iguais: true };
   }, 90_000);
+
+  // 296-ALTO: processo filho com o serviço real aplicando com fonte lenta.
+  const filhoServico = (dir: string, atrasoMs: number) => {
+    const child = spawn(process.execPath, ['--import', 'tsx', join(ROOT, 'test/webmap-camadas/aplicar-servico-worker.ts'), dir, String(atrasoMs)], { cwd: ROOT, env: { ...process.env, WEBMAP_CAMADAS_TEST_DATABASE_URL: URL, WEBMAP_CAMADAS_WORKER: '0' }, stdio: ['ignore', 'pipe', 'pipe'] });
+    const pronto = new Promise<{ jobId: string; boot: string }>((resolve, reject) => {
+      let out = '';
+      child.stdout.on('data', (d: Buffer) => {
+        out += d.toString();
+        const j = /JOB (\S+)/.exec(out); const b = /BOOT (\S+)/.exec(out);
+        if (j && b) resolve({ jobId: j[1], boot: b[1] });
+      });
+      child.stderr.on('data', (d: Buffer) => { out += d.toString(); });
+      child.on('exit', () => reject(new Error(`filho saiu antes do JOB: ${out}`)));
+      setTimeout(() => { child.kill("SIGKILL"); reject(new Error(`filho não iniciou: ${out}`)); }, 60_000);
+    });
+    return { child, pronto };
+  };
+  const dirLenta = () => {
+    const dir = mkdtempSync(join(tmpdir(), 'wm296alto-'));
+    cpSync(join(FIX, 'v4'), dir, { recursive: true });
+    // camada grande (vários chunks de 256 KiB) para o filho seguir aplicando > 40 s com a fonte lenta
+    const feats = Array.from({ length: 60000 }, (_, i) => ({ type: 'Feature', properties: { fid: String(i + 1) }, geometry: { type: 'Point', coordinates: [-47.4 + (i % 100) / 1000, -20.5 - Math.floor(i / 100) / 1000] } }));
+    writeFileSync(join(dir, 'layers/UBS24UNID_80.js'), `var json_UBS24UNID_80 = ${JSON.stringify({ type: 'FeatureCollection', name: 'UBS24UNID_80', features: feats })};`);
+    return dir;
+  };
+  const historicoFalhas = async (service: WebmapCamadasService, jobId: string) =>
+    (await service.historico(50)).filter((h) => (h as Record<string, unknown>).importacaoId === jobId && (h as Record<string, unknown>).resultado === 'FALHA');
+
+  it('296-ALTO: kill -9 no meio do aplicar + reinício em ~5 s => simular destrava após ~2 intervalos de heartbeat e o Histórico mostra FALHA', async () => {
+    const { child, pronto } = filhoServico(dirLenta(), 3000);
+    const { jobId, boot } = await pronto;
+    expect(boot).not.toBe(BOOT_ID);
+    expect(await prisma.webmapImportacao.findUnique({ where: { id: jobId } })).toMatchObject({ status: 'EM_ANDAMENTO', bootId: boot });
+    await new Promise((r) => setTimeout(r, 1500));
+    const hbAntes = (await prisma.webmapImportacao.findUnique({ where: { id: jobId } }))!.heartbeatEm.getTime();
+    child.kill('SIGKILL');
+    const morto = Date.now();
+    await new Promise((r) => child.once('exit', r));
+    await new Promise((r) => setTimeout(r, 5000)); // reinício rápido (~5 s)
+    const service = new WebmapCamadasService(prisma as never, { persistBuffer: async () => ({ storageKey: 'k', url: '/u' }) } as never);
+    service.usarFonte(fonte('v2'), URL);
+    await service.onModuleInit(); // subida: heartbeat ainda fresco (< 2 intervalos) => ainda não marca
+    let tentativas = 0; let conflitos = 0; let destravou = 0;
+    while (Date.now() - morto < 3 * HEARTBEAT_BOOT_LIMITE_MS + 10_000) {
+      tentativas++;
+      try { await service.simular(user); destravou = Date.now(); break; } catch (e) {
+        if (!/em andamento/.test(String(e))) throw e;
+        conflitos++;
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+    }
+    expect(destravou).toBeGreaterThan(0);
+    const job = await prisma.webmapImportacao.findUnique({ where: { id: jobId } });
+    expect(job).toMatchObject({ status: 'FALHA', motivo: 'interrompida por reinício' });
+    expect(await prisma.webmapElemento.count({ where: { versao: { startsWith: jobId } } })).toBe(0);
+    const falhas = await historicoFalhas(service, jobId);
+    expect(falhas).toHaveLength(1);
+    expect(falhas[0]).toMatchObject({ tipo: 'APLICACAO', resultado: 'FALHA', motivo: 'interrompida por reinício', usuario: 'Processo filho 296', interrompidaPorReinicio: true });
+    expect((falhas[0] as Record<string, unknown>).dataHoraBrt).toMatch(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2} \(BRT\)$/);
+    const st = await service.status();
+    expect(st.emAndamento).toBeNull();
+    expect(st.ultimaImportacao).toMatchObject({ id: jobId, status: 'FALHA' });
+    const desdeKill = destravou - morto; const desdeHb = destravou - hbAntes;
+    // destrava depois de 2 intervalos sem heartbeat (não antes) e bem antes do limite antigo de 60 s
+    expect(desdeHb).toBeGreaterThanOrEqual(HEARTBEAT_BOOT_LIMITE_MS);
+    expect(desdeKill).toBeLessThan(HEARTBEAT_LIMITE_MS);
+    evid.alto_kill = { heartbeatMs: HEARTBEAT_MS, limiteBootMs: HEARTBEAT_BOOT_LIMITE_MS, msDoKillAteDestravar: desdeKill, msDoUltimoHeartbeatAteDestravar: desdeHb, conflitos409AntesDeDestravar: conflitos, tentativas };
+  }, 120_000);
+
+  it('296-ALTO: job vivo de outro processo (bootId ≠, heartbeat em dia) continua 409 e NÃO vira FALHA', async () => {
+    const { child, pronto } = filhoServico(dirLenta(), 3000);
+    try {
+      const { jobId, boot } = await pronto;
+      const service = new WebmapCamadasService(prisma as never, {} as never);
+      service.usarFonte(fonte('v2'), URL);
+      await service.onModuleInit();
+      const inicio = Date.now(); let conflitos = 0;
+      while (Date.now() - inicio < HEARTBEAT_BOOT_LIMITE_MS + 2 * HEARTBEAT_MS) {
+        await expect(service.simular(user)).rejects.toThrow(/em andamento por Processo filho 296 desde .*\(BRT\)/);
+        await service.status();
+        conflitos++;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      const job = await prisma.webmapImportacao.findUnique({ where: { id: jobId } });
+      expect(job).toMatchObject({ status: 'EM_ANDAMENTO', bootId: boot });
+      expect(Date.now() - job!.heartbeatEm.getTime()).toBeLessThan(HEARTBEAT_BOOT_LIMITE_MS);
+      expect(await historicoFalhas(service, jobId)).toHaveLength(0);
+      evid.alto_vivo = { msObservados: Date.now() - inicio, conflitos409: conflitos, statusFinal: job!.status };
+    } finally {
+      child.kill('SIGKILL');
+      await new Promise((r) => child.once('exit', r));
+      await new Promise((r) => setTimeout(r, 300));
+      await recuperarInterrompidas(prisma, new PgSessionLock(URL!), 0); // limpeza
+    }
+  }, 120_000);
+
+  it('296-ALTO: regra do bootId sem disputa de lock (mesmo boot nunca; outro boot só > 2 intervalos; qualquer um > 60 s)', async () => {
+    const mk = (bootId: string | null, idadeMs: number) => prisma.webmapImportacao.create({ data: { status: 'EM_ANDAMENTO', usuarioNome: 'Regra', bootId, heartbeatEm: new Date(Date.now() - idadeMs) } });
+    const meuFresco = await mk(BOOT_ID, 1000);
+    const meu30 = await mk(BOOT_ID, HEARTBEAT_BOOT_LIMITE_MS + 10_000);
+    const outroFresco = await mk('outro-boot', 1000);
+    const outro25 = await mk('outro-boot', HEARTBEAT_BOOT_LIMITE_MS + 5_000);
+    const nulo25 = await mk(null, HEARTBEAT_BOOT_LIMITE_MS + 5_000);
+    const meuVencido = await mk(BOOT_ID, HEARTBEAT_LIMITE_MS + 1000);
+    const ids = await recuperarInterrompidas(prisma, new PgSessionLock(URL!));
+    expect(ids.sort()).toEqual([outro25.id, nulo25.id, meuVencido.id].sort());
+    for (const j of [meuFresco, meu30, outroFresco]) expect((await prisma.webmapImportacao.findUnique({ where: { id: j.id } }))!.status).toBe('EM_ANDAMENTO');
+    await recuperarInterrompidas(prisma, new PgSessionLock(URL!), 0); // limpeza
+  });
 
   it('serviço: aplicar devolve 202 em segundo plano; segunda aplicação => "em andamento" com quem e desde quando; resultado consultável depois', async () => {
     const lenta = fonte('v2');

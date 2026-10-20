@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 import { ConflictException } from '@nestjs/common';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { REQUIRED_ANY_PERMISSIONS_KEY } from '../auth/permissions';
 import { adminTabPermissionKeys } from '../domain/admin-permissions';
 import { WebmapCamadasAdminController, WebmapCamadasMapaController } from './webmap-camadas.controller';
@@ -27,6 +27,7 @@ describe('296 — permissões e concorrência', () => {
     s.usarFonte(fonte as never);
     const user = { sub: 'u1', nome: 'Ana Admin', email: '', perfis: [], permissoes: [] };
     const primeira = s.simular(user).catch(() => undefined);
+    await vi.waitFor(() => expect(soltar).toBeTypeOf('function')); // 296-ALTO: simular roda a recuperação antes de ler a fonte
     await expect(s.simular({ ...user, nome: 'Outro' })).rejects.toThrow(ConflictException);
     await expect(s.simular(user)).rejects.toThrow(/em andamento por Ana Admin desde .*\(BRT\)/);
     soltar();
