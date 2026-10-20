@@ -187,6 +187,7 @@ export function CcoFiltrosPanel({
   resultCount,
   defaultTiposPendencia,
   abrirSinal = 0,
+  variante = 'sanfona',
 }: {
   tab: 'proprios' | 'chamados';
   filters: UnidadeFilters;
@@ -209,7 +210,10 @@ export function CcoFiltrosPanel({
   defaultTiposPendencia: TipoPendencia[];
   /** 295: incrementar abre a sanfona e foca o primeiro campo ("Ajustar filtros"). */
   abrirSinal?: number;
+  /** 299: `painel` = só os campos, dentro do #cco-map-painel (rascunho controlado pela página). */
+  variante?: 'sanfona' | 'painel';
 }) {
+  const painel = variante === 'painel';
   const [open, setOpen] = useState(false);
   const painelRef = useRef<HTMLDivElement | null>(null);
 
@@ -282,41 +286,14 @@ export function CcoFiltrosPanel({
     [tab, filters, chamadoFilters, kpiFilter, defaultTiposPendencia, tiposChamado, equipes, secretarias],
   );
 
-  return (
-    <div className="min-w-0 shrink-0 overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <SlidersHorizontal className="h-4 w-4 shrink-0 text-[var(--brand)]" />
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-[var(--ink)]">
-              {tab === 'proprios' ? 'Filtros de próprios' : 'Filtros de chamados'}
-            </p>
-            {!open ? <p data-testid="cco-filtros-resumo" className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
-          </div>
-          <span
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            <Hint text="Filtros aplicados simultaneamente na lista e no mapa." />
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="hidden text-[11px] text-[var(--ink-3)] sm:inline">
-            <b className="mono text-[var(--ink)]">{resultCount}</b> resultado(s)
-          </span>
-          <ChevronDown
-            className={cn('h-4 w-4 shrink-0 text-[var(--ink-3)] transition-transform', open ? 'rotate-180' : '')}
-          />
-        </div>
-      </button>
-
-      {open ? (
-        <div ref={painelRef} className="min-w-0 space-y-3 overflow-hidden border-t border-[var(--line-2)] px-3.5 py-3.5">
+  const corpo = (
+        <div
+          ref={painelRef}
+          className={cn(
+            'min-w-0 space-y-3',
+            painel ? 'cco-filtros-painel' : 'overflow-hidden border-t border-[var(--line-2)] px-3.5 py-3.5',
+          )}
+        >
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <div className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
@@ -334,12 +311,16 @@ export function CcoFiltrosPanel({
                 className="h-[38px] w-full min-w-0 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
               />
             </div>
-            <Button variant="ghost" size="sm" className="h-8 shrink-0" onClick={onClear}>
-              Limpar
-            </Button>
-            <span className="text-[11px] text-[var(--ink-3)] sm:hidden">
-              <b className="mono text-[var(--ink)]">{resultCount}</b> resultado(s)
-            </span>
+            {painel ? null : (
+              <>
+                <Button variant="ghost" size="sm" className="h-8 shrink-0" onClick={onClear}>
+                  Limpar
+                </Button>
+                <span className="text-[11px] text-[var(--ink-3)] sm:hidden">
+                  <b className="mono text-[var(--ink)]">{resultCount}</b> resultado(s)
+                </span>
+              </>
+            )}
           </div>
 
           {tab === 'proprios' ? (
@@ -388,6 +369,7 @@ export function CcoFiltrosPanel({
                 <FilterMultiSelect
                   label="Tipo de chamado"
                   placeholder="Selecionar tipo de chamado…"
+                  textoSemOpcoes="Sem tipos para os filtros atuais"
                   options={tipoChamadoOptions}
                   selected={tiposChamadoSelecionados}
                   onChange={(next) => onFiltersChange((prev) => ({ ...prev, tiposChamadoId: next }))}
@@ -397,6 +379,7 @@ export function CcoFiltrosPanel({
               <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <FilterMultiSelect
                   label="Secretaria"
+                  textoSemOpcoes="Sem secretarias para os filtros atuais"
                   placeholder="Selecionar secretaria…"
                   options={secretariaOptions}
                   selected={secretariaIdsSelected}
@@ -406,6 +389,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Bairro"
+                  textoSemOpcoes="Sem bairros para os filtros atuais"
                   placeholder="Selecionar bairro…"
                   options={bairroOptions}
                   selected={bairrosSelected}
@@ -413,6 +397,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Região"
+                  textoSemOpcoes="Sem regiões para os filtros atuais"
                   placeholder="Selecionar região…"
                   options={regiaoOptions}
                   selected={regioesSelected}
@@ -420,6 +405,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Tipo de próprio"
+                  textoSemOpcoes="Sem tipos de próprio para os filtros atuais"
                   placeholder="Selecionar tipo de próprio…"
                   options={tipoOptions}
                   selected={tiposSelected}
@@ -427,6 +413,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Equipe do chamado"
+                  textoSemOpcoes="Sem equipes para os filtros atuais"
                   placeholder="Selecionar equipe…"
                   options={equipeOptions}
                   selected={filters.equipeIds ?? []}
@@ -488,6 +475,7 @@ export function CcoFiltrosPanel({
               </div>
               <FilterMultiSelect
                 label="Status"
+                textoSemOpcoes="Sem status para os filtros atuais"
                 placeholder="Selecionar status…"
                 options={statusOptions}
                 selected={chamadoFilters.status ?? []}
@@ -502,6 +490,7 @@ export function CcoFiltrosPanel({
               </div>
               <FilterMultiSelect
                 label="Prioridade"
+                textoSemOpcoes="Sem prioridades para os filtros atuais"
                 placeholder="Selecionar prioridade…"
                 options={prioridadeOptions}
                 selected={chamadoFilters.prioridade ?? []}
@@ -510,12 +499,14 @@ export function CcoFiltrosPanel({
               <FilterMultiSelect
                 label="Tipo de chamado"
                 placeholder="Selecionar tipo de chamado…"
+                textoSemOpcoes="Sem tipos para os filtros atuais"
                 options={tipoChamadoOptions}
                 selected={chamadoFilters.tipoChamadoId ?? []}
                 onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, tipoChamadoId: next }))}
               />
               <FilterMultiSelect
                 label="Bairro"
+                textoSemOpcoes="Sem bairros para os filtros atuais"
                 placeholder="Selecionar bairro…"
                 options={bairroOptions}
                 selected={chamadoBairrosSelected}
@@ -525,6 +516,7 @@ export function CcoFiltrosPanel({
               />
               <FilterMultiSelect
                 label="Equipe do chamado"
+                textoSemOpcoes="Sem equipes para os filtros atuais"
                 placeholder="Selecionar equipe…"
                 options={equipeOptions}
                 selected={chamadoFilters.equipeIds ?? []}
@@ -574,7 +566,45 @@ export function CcoFiltrosPanel({
             </select>
           </div>
         </div>
-      ) : null}
+  );
+
+  // 299: no painel do mapa só o corpo (mesmos componentes, 1 coluna); o rodapé é do painel.
+  if (painel) return corpo;
+
+  return (
+    <div className="min-w-0 shrink-0 overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <SlidersHorizontal className="h-4 w-4 shrink-0 text-[var(--brand)]" />
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-[var(--ink)]">
+              {tab === 'proprios' ? 'Filtros de próprios' : 'Filtros de chamados'}
+            </p>
+            {!open ? <p data-testid="cco-filtros-resumo" className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
+          </div>
+          <span
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <Hint text="Filtros aplicados simultaneamente na lista e no mapa." />
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="hidden text-[11px] text-[var(--ink-3)] sm:inline">
+            <b className="mono text-[var(--ink)]">{resultCount}</b> resultado(s)
+          </span>
+          <ChevronDown
+            className={cn('h-4 w-4 shrink-0 text-[var(--ink-3)] transition-transform', open ? 'rotate-180' : '')}
+          />
+        </div>
+      </button>
+
+      {open ? corpo : null}
     </div>
   );
 }

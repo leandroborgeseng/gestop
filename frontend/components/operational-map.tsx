@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { ChamadoMapaItem, UnidadeOperacional } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,6 +33,11 @@ export function OperationalMap({
   onHover,
   popupActionKind = 'modal',
   notaCorte,
+  controlesExtra,
+  renderPainel,
+  alertaMapa,
+  manterVista,
+  ocultarPinos,
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -46,6 +52,11 @@ export function OperationalMap({
   /** 295: nota quando o resultado foi cortado (mapa de calor e legenda). */
   notaCorte?: string;
   popupActionKind?: import('@/lib/map-popup-action').MapPopupActionKind;
+  controlesExtra?: ReactNode;
+  renderPainel?: (ctx: import('./operational-map-client').MapaPainelContexto) => ReactNode;
+  alertaMapa?: ReactNode;
+  manterVista?: boolean;
+  ocultarPinos?: boolean;
 }) {
   return (
     <OperationalMapClient
@@ -61,6 +72,11 @@ export function OperationalMap({
       onHover={onHover}
       popupActionKind={popupActionKind}
       notaCorte={notaCorte}
+      controlesExtra={controlesExtra}
+      renderPainel={renderPainel}
+      alertaMapa={alertaMapa}
+      manterVista={manterVista}
+      ocultarPinos={ocultarPinos}
     />
   );
 }
