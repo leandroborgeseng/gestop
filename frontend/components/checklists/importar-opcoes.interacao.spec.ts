@@ -196,7 +196,8 @@ describe('294 · conflito com opções atuais', () => {
     expect(estado.mudancas).toBe(0);
     fireEvent.click(screen.getByLabelText(/Substituir as 499 opções atuais/));
     expect(confirmar().hasAttribute('disabled')).toBe(false);
-  });
+    // Renderiza 499 opções no jsdom: ~3 s local, passa de 5 s no runner do Actions.
+  }, 20_000);
   it('Adicionar ao final: mantém as atuais, seleção e exibição; foco na 1ª importada', async () => {
     await ateConflito();
     await act(async () => fireEvent.click(confirmar()));
