@@ -25,8 +25,10 @@ export function MapViewControls({
   alvo44 = false,
 }: MapViewControlsProps) {
   const seg = alvo44 ? 'h-10' : 'h-[30px]';
+  // 301: a caixa da pilha (largura do seletor Mapa/Satélite, z 500) cobria o X e as setas do painel (z 450).
+  // A caixa não recebe clique; só os filhos diretos (seletor, tela cheia e botões do CCO).
   return (
-    <div className="sigma-map-controls pointer-events-auto absolute top-3.5 right-3.5 z-[500] flex flex-col gap-2">
+    <div className="sigma-map-controls pointer-events-none absolute top-3.5 right-3.5 z-[500] flex flex-col gap-2 *:pointer-events-auto">
       <div className="flex gap-0.5 rounded-[10px] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-0.5 shadow-[var(--sh-sm)] backdrop-blur-md">
         <button
           type="button"

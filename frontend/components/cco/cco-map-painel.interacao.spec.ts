@@ -188,3 +188,33 @@ describe('299 · painel #cco-map-painel', () => {
     expect(screen.getByTestId('cco-secao-webmap').textContent).toContain('Webmap QGIS');
   });
 });
+
+describe('301 · X e setas do painel', () => {
+  it('X chama a mesma ação do Fechar (Filtros e Camadas)', () => {
+    for (const aba of ['filtros', 'camadas'] as const) {
+      const onFechar = vi.fn();
+      const { unmount } = render(painel({ aba, onFechar }));
+      fireEvent.click(screen.getByRole('button', { name: 'Fechar painel' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+      expect(onFechar).toHaveBeenCalledTimes(2);
+      unmount();
+    }
+  });
+  it('seta (svg) e nome alternam igual; aria-expanded e rotação seguem o estado', () => {
+    const onAlternarGrupo = vi.fn();
+    const arvore = [{ id: 'g', titulo: 'Drenagem', camadas: [{ id: 'webmap:a', camadaId: 'a', nomeOriginal: 'Bocas', geometriaTipo: 'Point', estilo: null, totalElementos: 1, versaoAtual: 1, ligadaPorPadrao: false, pesada: false }] }];
+    render(painel({ aba: 'camadas', camadas: camadasBase({ arvore, onAlternarGrupo, estado: { ...estadoCamadasPadrao(), gruposAbertos: ['sigma', 'webmap'] } }) }));
+    const sigma = screen.getByRole('button', { name: /^SIGMA/ });
+    expect(sigma.getAttribute('aria-expanded')).toBe('true');
+    expect(sigma.querySelector('svg')!.getAttribute('class')).toContain('rotate-180');
+    fireEvent.click(sigma.querySelector('svg')!);
+    expect(onAlternarGrupo).toHaveBeenLastCalledWith('sigma');
+    const grupo = screen.getByRole('button', { name: /Drenagem/ });
+    expect(grupo.getAttribute('aria-expanded')).toBe('false');
+    expect(grupo.querySelector('svg')!.getAttribute('class')).not.toContain('rotate-180');
+    fireEvent.click(grupo.querySelector('svg')!);
+    expect(onAlternarGrupo).toHaveBeenLastCalledWith('webmap-grupo:g');
+    fireEvent.click(screen.getByText('Drenagem'));
+    expect(onAlternarGrupo).toHaveBeenLastCalledWith('webmap-grupo:g');
+  });
+});
