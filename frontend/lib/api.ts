@@ -161,7 +161,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (response.status === 403) {
-    throw new Error(await readForbiddenMessage(response));
+    // 300: status no erro para a tela distinguir "sem acesso" de falha temporária.
+    throw Object.assign(new Error(await readForbiddenMessage(response)), { status: 403 });
   }
 
   if (!response.ok) {

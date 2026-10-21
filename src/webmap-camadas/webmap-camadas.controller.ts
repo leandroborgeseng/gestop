@@ -5,7 +5,6 @@ import { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequireAnyPermissions } from '../auth/permissions';
 import { adminTabPermissionKeys } from '../domain/admin-permissions';
-import { permissionMatrixKey } from '../domain/permissions-catalog';
 import { WebmapCamadasService } from './webmap-camadas.service';
 
 /** 296 — Administração › Importação › "Importar apenas camadas Webmap". Mesmas permissões da tela. */
@@ -48,8 +47,14 @@ export class WebmapCamadasAdminController {
   }
 }
 
-/** 300: só a permissão do CCO (tela ou mapa) — Documentos, Cronograma etc. recebem 403. */
-export const WEBMAP_MAPA_KEYS = [permissionMatrixKey('cco', '_tela', 'visualizar'), permissionMatrixKey('cco', 'mapa', 'visualizar')];
+/**
+ * 300 (QA ciclo 2): EXATAMENTE a mesma checagem que libera a tela do CCO — frontend
+ * `<RequirePermissions permissions={['dashboard.visualizar']}>` em app/(authenticated)/cco/page.tsx e
+ * NAV_ITEMS.cco.permission. No backend, hasAnyPermission dá passe ao Administrador do Sistema e expande
+ * matriz → legado (matriz.cco.* , matriz.dashboard.*, matriz.relatorios.*, matriz.vistorias.* e matriz.cronograma.*
+ * derivam dashboard.visualizar). Quem abre o CCO vê as camadas; os demais recebem 403.
+ */
+export const WEBMAP_MAPA_KEYS = ['dashboard.visualizar'];
 
 /** Leitura das camadas para o mapa (usuários do CCO). */
 @UseGuards(AuthGuard, PermissionsGuard)

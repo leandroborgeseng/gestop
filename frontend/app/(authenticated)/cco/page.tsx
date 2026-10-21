@@ -410,7 +410,7 @@ function CcoPageContent() {
     return () => window.clearTimeout(t);
   }, [statusMapa]);
 
-  const { arvore: arvoreCamadas, carregando: arvoreCarregando, erro: arvoreErro, carregar: carregarArvoreCamadas, garantir: garantirArvoreCamadas } =
+  const { arvore: arvoreCamadas, carregando: arvoreCarregando, erro: arvoreErro, semAcesso: arvoreSemAcesso, carregar: carregarArvoreCamadas, garantir: garantirArvoreCamadas } =
     useArvoreCamadasWebmap();
   // 298: camadas do Webmap ligadas na sessão e existentes na lista (L3) => desenhadas no mapa, sob demanda.
   const [mapaLeaflet, setMapaLeaflet] = useState<LeafletMap | null>(null);
@@ -767,6 +767,7 @@ function CcoPageContent() {
                       arvore: arvoreCamadas,
                       carregando: arvoreCarregando,
                       erro: arvoreErro,
+                      semAcesso: arvoreSemAcesso,
                       onTentarNovamente: carregarArvoreCamadas,
                       onAlternar: (id, ligar) => setCamadas((c) => alternarCamada(c, id, ligar)),
                       onAlternarGrupo: (g) => setCamadas((c) => alternarGrupoAberto(c, g)),

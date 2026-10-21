@@ -20,6 +20,7 @@ import type { CcoPainelAba } from './cco-map-controles';
 
 export const MSG_CAMADAS_VAZIO = 'Nenhuma camada do Webmap foi importada ainda.';
 export const MSG_CAMADAS_ERRO = 'Não foi possível carregar as camadas do Webmap.';
+export const MSG_CAMADAS_SEM_ACESSO = 'Seu perfil não tem acesso às camadas do Webmap.';
 export const MSG_MUITAS_LIGADAS = 'Muitas camadas ligadas podem deixar o mapa lento.';
 export const MUITAS_LIGADAS = 20;
 export const MSG_ESC_TELA_CHEIA = 'Esc sai da tela cheia. Use Fechar para fechar o painel.';
@@ -64,6 +65,8 @@ export type CcoCamadasProps = {
   arvore: MapaCamadaGrupo[] | null;
   carregando: boolean;
   erro: boolean;
+  /** 300: 403 na lista — mensagem fixa, sem Tentar novamente. */
+  semAcesso?: boolean;
   onTentarNovamente: () => void;
   onAlternar: (id: string, ligar: boolean) => void;
   onAlternarGrupo: (grupo: string) => void;
@@ -207,7 +210,9 @@ function CamadasConteudo(p: CcoCamadasProps) {
         </button>
         {webmapAberto ? (
           <div className="mt-1 space-y-1">
-            {p.erro ? (
+            {p.semAcesso ? (
+              <p role="status" data-testid="cco-camadas-sem-acesso" className="px-2 text-[12.5px] text-[var(--ink-3)]">{MSG_CAMADAS_SEM_ACESSO}</p>
+            ) : p.erro ? (
               <div role="alert" data-testid="cco-camadas-erro" className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-[12.5px] text-[var(--ink-2)]">
                 {MSG_CAMADAS_ERRO}
                 <div className="mt-2">

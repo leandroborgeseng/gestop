@@ -141,6 +141,12 @@ describe('300 · painel Webmap QGIS', () => {
     montar([], { arvore: [] });
     expect(screen.getByTestId('cco-camadas-vazio').textContent).toBe('Nenhuma camada do Webmap foi importada ainda.');
   });
+  it('300 QA2: 403 => "Seu perfil não tem acesso às camadas do Webmap." sem Tentar novamente', () => {
+    montar([], { semAcesso: true, estado: { ...estadoCamadasPadrao(), gruposAbertos: ['sigma', 'webmap'] } });
+    expect(screen.getByTestId('cco-camadas-sem-acesso').textContent).toBe('Seu perfil não tem acesso às camadas do Webmap.');
+    expect(screen.queryByRole('button', { name: /Tentar/ })).toBeNull();
+    expect(screen.queryByTestId('cco-camadas-erro')).toBeNull();
+  });
   it('W17: pane do Webmap acima do calor (overlayPane 400) e abaixo dos pinos (600)', () => {
     expect(WEBMAP_PANE_Z).toBeGreaterThan(400);
     expect(WEBMAP_PANE_Z).toBeLessThan(600);

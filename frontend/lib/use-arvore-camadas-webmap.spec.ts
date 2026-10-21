@@ -51,6 +51,25 @@ describe('300 · árvore do Webmap sem flag', () => {
   });
 });
 
+describe('300 QA2 · 403 na lista', () => {
+  it('403 => semAcesso (não erro) e garantir não repete a requisição', async () => {
+    getMapaCamadas.mockImplementationOnce(async () => { throw Object.assign(new Error('Acesso negado'), { status: 403 }); });
+    const { result } = renderHook(() => useArvoreCamadasWebmap());
+    act(() => result.current.garantir());
+    await waitFor(() => expect(result.current.semAcesso).toBe(true));
+    expect(result.current.erro).toBe(false);
+    act(() => result.current.garantir());
+    expect(getMapaCamadas).toHaveBeenCalledTimes(1);
+  });
+  it('falha de rede => erro (com Tentar novamente), não semAcesso', async () => {
+    getMapaCamadas.mockImplementationOnce(async () => { throw new Error('Falha de conexao'); });
+    const { result } = renderHook(() => useArvoreCamadasWebmap());
+    act(() => result.current.garantir());
+    await waitFor(() => expect(result.current.erro).toBe(true));
+    expect(result.current.semAcesso).toBe(false);
+  });
+});
+
 describe('300 · seção Webmap QGIS recolhida por padrão', () => {
   it('padrão abre só SIGMA; Webmap e grupos recolhidos', () => {
     const e = estadoCamadasPadrao();
