@@ -13,7 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BOOT_ID, executarAplicacao, FonteMudouError, HEARTBEAT_BOOT_LIMITE_MS, HEARTBEAT_LIMITE_MS, HEARTBEAT_MS, PgSessionLock, recuperarInterrompidas, ResultadoSimulacao, simular } from './core';
 import { DiretorioWebmapFonte } from './source';
-import { FILTRO_EXIBICAO, WebmapCamadasService } from './webmap-camadas.service';
+import { estiloEnxuto, FILTRO_EXIBICAO, LIMITE_BYTES_RESPOSTA, versaoCurta, WebmapCamadasService } from './webmap-camadas.service';
 
 const URL = process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL && process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL !== process.env.DATABASE_URL ? process.env.WEBMAP_CAMADAS_TEST_DATABASE_URL : undefined;
 const ROOT = join(__dirname, '../..');
@@ -408,7 +408,7 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
     expect((gravado.geometria as { coordinates: unknown[] }).coordinates.length).toBe(original.coordinates.length);
     expect(gravado.minLng).not.toBeNull();
     const gj = await service.geojson(ete.id, '-180,-90,180,90', '18');
-    expect(gj.features.some((f) => f.id === '431')).toBe(false);
+    expect(gj.features.some((f) => f.fid === '431')).toBe(false);
     expect(gj.features).toHaveLength(ete.totalElementos);
     const csv = await service.errosCsv();
     expect(csv).toMatch(/"431";"Polígono irreparável \(Maximum call stack size exceeded\)"/);
@@ -470,8 +470,96 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
     const service = new WebmapCamadasService(prisma as never, {} as never);
     for (const [bbox, zoom] of [[undefined, undefined], ['-180,-90,180,90', '14']] as const) {
       const gj = await service.geojson(c.id, bbox, zoom);
-      expect(gj.features.map((f) => f.id)).toEqual(['valida']);
+      expect(gj.features.map((f) => f.fid)).toEqual(['valida']);
     }
     expect(FILTRO_EXIBICAO).toMatchObject({ geometriaInvalida: false, minLng: { not: null }, minLat: { not: null }, maxLng: { not: null }, maxLat: { not: null } });
+  });
+
+  // ── 298: GeoJSON para o mapa do CCO (bbox + zoom, limites, versão, precisão) ──────────────────
+  describe('298 — GeoJSON do mapa', () => {
+    let camadaId = ''; let versao = '';
+    const pontosConhecidos: Array<[number, number]> = [[-47.4012345678, -20.5387654321], [-47.3901234567, -20.5298765432], [-47.4123456789, -20.5476543219]];
+    beforeAll(async () => {
+      const g = await prisma.webmapCamadaGrupo.create({ data: { chaveOrigem: 'T298', titulo: 'Teste 298', ordem: 99 } });
+      const c = await prisma.webmapCamada.create({ data: { chaveOrigem: 'T298/PESADA#POINT', grupoId: g.id, nomeOriginal: 'Pesada 298', varOrigem: 'json_T298', arquivoOrigem: 'T298.js', ordem: 0, geometriaTipo: 'POINT', estilo: {}, estiloOriginal: '', shaArquivo: 'x', commitSha: 'x', importadoEm: new Date(), totalElementos: 6200, ativo: true, versaoAtual: 'v298' } as never });
+      camadaId = c.id; versao = 'v298';
+      const pts = Array.from({ length: 6000 }, (_, i) => [-47.45 + (i % 100) * 0.001, -20.55 + Math.floor(i / 100) * 0.001] as [number, number]);
+      const elems = [
+        ...pts.map((p, i) => ({ fid: `p${i}`, geo: { type: 'Point', coordinates: p }, bb: [p[0], p[1], p[0], p[1]] })),
+        ...pontosConhecidos.map((p, i) => ({ fid: `k${i}`, geo: { type: 'Point', coordinates: p }, bb: [p[0], p[1], p[0], p[1]] })),
+        // polígono minúsculo (≈ 1 m) — não pode sumir com a simplificação em zoom baixo
+        { fid: 'mini', geo: { type: 'Polygon', coordinates: [[[-47.3, -20.6], [-47.29999, -20.6], [-47.29999, -20.59999], [-47.3, -20.59999], [-47.3, -20.6]]] }, bb: [-47.3, -20.6, -47.29999, -20.59999] },
+        // linha longa e cheia de vértices: simplificada em zoom baixo
+        { fid: 'linha', geo: { type: 'LineString', coordinates: Array.from({ length: 2000 }, (_, i) => [-47.2 + i * 0.00001, -20.6 + Math.sin(i / 50) * 0.00001]) }, bb: [-47.2, -20.60001, -47.18, -20.59999] },
+      ];
+      await prisma.webmapElemento.createMany({ data: elems.map((e) => ({ camadaId, versao, fidOrigem: e.fid, geometriaTipo: e.geo.type, geometria: e.geo, atributos: { NOME: e.fid, VAZIO: '' }, minLng: e.bb[0], minLat: e.bb[1], maxLng: e.bb[2], maxLat: e.bb[3] })) });
+    });
+
+    it('lista leve (crit. 1): sem geometria/bbox/bytes, estilo sem nulos, versão curta e pesada', async () => {
+      const service = new WebmapCamadasService(prisma as never, {} as never);
+      const c = (await service.arvore()).flatMap((g) => g.camadas).find((x) => x.camadaId === camadaId)!;
+      expect(Object.keys(c).sort()).toEqual(['camadaId', 'estilo', 'geometriaTipo', 'id', 'ligadaPorPadrao', 'nomeOriginal', 'pesada', 'totalElementos', 'totalInvalidos', 'versaoAtual']);
+      expect(c).toMatchObject({ versaoAtual: versaoCurta(versao), pesada: true });
+      expect(estiloEnxuto({ tipo: 'line', cor: null, icone: { url: '/u', storageKey: 'k' } })).toEqual({ tipo: 'line', icone: { url: '/u' } });
+    });
+
+    it('camada pesada exige bbox e zoom; bbox invertido é recusado', async () => {
+      const service = new WebmapCamadasService(prisma as never, {} as never);
+      await expect(service.geojson(camadaId)).rejects.toThrow(/bbox e zoom/);
+      await expect(service.geojson(camadaId, '-47.4,-20.5,-47.5,-20.4', '14')).rejects.toThrow(/bbox inválido/);
+    });
+
+    it('limite de 5.000 feições por resposta com truncado=true; bbox pequeno vem completo', async () => {
+      const service = new WebmapCamadasService(prisma as never, {} as never);
+      const tudo = await service.geojson(camadaId, '-48,-21,-47,-20', '12');
+      expect(tudo.features).toHaveLength(5000);
+      expect(tudo.truncado).toBe(true);
+      const bairro = await service.geojson(camadaId, '-47.45,-20.55,-47.44,-20.54', '16');
+      expect(bairro.truncado).toBe(false);
+      expect(bairro.features.length).toBe(11 * 11);
+      expect(bairro.versao).toBe(versaoCurta(versao));
+      expect(new Set(bairro.features.map((f) => f.id)).size).toBe(bairro.features.length); // id único (dedup entre tiles)
+    });
+
+    it('versão diferente da ativa => 409 versao_mudou', async () => {
+      const service = new WebmapCamadasService(prisma as never, {} as never);
+      await expect(service.geojson(camadaId, '-47.45,-20.55,-47.44,-20.54', '16', 'velha')).rejects.toMatchObject({ status: 409 });
+      await expect(service.geojson(camadaId, '-47.45,-20.55,-47.44,-20.54', '16', versaoCurta(versao))).resolves.toMatchObject({ versao: versaoCurta(versao) });
+    });
+
+    it('precisão: 3 pontos conhecidos voltam com desvio ≤ 1 m após o arredondamento (6 casas)', async () => {
+      const service = new WebmapCamadasService(prisma as never, {} as never);
+      const gj = await service.geojson(camadaId, '-47.42,-20.55,-47.38,-20.52', '18');
+      for (const [i, [lng, lat]] of pontosConhecidos.entries()) {
+        const f = gj.features.find((x) => x.fid === `k${i}`)!;
+        const [x, y] = f.geometry.coordinates as [number, number];
+        const m = Math.hypot((x - lng) * 111_320 * Math.cos((lat * Math.PI) / 180), (y - lat) * 110_540);
+        expect(m).toBeLessThanOrEqual(1);
+        expect(String(x).split('.')[1]?.length ?? 0).toBeLessThanOrEqual(6);
+      }
+    });
+
+    it('simplificação por zoom: polígono minúsculo não some; linha longa perde vértices em zoom baixo e não em zoom alto', async () => {
+      const service = new WebmapCamadasService(prisma as never, {} as never);
+      const baixo = await service.geojson(camadaId, '-47.31,-20.61,-47.17,-20.59', '10');
+      const alto = await service.geojson(camadaId, '-47.31,-20.61,-47.17,-20.59', '20');
+      const mini = baixo.features.find((f) => f.fid === 'mini')!;
+      expect((mini.geometry.coordinates as number[][][])[0].length).toBeGreaterThanOrEqual(4);
+      const nLow = (baixo.features.find((f) => f.fid === 'linha')!.geometry.coordinates as unknown[]).length;
+      const nHigh = (alto.features.find((f) => f.fid === 'linha')!.geometry.coordinates as unknown[]).length;
+      expect(nLow).toBeLessThan(50);
+      expect(nHigh).toBeGreaterThan(nLow);
+    });
+
+    it('teto de bytes (~2 MB) também trunca', async () => {
+      const big = await prisma.webmapCamada.create({ data: { chaveOrigem: 'T298/BYTES#LINE', grupoId: (await prisma.webmapCamadaGrupo.findUniqueOrThrow({ where: { chaveOrigem: 'T298' } })).id, nomeOriginal: 'Bytes 298', varOrigem: 'json_B', arquivoOrigem: 'B.js', ordem: 1, geometriaTipo: 'LINE', estilo: {}, estiloOriginal: '', shaArquivo: 'y', commitSha: 'y', importadoEm: new Date(), totalElementos: 3000, ativo: true, versaoAtual: 'vb' } as never });
+      const linha = { type: 'LineString', coordinates: Array.from({ length: 200 }, (_, i) => [-47.4 + i * 0.0001, -20.5 + (i % 2) * 0.01]) };
+      await prisma.webmapElemento.createMany({ data: Array.from({ length: 1000 }, (_, i) => ({ camadaId: big.id, versao: 'vb', fidOrigem: `b${i}`, geometriaTipo: 'LineString', geometria: linha, atributos: {}, minLng: -47.4, minLat: -20.5, maxLng: -47.38, maxLat: -20.49 })) });
+      const service = new WebmapCamadasService(prisma as never, {} as never);
+      const gj = await service.geojson(big.id, '-48,-21,-47,-20', '22');
+      expect(gj.truncado).toBe(true);
+      expect(gj.features.length).toBeLessThan(1000);
+      expect(JSON.stringify(gj).length).toBeLessThanOrEqual(LIMITE_BYTES_RESPOSTA + 1024);
+    });
   });
 });

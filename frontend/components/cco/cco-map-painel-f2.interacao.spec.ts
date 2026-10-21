@@ -41,7 +41,8 @@ describe('299-F2 · sheet < 600 px fora da tela cheia', () => {
     expect(p.parentElement).toBe(document.body);
     expect(p.getAttribute('data-sheet-viewport')).toBe('true');
     expect(p.className).toContain('fixed');
-    expect(p.className).toContain('h-[85dvh]');
+    expect(p.className).toContain('h-[60dvh]');
+    expect(p.getAttribute('data-sheet-altura')).toBe('60');
     expect(p.className).toContain('pb-[env(safe-area-inset-bottom)]');
     expect(p.getAttribute('role')).toBe('dialog');
     expect(p.getAttribute('aria-modal')).toBe('true');
@@ -71,14 +72,48 @@ describe('299-F2 · sheet < 600 px fora da tela cheia', () => {
     }
   });
 
-  it('em tela cheia continua dentro do mapa (absolute, 85% do shell)', () => {
+  it('em tela cheia continua dentro do mapa (absolute, 60% do shell)', () => {
     const mm = midia({ '(max-width: 599px)': true });
     const { host } = renderNoMapa(painel({ fullscreenMode: 'native' }));
     const p = screen.getByTestId('cco-map-painel');
     expect(host.contains(p)).toBe(true);
     expect(p.className).toContain('absolute');
-    expect(p.className).toContain('h-[85%]');
+    expect(p.className).toContain('h-[60%]');
     expect(p.getAttribute('data-sheet-viewport')).toBeNull();
+    mm();
+  });
+
+  it('300 UX: alça leva o sheet de 60% a 90% (arrastar para cima ou tocar) e volta a 60% (arrastar para baixo)', () => {
+    const mm = midia({ '(max-width: 599px)': true });
+    renderNoMapa(painel());
+    const p = screen.getByTestId('cco-map-painel');
+    const alca = screen.getByTestId('cco-sheet-alca');
+    expect(alca.getAttribute('aria-label')).toBe('Expandir painel');
+    // QA U6: alvo de toque >= 44x44 (h-11 = 44 px; w-16 = 64 px; min-w-11 garante 44)
+    for (const c of ['h-11', 'min-h-11', 'w-16', 'min-w-11']) expect(alca.className.split(/\s+/)).toContain(c);
+    expect(alca.className).not.toMatch(/\bh-6\b/);
+    fireEvent.pointerDown(alca, { clientY: 500 });
+    fireEvent.pointerUp(alca, { clientY: 300 });
+    fireEvent.click(alca);
+    expect(p.getAttribute('data-sheet-altura')).toBe('90');
+    expect(p.className).toContain('h-[90dvh]');
+    expect(alca.getAttribute('aria-label')).toBe('Reduzir painel');
+    fireEvent.pointerDown(alca, { clientY: 300 });
+    fireEvent.pointerUp(alca, { clientY: 500 });
+    fireEvent.click(alca);
+    expect(p.getAttribute('data-sheet-altura')).toBe('60');
+    fireEvent.click(alca); // teclado/leitor de tela: clique alterna
+    expect(p.getAttribute('data-sheet-altura')).toBe('90');
+    mm();
+  });
+
+  it('300 UX: desktop sem alça nem altura de sheet', () => {
+    const mm = midia({ '(max-width: 599px)': false });
+    renderNoMapa(painel());
+    expect(screen.queryByTestId('cco-sheet-alca')).toBeNull();
+    const p = screen.getByTestId('cco-map-painel');
+    expect(p.getAttribute('data-sheet-altura')).toBeNull();
+    expect(p.className).toContain('w-[360px]');
     mm();
   });
 

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { AuditAction, Prisma, PrismaClient } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,7 +12,30 @@ import type { ErroLeitura } from './parse';
 import { leitorEmWorker } from './job';
 import { GithubWebmapFonte, WebmapCamadasFonte } from './source';
 
-const LIMITE_ELEMENTOS_RESPOSTA = 5000;
+export const LIMITE_ELEMENTOS_RESPOSTA = 5000;
+/** 298: teto de JSON por resposta (~2 MB); passa disso => truncado. */
+export const LIMITE_BYTES_RESPOSTA = 2 * 1024 * 1024;
+
+/** 298: versão curta (10 hex do sha1) — identifica a versão ATIVA na lista e no `v` do GeoJSON (cache do cliente). */
+export function versaoCurta(v: string) {
+  return createHash('sha1').update(v).digest('hex').slice(0, 10);
+}
+
+/** 298: estilo sem chaves nulas (lista leve); ícone só com a url. */
+export function estiloEnxuto(e: unknown): Record<string, unknown> {
+  const o: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries((e ?? {}) as Record<string, unknown>)) {
+    if (v === null || v === undefined) continue;
+    o[k] = k === 'icone' && typeof v === 'object' ? { url: (v as { url?: unknown }).url } : v;
+  }
+  return o;
+}
+
+/** 298: 6 casas decimais (~0,11 m no equador) — reduz o payload sem passar de 1 m (crit. 10). */
+export function arredondarGeometria(g: { type: string; coordinates: unknown }): { type: string; coordinates: unknown } {
+  const r = (c: unknown): unknown => (typeof c === 'number' ? Math.round(c * 1e6) / 1e6 : Array.isArray(c) ? c.map(r) : c);
+  return { ...g, coordinates: r(g.coordinates) };
+}
 
 /**
  * 296 (TL): toda consulta de EXIBIÇÃO no mapa ignora, explicitamente, feições sem conserto e feições com bbox nulo.
@@ -264,38 +288,58 @@ export class WebmapCamadasService implements OnModuleInit {
     return { emAndamento: Boolean(a && a.tipo === 'APLICACAO'), mensagem: a && a.tipo === 'APLICACAO' ? 'Importação em andamento' : null };
   }
 
-  /** Árvore para o mapa (D-296c: todos os usuários do mapa; camadas desligadas por padrão). */
+  /**
+   * Árvore para o mapa (D-296c: todos os usuários do mapa; camadas desligadas por padrão).
+   * 298 (crit. 1): só a lista, enxuta — sem geometria, sem bbox; estilo sem campos nulos; versão curta (hash).
+   */
   async arvore() {
     const grupos = await this.db.webmapCamadaGrupo.findMany({
       where: { ativo: true }, orderBy: { ordem: 'asc' },
-      include: { camadas: { where: { ativo: true, versaoAtual: { not: null } }, orderBy: { ordem: 'asc' }, select: { id: true, nomeOriginal: true, geometriaTipo: true, estilo: true, totalElementos: true, bbox: true, versaoAtual: true, bytesOrigem: true } } },
+      include: { camadas: { where: { ativo: true, versaoAtual: { not: null } }, orderBy: { ordem: 'asc' }, select: { id: true, nomeOriginal: true, geometriaTipo: true, estilo: true, totalElementos: true, totalInvalidos: true, versaoAtual: true } } },
     });
     return grupos.filter((g) => g.camadas.length).map((g) => ({
       id: g.id, titulo: g.titulo,
-      camadas: g.camadas.map((c) => ({ ...c, id: `webmap:${c.id}`, camadaId: c.id, ligadaPorPadrao: false, pesada: c.totalElementos > CAMADA_PESADA_ELEMENTOS })),
+      camadas: g.camadas.map((c) => ({
+        id: `webmap:${c.id}`, camadaId: c.id, nomeOriginal: c.nomeOriginal, geometriaTipo: c.geometriaTipo, estilo: estiloEnxuto(c.estilo),
+        totalElementos: c.totalElementos, totalInvalidos: c.totalInvalidos, versaoAtual: versaoCurta(c.versaoAtual!), ligadaPorPadrao: false, pesada: c.totalElementos > CAMADA_PESADA_ELEMENTOS,
+      })),
     }));
   }
 
-  /** GeoJSON sob demanda da versão ATIVA; camadas pesadas exigem bbox e são simplificadas pelo zoom. */
-  async geojson(camadaId: string, bboxParam?: string, zoomParam?: string) {
+  /**
+   * GeoJSON sob demanda da versão ATIVA (298). Camada pesada: bbox + zoom obrigatórios (índice composto da 296) e
+   * simplificação por zoom; limites por resposta: 5.000 feições e ~2 MB (truncado=true → aviso no cliente).
+   * Coordenadas com 6 casas (~0,11 m). `v` (versão vista pelo cliente) diferente da ativa => 409 versao_mudou.
+   */
+  async geojson(camadaId: string, bboxParam?: string, zoomParam?: string, versaoParam?: string) {
     const camada = await this.db.webmapCamada.findFirst({ where: { id: camadaId, ativo: true, versaoAtual: { not: null } }, select: { id: true, totalElementos: true, versaoAtual: true } });
     if (!camada) throw new NotFoundException('Camada não encontrada.');
+    const versao = versaoCurta(camada.versaoAtual!);
+    if (versaoParam && versaoParam !== versao) throw new ConflictException({ message: 'A camada foi reimportada; recarregue a lista de camadas.', codigo: 'versao_mudou', versao });
     const bbox = bboxParam?.split(',').map(Number);
-    if (bbox && (bbox.length !== 4 || bbox.some((n) => !Number.isFinite(n)))) throw new BadRequestException('bbox inválido (minLng,minLat,maxLng,maxLat).');
+    if (bbox && (bbox.length !== 4 || bbox.some((n) => !Number.isFinite(n)) || bbox[0] > bbox[2] || bbox[1] > bbox[3])) throw new BadRequestException('bbox inválido (minLng,minLat,maxLng,maxLat).');
     const pesada = camada.totalElementos > CAMADA_PESADA_ELEMENTOS;
-    if (pesada && !bbox) throw new BadRequestException('Camada pesada: informe bbox e zoom.');
+    if (pesada && (!bbox || !zoomParam)) throw new BadRequestException('Camada pesada: informe bbox e zoom.');
     const zoom = zoomParam ? Number(zoomParam) : 18;
+    if (!Number.isFinite(zoom)) throw new BadRequestException('zoom inválido.');
     const where: Prisma.WebmapElementoWhereInput = { camadaId: camada.id, versao: camada.versaoAtual!, ...FILTRO_EXIBICAO };
     if (bbox) Object.assign(where, { minLng: { lte: bbox[2] }, maxLng: { gte: bbox[0] }, minLat: { lte: bbox[3] }, maxLat: { gte: bbox[1] } });
-    const rows = await this.db.webmapElemento.findMany({ where, take: LIMITE_ELEMENTOS_RESPOSTA + 1, select: { fidOrigem: true, geometria: true, atributos: true, corrigida: true } });
-    const truncado = rows.length > LIMITE_ELEMENTOS_RESPOSTA;
-    const tol = pesada ? toleranciaPorZoom(zoom) : 0;
-    return {
-      type: 'FeatureCollection', versao: camada.versaoAtual, truncado, total: camada.totalElementos,
-      features: rows.slice(0, LIMITE_ELEMENTOS_RESPOSTA).map((r) => ({
-        type: 'Feature', id: r.fidOrigem ?? undefined, properties: { ...(r.atributos as Record<string, unknown>), ...(r.corrigida ? { _geometriaCorrigida: true } : {}) },
-        geometry: tol ? simplificarGeometria(r.geometria as { type: string; coordinates: unknown }, tol) : r.geometria,
-      })),
-    };
+    const rows = await this.db.webmapElemento.findMany({ where, take: LIMITE_ELEMENTOS_RESPOSTA + 1, select: { id: true, fidOrigem: true, geometria: true, atributos: true, corrigida: true } });
+    let truncado = rows.length > LIMITE_ELEMENTOS_RESPOSTA;
+    const tol = pesada || zoomParam ? toleranciaPorZoom(zoom) : 0;
+    const features: Array<{ type: 'Feature'; id: string; fid: string | null; properties: Record<string, unknown>; geometry: { type: string; coordinates: unknown } }> = [];
+    let bytes = 0;
+    for (const r of rows.slice(0, LIMITE_ELEMENTOS_RESPOSTA)) {
+      const g = r.geometria as { type: string; coordinates: unknown };
+      const f = {
+        type: 'Feature' as const, id: r.id, fid: r.fidOrigem,
+        properties: { ...(r.atributos as Record<string, unknown>), ...(r.corrigida ? { _geometriaCorrigida: true } : {}) },
+        geometry: arredondarGeometria(tol ? simplificarGeometria(g, tol) : g),
+      };
+      bytes += JSON.stringify(f).length + 1;
+      if (bytes > LIMITE_BYTES_RESPOSTA && features.length) { truncado = true; break; }
+      features.push(f);
+    }
+    return { type: 'FeatureCollection', versao, truncado, total: camada.totalElementos, features };
   }
 }
