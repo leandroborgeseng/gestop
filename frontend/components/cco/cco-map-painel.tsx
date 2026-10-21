@@ -24,6 +24,7 @@ export const MSG_MUITAS_LIGADAS = 'Muitas camadas ligadas podem deixar o mapa le
 export const MUITAS_LIGADAS = 20;
 export const MSG_ESC_TELA_CHEIA = 'Esc sai da tela cheia. Use Fechar para fechar o painel.';
 
+const ARRASTE_MIN_PX = 24;
 const LINHA = 'flex min-h-11 items-center gap-2.5 rounded-[var(--r-md)] px-2 text-[13px] text-[var(--ink)] hover:bg-[var(--surface-2)]';
 
 /** 299-U3: dica do Esc só com ponteiro fino (mouse/teclado), nunca no celular. */
@@ -323,6 +324,9 @@ export function CcoMapPainel({
   camadas: CcoCamadasProps;
 }) {
   const celular = useCelular();
+  /** 300 (UX): sheet < 600 px abre em 60% da altura (mapa visível); a alça leva a 90%. */
+  const [alturaSheet, setAlturaSheet] = useState<60 | 90>(60);
+  const arrasteRef = useRef<number | null>(null);
   const ponteiroFino = usePonteiroFino();
   const tituloId = useId();
   const ref = useRef<HTMLDivElement | null>(null);
@@ -399,16 +403,41 @@ export function CcoMapPainel({
       data-testid="cco-map-painel"
       data-layout={celular ? 'sheet' : 'lateral'}
       data-sheet-viewport={sheetViewport ? 'true' : undefined}
+      data-sheet-altura={celular ? alturaSheet : undefined}
       className={cn(
         'cco-map-painel pointer-events-auto flex flex-col overflow-hidden border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-md)]',
         celular
           ? sheetViewport
-            ? 'fixed inset-x-0 bottom-0 z-[1100] h-[85dvh] max-h-[85vh] rounded-t-[16px] pb-[env(safe-area-inset-bottom)]'
-            : 'absolute inset-x-0 bottom-0 z-[600] h-[85%] rounded-t-[16px] pb-[env(safe-area-inset-bottom)]'
+            ? cn('fixed inset-x-0 bottom-0 z-[1100] rounded-t-[16px] pb-[env(safe-area-inset-bottom)] transition-[height] duration-200', alturaSheet === 90 ? 'h-[90dvh] max-h-[90vh]' : 'h-[60dvh] max-h-[60vh]')
+            : cn('absolute inset-x-0 bottom-0 z-[600] rounded-t-[16px] pb-[env(safe-area-inset-bottom)] transition-[height] duration-200', alturaSheet === 90 ? 'h-[90%]' : 'h-[60%]')
           : 'absolute z-[450] top-[4.25rem] right-[4.25rem] bottom-3 w-[360px] max-w-[calc(100%-5rem)] min-w-[min(320px,calc(100%-5rem))] rounded-[var(--r-card)]',
       )}
     >
-      {celular ? <div aria-hidden="true" className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-[var(--line)]" /> : null}
+      {celular ? (
+        <button
+          type="button"
+          data-testid="cco-sheet-alca"
+          aria-label={alturaSheet === 90 ? 'Reduzir painel' : 'Expandir painel'}
+          aria-expanded={alturaSheet === 90}
+          className="mx-auto flex h-6 w-16 shrink-0 touch-none items-center justify-center"
+          onPointerDown={(e) => { arrasteRef.current = e.clientY; e.currentTarget.setPointerCapture?.(e.pointerId); }}
+          onPointerUp={(e) => {
+            const ini = arrasteRef.current;
+            arrasteRef.current = null;
+            const dy = ini === null ? 0 : e.clientY - ini;
+            if (dy < -ARRASTE_MIN_PX) setAlturaSheet(90);
+            else if (dy > ARRASTE_MIN_PX) setAlturaSheet(60);
+            else setAlturaSheet((h) => (h === 90 ? 60 : 90)); // toque/clique/teclado alterna
+            arrasteRef.current = -1e9; // evita o onClick repetir a ação
+          }}
+          onClick={() => {
+            if (arrasteRef.current === -1e9) { arrasteRef.current = null; return; }
+            setAlturaSheet((h) => (h === 90 ? 60 : 90));
+          }}
+        >
+          <span aria-hidden="true" className="h-1 w-10 rounded-full bg-[var(--line)]" />
+        </button>
+      ) : null}
       <div className="shrink-0 border-b border-[var(--line-2)] px-3.5 pt-2.5 pb-2">
         <div className="flex items-center justify-between gap-2">
           <h2 id={tituloId} ref={tituloRef} tabIndex={-1} className="text-[14px] font-bold text-[var(--ink)] focus:outline-none">
