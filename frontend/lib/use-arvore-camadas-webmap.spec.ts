@@ -6,44 +6,47 @@ const getMapaCamadas = vi.fn(async () => [{ id: 'g', titulo: 'Drenagem', camadas
 vi.mock('@/lib/api', () => ({ getMapaCamadas: () => getMapaCamadas() }));
 
 import { useArvoreCamadasWebmap } from './use-arvore-camadas-webmap';
-import { webmapCamadasMapaAtivo } from './feature-flags';
-import { contarCamadasAlemDoPadrao, estadoCamadasPadrao } from './cco-camadas';
+import { contarCamadasAlemDoPadrao, estadoCamadasPadrao, filtrarArvore, resumoGrupo } from './cco-camadas';
+import type { MapaCamada } from './types';
 
-afterEach(() => { getMapaCamadas.mockClear(); vi.unstubAllEnvs(); });
+afterEach(() => { getMapaCamadas.mockClear(); });
 
-describe('299 W-OCULTO · flag NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA', () => {
-  it('padrão desligada; só "true" liga', () => {
-    vi.stubEnv('NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA', '');
-    expect(webmapCamadasMapaAtivo()).toBe(false);
-    vi.stubEnv('NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA', 'false');
-    expect(webmapCamadasMapaAtivo()).toBe(false);
-    vi.stubEnv('NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA', '1');
-    expect(webmapCamadasMapaAtivo()).toBe(false);
-    vi.stubEnv('NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA', 'true');
-    expect(webmapCamadasMapaAtivo()).toBe(true);
-  });
+const cam = (id: string, nome: string): MapaCamada => ({ id: `webmap:${id}`, camadaId: id, nomeOriginal: nome, geometriaTipo: 'Point', estilo: null, totalElementos: 1, versaoAtual: 'v', ligadaPorPadrao: false, pesada: false });
 
-  it('flag off: o hook NÃO faz nenhuma requisição de camadas (carregar e garantir)', async () => {
-    const { result } = renderHook(() => useArvoreCamadasWebmap(false));
-    act(() => { result.current.garantir(); result.current.carregar(); result.current.garantir(); });
-    await new Promise((r) => setTimeout(r, 20));
+describe('300 · árvore do Webmap sem flag', () => {
+  it('sem env: nada na montagem, carrega uma vez sob demanda (W12)', async () => {
+    const { result } = renderHook(() => useArvoreCamadasWebmap());
     expect(getMapaCamadas).not.toHaveBeenCalled();
-    expect(result.current).toMatchObject({ arvore: null, carregando: false, erro: false });
-  });
-
-  it('flag on: carrega uma vez sob demanda', async () => {
-    const { result } = renderHook(() => useArvoreCamadasWebmap(true));
-    expect(getMapaCamadas).not.toHaveBeenCalled(); // nada na montagem
     act(() => result.current.garantir());
     await waitFor(() => expect(result.current.arvore).toHaveLength(1));
     act(() => result.current.garantir());
     expect(getMapaCamadas).toHaveBeenCalledTimes(1);
   });
 
-  it('selo do botão Camadas: flag off não conta nada do Webmap', () => {
+  it('selo conta camadas Webmap ligadas', () => {
     const estado = { ...estadoCamadasPadrao(), ligadas: [...estadoCamadasPadrao().ligadas, 'webmap:a', 'webmap:b'] };
-    expect(contarCamadasAlemDoPadrao(estado, false, true)).toBe(2);
-    expect(contarCamadasAlemDoPadrao(estado, false, false)).toBe(0);
-    expect(contarCamadasAlemDoPadrao(estado, true, false)).toBe(1);
+    expect(contarCamadasAlemDoPadrao(estado, false)).toBe(2);
+    expect(contarCamadasAlemDoPadrao(estado, true)).toBe(3);
+  });
+
+  it('W11: padrão sem nenhuma camada Webmap', () => {
+    expect(estadoCamadasPadrao().ligadas.some((id) => id.startsWith('webmap:'))).toBe(false);
+  });
+
+  it('U1/W7: tri-estado do grupo', () => {
+    const g = { id: 'g', titulo: 'G', camadas: [cam('a', 'A'), cam('b', 'B')] };
+    const base = estadoCamadasPadrao();
+    expect(resumoGrupo(base, g).marcado).toBe(false);
+    expect(resumoGrupo({ ...base, ligadas: ['webmap:a'] }, g).marcado).toBe('mixed');
+    expect(resumoGrupo({ ...base, ligadas: ['webmap:a', 'webmap:b'] }, g).marcado).toBe(true);
+  });
+
+  it('W16: busca sem acento/caixa, por camada ou grupo', () => {
+    const arv = [{ id: 'g1', titulo: 'Água', camadas: [cam('a', 'Rede de água'), cam('b', 'Hidrantes')] }, { id: 'g2', titulo: 'Drenagem', camadas: [cam('c', 'Bocas de lobo')] }];
+    expect(filtrarArvore(arv, 'AGUA').map((g) => g.id)).toEqual(['g1']);
+    expect(filtrarArvore(arv, 'agua')[0].camadas).toHaveLength(2); // nome do grupo bate => grupo inteiro
+    expect(filtrarArvore(arv, 'boca')[0].camadas.map((c) => c.nomeOriginal)).toEqual(['Bocas de lobo']);
+    expect(filtrarArvore(arv, 'xyz')).toEqual([]);
+    expect(filtrarArvore(arv, '  ')).toBe(arv);
   });
 });

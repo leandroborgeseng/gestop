@@ -58,12 +58,12 @@ describe('299 · camadas do CCO (D-296c)', () => {
     let e = alternarCamada(estadoCamadasPadrao(), 'webmap:b', true);
     e = alternarCamada(e, 'webmap:a', true);
     e = alternarCamada(e, 'webmap:a', true);
-    expect(resumoGrupo(e, arvore[0]).texto).toBe('2 de 2 ligadas');
+    expect(resumoGrupo(e, arvore[0]).texto).toBe('2/2');
     expect(webmapLigadas(e)).toEqual(['webmap:b', 'webmap:a']);
     expect(webmapLigadas(alternarCamada(e, 'webmap:zz', true), arvore)).toEqual(['webmap:b', 'webmap:a']);
     expect(contarCamadasAlemDoPadrao(e, true)).toBe(3);
     const off = desligarTodas(e);
-    expect(resumoGrupo(off, arvore[0]).texto).toBe('0 de 2 ligadas');
+    expect(resumoGrupo(off, arvore[0]).texto).toBe('0/2');
     expect(contarCamadasAlemDoPadrao(off)).toBe(2);
     const soWebmap = desligarWebmap(e);
     expect(webmapLigadas(soWebmap)).toEqual([]);

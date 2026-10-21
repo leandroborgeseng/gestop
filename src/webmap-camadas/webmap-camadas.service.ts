@@ -295,13 +295,13 @@ export class WebmapCamadasService implements OnModuleInit {
   async arvore() {
     const grupos = await this.db.webmapCamadaGrupo.findMany({
       where: { ativo: true }, orderBy: { ordem: 'asc' },
-      include: { camadas: { where: { ativo: true, versaoAtual: { not: null } }, orderBy: { ordem: 'asc' }, select: { id: true, nomeOriginal: true, geometriaTipo: true, estilo: true, totalElementos: true, versaoAtual: true } } },
+      include: { camadas: { where: { ativo: true, versaoAtual: { not: null } }, orderBy: { ordem: 'asc' }, select: { id: true, nomeOriginal: true, geometriaTipo: true, estilo: true, totalElementos: true, totalInvalidos: true, versaoAtual: true } } },
     });
     return grupos.filter((g) => g.camadas.length).map((g) => ({
       id: g.id, titulo: g.titulo,
       camadas: g.camadas.map((c) => ({
         id: `webmap:${c.id}`, camadaId: c.id, nomeOriginal: c.nomeOriginal, geometriaTipo: c.geometriaTipo, estilo: estiloEnxuto(c.estilo),
-        totalElementos: c.totalElementos, versaoAtual: versaoCurta(c.versaoAtual!), ligadaPorPadrao: false, pesada: c.totalElementos > CAMADA_PESADA_ELEMENTOS,
+        totalElementos: c.totalElementos, totalInvalidos: c.totalInvalidos, versaoAtual: versaoCurta(c.versaoAtual!), ligadaPorPadrao: false, pesada: c.totalElementos > CAMADA_PESADA_ELEMENTOS,
       })),
     }));
   }

@@ -108,8 +108,8 @@ export function webmapLigadas(estado: CcoCamadasEstado, arvore?: MapaCamadaGrupo
 }
 
 /** Selo do botão Camadas: camadas ligadas além do padrão (Webmap ligadas + SIGMA fora do padrão). */
-export function contarCamadasAlemDoPadrao(estado: CcoCamadasEstado, calorLigado = false, webmapAtivo = true): number {
-  const webmap = webmapAtivo ? webmapLigadas(estado).length : 0; // 299 W-OCULTO: flag desligada não conta Webmap
+export function contarCamadasAlemDoPadrao(estado: CcoCamadasEstado, calorLigado = false): number {
+  const webmap = webmapLigadas(estado).length;
   const sigmaDesligadas = SIGMA_CAMADAS_PADRAO.filter((id) => !camadaLigada(estado, id)).length;
   return webmap + (calorLigado ? 1 : 0) + sigmaDesligadas;
 }
@@ -117,5 +117,20 @@ export function contarCamadasAlemDoPadrao(estado: CcoCamadasEstado, calorLigado 
 export function resumoGrupo(estado: CcoCamadasEstado, grupo: MapaCamadaGrupo) {
   const total = grupo.camadas.length;
   const ligadas = grupo.camadas.filter((c) => camadaLigada(estado, c.id)).length;
-  return { ligadas, total, texto: `${ligadas} de ${total} ligadas` };
+  const marcado: boolean | 'mixed' = ligadas === 0 ? false : ligadas === total ? true : 'mixed';
+  return { ligadas, total, texto: `${ligadas}/${total}`, marcado };
+}
+
+/** 300 W16: normaliza para busca (sem acento, sem caixa). */
+export function normalizarBusca(s: string) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+/** 300 W16: grupos com as camadas cujo nome (ou o do grupo) contém o termo. Termo vazio => árvore inteira. */
+export function filtrarArvore(arvore: MapaCamadaGrupo[], termo: string): MapaCamadaGrupo[] {
+  const t = normalizarBusca(termo);
+  if (!t) return arvore;
+  return arvore
+    .map((g) => (normalizarBusca(g.titulo).includes(t) ? g : { ...g, camadas: g.camadas.filter((c) => normalizarBusca(c.nomeOriginal).includes(t)) }))
+    .filter((g) => g.camadas.length > 0);
 }

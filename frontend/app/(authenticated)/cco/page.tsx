@@ -57,7 +57,6 @@ import {
   salvarCamadasSessao,
   webmapLigadas,
 } from '@/lib/cco-camadas';
-import { webmapCamadasMapaAtivo } from '@/lib/feature-flags';
 import { useArvoreCamadasWebmap } from '@/lib/use-arvore-camadas-webmap';
 import { useWebmapNoMapa } from '@/components/cco/use-webmap-no-mapa';
 import type { Map as LeafletMap } from 'leaflet';
@@ -129,11 +128,10 @@ function CcoPageContent() {
   const origemPainelRef = useRef<CcoPainelAba>('filtros');
 
   // D-296c: escolha das camadas vale para a sessão (Webmap desligado por padrão).
-  // 299 W-OCULTO: flag desligada => nada do Webmap (sem seção, sem requisição, sem contar no selo).
-  const webmapAtivo = webmapCamadasMapaAtivo();
+  // 300: seção Webmap QGIS sempre ativa (flag NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA removida). Tudo desligado por padrão.
   useEffect(() => {
     const salvo = lerCamadasSessao();
-    setCamadas(webmapAtivo ? salvo : desligarWebmap(salvo));
+    setCamadas(salvo);
     camadasCarregadasRef.current = true;
   }, []);
   useEffect(() => {
@@ -394,7 +392,7 @@ function CcoPageContent() {
   const filtrosAtivos = useMemo(() => contarFiltrosAtivos(tab, aplicado), [tab, aplicado]);
   const rascunhoPendente = Boolean(rascunho && !snapshotsIguais(rascunho, aplicado));
   const calorLigado = chamadoMapMode === 'calor';
-  const camadasAlemDoPadrao = contarCamadasAlemDoPadrao(camadas, calorLigado, webmapAtivo);
+  const camadasAlemDoPadrao = contarCamadasAlemDoPadrao(camadas, calorLigado);
 
   // Sanfona mudou algo com o painel aberto: o rascunho recomeça do aplicado.
   useEffect(() => {
@@ -412,21 +410,21 @@ function CcoPageContent() {
   }, [statusMapa]);
 
   const { arvore: arvoreCamadas, carregando: arvoreCarregando, erro: arvoreErro, carregar: carregarArvoreCamadas, garantir: garantirArvoreCamadas } =
-    useArvoreCamadasWebmap(webmapAtivo);
+    useArvoreCamadasWebmap();
   // 298: camadas do Webmap ligadas na sessão e existentes na lista (L3) => desenhadas no mapa, sob demanda.
   const [mapaLeaflet, setMapaLeaflet] = useState<LeafletMap | null>(null);
-  const idsWebmapLigadas = webmapAtivo ? webmapLigadas(camadas) : [];
+  const idsWebmapLigadas = webmapLigadas(camadas);
   const temWebmapLigada = idsWebmapLigadas.length > 0;
   useEffect(() => {
     if (temWebmapLigada) garantirArvoreCamadas(); // sessão com Webmap ligada (F5): só a lista, sem geometria
   }, [temWebmapLigada, garantirArvoreCamadas]);
   const camadasWebmapLigadas = useMemo(() => {
-    if (!webmapAtivo || !arvoreCamadas) return [];
+    if (!arvoreCamadas) return [];
     const porId = new Map(arvoreCamadas.flatMap((g) => g.camadas).map((c) => [c.id, c]));
     return idsWebmapLigadas.map((id) => porId.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webmapAtivo, arvoreCamadas, idsWebmapLigadas.join(',')]);
-  const webmapMapa = useWebmapNoMapa(webmapAtivo ? mapaLeaflet : null, camadasWebmapLigadas, carregarArvoreCamadas);
+  }, [arvoreCamadas, idsWebmapLigadas.join(',')]);
+  const webmapMapa = useWebmapNoMapa(mapaLeaflet, camadasWebmapLigadas, carregarArvoreCamadas);
 
   function abrirPainel(aba: CcoPainelAba) {
     if (painelAba === aba) {
@@ -776,8 +774,8 @@ function CcoPageContent() {
                         setChamadoMapMode('situacao');
                       },
                       calorLigado,
-                      algumaLigada: calorLigado || (webmapAtivo && webmapLigadas(camadas, arvoreCamadas).length > 0),
-                      webmapAtivo,
+                      algumaLigada: calorLigado || webmapLigadas(camadas, arvoreCamadas).length > 0,
+                      onAlternarVarias: (ids, ligar) => setCamadas((c) => ids.reduce((e, id) => alternarCamada(e, id, ligar), c)),
                       statusWebmap: webmapMapa.status,
                       onTentarCamada: webmapMapa.tentarNovamente,
                       onCalor: (ligar) => setChamadoMapMode(ligar ? 'calor' : 'situacao'),

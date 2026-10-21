@@ -10,15 +10,18 @@ import {
   SIGMA_CAMADA_CHAMADOS,
   SIGMA_CAMADA_PROPRIOS,
   camadaLigada,
+  filtrarArvore,
+  normalizarBusca,
   resumoGrupo,
 } from '@/lib/cco-camadas';
 import type { MapaCamadaGrupo } from '@/lib/types';
 import type { StatusCamadaWebmap } from '@/lib/webmap-mapa';
 import type { CcoPainelAba } from './cco-map-controles';
 
-export const MSG_CAMADAS_VAZIO =
-  'Nenhuma camada do Webmap importada ainda. Um administrador pode importar em Administração › Importação.';
-export const MSG_CAMADAS_ERRO = 'Não foi possível carregar as camadas. Tente novamente.';
+export const MSG_CAMADAS_VAZIO = 'Nenhuma camada do Webmap foi importada ainda.';
+export const MSG_CAMADAS_ERRO = 'Não foi possível carregar as camadas do Webmap.';
+export const MSG_MUITAS_LIGADAS = 'Muitas camadas ligadas podem deixar o mapa lento.';
+export const MUITAS_LIGADAS = 20;
 export const MSG_ESC_TELA_CHEIA = 'Esc sai da tela cheia. Use Fechar para fechar o painel.';
 
 const LINHA = 'flex min-h-11 items-center gap-2.5 rounded-[var(--r-md)] px-2 text-[13px] text-[var(--ink)] hover:bg-[var(--surface-2)]';
@@ -68,8 +71,8 @@ export type CcoCamadasProps = {
   onCalor: (ligar: boolean) => void;
   /** 299-U2: há camada do Webmap (ou o calor) ligada → mostra "Desligar todas". */
   algumaLigada: boolean;
-  /** 299 W-OCULTO: flag NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA (padrão desligada) — sem ela não há seção Webmap. */
-  webmapAtivo?: boolean;
+  /** 300 U1: checkbox do grupo liga/desliga várias de uma vez. */
+  onAlternarVarias: (ids: string[], ligar: boolean) => void;
   /** 298: estado de cada camada Webmap ligada no mapa (carregando, erro, truncado, fora da faixa de zoom). */
   statusWebmap?: Record<string, StatusCamadaWebmap>;
   onTentarCamada?: (camadaId: string) => void;
@@ -82,8 +85,8 @@ function StatusCamada({ nome, status, onTentar }: { nome: string; status?: Statu
   if (status.estado === 'erro')
     return (
       <p role="alert" data-testid="webmap-status-erro" className="ml-9 text-[11.5px] text-[var(--danger,#b42318)]">
-        Não foi possível carregar {nome}.{' '}
-        <button type="button" className="font-semibold underline" onClick={onTentar}>Tentar novamente</button>
+        Não foi possível exibir esta camada.{' '}
+        <button type="button" className="font-semibold underline" onClick={onTentar}>Tentar de novo</button>
       </p>
     );
   if (status.estado === 'fora_zoom')
@@ -92,11 +95,54 @@ function StatusCamada({ nome, status, onTentar }: { nome: string; status?: Statu
   return null;
 }
 
+/** 300 U1: checkbox de grupo tri-estado (vazio / parcial / cheio). */
+function CheckboxGrupo({ marcado, rotulo, onChange }: { marcado: boolean | 'mixed'; rotulo: string; onChange: (ligar: boolean) => void }) {
+  const ref = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = marcado === 'mixed';
+  }, [marcado]);
+  return (
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center">
+      <input
+        ref={ref}
+        type="checkbox"
+        className="h-4 w-4"
+        data-testid="webmap-grupo-checkbox"
+        aria-label={`Marcar todas as camadas de ${rotulo}`}
+        aria-checked={marcado === 'mixed' ? 'mixed' : marcado}
+        checked={marcado === true}
+        onChange={() => onChange(marcado !== true)}
+      />
+    </span>
+  );
+}
+
+/** 300: ícone do tipo de geometria com a cor do estilo (contorno p/ contraste). */
+function IconeTipo({ tipo, cor }: { tipo: string | null; cor: string }) {
+  const t = (tipo ?? '').toLowerCase();
+  const forma = t.includes('line') ? 'linha' : t.includes('polygon') ? 'poligono' : 'ponto';
+  return (
+    <span aria-hidden="true" data-tipo={forma} className="flex h-4 w-4 shrink-0 items-center justify-center">
+      {forma === 'linha' ? (
+        <span className="h-[3px] w-4 rounded-full outline outline-1 outline-black/20" style={{ background: cor }} />
+      ) : forma === 'poligono' ? (
+        <span className="h-3 w-3.5 rounded-[2px] border border-black/30" style={{ background: cor }} />
+      ) : (
+        <span className="h-2.5 w-2.5 rounded-full border border-black/30" style={{ background: cor }} />
+      )}
+    </span>
+  );
+}
+
 function CamadasConteudo(p: CcoCamadasProps) {
+  const [busca, setBusca] = useState('');
   const sigmaAberto = p.estado.gruposAbertos.includes('sigma');
   const webmapAberto = p.estado.gruposAbertos.includes('webmap');
-  const totalWebmap = (p.arvore ?? []).reduce((n, g) => n + g.camadas.length, 0);
-  const ligadasWebmap = (p.arvore ?? []).reduce((n, g) => n + resumoGrupo(p.estado, g).ligadas, 0);
+  const arvore = p.arvore ?? [];
+  const totalWebmap = arvore.reduce((n, g) => n + g.camadas.length, 0);
+  const ligadasWebmap = arvore.reduce((n, g) => n + resumoGrupo(p.estado, g).ligadas, 0);
+  const filtrada = filtrarArvore(arvore, busca);
+  const buscando = normalizarBusca(busca) !== '';
   return (
     <div className="space-y-3" data-testid="cco-painel-camadas">
       <section>
@@ -110,7 +156,7 @@ function CamadasConteudo(p: CcoCamadasProps) {
           <ChevronDown className={cn('h-4 w-4 transition-transform', sigmaAberto && 'rotate-180')} aria-hidden="true" />
         </button>
         {sigmaAberto ? (
-          <div className="mt-1 space-y-0.5">
+          <div className="mt-1 space-y-0.5" data-testid="cco-secao-sigma-itens">
             <label className={LINHA}>
               <input type="checkbox" className="h-4 w-4" checked={camadaLigada(p.estado, SIGMA_CAMADA_PROPRIOS)} onChange={(e) => p.onAlternar(SIGMA_CAMADA_PROPRIOS, e.target.checked)} />
               Próprios públicos
@@ -127,7 +173,6 @@ function CamadasConteudo(p: CcoCamadasProps) {
         ) : null}
       </section>
 
-      {p.webmapAtivo ? (
       <section data-testid="cco-secao-webmap">
         <button
           type="button"
@@ -136,7 +181,7 @@ function CamadasConteudo(p: CcoCamadasProps) {
           onClick={() => p.onAlternarGrupo('webmap')}
         >
           <span>
-            Webmap
+            Webmap QGIS
             {totalWebmap > 0 ? (
               <span data-testid="cco-webmap-resumo" className="font-semibold tracking-normal normal-case"> · {ligadasWebmap} de {totalWebmap} ligadas</span>
             ) : null}
@@ -146,64 +191,99 @@ function CamadasConteudo(p: CcoCamadasProps) {
         {webmapAberto ? (
           <div className="mt-1 space-y-1">
             {p.erro ? (
-              <div role="alert" className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-[12.5px] text-[var(--ink-2)]">
+              <div role="alert" data-testid="cco-camadas-erro" className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-[12.5px] text-[var(--ink-2)]">
                 {MSG_CAMADAS_ERRO}
                 <div className="mt-2">
                   <Button variant="outlined" size="lg" onClick={p.onTentarNovamente}>Tentar novamente</Button>
                 </div>
               </div>
             ) : p.carregando && !p.arvore ? (
-              <p role="status" className="px-2 text-[12.5px] text-[var(--ink-3)]">Carregando camadas…</p>
-            ) : (p.arvore ?? []).length === 0 ? (
+              <div role="status" aria-label="Carregando camadas…" data-testid="cco-camadas-carregando" className="space-y-1.5 px-2">
+                {Array.from({ length: 6 }, (_, i) => <div key={i} className="h-6 animate-pulse rounded bg-[var(--surface-2)]" />)}
+              </div>
+            ) : arvore.length === 0 ? (
               <p role="status" data-testid="cco-camadas-vazio" className="px-2 text-[12.5px] text-[var(--ink-3)]">{MSG_CAMADAS_VAZIO}</p>
             ) : (
-              (p.arvore ?? []).map((grupo) => {
-                const chave = `webmap-grupo:${grupo.id}`;
-                const aberto = p.estado.gruposAbertos.includes(chave);
-                const resumo = resumoGrupo(p.estado, grupo);
-                return (
-                  <div key={grupo.id}>
-                    <button
-                      type="button"
-                      className="flex min-h-11 w-full items-center justify-between gap-2 rounded-[var(--r-md)] px-2 text-left text-[13px] font-semibold text-[var(--ink)] hover:bg-[var(--surface-2)]"
-                      aria-expanded={aberto}
-                      onClick={() => p.onAlternarGrupo(chave)}
-                    >
-                      <span className="min-w-0 truncate">{grupo.titulo}</span>
-                      <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-normal text-[var(--ink-3)]">
-                        {resumo.texto}
-                        <ChevronDown className={cn('h-4 w-4 transition-transform', aberto && 'rotate-180')} aria-hidden="true" />
-                      </span>
-                    </button>
-                    {aberto ? (
-                      <div className="ml-2 space-y-0.5">
-                        {grupo.camadas.map((c) => (
-                          <div key={c.id}>
-                          <label className={LINHA} aria-busy={p.statusWebmap?.[c.camadaId]?.estado === 'carregando' || undefined}>
-                            <input
-                              type="checkbox"
-                              className="h-4 w-4"
-                              checked={camadaLigada(p.estado, c.id)}
-                              onChange={(e) => p.onAlternar(c.id, e.target.checked)}
+              <>
+                <input
+                  type="search"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar camada"
+                  aria-label="Buscar camada"
+                  data-testid="webmap-busca"
+                  className="min-h-11 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] text-[var(--ink)]"
+                />
+                {ligadasWebmap > MUITAS_LIGADAS ? (
+                  <p role="status" data-testid="webmap-aviso-muitas" className="rounded-[var(--r-md)] bg-amber-50 px-2 py-1.5 text-[12px] text-amber-900">{MSG_MUITAS_LIGADAS}</p>
+                ) : null}
+                {filtrada.length === 0 ? (
+                  <p role="status" data-testid="webmap-busca-vazia" className="px-2 text-[12.5px] text-[var(--ink-3)]">Nenhuma camada encontrada para “{busca.trim()}”.</p>
+                ) : (
+                  <div role="tree" aria-label="Camadas do Webmap QGIS">
+                    {filtrada.map((grupo) => {
+                      const chave = `webmap-grupo:${grupo.id}`;
+                      const aberto = buscando || p.estado.gruposAbertos.includes(chave);
+                      const completo = arvore.find((g) => g.id === grupo.id) ?? grupo;
+                      const resumo = resumoGrupo(p.estado, completo);
+                      return (
+                        <div key={grupo.id} role="treeitem" aria-expanded={aberto} aria-selected={false} data-testid="webmap-grupo">
+                          <div className="flex items-center rounded-[var(--r-md)] hover:bg-[var(--surface-2)]">
+                            <CheckboxGrupo
+                              marcado={resumo.marcado}
+                              rotulo={grupo.titulo}
+                              onChange={(ligar) => p.onAlternarVarias(completo.camadas.map((c) => c.id), ligar)}
                             />
-                            <span aria-hidden="true" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: corAmostra(c.estilo) }} />
-                            <span className="min-w-0 break-words">{c.nomeOriginal}</span>
-                          </label>
-                          {camadaLigada(p.estado, c.id) ? (
-                            <StatusCamada nome={c.nomeOriginal} status={p.statusWebmap?.[c.camadaId]} onTentar={() => p.onTentarCamada?.(c.camadaId)} />
-                          ) : null}
+                            <button
+                              type="button"
+                              className="flex min-h-11 min-w-0 flex-1 items-center justify-between gap-2 pr-2 text-left text-[13px] font-semibold text-[var(--ink)]"
+                              aria-expanded={aberto}
+                              onClick={() => p.onAlternarGrupo(chave)}
+                            >
+                              <span className="min-w-0 truncate">{grupo.titulo}</span>
+                              <span className="flex shrink-0 items-center gap-1.5 text-[11.5px] font-normal text-[var(--ink-3)]">
+                                {resumo.texto}
+                                <ChevronDown className={cn('h-4 w-4 transition-transform', aberto && 'rotate-180')} aria-hidden="true" />
+                              </span>
+                            </button>
                           </div>
-                        ))}
-                      </div>
-                    ) : null}
+                          {aberto ? (
+                            <div role="group" className="ml-6 space-y-0.5">
+                              {grupo.camadas.map((c) => {
+                                const ligada = camadaLigada(p.estado, c.id);
+                                const st = p.statusWebmap?.[c.camadaId];
+                                return (
+                                  <div key={c.id} role="treeitem" aria-selected={ligada} data-testid="webmap-camada">
+                                    <label className={LINHA} aria-busy={st?.estado === 'carregando' || undefined}>
+                                      <input type="checkbox" className="h-4 w-4" checked={ligada} onChange={(e) => p.onAlternar(c.id, e.target.checked)} />
+                                      {ligada && st?.estado === 'carregando' ? (
+                                        <span aria-hidden="true" className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-[var(--line)] border-t-[var(--ink-3)]" />
+                                      ) : (
+                                        <IconeTipo tipo={c.geometriaTipo} cor={corAmostra(c.estilo)} />
+                                      )}
+                                      <span className="min-w-0 break-words">{c.nomeOriginal}</span>
+                                    </label>
+                                    {ligada ? <StatusCamada nome={c.nomeOriginal} status={st} onTentar={() => p.onTentarCamada?.(c.camadaId)} /> : null}
+                                    {ligada && (c.totalInvalidos ?? 0) > 0 && st?.estado !== 'erro' ? (
+                                      <p data-testid="webmap-status-invalidos" title="Elementos com geometria irreparável na importação não são desenhados." className="ml-9 text-[11.5px] text-[var(--ink-3)]">
+                                        {c.totalInvalidos} {c.totalInvalidos === 1 ? 'elemento não exibido' : 'elementos não exibidos'}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })
+                )}
+              </>
             )}
           </div>
         ) : null}
       </section>
-      ) : null}
     </div>
   );
 }
@@ -392,7 +472,7 @@ export function CcoMapPainel({
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            {camadas.algumaLigada && (camadas.webmapAtivo || camadas.calorLigado) ? (
+            {camadas.algumaLigada ? (
               <Button variant="ghost" size="lg" className="px-3" onClick={camadas.onDesligarTodas}>Desligar todas</Button>
             ) : null}
             <span className="flex-1" />

@@ -18,11 +18,11 @@ const painel = (status: Record<string, unknown>, ligada = true, onTentarCamada =
     camadas: {
       estado: { ...estadoCamadasPadrao(), ligadas: [...estadoCamadasPadrao().ligadas, ...(ligada ? ['webmap:a'] : [])], gruposAbertos: ['sigma', 'webmap', 'webmap-grupo:g'] },
       arvore, carregando: false, erro: false, onTentarNovamente: vi.fn(), onAlternar: vi.fn(), onAlternarGrupo: vi.fn(), onDesligarTodas: vi.fn(),
-      calorLigado: false, onCalor: vi.fn(), algumaLigada: ligada, webmapAtivo: true, statusWebmap: status, onTentarCamada,
+      calorLigado: false, onCalor: vi.fn(), algumaLigada: ligada, onAlternarVarias: vi.fn(), statusWebmap: status, onTentarCamada,
     },
   } as never);
 
-describe('298 · estado da camada no painel (flag NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA ligada)', () => {
+describe('298 · estado da camada no painel', () => {
   it('C2: carregando na própria camada (aria-busy)', () => {
     render(painel({ a: { estado: 'carregando' } }));
     expect(screen.getByTestId('webmap-status-carregando').textContent).toBe('Carregando…');
@@ -31,8 +31,8 @@ describe('298 · estado da camada no painel (flag NEXT_PUBLIC_WEBMAP_CAMADAS_MAP
   it('C11: erro isolado com Tentar novamente', () => {
     const onTentarCamada = vi.fn();
     render(painel({ a: { estado: 'erro' } }, true, onTentarCamada));
-    expect(screen.getByTestId('webmap-status-erro').textContent).toContain('Não foi possível carregar Rede de água.');
-    fireEvent.click(screen.getByRole('button', { name: 'Tentar novamente' }));
+    expect(screen.getByTestId('webmap-status-erro').textContent).toContain('Não foi possível exibir esta camada.');
+    fireEvent.click(screen.getByRole('button', { name: 'Tentar de novo' }));
     expect(onTentarCamada).toHaveBeenCalledWith('a');
   });
   it('C6/L6: truncado => "Aproxime o mapa para ver todos os elementos de {camada}" (não é erro)', () => {
@@ -67,5 +67,61 @@ describe('298 · desenho no Leaflet', () => {
     expect(estiloLeaflet(c1)).toMatchObject({ color: 'rgba(1,1,226,1.0)', fill: false });
     expect(estiloLeaflet({ ...c1, estilo: { tipo: 'fill', preenchimento: 'rgba(250,235,221,0.75)' } })).toMatchObject({ fillColor: 'rgba(250,235,221,0.75)' });
     expect(estiloLeaflet({ ...c1, estilo: { tipo: 'circle', raio: 6, preenchimento: 'rgba(255,255,0,1.0)' } })).toMatchObject({ radius: 6, fillColor: 'rgba(255,255,0,1.0)' });
+  });
+});
+
+describe('300 · painel Webmap QGIS', () => {
+  const pts: MapaCamada = { ...c1, id: 'webmap:p', camadaId: 'p', nomeOriginal: 'Hidrantes', geometriaTipo: 'Point', totalElementos: 3, totalInvalidos: 2, pesada: false };
+  const arv2 = [{ id: 'g', titulo: 'Água', camadas: [c1, pts] }, { id: 'h', titulo: 'Drenagem', camadas: [{ ...pts, id: 'webmap:b', camadaId: 'b', nomeOriginal: 'Bocas de lobo', totalInvalidos: 0 }] }];
+  const montar = (ligadas: string[], extra: Record<string, unknown> = {}) => {
+    const onAlternarVarias = vi.fn();
+    render(createElement(CcoMapPainel, {
+      aba: 'camadas', onAba: vi.fn(), onFechar: vi.fn(), fullscreenMode: 'off', tituloAba: '', filtros: null, rascunhoPendente: false, avisoExterno: false,
+      onLimpar: vi.fn(), onAplicar: vi.fn(), podeAplicar: false,
+      camadas: {
+        estado: { ...estadoCamadasPadrao(), ligadas: [...estadoCamadasPadrao().ligadas, ...ligadas], gruposAbertos: ['sigma', 'webmap', 'webmap-grupo:g'] },
+        arvore: arv2, carregando: false, erro: false, onTentarNovamente: vi.fn(), onAlternar: vi.fn(), onAlternarGrupo: vi.fn(), onDesligarTodas: vi.fn(),
+        calorLigado: false, onCalor: vi.fn(), algumaLigada: false, onAlternarVarias, statusWebmap: {}, onTentarCamada: vi.fn(), ...extra,
+      },
+    } as never));
+    return { onAlternarVarias };
+  };
+  it('U1: grupo parcial => indeterminate/aria-checked=mixed; clique liga todas', () => {
+    const { onAlternarVarias } = montar(['webmap:a']);
+    const cb = screen.getByLabelText('Marcar todas as camadas de Água') as HTMLInputElement;
+    expect(cb.indeterminate).toBe(true);
+    expect(cb.getAttribute('aria-checked')).toBe('mixed');
+    fireEvent.click(cb);
+    expect(onAlternarVarias).toHaveBeenCalledWith(['webmap:a', 'webmap:p'], true);
+  });
+  it('U1: grupo cheio => clique desliga todas', () => {
+    const { onAlternarVarias } = montar(['webmap:a', 'webmap:p']);
+    fireEvent.click(screen.getByLabelText('Marcar todas as camadas de Água'));
+    expect(onAlternarVarias).toHaveBeenCalledWith(['webmap:a', 'webmap:p'], false);
+  });
+  it('W13: camada ligada com inválidos mostra "2 elementos não exibidos"', () => {
+    montar(['webmap:p']);
+    expect(screen.getByTestId('webmap-status-invalidos').textContent).toBe('2 elementos não exibidos');
+  });
+  it('U2/W16: busca acha camada em grupo fechado e mantém marcação; sem resultado => mensagem', () => {
+    montar(['webmap:b']);
+    expect(screen.queryByLabelText('Bocas de lobo')).toBeNull(); // grupo Drenagem fechado
+    fireEvent.change(screen.getByTestId('webmap-busca'), { target: { value: 'BOCAS' } });
+    expect((screen.getByLabelText('Bocas de lobo') as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByLabelText('Rede de água')).toBeNull();
+    fireEvent.change(screen.getByTestId('webmap-busca'), { target: { value: 'xyz' } });
+    expect(screen.getByTestId('webmap-busca-vazia').textContent).toBe('Nenhuma camada encontrada para “xyz”.');
+  });
+  it('U3/W14: erro da lista ≠ vazio', () => {
+    montar([], { erro: true });
+    expect(screen.getByTestId('cco-camadas-erro').textContent).toContain('Não foi possível carregar as camadas do Webmap.');
+    expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeTruthy();
+    cleanup();
+    montar([], { arvore: [] });
+    expect(screen.getByTestId('cco-camadas-vazio').textContent).toBe('Nenhuma camada do Webmap foi importada ainda.');
+  });
+  it('W17: pane do Webmap acima do calor (overlayPane 400) e abaixo dos pinos (600)', () => {
+    expect(WEBMAP_PANE_Z).toBeGreaterThan(400);
+    expect(WEBMAP_PANE_Z).toBeLessThan(600);
   });
 });

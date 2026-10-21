@@ -12,7 +12,8 @@ import type { MapaCamada } from '@/lib/types';
 import { htmlBalao, limiteCacheBytes, type Desenho, type StatusCamadaWebmap, WebmapGerenciador } from '@/lib/webmap-mapa';
 
 export const WEBMAP_PANE = 'webmapPane';
-export const WEBMAP_PANE_Z = 350; // overlayPane = 400, markerPane = 600
+/** 300 W17: acima do calor (canvas no overlayPane = 400) e abaixo dos pinos (markerPane = 600). */
+export const WEBMAP_PANE_Z = 450;
 
 type LeafletNs = typeof import('leaflet');
 
@@ -74,7 +75,7 @@ export function criarDesenhoLeaflet(L: LeafletNs, map: Leaflet.Map): Desenho & {
   };
 }
 
-/** Liga o gerenciador ao mapa. `ligadas`: camadas ligadas na sessão que existem na lista (L3). Flag off => nunca chamado. */
+/** Liga o gerenciador ao mapa. `ligadas`: camadas ligadas na sessão que existem na lista (L3). */
 export function useWebmapNoMapa(map: Leaflet.Map | null, ligadas: MapaCamada[], onVersaoMudou: () => void) {
   const [status, setStatus] = useState<Record<string, StatusCamadaWebmap>>({});
   const gerRef = useRef<WebmapGerenciador | null>(null);
