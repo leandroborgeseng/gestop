@@ -17,7 +17,7 @@ function midia(map: Record<string, boolean>) {
 }
 
 const camadasBase = (over = {}) => ({
-  estado: estadoCamadasPadrao(), arvore: [], carregando: false, erro: false,
+  estado: { ...estadoCamadasPadrao(), gruposAbertos: ['sigma', 'webmap'] }, arvore: [], carregando: false, erro: false,
   onTentarNovamente: vi.fn(), onAlternar: vi.fn(), onAlternarGrupo: vi.fn(), onDesligarTodas: vi.fn(),
   calorLigado: false, onCalor: vi.fn(), algumaLigada: false, ...over,
 });
@@ -174,6 +174,15 @@ describe('299 · painel #cco-map-painel', () => {
   });
 
   // 300: flag removida — a seção Webmap QGIS aparece sempre, sem variável de ambiente.
+  it('300 TL: padrão real => "Webmap QGIS" recolhida (aria-expanded=false), sem grupos nem busca', () => {
+    render(painel({ aba: 'camadas', camadas: camadasBase({ estado: estadoCamadasPadrao(), arvore: [{ id: 'g', titulo: 'Drenagem', camadas: [] }] }) }));
+    const sec = screen.getByTestId('cco-secao-webmap');
+    expect(sec.querySelector('button')!.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByTestId('webmap-busca')).toBeNull();
+    expect(screen.queryByTestId('webmap-grupo')).toBeNull();
+    expect(screen.getByLabelText('Próprios públicos')).toBeTruthy(); // SIGMA aberta
+  });
+
   it('300 W5: seção "Webmap QGIS" sempre presente, sem env', () => {
     render(painel({ aba: 'camadas', camadas: camadasBase({}) }));
     expect(screen.getByTestId('cco-secao-webmap').textContent).toContain('Webmap QGIS');

@@ -50,3 +50,12 @@ describe('300 · árvore do Webmap sem flag', () => {
     expect(filtrarArvore(arv, '  ')).toBe(arv);
   });
 });
+
+describe('300 · seção Webmap QGIS recolhida por padrão', () => {
+  it('padrão abre só SIGMA; Webmap e grupos recolhidos', () => {
+    const e = estadoCamadasPadrao();
+    expect(e.gruposAbertos).toContain('sigma');
+    expect(e.gruposAbertos).not.toContain('webmap');
+    expect(e.gruposAbertos.some((g) => g.startsWith('webmap-grupo:'))).toBe(false);
+  });
+});

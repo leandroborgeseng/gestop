@@ -26,7 +26,7 @@ export type CcoCamadasEstado = {
 };
 
 export function estadoCamadasPadrao(): CcoCamadasEstado {
-  return { ligadas: [...SIGMA_CAMADAS_PADRAO], gruposAbertos: ['sigma', 'webmap'] };
+  return { ligadas: [...SIGMA_CAMADAS_PADRAO], gruposAbertos: ['sigma'] }; // 300: Webmap QGIS recolhida por padrão (esboço UX)
 }
 
 function storage(): Storage | null {
