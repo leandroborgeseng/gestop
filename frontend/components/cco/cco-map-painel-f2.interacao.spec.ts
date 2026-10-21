@@ -89,6 +89,9 @@ describe('299-F2 · sheet < 600 px fora da tela cheia', () => {
     const p = screen.getByTestId('cco-map-painel');
     const alca = screen.getByTestId('cco-sheet-alca');
     expect(alca.getAttribute('aria-label')).toBe('Expandir painel');
+    // QA U6: alvo de toque >= 44x44 (h-11 = 44 px; w-16 = 64 px; min-w-11 garante 44)
+    for (const c of ['h-11', 'min-h-11', 'w-16', 'min-w-11']) expect(alca.className.split(/\s+/)).toContain(c);
+    expect(alca.className).not.toMatch(/\bh-6\b/);
     fireEvent.pointerDown(alca, { clientY: 500 });
     fireEvent.pointerUp(alca, { clientY: 300 });
     fireEvent.click(alca);

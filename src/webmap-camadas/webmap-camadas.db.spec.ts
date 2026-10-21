@@ -498,7 +498,7 @@ describe.skipIf(!URL)('296 — importação de camadas Webmap (Postgres sem exte
     it('lista leve (crit. 1): sem geometria/bbox/bytes, estilo sem nulos, versão curta e pesada', async () => {
       const service = new WebmapCamadasService(prisma as never, {} as never);
       const c = (await service.arvore()).flatMap((g) => g.camadas).find((x) => x.camadaId === camadaId)!;
-      expect(Object.keys(c).sort()).toEqual(['camadaId', 'estilo', 'geometriaTipo', 'id', 'ligadaPorPadrao', 'nomeOriginal', 'pesada', 'totalElementos', 'versaoAtual']);
+      expect(Object.keys(c).sort()).toEqual(['camadaId', 'estilo', 'geometriaTipo', 'id', 'ligadaPorPadrao', 'nomeOriginal', 'pesada', 'totalElementos', 'totalInvalidos', 'versaoAtual']);
       expect(c).toMatchObject({ versaoAtual: versaoCurta(versao), pesada: true });
       expect(estiloEnxuto({ tipo: 'line', cor: null, icone: { url: '/u', storageKey: 'k' } })).toEqual({ tipo: 'line', icone: { url: '/u' } });
     });

@@ -1,10 +1,10 @@
 import '@/test-utils/jsdom-global';
-import { createElement } from 'react';
+import { createElement, useState } from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CcoMapPainel } from './cco-map-painel';
 import { criarDesenhoLeaflet, estiloLeaflet, WEBMAP_PANE, WEBMAP_PANE_Z } from './use-webmap-no-mapa';
-import { estadoCamadasPadrao } from '@/lib/cco-camadas';
+import { abrirGrupos, alternarGrupoAberto, estadoCamadasPadrao } from '@/lib/cco-camadas';
 import type { MapaCamada } from '@/lib/types';
 
 afterEach(() => cleanup());
@@ -103,13 +103,34 @@ describe('300 · painel Webmap QGIS', () => {
     montar(['webmap:p']);
     expect(screen.getByTestId('webmap-status-invalidos').textContent).toBe('2 elementos não exibidos');
   });
-  it('U2/W16: busca acha camada em grupo fechado e mantém marcação; sem resultado => mensagem', () => {
-    montar(['webmap:b']);
-    expect(screen.queryByLabelText('Bocas de lobo')).toBeNull(); // grupo Drenagem fechado
-    fireEvent.change(screen.getByTestId('webmap-busca'), { target: { value: 'BOCAS' } });
+  it('U2/W16: busca no topo, com a seção recolhida; digitar abre Webmap e só os grupos com resultado; limpar não recolhe', () => {
+    function Host() {
+      const [estado, setEstado] = useState({ ...estadoCamadasPadrao(), ligadas: [...estadoCamadasPadrao().ligadas, 'webmap:b'] });
+      return createElement(CcoMapPainel, {
+        aba: 'camadas', onAba: vi.fn(), onFechar: vi.fn(), fullscreenMode: 'off', tituloAba: '', filtros: null, rascunhoPendente: false, avisoExterno: false,
+        onLimpar: vi.fn(), onAplicar: vi.fn(), podeAplicar: false,
+        camadas: {
+          estado, arvore: arv2, carregando: false, erro: false, onTentarNovamente: vi.fn(), onAlternar: vi.fn(),
+          onAlternarGrupo: (g: string) => setEstado((e) => alternarGrupoAberto(e, g)), onDesligarTodas: vi.fn(),
+          calorLigado: false, onCalor: vi.fn(), algumaLigada: false, onAlternarVarias: vi.fn(),
+          onAbrirGrupos: (k: string[]) => setEstado((e) => abrirGrupos(e, k)), statusWebmap: {}, onTentarCamada: vi.fn(),
+        },
+      } as never);
+    }
+    render(createElement(Host));
+    const painelEl = screen.getByTestId('cco-painel-camadas');
+    const busca = screen.getByTestId('webmap-busca');
+    expect(painelEl.firstElementChild).toBe(busca); // topo do painel, antes de SIGMA
+    expect(screen.queryByTestId('webmap-grupo')).toBeNull(); // seção recolhida
+    fireEvent.change(busca, { target: { value: 'BOCAS' } });
+    expect(screen.getByTestId('cco-secao-webmap').querySelector('button')!.getAttribute('aria-expanded')).toBe('true');
     expect((screen.getByLabelText('Bocas de lobo') as HTMLInputElement).checked).toBe(true);
     expect(screen.queryByLabelText('Rede de água')).toBeNull();
-    fireEvent.change(screen.getByTestId('webmap-busca'), { target: { value: 'xyz' } });
+    fireEvent.change(busca, { target: { value: '' } });
+    expect(screen.getByLabelText('Bocas de lobo')).toBeTruthy(); // limpar não recolhe
+    const grupos = screen.getAllByTestId('webmap-grupo').map((g) => g.getAttribute('aria-expanded'));
+    expect(grupos).toEqual(['false', 'true']); // Água segue fechado (sem resultado), Drenagem aberto
+    fireEvent.change(busca, { target: { value: 'xyz' } });
     expect(screen.getByTestId('webmap-busca-vazia').textContent).toBe('Nenhuma camada encontrada para “xyz”.');
   });
   it('U3/W14: erro da lista ≠ vazio', () => {

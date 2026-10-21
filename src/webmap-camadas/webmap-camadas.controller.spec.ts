@@ -3,7 +3,10 @@ import { ConflictException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { REQUIRED_ANY_PERMISSIONS_KEY } from '../auth/permissions';
 import { adminTabPermissionKeys } from '../domain/admin-permissions';
-import { WebmapCamadasAdminController, WebmapCamadasMapaController } from './webmap-camadas.controller';
+import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { PermissionsGuard } from '../auth/permissions.guard';
+import { WebmapCamadasAdminController, WebmapCamadasMapaController, WEBMAP_MAPA_KEYS } from './webmap-camadas.controller';
 import { WebmapCamadasService } from './webmap-camadas.service';
 
 const perms = (fn: unknown) => Reflect.getMetadata(REQUIRED_ANY_PERMISSIONS_KEY, fn as object) as string[];
@@ -15,8 +18,33 @@ describe('296 — permissões e concorrência', () => {
     for (const m of [p.status, p.historico]) expect(perms(m)).toEqual(adminTabPermissionKeys('importacao', 'visualizar'));
   });
 
-  it('camadas do mapa exigem leitura operacional (CCO)', () => {
-    expect(perms(WebmapCamadasMapaController)?.length).toBeGreaterThan(0);
+  it('300: camadas do mapa exigem só a permissão do CCO (tela ou mapa)', () => {
+    expect(perms(WebmapCamadasMapaController)).toEqual(['matriz.cco._tela.visualizar', 'matriz.cco.mapa.visualizar']);
+    expect(WEBMAP_MAPA_KEYS).toEqual(perms(WebmapCamadasMapaController));
+  });
+
+  describe('300 W4: guard real nas rotas do mapa (lista, geojson, status)', () => {
+    const guard = new PermissionsGuard(new Reflector());
+    const p = WebmapCamadasMapaController.prototype;
+    const ctx = (handler: unknown, permissoes: string[]) => ({
+      getHandler: () => handler, getClass: () => WebmapCamadasMapaController,
+      switchToHttp: () => ({ getRequest: () => ({ user: { sub: 'u', nome: 't', email: 't@aion.local', perfis: ['TESTE'], permissoes } }) }),
+    }) as unknown as ExecutionContext;
+    const rotas = [p.arvore, p.geojson, p.status];
+    it('perfil só CCO (tela) é aceito; só CCO mapa também', () => {
+      for (const h of rotas) {
+        expect(guard.canActivate(ctx(h, ['matriz.cco._tela.visualizar']))).toBe(true);
+        expect(guard.canActivate(ctx(h, ['matriz.cco.mapa.visualizar']))).toBe(true);
+      }
+    });
+    it('perfil só Documentos recebe 403 (inclui o legado documentos.visualizar)', () => {
+      for (const h of rotas) {
+        expect(() => guard.canActivate(ctx(h, ['matriz.documentos._tela.visualizar', 'matriz.documentos.consultar.visualizar', 'documentos.visualizar']))).toThrow(ForbiddenException);
+      }
+    });
+    it('perfil só Cronograma (dashboard.visualizar legado) também recebe 403', () => {
+      for (const h of rotas) expect(() => guard.canActivate(ctx(h, ['matriz.cronograma._tela.visualizar', 'cronograma.visualizar', 'dashboard.visualizar']))).toThrow(ForbiddenException);
+    });
   });
 
   it('segunda execução simultânea recebe aviso com quem e desde quando', async () => {

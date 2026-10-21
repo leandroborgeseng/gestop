@@ -5,7 +5,7 @@ import { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequireAnyPermissions } from '../auth/permissions';
 import { adminTabPermissionKeys } from '../domain/admin-permissions';
-import { OPERACIONAL_READ_KEYS } from '../operacional/operacional.permissions';
+import { permissionMatrixKey } from '../domain/permissions-catalog';
 import { WebmapCamadasService } from './webmap-camadas.service';
 
 /** 296 — Administração › Importação › "Importar apenas camadas Webmap". Mesmas permissões da tela. */
@@ -48,9 +48,12 @@ export class WebmapCamadasAdminController {
   }
 }
 
+/** 300: só a permissão do CCO (tela ou mapa) — Documentos, Cronograma etc. recebem 403. */
+export const WEBMAP_MAPA_KEYS = [permissionMatrixKey('cco', '_tela', 'visualizar'), permissionMatrixKey('cco', 'mapa', 'visualizar')];
+
 /** Leitura das camadas para o mapa (usuários do CCO). */
 @UseGuards(AuthGuard, PermissionsGuard)
-@RequireAnyPermissions(...OPERACIONAL_READ_KEYS)
+@RequireAnyPermissions(...WEBMAP_MAPA_KEYS)
 @Controller('mapa/camadas')
 export class WebmapCamadasMapaController {
   constructor(private readonly service: WebmapCamadasService) {}

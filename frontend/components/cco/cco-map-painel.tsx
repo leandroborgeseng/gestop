@@ -74,6 +74,8 @@ export type CcoCamadasProps = {
   algumaLigada: boolean;
   /** 300 U1: checkbox do grupo liga/desliga várias de uma vez. */
   onAlternarVarias: (ids: string[], ligar: boolean) => void;
+  /** 300: abre (idempotente, nunca fecha) a seção/grupos — usado pela busca. */
+  onAbrirGrupos: (chaves: string[]) => void;
   /** 298: estado de cada camada Webmap ligada no mapa (carregando, erro, truncado, fora da faixa de zoom). */
   statusWebmap?: Record<string, StatusCamadaWebmap>;
   onTentarCamada?: (camadaId: string) => void;
@@ -143,9 +145,23 @@ function CamadasConteudo(p: CcoCamadasProps) {
   const totalWebmap = arvore.reduce((n, g) => n + g.camadas.length, 0);
   const ligadasWebmap = arvore.reduce((n, g) => n + resumoGrupo(p.estado, g).ligadas, 0);
   const filtrada = filtrarArvore(arvore, busca);
-  const buscando = normalizarBusca(busca) !== '';
+  /** 300 (TL/UX): a busca fica no topo; digitar abre a seção Webmap e os grupos com resultado. Limpar não recolhe nada. */
+  const buscar = (v: string) => {
+    setBusca(v);
+    if (normalizarBusca(v) === '') return;
+    p.onAbrirGrupos(['webmap', ...filtrarArvore(arvore, v).map((g) => `webmap-grupo:${g.id}`)]);
+  };
   return (
     <div className="space-y-3" data-testid="cco-painel-camadas">
+      <input
+        type="search"
+        value={busca}
+        onChange={(e) => buscar(e.target.value)}
+        placeholder="Buscar camada"
+        aria-label="Buscar camada"
+        data-testid="webmap-busca"
+        className="min-h-11 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] text-[var(--ink)]"
+      />
       <section>
         <button
           type="button"
@@ -206,15 +222,6 @@ function CamadasConteudo(p: CcoCamadasProps) {
               <p role="status" data-testid="cco-camadas-vazio" className="px-2 text-[12.5px] text-[var(--ink-3)]">{MSG_CAMADAS_VAZIO}</p>
             ) : (
               <>
-                <input
-                  type="search"
-                  value={busca}
-                  onChange={(e) => setBusca(e.target.value)}
-                  placeholder="Buscar camada"
-                  aria-label="Buscar camada"
-                  data-testid="webmap-busca"
-                  className="min-h-11 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[13px] text-[var(--ink)]"
-                />
                 {ligadasWebmap > MUITAS_LIGADAS ? (
                   <p role="status" data-testid="webmap-aviso-muitas" className="rounded-[var(--r-md)] bg-amber-50 px-2 py-1.5 text-[12px] text-amber-900">{MSG_MUITAS_LIGADAS}</p>
                 ) : null}
@@ -224,7 +231,7 @@ function CamadasConteudo(p: CcoCamadasProps) {
                   <div role="tree" aria-label="Camadas do Webmap QGIS">
                     {filtrada.map((grupo) => {
                       const chave = `webmap-grupo:${grupo.id}`;
-                      const aberto = buscando || p.estado.gruposAbertos.includes(chave);
+                      const aberto = p.estado.gruposAbertos.includes(chave);
                       const completo = arvore.find((g) => g.id === grupo.id) ?? grupo;
                       const resumo = resumoGrupo(p.estado, completo);
                       return (
@@ -419,7 +426,7 @@ export function CcoMapPainel({
           data-testid="cco-sheet-alca"
           aria-label={alturaSheet === 90 ? 'Reduzir painel' : 'Expandir painel'}
           aria-expanded={alturaSheet === 90}
-          className="mx-auto flex h-6 w-16 shrink-0 touch-none items-center justify-center"
+          className="mx-auto flex h-11 min-h-11 w-16 min-w-11 shrink-0 touch-none items-center justify-center"
           onPointerDown={(e) => { arrasteRef.current = e.clientY; e.currentTarget.setPointerCapture?.(e.pointerId); }}
           onPointerUp={(e) => {
             const ini = arrasteRef.current;

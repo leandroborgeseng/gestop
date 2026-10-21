@@ -134,3 +134,9 @@ export function filtrarArvore(arvore: MapaCamadaGrupo[], termo: string): MapaCam
     .map((g) => (normalizarBusca(g.titulo).includes(t) ? g : { ...g, camadas: g.camadas.filter((c) => normalizarBusca(c.nomeOriginal).includes(t)) }))
     .filter((g) => g.camadas.length > 0);
 }
+
+/** 300: abre seção/grupos sem fechar nenhum (idempotente). */
+export function abrirGrupos(estado: CcoCamadasEstado, chaves: string[]): CcoCamadasEstado {
+  const faltam = chaves.filter((k) => !estado.gruposAbertos.includes(k));
+  return faltam.length ? { ...estado, gruposAbertos: [...estado.gruposAbertos, ...faltam] } : estado;
+}

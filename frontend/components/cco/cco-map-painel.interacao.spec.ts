@@ -178,7 +178,7 @@ describe('299 · painel #cco-map-painel', () => {
     render(painel({ aba: 'camadas', camadas: camadasBase({ estado: estadoCamadasPadrao(), arvore: [{ id: 'g', titulo: 'Drenagem', camadas: [] }] }) }));
     const sec = screen.getByTestId('cco-secao-webmap');
     expect(sec.querySelector('button')!.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByTestId('webmap-busca')).toBeNull();
+    expect(screen.getByTestId('webmap-busca')).toBeTruthy(); // 300: busca sempre visível no topo
     expect(screen.queryByTestId('webmap-grupo')).toBeNull();
     expect(screen.getByLabelText('Próprios públicos')).toBeTruthy(); // SIGMA aberta
   });
