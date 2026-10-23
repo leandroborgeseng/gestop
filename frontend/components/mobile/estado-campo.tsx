@@ -37,6 +37,24 @@ export function usePermissoesCampo() {
   return { gps, camera, atualizar };
 }
 
+/** Bloqueado = o usuário precisa agir (permissão negada ou recurso ausente). "Ainda não perguntado" não é bloqueio. */
+export function permissaoBloqueada(estado: EstadoPermissao) {
+  return estado === 'denied' || estado === 'indisponivel';
+}
+
+const rotuloFeminino: Record<EstadoPermissao, string> = {
+  granted: 'liberada',
+  denied: 'bloqueada',
+  prompt: 'não autorizada',
+  indisponivel: 'indisponível',
+  desconhecido: '—',
+};
+
+/** Lows/Designer: concordância — "Câmera bloqueada". */
+export function rotuloCamera(estado: EstadoPermissao) {
+  return `Câmera ${rotuloFeminino[estado]}`;
+}
+
 const rotulo: Record<EstadoPermissao, string> = {
   granted: 'liberado',
   denied: 'bloqueado',
@@ -50,10 +68,13 @@ export function IndicadorCampo({
   camera,
   online,
   ultimoGps,
+  somenteBloqueios = false,
 }: {
   gps: EstadoPermissao;
   camera: EstadoPermissao;
   online: boolean;
+  /** Designer M1: inline, mostra só o que está bloqueado (nada quando está tudo ok). */
+  somenteBloqueios?: boolean;
   /** Resultado do último check-in (ex.: "12 m") ou falha curta. */
   ultimoGps?: string | null;
 }) {
@@ -70,11 +91,19 @@ export function IndicadorCampo({
       {texto}
     </span>
   );
+  const mostrarGps = !somenteBloqueios || permissaoBloqueada(gps);
+  const mostrarRede = !somenteBloqueios || !online;
+  const mostrarCamera = !somenteBloqueios || permissaoBloqueada(camera);
+  if (!mostrarGps && !mostrarRede && !mostrarCamera) return null;
   return (
-    <div className="flex flex-wrap items-center gap-1.5" aria-label="Estado do GPS, da rede e da câmera" data-testid="indicador-campo">
-      {item(gps === 'granted', <MapPin className="h-3 w-3" />, `GPS ${ultimoGps ? `· ${ultimoGps}` : rotulo[gps]}`, 'indicador-gps')}
-      {item(online, online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />, online ? 'Rede online' : 'Sem rede', 'indicador-rede')}
-      {item(camera === 'granted', <Camera className="h-3 w-3" />, `Câmera ${rotulo[camera]}`, 'indicador-camera')}
+    <div
+      className="flex flex-wrap items-center gap-1.5"
+      aria-label="Estado do GPS, da rede e da câmera"
+      data-testid={somenteBloqueios ? 'indicador-campo-bloqueios' : 'indicador-campo'}
+    >
+      {mostrarGps ? item(gps === 'granted', <MapPin className="h-3 w-3" />, `GPS ${ultimoGps ? `· ${ultimoGps}` : rotulo[gps]}`, 'indicador-gps') : null}
+      {mostrarRede ? item(online, online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />, online ? 'Rede online' : 'Sem rede', 'indicador-rede') : null}
+      {mostrarCamera ? item(camera === 'granted', <Camera className="h-3 w-3" />, rotuloCamera(camera), 'indicador-camera') : null}
     </div>
   );
 }

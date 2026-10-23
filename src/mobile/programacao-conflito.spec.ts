@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { avaliarConflitoProgramacao } from './programacao-conflito';
+import { avaliarConflitoProgramacao, validarAvulsaPorConflito } from './programacao-conflito';
 
 const c = {
   id: 'c1', unidadeId: 'u1', checklistId: 'k1', ativo: true, frequencia: 'SEMANAL' as const,
@@ -26,4 +26,18 @@ describe('304 O6 — conflito da programação no sync', () => {
     expect(avaliarConflitoProgramacao({ ...base, cronograma: alterado, projetar: () => true })).toBeNull();
     expect(avaliarConflitoProgramacao({ ...base, programacaoAtualizadaEm: null, cronograma: alterado, projetar: () => false })).toBeNull();
   });
+});
+
+describe('304/O6a validarAvulsaPorConflito', () => {
+  const ok = { motivo: 'Programação mudou', cronogramaId: 'c1', dataProgramada: '2026-10-16' };
+  it('sem avulsa → null (fluxo normal)', () => expect(validarAvulsaPorConflito({ cronogramaId: 'c1' })).toBeNull());
+  it('válida', () => expect(validarAvulsaPorConflito({ avulsaPorConflito: ok })).toBeNull());
+  it('motivo vazio ou curto', () => {
+    expect(validarAvulsaPorConflito({ avulsaPorConflito: { ...ok, motivo: '   ' } })).toMatch(/motivo/);
+    expect(validarAvulsaPorConflito({ avulsaPorConflito: { ...ok, motivo: 'abcd' } })).toMatch(/mínimo 5/);
+  });
+  it('não pode vir com cronogramaId (não baixa a programação)', () =>
+    expect(validarAvulsaPorConflito({ cronogramaId: 'c1', avulsaPorConflito: ok })).toMatch(/não pode baixar/));
+  it('exige a referência da programação', () =>
+    expect(validarAvulsaPorConflito({ avulsaPorConflito: { ...ok, cronogramaId: '' } })).toMatch(/programação/));
 });

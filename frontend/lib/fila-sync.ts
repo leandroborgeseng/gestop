@@ -1,4 +1,4 @@
-import { FilaItemSync } from './types';
+import { FilaItemSync, MobileQueuedInspection } from './types';
 
 /** 304/O6/O10: classifica o erro do envio para o item ficar na fila com o motivo visível. */
 export function classificarErroSync(err: unknown, agora = new Date(), anterior?: FilaItemSync): FilaItemSync {
@@ -29,4 +29,27 @@ export function rotuloErroSync(s: FilaItemSync) {
     default:
       return s.mensagem;
   }
+}
+
+export const MOTIVO_AVULSA_MIN = 5;
+
+/**
+ * 304/O6a: transforma um item em CONFLITO em vistoria avulsa: tira o vínculo de baixa (cronogramaId/dataProgramada),
+ * guarda a referência da programação e o motivo (obrigatório). Retorna `{ erro }` se não der.
+ */
+export function marcarComoAvulsaPorConflito<T extends MobileQueuedInspection>(
+  item: T,
+  motivo: string,
+): { item: T } | { erro: string } {
+  const texto = motivo.trim();
+  if (texto.length < MOTIVO_AVULSA_MIN) return { erro: `Informe o motivo (mínimo ${MOTIVO_AVULSA_MIN} caracteres).` };
+  if (!item.cronogramaId || !item.dataProgramada) return { erro: 'Esta vistoria não está ligada a uma programação.' };
+  const { cronogramaId, dataProgramada, programacaoAtualizadaEm: _p, sync, ...resto } = item;
+  void _p;
+  return {
+    item: {
+      ...resto,
+      avulsaPorConflito: { motivo: texto, cronogramaId, dataProgramada, ...(sync?.codigo ? { codigo: sync.codigo } : {}) },
+    } as T,
+  };
 }

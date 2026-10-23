@@ -496,6 +496,8 @@ export class CronogramaService {
       const fiscalizacoes = await this.prisma.fiscalizacao.findMany({
         where: {
           status: 'CONCLUIDA',
+          // 304/O6a: avulsa por conflito NÃO realiza a programação (ela continua pendente e sinalizada).
+          avulsaPorConflito: false,
           concluidaEm: { gte: from, lte: new Date(to.getTime() + 86_399_999) },
           unidadeId: { in: cronogramas.map((item) => item.unidadeId) },
         },
@@ -511,6 +513,32 @@ export class CronogramaService {
           `${item.checklistVersao.checklistId}:${item.unidadeId}:${toDateKey(startOfDay(item.concluidaEm))}`,
         );
       }
+    }
+
+    // 304/O6a: programações com vistoria avulsa por conflito ficam sinalizadas para o gestor.
+    const avulsasConflito = await this.prisma.fiscalizacao.findMany({
+      where: { avulsaPorConflito: true, conflitoCronogramaId: { in: cronogramas.map((item) => item.id) } },
+      select: {
+        id: true,
+        avulsaMotivo: true,
+        conflitoCronogramaId: true,
+        conflitoDataProgramada: true,
+        conflitoCodigo: true,
+        concluidaEm: true,
+        createdAt: true,
+        agente: { select: { id: true, nome: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    // Sinalizada até a programação ter uma baixa real depois da avulsa.
+    const conflitoPorCronograma = new Map<string, (typeof avulsasConflito)[number]>();
+    const ultimaPorCronograma = new Map(cronogramas.map((c) => [c.id, c.ultimaChecagemEm]));
+    for (const f of avulsasConflito) {
+      if (!f.conflitoCronogramaId || conflitoPorCronograma.has(f.conflitoCronogramaId)) continue;
+      const ultima = ultimaPorCronograma.get(f.conflitoCronogramaId);
+      // a baixa é gravada no início do dia: baixa no mesmo dia (ou depois) da avulsa resolve a sinalização.
+      if (ultima && startOfDay(f.createdAt).getTime() <= ultima.getTime()) continue;
+      conflitoPorCronograma.set(f.conflitoCronogramaId, f);
     }
 
     const items = [];
@@ -549,6 +577,19 @@ export class CronogramaService {
             secretaria: cronograma.unidade.secretaria,
           },
           responsaveis: responsaveis.map((item) => ({ id: item.id, nome: item.nome })),
+          conflitoAvulsa: (() => {
+            const f = conflitoPorCronograma.get(cronograma.id);
+            return f
+              ? {
+                  fiscalizacaoId: f.id,
+                  motivo: f.avulsaMotivo,
+                  codigo: f.conflitoCodigo,
+                  dataProgramada: f.conflitoDataProgramada ? toDateKey(startOfDay(f.conflitoDataProgramada)) : null,
+                  enviadaEm: f.concluidaEm?.toISOString() ?? null,
+                  agente: f.agente,
+                }
+              : null;
+          })(),
         });
       }
     }

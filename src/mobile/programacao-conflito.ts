@@ -48,3 +48,18 @@ export function avaliarConflitoProgramacao(input: {
   }
   return null;
 }
+
+export const MOTIVO_AVULSA_MIN = 5;
+
+/** 304/O6a: regras do envio como avulsa por conflito. Retorna a mensagem de erro ou null. */
+export function validarAvulsaPorConflito(input: {
+  cronogramaId?: string | null;
+  avulsaPorConflito?: { motivo?: string | null; cronogramaId?: string | null; dataProgramada?: string | null } | null;
+}): string | null {
+  const a = input.avulsaPorConflito;
+  if (!a) return null;
+  if (input.cronogramaId?.trim()) return 'Vistoria avulsa por conflito não pode baixar a programação (remova o cronogramaId).';
+  if (!a.cronogramaId?.trim() || !a.dataProgramada) return 'Informe a programação com que a vistoria conflitou.';
+  if ((a.motivo ?? '').trim().length < MOTIVO_AVULSA_MIN) return `Informe o motivo do envio como avulsa (mínimo ${MOTIVO_AVULSA_MIN} caracteres).`;
+  return null;
+}

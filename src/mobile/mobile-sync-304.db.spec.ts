@@ -11,6 +11,8 @@ import { seedCampo304, Seed304 } from '../../scripts/seed-campo-304-core';
 import { AuthService } from '../auth/auth.service';
 import { JwtPayload } from '../auth/jwt';
 import { CronogramaService } from '../cronograma/cronograma.service';
+import { FiscalizacoesService } from '../fiscalizacoes/fiscalizacoes.service';
+import { MonitoramentoService } from '../monitoramento/monitoramento.service';
 import { startOfDay, toDateKey } from '../cronograma/cronograma.rules';
 import { MobileSyncFiscalizacaoDto } from './mobile.dto';
 import { MobileService } from './mobile.service';
@@ -187,5 +189,121 @@ describe.skipIf(!URL)('303/304 — pacote offline e sync das programadas (Postgr
     expect(r.status).toBe('sincronizado');
     const c = await prisma.cronogramaChecagem.findUniqueOrThrow({ where: { id: seed.cronograma304A } });
     expect(c.ultimaChecagemEm?.getTime()).toBe(hoje().getTime());
+  });
+
+  it('M-1: reenvio de uma vistoria já gravada, feito por quem está fora do escopo → 403 (igual ao O10); nada muda', async () => {
+    const d = dto();
+    const ok = await svc.syncFiscalizacao(d, await sessao(seed.usuarios304.gestorA));
+    const erro = await svc.syncFiscalizacao(d, await sessao(seed.usuarios304.gestorB)).catch((e) => e);
+    expect(erro).toBeInstanceOf(ForbiddenException);
+    expect((erro as ForbiddenException).message).toContain('não pertence a uma Secretaria do seu acesso');
+    expect(await prisma.fiscalizacao.count({ where: { clientId: d.clientEventId } })).toBe(1);
+    expect((await prisma.offlineSyncEvent.findUniqueOrThrow({ where: { clientEventId: d.clientEventId } })).status).toBe('SINCRONIZADO');
+    // o próprio autor continua recebendo o reenvio normal
+    expect(await svc.syncFiscalizacao(d, await sessao(seed.usuarios304.gestorA))).toMatchObject({ reenvio: true, fiscalizacaoId: ok.fiscalizacaoId });
+  });
+
+  describe('O6a: "Enviar como avulsa" após conflito', () => {
+    // Conflito PROGRAMACAO_ALTERADA: o app baixou uma data que não existe mais; a programação real (atrasada) continua pendente.
+    const conflitar = async (u: JwtPayload) => {
+      const diaBaixado = toDateKey(new Date(programada().getTime() - 86_400_000));
+      const d = dto({ dataProgramada: diaBaixado, programacaoAtualizadaEm: new Date(Date.now() - 3_600_000).toISOString() });
+      await prisma.cronogramaChecagem.update({ where: { id: seed.cronograma304A }, data: { observacoes: 'Cronograma fictício 304 A' } });
+      const erro = await svc.syncFiscalizacao(d, u).catch((e) => e);
+      expect((erro as ConflictException).getResponse()).toMatchObject({ codigo: 'PROGRAMACAO_ALTERADA' });
+      return { d, diaBaixado };
+    };
+    const comoAvulsa = (d: MobileSyncFiscalizacaoDto, diaBaixado: string, motivo = 'Programação mudou; vistoria feita no local') =>
+      ({
+        ...d,
+        cronogramaId: undefined,
+        dataProgramada: undefined,
+        programacaoAtualizadaEm: undefined,
+        avulsaPorConflito: { motivo, cronogramaId: seed.cronograma304A, dataProgramada: diaBaixado, codigo: 'PROGRAMACAO_ALTERADA' },
+      }) as MobileSyncFiscalizacaoDto;
+
+    it('grava como avulsa por conflito com a referência, NÃO baixa a programação, audita e sinaliza para o gestor', async () => {
+      const u = await sessao(seed.usuarios304.gestorA);
+      const { d, diaBaixado } = await conflitar(u);
+      const antes = await prisma.cronogramaChecagem.findUniqueOrThrow({ where: { id: seed.cronograma304A } });
+      const r = await svc.syncFiscalizacao(comoAvulsa(d, diaBaixado), u);
+      expect(r).toMatchObject({ status: 'sincronizado', avulsaPorConflito: true, programacao: null });
+
+      const f = await prisma.fiscalizacao.findUniqueOrThrow({ where: { id: r.fiscalizacaoId } });
+      expect(f).toMatchObject({ avulsaPorConflito: true, cronogramaId: null, dataProgramada: null, conflitoCronogramaId: seed.cronograma304A, conflitoCodigo: 'PROGRAMACAO_ALTERADA' });
+      expect(f.avulsaMotivo).toBe('Programação mudou; vistoria feita no local');
+      expect(toDateKey(startOfDay(f.conflitoDataProgramada!))).toBe(diaBaixado);
+
+      const depois = await prisma.cronogramaChecagem.findUniqueOrThrow({ where: { id: seed.cronograma304A } });
+      expect(depois.ultimaChecagemEm).toBeNull();
+      expect(depois.proximaChecagemEm.getTime()).toBe(antes.proximaChecagemEm.getTime());
+
+      const logs = await prisma.logAuditoria.findMany({ where: { entidadeTipo: 'Fiscalizacao', entidadeId: f.id, acao: 'CREATE' } });
+      expect(logs).toHaveLength(1);
+      expect(logs[0].usuarioId).toBe(seed.usuarios304.gestorA);
+      expect(logs[0].createdAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
+      expect(logs[0].valorNovo).toMatchObject({ evento: 'AVULSA_POR_CONFLITO', motivo: 'Programação mudou; vistoria feita no local', cronogramaId: seed.cronograma304A, dataProgramada: diaBaixado, enviadoPorId: seed.usuarios304.gestorA });
+      expect(logs[0].descricao).toContain('Programação mudou');
+
+      // programação continua na lista (atrasada) e sinalizada, no pacote e na API das programadas
+      const pkg = await svc.getFieldPackage(u);
+      const p = pkg.programacoes.find((x) => x.cronogramaId === seed.cronograma304A && x.data === toDateKey(programada()));
+      expect(p?.conflitoAvulsa).toMatchObject({ fiscalizacaoId: f.id, motivo: 'Programação mudou; vistoria feita no local', codigo: 'PROGRAMACAO_ALTERADA' });
+
+      // reenvio da mesma avulsa: mesmo id, sem duplicar fiscalização nem auditoria
+      const r2 = await svc.syncFiscalizacao(comoAvulsa(d, diaBaixado), u);
+      expect(r2).toMatchObject({ reenvio: true, fiscalizacaoId: f.id });
+      expect(await prisma.fiscalizacao.count({ where: { clientId: d.clientEventId } })).toBe(1);
+      expect(await prisma.logAuditoria.count({ where: { entidadeTipo: 'Fiscalizacao', entidadeId: f.id, acao: 'CREATE' } })).toBe(1);
+      expect((await prisma.cronogramaChecagem.findUniqueOrThrow({ where: { id: seed.cronograma304A } })).ultimaChecagemEm).toBeNull();
+    });
+
+    it('a sinalização sai quando a programação recebe uma baixa real depois da avulsa', async () => {
+      const u = await sessao(seed.usuarios304.gestorA);
+      const { d, diaBaixado } = await conflitar(u);
+      await svc.syncFiscalizacao(comoAvulsa(d, diaBaixado), u);
+      await svc.syncFiscalizacao(dto(), u); // vistoria programada normal → baixa
+      const pkg = await svc.getFieldPackage(u);
+      expect(pkg.programacoes.filter((x) => x.cronogramaId === seed.cronograma304A).every((x) => !x.conflitoAvulsa)).toBe(true);
+    });
+
+    it('motivo é obrigatório; não pode vir com cronogramaId; programação de outro próprio é recusada (nada gravado)', async () => {
+      const u = await sessao(seed.usuarios304.gestorA);
+      const { d, diaBaixado } = await conflitar(u);
+      await expect(svc.syncFiscalizacao(comoAvulsa(d, diaBaixado, '   '), u)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(svc.syncFiscalizacao({ ...comoAvulsa(d, diaBaixado), cronogramaId: seed.cronograma304A }, u)).rejects.toBeInstanceOf(BadRequestException);
+      const outro = { ...comoAvulsa(d, diaBaixado), avulsaPorConflito: { motivo: 'motivo qualquer', cronogramaId: seed.cronograma304B, dataProgramada: diaBaixado } };
+      await expect(svc.syncFiscalizacao(outro as MobileSyncFiscalizacaoDto, u)).rejects.toBeInstanceOf(BadRequestException);
+      expect(await prisma.fiscalizacao.count({ where: { clientId: d.clientEventId } })).toBe(0);
+    });
+
+    it('gestor filtra as avulsas por conflito na API de vistorias (true/false)', async () => {
+      const u = await sessao(seed.usuarios304.gestorA);
+      const { d, diaBaixado } = await conflitar(u);
+      const r = await svc.syncFiscalizacao(comoAvulsa(d, diaBaixado), u);
+      const normal = await svc.syncFiscalizacao(dto({ cronogramaId: undefined, dataProgramada: undefined }), u);
+      const fisc = new FiscalizacoesService(prisma as never, {} as never, {} as never, cronograma, {} as never);
+      const so = await fisc.list({ avulsaPorConflito: 'true', limit: 100 }, u);
+      expect(so.items.map((i) => i.id)).toContain(r.fiscalizacaoId);
+      expect(so.items.every((i) => i.avulsaPorConflito)).toBe(true);
+      const sem = await fisc.list({ avulsaPorConflito: 'false', limit: 100 }, u);
+      expect(sem.items.map((i) => i.id)).toContain(normal.fiscalizacaoId);
+      expect(sem.items.map((i) => i.id)).not.toContain(r.fiscalizacaoId);
+    });
+
+    it('indicadores: conflito + avulsa contam UMA vistoria e nenhuma falha de sync pendente (sem contagem dupla)', async () => {
+      const u = await sessao(seed.usuarios304.gestorA);
+      const mon = new MonitoramentoService(prisma as never);
+      const antes = (await mon.getDashboard({}, u)).indicadores;
+      const { d, diaBaixado } = await conflitar(u);
+      const meio = (await mon.getDashboard({}, u)).indicadores;
+      expect(meio.fiscalizacoes).toBe(antes.fiscalizacoes);
+      expect(meio.syncPendentes).toBe(antes.syncPendentes + 1);
+      await svc.syncFiscalizacao(comoAvulsa(d, diaBaixado), u);
+      await svc.syncFiscalizacao(comoAvulsa(d, diaBaixado), u); // reenvio
+      const depois = (await mon.getDashboard({}, u)).indicadores;
+      expect(depois.fiscalizacoes).toBe(antes.fiscalizacoes + 1);
+      expect(depois.syncPendentes).toBe(antes.syncPendentes);
+    });
   });
 });

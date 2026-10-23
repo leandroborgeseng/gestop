@@ -43,12 +43,15 @@ export function VistoriasProgramadasPanel({
   onIniciar,
   online = true,
   usuarioId,
+  rascunhos,
 }: {
   fieldPackage: MobileFieldPackage | null;
   onIniciar: (item: VistoriaProgramadaItem) => void;
   /** 304/O2/O3: offline, a lista lê do pacote local e o mapa fica desabilitado. */
   online?: boolean;
   usuarioId?: string;
+  /** M-2: chaves `prog:cronogramaId:data` com rascunho local (badge "Rascunho"; tocar retoma). */
+  rascunhos?: Set<string>;
 }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -64,6 +67,10 @@ export function VistoriasProgramadasPanel({
   const [confirmItem, setConfirmItem] = useState<VistoriaProgramadaItem | null>(null);
   // 304/O2: fonte da lista — API (online) ou pacote local (offline ou API inacessível).
   const [fonteLocal, setFonteLocal] = useState(!online);
+  // Lows/Designer: sem conexão o Mapa fica desabilitado de verdade; volta para a Lista.
+  useEffect(() => {
+    if (fonteLocal) setMobilePanel('lista');
+  }, [fonteLocal]);
 
   const tipoOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -171,6 +178,10 @@ export function VistoriasProgramadasPanel({
     const match = items.find((item) => item.id === id);
     if (!match) return;
     setSelectedId(id);
+    if (rascunhos?.has(`prog:${match.cronogramaId}:${match.data}`)) {
+      onIniciar(match);
+      return;
+    }
     setConfirmItem(match);
   }
 
@@ -277,18 +288,38 @@ export function VistoriasProgramadasPanel({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 xl:hidden">
-            <Chip active={mobilePanel === 'mapa'} onClick={() => setMobilePanel('mapa')}>
-              <span className="inline-flex items-center gap-1.5">
-                <MapIcon className="h-3.5 w-3.5" />
-                Mapa
-              </span>
-            </Chip>
+            {fonteLocal ? (
+              <>
+                <button
+                  type="button"
+                  disabled
+                  data-testid="chip-mapa"
+                  title="Mapa indisponível sem conexão"
+                  className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-3)] opacity-60"
+                >
+                  <MapIcon className="h-3.5 w-3.5" />
+                  Mapa
+                </button>
+              </>
+            ) : (
+              <Chip active={mobilePanel === 'mapa'} onClick={() => setMobilePanel('mapa')}>
+                <span className="inline-flex items-center gap-1.5" data-testid="chip-mapa">
+                  <MapIcon className="h-3.5 w-3.5" />
+                  Mapa
+                </span>
+              </Chip>
+            )}
             <Chip active={mobilePanel === 'lista'} onClick={() => setMobilePanel('lista')}>
               <span className="inline-flex items-center gap-1.5">
                 <MapPinned className="h-3.5 w-3.5" />
                 Lista
               </span>
             </Chip>
+            {fonteLocal ? (
+              <span data-testid="mapa-hint" className="text-[11px] text-[var(--ink-3)]">
+                Mapa indisponível sem conexão
+              </span>
+            ) : null}
           </div>
 
           <div className="cco-workspace grid min-h-0 gap-3 xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] xl:items-stretch">
@@ -326,8 +357,21 @@ export function VistoriasProgramadasPanel({
                     >
                       <div className="flex min-w-0 items-start justify-between gap-2">
                         <span className="min-w-0 break-words text-[13px] font-semibold text-[var(--ink)]">{item.unidade.nome}</span>
-                        <Badge variant={meta.badge} className="shrink-0">{meta.label}</Badge>
+                        <span className="flex shrink-0 items-center gap-1">
+                          {rascunhos?.has(`prog:${item.cronogramaId}:${item.data}`) ? (
+                            <span data-testid="badge-rascunho">
+                              <Badge variant="info">Rascunho</Badge>
+                            </span>
+                          ) : null}
+                          <Badge variant={meta.badge} className="shrink-0">{meta.label}</Badge>
+                        </span>
                       </div>
+                      {item.conflitoAvulsa ? (
+                        <p data-testid="programada-conflito-avulsa" className="break-words rounded-[var(--r-sm)] bg-[var(--warn-bg)] px-2 py-1 text-[11px] font-semibold text-[var(--warn)]">
+                          Pendente · vistoria enviada como avulsa por conflito ({item.conflitoAvulsa.agente.nome}
+                          {item.conflitoAvulsa.motivo ? `: ${item.conflitoAvulsa.motivo}` : ''})
+                        </p>
+                      ) : null}
                       <p className="break-words text-[12px] text-[var(--ink-3)]">
                         {item.unidade.endereco}
                         {item.unidade.bairro ? ` · ${item.unidade.bairro}` : ''}

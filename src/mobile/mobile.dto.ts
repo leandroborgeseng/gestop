@@ -7,6 +7,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  MaxLength,
   ValidateNested,
 } from 'class-validator';
 import { ConformidadeStatus, EvidenciaTipo } from '@prisma/client';
@@ -84,6 +85,24 @@ class MobileRespostaDto {
   evidencias!: MobileEvidenciaDto[];
 }
 
+/** 304/O6a: a vistoria vai como avulsa porque a programação deu conflito; guarda a referência e o motivo. */
+export class MobileAvulsaConflitoDto {
+  @IsString()
+  @MaxLength(500)
+  motivo!: string;
+
+  @IsString()
+  cronogramaId!: string;
+
+  @IsDateString()
+  dataProgramada!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  codigo?: string;
+}
+
 export class MobileSyncFiscalizacaoDto {
   @IsString()
   clientEventId!: string;
@@ -124,4 +143,10 @@ export class MobileSyncFiscalizacaoDto {
   @IsOptional()
   @IsDateString()
   programacaoAtualizadaEm?: string;
+
+  /** 304/O6a: presente quando o agente escolheu "Enviar como vistoria avulsa" após um conflito (sem cronogramaId). */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => MobileAvulsaConflitoDto)
+  avulsaPorConflito?: MobileAvulsaConflitoDto;
 }

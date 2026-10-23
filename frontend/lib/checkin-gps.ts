@@ -19,7 +19,7 @@ export type ResultadoCheckin = { ok: true; checkin: CheckinGps } | { ok: false; 
 export function mensagemFalhaGps(falha: FalhaGps, ctx: { precisaoMetros?: number; limiteMetros?: number } = {}) {
   switch (falha) {
     case 'PERMISSAO_NEGADA':
-      return 'Permissão de localização negada. Libere a localização para este app nas configurações do navegador e tente de novo.';
+      return 'Permissão de localização negada. Toque no cadeado ao lado do endereço, depois em Permissões e em Localização (Android). Depois tente de novo.';
     case 'SERVICO_DESLIGADO':
       return 'GPS desligado ou sem sinal. Ative a localização do aparelho e tente de novo.';
     case 'TEMPO_ESGOTADO':

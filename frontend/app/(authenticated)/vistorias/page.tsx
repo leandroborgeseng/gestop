@@ -110,6 +110,7 @@ export default function VistoriasPage() {
   const [agenteId, setAgenteId] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
+  const [avulsaConflito, setAvulsaConflito] = useState<'' | 'true' | 'false'>('');
 
   const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
@@ -140,8 +141,9 @@ export default function VistoriasPage() {
       agenteId: agenteId || undefined,
       from: from || undefined,
       to: to || undefined,
+      avulsaPorConflito: avulsaConflito || undefined,
     }),
-    [search, status, tipo, secretariaId, agenteId, from, to],
+    [search, status, tipo, secretariaId, agenteId, from, to, avulsaConflito],
   );
 
   const loadList = useCallback(async (offset = 0, append = false) => {
@@ -254,6 +256,22 @@ export default function VistoriasPage() {
                   </Select>
                 </div>
                 <div>
+                  <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]" htmlFor="filtro-avulsa-conflito">
+                    Avulsa por conflito
+                  </label>
+                  <Select
+                    id="filtro-avulsa-conflito"
+                    data-testid="filtro-avulsa-conflito"
+                    value={avulsaConflito}
+                    onChange={(event) => setAvulsaConflito(event.target.value as '' | 'true' | 'false')}
+                    className="h-9 w-full text-xs"
+                  >
+                    <option value="">Todas</option>
+                    <option value="true">Só avulsas por conflito</option>
+                    <option value="false">Sem avulsas por conflito</option>
+                  </Select>
+                </div>
+                <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Tipo de próprio</label>
                   <Select value={tipo} onChange={(event) => setTipo(event.target.value as '' | UnidadeTipo)} className="h-9 w-full text-xs">
                     <option value="">Todos</option>
@@ -344,6 +362,11 @@ export default function VistoriasPage() {
                             <Badge variant={STATUS_BADGE[item.status]}>{statusLabel(item.status)}</Badge>
                             {item.lancamentoManual || item.origem === 'MANUAL' ? (
                               <Badge variant="info">Lançamento manual</Badge>
+                            ) : null}
+                            {item.avulsaPorConflito ? (
+                              <span data-testid="badge-avulsa-conflito">
+                                <Badge variant="warning">Avulsa por conflito</Badge>
+                              </span>
                             ) : null}
                           </div>
                         </div>
@@ -447,6 +470,15 @@ export default function VistoriasPage() {
                     <dl className="grid gap-3 sm:grid-cols-2">
                       <DetailField label="Checklist">{selected.checklistVersao.checklist.nome} (v{selected.checklistVersao.versao})</DetailField>
                       <DetailField label="Origem">{(detail ?? selected).origemLabel ?? selected.origem}</DetailField>
+                      {selected.avulsaPorConflito ? (
+                        <DetailField label="Enviada como avulsa por conflito">
+                          <span data-testid="detalhe-avulsa-motivo">
+                            {selected.conflitoCodigo ? `${selected.conflitoCodigo} · ` : ''}
+                            Programação de {selected.conflitoDataProgramada ? formatDateTime(selected.conflitoDataProgramada).slice(0, 10) : '—'}
+                            {' · '}Motivo: {selected.avulsaMotivo ?? '—'}
+                          </span>
+                        </DetailField>
+                      ) : null}
                       <DetailField label="Vistoria realizada por">
                         {(detail ?? selected).realizadaPorLabel ?? selected.agente.nome}
                       </DetailField>

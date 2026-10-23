@@ -1263,11 +1263,13 @@ export function listFiscalizacoes(params?: {
   from?: string;
   to?: string;
   q?: string;
+  avulsaPorConflito?: 'true' | 'false';
   limit?: number;
   offset?: number;
 }) {
   const query = new URLSearchParams();
   if (params?.secretariaId) query.set('secretariaId', params.secretariaId);
+  if (params?.avulsaPorConflito) query.set('avulsaPorConflito', params.avulsaPorConflito);
   if (params?.unidadeId) query.set('unidadeId', params.unidadeId);
   if (params?.agenteId) query.set('agenteId', params.agenteId);
   if (params?.tipo) query.set('tipo', params.tipo);

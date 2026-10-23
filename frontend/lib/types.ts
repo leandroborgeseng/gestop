@@ -735,6 +735,8 @@ export type MobileQueuedInspection = {
   programacaoAtualizadaEm?: string;
   /** 304/O10/O6: estado local do item na fila (não é enviado). */
   sync?: FilaItemSync;
+  /** 304/O6a: "Enviar como avulsa" após conflito — referência da programação + motivo (obrigatório). */
+  avulsaPorConflito?: { motivo: string; cronogramaId: string; dataProgramada: string; codigo?: string };
   checkin: {
     latitude: number;
     longitude: number;
@@ -790,6 +792,15 @@ export type VistoriaProgramadaItem = {
     secretaria: SecretariaOption;
   };
   responsaveis: Array<{ id: string; nome: string }>;
+  /** 304/O6a: vistoria avulsa enviada por conflito com esta programação (ela continua pendente). */
+  conflitoAvulsa?: {
+    fiscalizacaoId: string;
+    motivo: string | null;
+    codigo: string | null;
+    dataProgramada: string | null;
+    enviadaEm: string | null;
+    agente: { id: string; nome: string };
+  } | null;
 };
 
 export type ChamadoStatus =
@@ -1293,6 +1304,12 @@ export type FiscalizacaoResumo = {
   status: FiscalizacaoStatus;
   origem: FiscalizacaoOrigem | string;
   origemLabel?: string | null;
+  /** 304/O6a */
+  avulsaPorConflito?: boolean;
+  avulsaMotivo?: string | null;
+  conflitoCronogramaId?: string | null;
+  conflitoDataProgramada?: string | null;
+  conflitoCodigo?: string | null;
   iniciadaEm: string | null;
   concluidaEm: string | null;
   dentroRaioPermitido: boolean | null;

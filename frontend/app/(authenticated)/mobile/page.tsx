@@ -39,9 +39,20 @@ import {
   mensagemForaDoRaio,
   PRECISAO_CHECKIN_PADRAO_METROS,
 } from '@/lib/checkin-gps';
-import { gravarRascunho, lerRascunho, limparRascunho, rascunhoTemConteudo } from '@/lib/mobile-draft';
+import {
+  chaveProgramada,
+  chaveRascunho,
+  gravarRascunho,
+  lerRascunho,
+  limparRascunho,
+  listarRascunhos,
+  rascunhoTemConteudo,
+  rascunhoTemDados,
+  type RascunhoVistoria,
+} from '@/lib/mobile-draft';
+import { DialogoConfirmacao } from '@/components/mobile/dialogo-confirmacao';
 import { avisoPacoteVencido, pacoteVencido, rotuloDadosLocais } from '@/lib/pacote-offline';
-import { classificarErroSync, rotuloErroSync } from '@/lib/fila-sync';
+import { classificarErroSync, marcarComoAvulsaPorConflito, rotuloErroSync } from '@/lib/fila-sync';
 import { IndicadorCampo, OnboardingPermissoes, usePermissoesCampo } from '@/components/mobile/estado-campo';
 import { filterChecklistsForUnidade } from '@/lib/checklist-matching';
 import { migrateLegacyQueueIfNeeded, readMobileQueue, writeMobileQueue } from '@/lib/mobile-queue';
@@ -57,6 +68,7 @@ import { MobileFieldPackage, MobileQueuedInspection, VistoriaProgramadaItem } fr
 import { cn } from '@/lib/cn';
 
 const DEVICE_KEY = 'gestop.mobile.device';
+const AVISO_OFFLINE_KEY = 'sigma.campo.aviso-offline.visto';
 
 export default function MobilePage() {
   const backHref = useSafeBackHref('/cco');
@@ -94,11 +106,30 @@ export default function MobilePage() {
   const permissoes = usePermissoesCampo();
   // 303/G5: rascunho local — restaurado uma vez, depois salvo a cada alteração.
   const rascunhoPronto = useRef(false);
-  const [rascunhoRestaurado, setRascunhoRestaurado] = useState(false);
+  // M-2: rascunhos por vistoria (badge "Rascunho" nas programadas) e confirmação ao sair.
+  const [rascunhos, setRascunhos] = useState<Array<RascunhoVistoria & { chave: string }>>([]);
+  const [saidaPendente, setSaidaPendente] = useState<(() => void) | null>(null);
+  const [descartarOpen, setDescartarOpen] = useState(false);
+  const atualizarRascunhos = useCallback(() => {
+    void listarRascunhos()
+      .then(setRascunhos)
+      .catch(() => undefined);
+  }, []);
+  const [detalhesCampoOpen, setDetalhesCampoOpen] = useState(false);
+  const [avisoOfflineVisto, setAvisoOfflineVisto] = useState(true);
+  const [avulsaEdicao, setAvulsaEdicao] = useState<{ clientEventId: string; motivo: string; erro?: string } | null>(null);
 
   useEffect(() => {
     queueRef.current = queue;
   }, [queue]);
+
+  useEffect(() => {
+    try {
+      setAvisoOfflineVisto(window.sessionStorage.getItem(AVISO_OFFLINE_KEY) === '1');
+    } catch {
+      setAvisoOfflineVisto(false);
+    }
+  }, []);
 
   const syncQueue = useCallback(async (manual = true) => {
     if (queueRef.current.length === 0 || syncing) return;
@@ -234,26 +265,29 @@ export default function MobilePage() {
         setResponses(r.responses as Record<string, ResponseDraft>);
         setCheckin(r.checkin);
         setVistoriaTab('avulsa');
-        setRascunhoRestaurado(true);
+        // Designer M3: aviso vira toast que some sozinho.
+        snackbar.show('Vistoria em andamento restaurada do rascunho local (respostas, fotos e check-in).', 'info', 5000);
       })
       .catch(() => undefined)
       .finally(() => {
         rascunhoPronto.current = true;
+        atualizarRascunhos();
       });
-  }, [fieldPackage, secretariaEscopoKey]);
+  }, [fieldPackage, secretariaEscopoKey, snackbar, atualizarRascunhos]);
 
   useEffect(() => {
     if (!rascunhoPronto.current) return;
     const dados = { unidadeId, checklistId, responses, checkin };
     const handle = window.setTimeout(() => {
+      // M-2/UM2-1: só grava; sair da vistoria (trocar de aba) nunca apaga o rascunho.
       if (rascunhoTemConteudo(dados)) {
-        void gravarRascunho({ versao: 1, escopoKey: secretariaEscopoKey, programadaCtx, atualizadoEm: new Date().toISOString(), ...dados }).catch(() => undefined);
-      } else {
-        void limparRascunho().catch(() => undefined);
+        void gravarRascunho({ versao: 1, escopoKey: secretariaEscopoKey, programadaCtx, atualizadoEm: new Date().toISOString(), ...dados })
+          .then(atualizarRascunhos)
+          .catch(() => undefined);
       }
     }, 250);
     return () => window.clearTimeout(handle);
-  }, [unidadeId, checklistId, responses, checkin, programadaCtx, secretariaEscopoKey]);
+  }, [unidadeId, checklistId, responses, checkin, programadaCtx, secretariaEscopoKey, atualizarRascunhos]);
 
   useEffect(() => {
     if (!fieldPackage) return;
@@ -418,7 +452,7 @@ export default function MobilePage() {
       if (!enviarParaFila) {
         setResponses({});
         setCheckin(null);
-        await limparRascunho().catch(() => undefined);
+        await limparRascunho(chaveRascunho({ unidadeId, checklistId, programadaCtx })).catch(() => undefined).then(atualizarRascunhos);
         setChecklistId('');
         const wasProgramada = Boolean(programadaCtx);
         setProgramadaCtx(null);
@@ -433,7 +467,7 @@ export default function MobilePage() {
       await writeMobileQueue(nextQueue);
       setResponses({});
       setCheckin(null);
-      await limparRascunho().catch(() => undefined);
+      await limparRascunho(chaveRascunho({ unidadeId, checklistId, programadaCtx })).catch(() => undefined).then(atualizarRascunhos);
       setChecklistId('');
       const wasProgramada = Boolean(programadaCtx);
       setProgramadaCtx(null);
@@ -448,6 +482,47 @@ export default function MobilePage() {
     }
   }
 
+  const temDadosEmAndamento = rascunhoTemDados({ responses, checkin });
+
+  /** M-2: sair da vistoria em andamento pede confirmação só quando há dados; o rascunho é mantido. */
+  function sairDaVistoria(acao: () => void) {
+    if (!temDadosEmAndamento) {
+      acao();
+      return;
+    }
+    setSaidaPendente(() => acao);
+  }
+
+  async function sairEManterRascunho() {
+    const acao = saidaPendente;
+    setSaidaPendente(null);
+    const dados = { unidadeId, checklistId, responses, checkin };
+    if (rascunhoTemConteudo(dados)) {
+      await gravarRascunho({ versao: 1, escopoKey: secretariaEscopoKey, programadaCtx, atualizadoEm: new Date().toISOString(), ...dados }).catch(() => undefined);
+    }
+    atualizarRascunhos();
+    acao?.();
+  }
+
+  async function descartarRascunho() {
+    setDescartarOpen(false);
+    await limparRascunho(chaveRascunho({ unidadeId, checklistId, programadaCtx })).catch(() => undefined);
+    const eraProgramada = Boolean(programadaCtx);
+    resetPreenchimento();
+    if (eraProgramada) setVistoriaTab('programadas');
+    atualizarRascunhos();
+    snackbar.show('Rascunho descartado.', 'info');
+  }
+
+  function restaurarRascunho(r: RascunhoVistoria) {
+    setUnidadeId(r.unidadeId);
+    setChecklistId(r.checklistId);
+    setProgramadaCtx(r.programadaCtx);
+    setResponses(r.responses as Record<string, ResponseDraft>);
+    setCheckin(r.checkin);
+    setCheckinErro(null);
+  }
+
   function resetPreenchimento() {
     setProgramadaCtx(null);
     setUnidadeId('');
@@ -455,7 +530,6 @@ export default function MobilePage() {
     setResponses({});
     setCheckin(null);
     setCheckinErro(null);
-    setRascunhoRestaurado(false);
   }
 
   const limitePrecisao = fieldPackage?.config?.precisaoMaxCheckinMetros ?? PRECISAO_CHECKIN_PADRAO_METROS;
@@ -482,16 +556,22 @@ export default function MobilePage() {
     }
   }
 
-  async function enviarComoAvulsa(clientEventId: string) {
-    const next = queue.map((item) => {
-      if (item.clientEventId !== clientEventId) return item;
-      const { cronogramaId: _c, dataProgramada: _d, programacaoAtualizadaEm: _p, sync: _s, ...resto } = item;
-      void _c; void _d; void _p; void _s;
-      return resto;
-    });
+  // 304/O6a: avulsa por conflito exige motivo; a referência da programação vai junto (ela NÃO é baixada).
+  async function enviarComoAvulsa(clientEventId: string, motivo: string) {
+    const alvo = queue.find((item) => item.clientEventId === clientEventId);
+    if (!alvo) return;
+    const r = marcarComoAvulsaPorConflito(alvo, motivo);
+    if ('erro' in r) {
+      setAvulsaEdicao({ clientEventId, motivo, erro: r.erro });
+      return;
+    }
+    const next = queue.map((item) => (item.clientEventId === clientEventId ? r.item : item));
+    queueRef.current = next;
     setQueue(next);
     await writeMobileQueue(next);
-    snackbar.show('A vistoria será enviada sem vínculo com a programação.', 'info');
+    setAvulsaEdicao(null);
+    snackbar.show('A vistoria será enviada como avulsa, sem baixar a programação. O gestor verá o motivo.', 'info');
+    if (online) void syncQueue(true);
   }
 
   function startProgramada(item: VistoriaProgramadaItem) {
@@ -507,6 +587,14 @@ export default function MobilePage() {
     const checklist = fieldPackage.checklists.find((entry) => entry.id === item.checklist.id);
     if (!checklist || !getPublishedVersion(checklist.versoes)) {
       snackbar.show('Checklist programado indisponível no pacote. Baixe os dados offline novamente.', 'error');
+      return;
+    }
+    // M-2: item com rascunho retoma a vistoria com os mesmos dados.
+    const salvo = rascunhos.find((r) => r.chave === chaveProgramada(item.cronogramaId, item.data));
+    if (salvo) {
+      restaurarRascunho(salvo);
+      setVistoriaTab('avulsa');
+      snackbar.show('Vistoria retomada do rascunho.', 'info');
       return;
     }
     setUnidadeId(item.unidade.id);
@@ -564,26 +652,66 @@ export default function MobilePage() {
             <div className="flex-1">
               <PwaInstallBanner />
             </div>
-            <ConnectionPill online={online} browserOnline={browserOnline} onRefresh={() => void refreshConnectivity()} />
+            <ConnectionPill
+              online={online}
+              browserOnline={browserOnline}
+              aberto={detalhesCampoOpen}
+              onClick={() => {
+                setDetalhesCampoOpen((v) => !v);
+                void refreshConnectivity();
+                void permissoes.atualizar();
+              }}
+            />
           </div>
-          <IndicadorCampo gps={permissoes.gps} camera={permissoes.camera} online={online} ultimoGps={checkin ? `${checkin.precisaoMetros} m` : null} />
+          {detalhesCampoOpen ? (
+            <section
+              data-testid="detalhes-campo"
+              className="space-y-2 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--sh-sm)]"
+            >
+              <p className="text-[13px] font-semibold text-[var(--ink)]">Estado do aparelho</p>
+              <IndicadorCampo gps={permissoes.gps} camera={permissoes.camera} online={online} ultimoGps={checkin ? `${checkin.precisaoMetros} m` : null} />
+              <p data-testid="detalhes-fila" className="text-[12px] text-[var(--ink-3)]">
+                Fila: {queue.length === 0 ? 'nenhuma vistoria pendente' : `${queue.length} vistoria${queue.length === 1 ? '' : 's'} pendente${queue.length === 1 ? '' : 's'}`}
+              </p>
+            </section>
+          ) : (
+            // Designer M1: inline só o que está bloqueado.
+            <IndicadorCampo gps={permissoes.gps} camera={permissoes.camera} online={online} somenteBloqueios />
+          )}
           <OnboardingPermissoes gps={permissoes.gps} camera={permissoes.camera} onAtualizar={() => void permissoes.atualizar()} />
 
-          <TipBanner id="mobile-offline-queue">
-            {online
-              ? 'Use “Baixar dados offline” para salvar o pacote e preparar o PWA. Depois disso, o app abre sem internet.'
-              : 'Modo Offline ativo. Use os próprios e checklists do pacote baixado; a vistoria entra na fila e sincroniza ao reconectar.'}
-          </TipBanner>
+          {online ? (
+            <TipBanner id="mobile-offline-queue">
+              Use “Baixar dados offline” para salvar o pacote e preparar o PWA. Depois disso, o app abre sem internet.
+            </TipBanner>
+          ) : !avisoOfflineVisto ? (
+            // Designer M3: o aviso offline sai com "Entendi" e não volta na mesma sessão.
+            <div data-testid="aviso-offline" className="flex items-start gap-2 rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-3 py-2.5 text-[13px] text-[var(--ink)]">
+              <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-[var(--warn)]" />
+              <p className="flex-1">Modo Offline ativo. Use os próprios e checklists do pacote baixado; a vistoria entra na fila e sincroniza ao reconectar.</p>
+              <Button
+                type="button"
+                variant="text"
+                size="sm"
+                data-testid="aviso-offline-entendi"
+                onClick={() => {
+                  try {
+                    window.sessionStorage.setItem(AVISO_OFFLINE_KEY, '1');
+                  } catch {
+                    /* ignore */
+                  }
+                  setAvisoOfflineVisto(true);
+                }}
+              >
+                Entendi
+              </Button>
+            </div>
+          ) : null}
 
           {error ? <ErrorState message={error} /> : null}
           {fieldPackage && pacoteVencido(fieldPackage) ? (
             <div data-testid="aviso-pacote-vencido">
               <Alert variant="warning">{avisoPacoteVencido(fieldPackage)}</Alert>
-            </div>
-          ) : null}
-          {rascunhoRestaurado ? (
-            <div data-testid="aviso-rascunho-restaurado">
-              <Alert variant="info">Vistoria em andamento restaurada do rascunho local (respostas, fotos e check-in).</Alert>
             </div>
           ) : null}
           {gpsNotice ? <Alert variant="warning">{gpsNotice}</Alert> : null}
@@ -598,7 +726,7 @@ export default function MobilePage() {
                     <span>{new Date().toLocaleDateString('pt-BR')}</span>
                   </div>
                   <p className="mt-1 text-[18px] font-semibold text-[var(--ink)]">
-                    {fieldPackage.unidades.length} próprios no pacote
+                    {fieldPackage.unidades.length} {fieldPackage.unidades.length === 1 ? 'próprio' : 'próprios'} no pacote
                   </p>
                   {cachedAt ? (
                     <p className="mt-1 text-[11px] text-[var(--ink-3)]" data-testid="pacote-dados-locais">
@@ -617,10 +745,12 @@ export default function MobilePage() {
               <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
                 <Chip
                   active={showProgramadas}
-                  onClick={() => {
-                    resetPreenchimento();
-                    setVistoriaTab('programadas');
-                  }}
+                  onClick={() =>
+                    sairDaVistoria(() => {
+                      resetPreenchimento();
+                      setVistoriaTab('programadas');
+                    })
+                  }
                 >
                   Vistorias programadas
                 </Chip>
@@ -628,7 +758,11 @@ export default function MobilePage() {
                   active={!showProgramadas}
                   onClick={() => {
                     if (fillingFromProgramada) {
-                      resetPreenchimento();
+                      sairDaVistoria(() => {
+                        resetPreenchimento();
+                        setVistoriaTab('avulsa');
+                      });
+                      return;
                     }
                     setVistoriaTab('avulsa');
                   }}
@@ -648,10 +782,12 @@ export default function MobilePage() {
                   <button
                     type="button"
                     className="font-semibold underline"
-                    onClick={() => {
-                      resetPreenchimento();
-                      setVistoriaTab('programadas');
-                    }}
+                    onClick={() =>
+                      sairDaVistoria(() => {
+                        resetPreenchimento();
+                        setVistoriaTab('programadas');
+                      })
+                    }
                   >
                     Voltar às programadas
                   </button>
@@ -659,7 +795,13 @@ export default function MobilePage() {
               ) : null}
 
               {showProgramadas ? (
-                <VistoriasProgramadasPanel fieldPackage={fieldPackage} onIniciar={startProgramada} online={online} usuarioId={sessionUser?.id} />
+                <VistoriasProgramadasPanel
+                  fieldPackage={fieldPackage}
+                  onIniciar={startProgramada}
+                  online={online}
+                  usuarioId={sessionUser?.id}
+                  rascunhos={new Set(rascunhos.filter((r) => rascunhoTemDados(r)).map((r) => r.chave))}
+                />
               ) : (
                 <>
               <Card elevation={1}>
@@ -760,6 +902,18 @@ export default function MobilePage() {
                         <Megaphone className="mr-1.5 h-3.5 w-3.5" />
                         Chamados pendentes
                       </Button>
+                      {temDadosEmAndamento ? (
+                        <Button
+                          type="button"
+                          variant="text"
+                          size="sm"
+                          className="min-h-11 text-[var(--danger)]"
+                          data-testid="descartar-rascunho"
+                          onClick={() => setDescartarOpen(true)}
+                        >
+                          Descartar rascunho
+                        </Button>
+                      ) : null}
                     </div>
                   </CardContent>
                 </Card>
@@ -811,9 +965,39 @@ export default function MobilePage() {
                             </p>
                             <p className={item.sync!.tipo === 'REDE' ? 'text-[var(--ink-3)]' : 'text-[var(--danger)]'}>{rotuloErroSync(item.sync!)}</p>
                             {item.sync!.tipo === 'CONFLITO' && item.cronogramaId ? (
-                              <Button type="button" variant="text" size="sm" onClick={() => void enviarComoAvulsa(item.clientEventId)}>
-                                Enviar como vistoria avulsa (sem baixar a programação)
-                              </Button>
+                              avulsaEdicao?.clientEventId === item.clientEventId ? (
+                                <div className="mt-2 space-y-2" data-testid="form-avulsa">
+                                  <label className="block text-[12px] font-semibold text-[var(--ink)]" htmlFor={`motivo-${item.clientEventId}`}>
+                                    Motivo do envio como avulsa (obrigatório)
+                                  </label>
+                                  <textarea
+                                    id={`motivo-${item.clientEventId}`}
+                                    data-testid="motivo-avulsa"
+                                    rows={2}
+                                    maxLength={500}
+                                    value={avulsaEdicao.motivo}
+                                    onChange={(e) => setAvulsaEdicao({ ...avulsaEdicao, motivo: e.target.value, erro: undefined })}
+                                    className="w-full rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--surface)] p-2 text-[13px]"
+                                  />
+                                  {avulsaEdicao.erro ? (
+                                    <p data-testid="motivo-avulsa-erro" className="text-[12px] text-[var(--danger)]">
+                                      {avulsaEdicao.erro}
+                                    </p>
+                                  ) : null}
+                                  <div className="flex flex-wrap gap-2">
+                                    <Button type="button" variant="filled" size="sm" data-testid="confirmar-avulsa" onClick={() => void enviarComoAvulsa(item.clientEventId, avulsaEdicao.motivo)}>
+                                      Confirmar envio como avulsa
+                                    </Button>
+                                    <Button type="button" variant="text" size="sm" onClick={() => setAvulsaEdicao(null)}>
+                                      Cancelar
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Button type="button" variant="text" size="sm" data-testid="enviar-como-avulsa" onClick={() => setAvulsaEdicao({ clientEventId: item.clientEventId, motivo: '' })}>
+                                  Enviar como vistoria avulsa (sem baixar a programação)
+                                </Button>
+                              )
                             ) : null}
                           </li>
                         );
@@ -823,7 +1007,17 @@ export default function MobilePage() {
               </Card>
 
               {selectedVersion ? (
-                <MobileInspectionFooter online={online} saving={saving} semCheckin={!checkin} onSubmit={() => void submitInspection()} />
+                <MobileInspectionFooter
+                  online={online}
+                  saving={saving}
+                  semCheckin={!checkin}
+                  onSubmit={() => void submitInspection()}
+                  onIrParaCheckin={() => {
+                    const alvo = document.querySelector<HTMLButtonElement>('[data-testid="fazer-checkin"]');
+                    alvo?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    alvo?.focus({ preventScroll: true });
+                  }}
+                />
               ) : null}
 
               {queue.length > 0 && online ? (
@@ -854,6 +1048,27 @@ export default function MobilePage() {
           unidadeNome={selectedUnit.nome}
         />
       ) : null}
+      <DialogoConfirmacao
+        open={Boolean(saidaPendente)}
+        testid="dialogo-sair-vistoria"
+        titulo="Sair da vistoria em andamento?"
+        texto="Suas respostas, fotos e check-in ficam salvos neste aparelho. Você pode continuar depois."
+        principal="Continuar vistoria"
+        secundario="Sair e manter rascunho"
+        onPrincipal={() => setSaidaPendente(null)}
+        onSecundario={() => void sairEManterRascunho()}
+      />
+      <DialogoConfirmacao
+        open={descartarOpen}
+        testid="dialogo-descartar-rascunho"
+        titulo="Descartar rascunho?"
+        texto="As respostas, fotos e o check-in desta vistoria serão apagados deste aparelho. Isso não pode ser desfeito."
+        principal="Manter rascunho"
+        secundario="Descartar"
+        perigoSecundario
+        onPrincipal={() => setDescartarOpen(false)}
+        onSecundario={() => void descartarRascunho()}
+      />
       <ImprimirVistoriaManualDialog open={imprimirOpen} onClose={() => setImprimirOpen(false)} />
       <LancarVistoriaManualDialog open={lancarOpen} onClose={() => setLancarOpen(false)} />
     </RequirePermissions>
@@ -874,43 +1089,47 @@ function MobileInspectionFooter({
   saving,
   semCheckin,
   onSubmit,
+  onIrParaCheckin,
 }: {
   online: boolean;
   saving: boolean;
   semCheckin: boolean;
   onSubmit: () => void;
+  onIrParaCheckin: () => void;
 }) {
+  // Designer M2: sem check-in o Concluir fica travado (aria-disabled) e o toque leva ao "Fazer check-in".
+  const travado = semCheckin && !saving;
   return (
     <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-30 border-t border-[var(--line-2)] bg-[var(--surface)]/95 px-4 py-3 shadow-[var(--sh-md)] backdrop-blur-sm lg:bottom-0">
-      <div className="mx-auto flex w-full max-w-2xl justify-center">
-        {online ? (
-          <Button
-            variant="filled"
-            size="lg"
-            disabled={saving || semCheckin}
-            title={semCheckin ? 'Faça o check-in antes de concluir' : undefined}
-            data-testid="concluir-vistoria"
-            onClick={onSubmit}
-            className="min-h-14 w-full max-w-sm gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)] sm:w-auto"
-          >
-            {saving ? <RefreshCcw className="h-5 w-5 animate-spin" /> : <CloudUpload className="h-5 w-5" />}
-            {saving ? 'Enviando vistoria...' : 'Concluir vistoria'}
-          </Button>
-        ) : (
-          <Button
-            variant="filled"
-            size="lg"
-            disabled={saving || semCheckin}
-            title={semCheckin ? 'Faça o check-in antes de concluir' : undefined}
-            data-testid="concluir-vistoria"
-            onClick={onSubmit}
-            aria-label="Salvar na fila offline"
-            className="min-h-14 w-full max-w-sm gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)] sm:w-auto"
-          >
-            {saving ? <RefreshCcw className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />}
-            {saving ? 'Salvando...' : 'Salvar offline'}
-          </Button>
-        )}
+      <div className="mx-auto flex w-full max-w-2xl flex-col items-center gap-1.5">
+        {semCheckin ? (
+          <p data-testid="aviso-checkin-concluir" className="text-center text-[12px] font-semibold text-[var(--warn)]">
+            Faça o check-in para concluir a vistoria
+          </p>
+        ) : null}
+        <Button
+          variant="filled"
+          size="lg"
+          disabled={saving}
+          aria-disabled={travado || undefined}
+          data-travado={travado ? '1' : '0'}
+          data-testid="concluir-vistoria"
+          onClick={travado ? onIrParaCheckin : onSubmit}
+          aria-label={online ? undefined : 'Salvar na fila offline'}
+          className={cn(
+            'min-h-14 w-full max-w-sm gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)] sm:w-auto',
+            travado && 'opacity-50',
+          )}
+        >
+          {saving ? (
+            <RefreshCcw className="h-5 w-5 animate-spin" />
+          ) : online ? (
+            <CloudUpload className="h-5 w-5" />
+          ) : (
+            <Save className="h-5 w-5" />
+          )}
+          {online ? (saving ? 'Enviando vistoria...' : 'Concluir vistoria') : saving ? 'Salvando...' : 'Salvar offline'}
+        </Button>
       </div>
     </div>
   );
@@ -919,19 +1138,23 @@ function MobileInspectionFooter({
 function ConnectionPill({
   online,
   browserOnline,
-  onRefresh,
+  aberto,
+  onClick,
 }: {
   online: boolean;
   browserOnline: boolean;
-  onRefresh: () => void;
+  aberto: boolean;
+  onClick: () => void;
 }) {
   const label = online ? 'Online' : browserOnline ? 'Sem servidor' : 'Offline';
 
   return (
     <button
       type="button"
-      onClick={onRefresh}
-      title="Atualizar status da conexão"
+      onClick={onClick}
+      data-testid="chip-conexao"
+      aria-expanded={aberto}
+      title="Ver GPS, rede, câmera e fila"
       className={cn(
         'inline-flex shrink-0 items-center gap-1.5 rounded-[var(--r-pill)] border px-3 py-1.5 text-[12px] font-semibold transition-colors',
         online

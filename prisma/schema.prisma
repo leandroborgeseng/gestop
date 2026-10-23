@@ -683,6 +683,14 @@ model Fiscalizacao {
   /// Vínculo com a vistoria prevista no cronograma, quando iniciada pela aba programadas.
   cronogramaId          String?
   dataProgramada        DateTime?
+  /// 304/O6a: enviada como avulsa porque a programação deu conflito no sync (a programação NÃO é baixada).
+  avulsaPorConflito     Boolean             @default(false)
+  /// Motivo informado pelo agente ao enviar como avulsa (obrigatório quando avulsaPorConflito).
+  avulsaMotivo          String?
+  /// Programação com que conflitou (referência; não é usada para baixa).
+  conflitoCronogramaId  String?
+  conflitoDataProgramada DateTime?
+  conflitoCodigo        String?
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
@@ -692,6 +700,7 @@ model Fiscalizacao {
   agente          Usuario           @relation("FiscalizacaoAgente", fields: [agenteId], references: [id], onDelete: Restrict)
   lancadoPor      Usuario?          @relation("FiscalizacaoLancadoPor", fields: [lancadoPorId], references: [id], onDelete: SetNull)
   cronograma      CronogramaChecagem? @relation(fields: [cronogramaId], references: [id], onDelete: SetNull)
+  conflitoCronograma CronogramaChecagem? @relation("FiscalizacaoConflitoCronograma", fields: [conflitoCronogramaId], references: [id], onDelete: SetNull)
   respostas       RespostaChecklist[]
   evidencias      Evidencia[]
   naoConformidades NaoConformidade[]
@@ -706,6 +715,8 @@ model Fiscalizacao {
   @@index([origem])
   @@index([createdAt])
   @@index([cronogramaId])
+  @@index([avulsaPorConflito])
+  @@index([conflitoCronogramaId])
 }
 
 model CronogramaChecagem {
@@ -727,6 +738,7 @@ model CronogramaChecagem {
   responsavel  Usuario?       @relation("CronogramaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   responsaveis CronogramaChecagemResponsavel[]
   fiscalizacoes Fiscalizacao[]
+  fiscalizacoesAvulsasConflito Fiscalizacao[] @relation("FiscalizacaoConflitoCronograma")
 
   @@unique([unidadeId, checklistId])
   @@index([proximaChecagemEm])

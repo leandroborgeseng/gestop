@@ -1012,6 +1012,7 @@ export class FiscalizacoesService {
       ...(query.agenteId ? { agenteId: query.agenteId } : {}),
       ...(query.tipo ? { unidade: { tipo: query.tipo } } : {}),
       ...(query.status ? { status: query.status } : {}),
+      ...(query.avulsaPorConflito ? { avulsaPorConflito: query.avulsaPorConflito === 'true' } : {}),
       ...(query.from || query.to
         ? {
             OR: [

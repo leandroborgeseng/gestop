@@ -32,7 +32,8 @@ import { ChamadosService } from '../chamados/chamados.service';
 import { CronogramaService } from '../cronograma/cronograma.service';
 import { projectChecagensNoPeriodo, startOfDay, toDateKey } from '../cronograma/cronograma.rules';
 import { precisaoMaxCheckinMetros, validadePacoteDias } from './mobile.config';
-import { avaliarConflitoProgramacao } from './programacao-conflito';
+import { avaliarConflitoProgramacao, validarAvulsaPorConflito } from './programacao-conflito';
+import { entidadeTipoParaTela } from '../audit/audit.constants';
 import { DocumentosService } from '../documentos/documentos.service';
 import { FiscalizacoesService } from '../fiscalizacoes/fiscalizacoes.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -42,6 +43,9 @@ import { validateMobileCheckin } from './mobile.rules';
 import { buildFieldPackageChecklistWhere } from './field-package';
 import { validateChecklistResponses } from '../domain/checklist-response.rules';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
+
+const MENSAGEM_FORA_DO_ESCOPO =
+  'Este próprio não pertence a uma Secretaria do seu acesso. A vistoria continua na fila; fale com o gestor.';
 
 @Injectable()
 export class MobileService {
@@ -156,7 +160,7 @@ export class MobileService {
 
   async syncFiscalizacao(dto: MobileSyncFiscalizacaoDto, user: JwtPayload) {
     // 304/O5b: reenvio da mesma vistoria = sucesso com o mesmo id e a programação baixada (nunca "duplicado" em aberto).
-    const reenvio = await this.respostaReenvio(dto.clientEventId);
+    const reenvio = await this.respostaReenvio(dto.clientEventId, user);
     if (reenvio) return reenvio;
 
     const unidade = await this.prisma.unidadePublica.findUnique({
@@ -168,7 +172,7 @@ export class MobileService {
     // 304/O10: unidade (e, por ela, a programação) precisa ser de uma Secretaria do usuário.
     const escopo = resolveSecretariaScopeIds(user);
     if (escopo && !escopo.includes(unidade.secretariaId)) {
-      const motivo = 'Este próprio não pertence a uma Secretaria do seu acesso. A vistoria continua na fila; fale com o gestor.';
+      const motivo = MENSAGEM_FORA_DO_ESCOPO;
       await this.createSyncFailure(dto, user, motivo);
       throw new ForbiddenException(motivo);
     }
@@ -176,6 +180,27 @@ export class MobileService {
     // 303/G3a: início = check-in, fim = Concluir; o fim não pode ser antes do início.
     if (new Date(dto.iniciadaEm).getTime() > new Date(dto.concluidaEm).getTime()) {
       throw new BadRequestException('Horário de início (check-in) posterior ao de conclusão.');
+    }
+    // 304/O6a: "Enviar como avulsa" exige motivo e a referência da programação; nunca dá baixa nela.
+    const erroAvulsa = validarAvulsaPorConflito(dto);
+    if (erroAvulsa) throw new BadRequestException(erroAvulsa);
+    const avulsa = dto.avulsaPorConflito
+      ? {
+          motivo: dto.avulsaPorConflito.motivo.trim(),
+          cronogramaId: dto.avulsaPorConflito.cronogramaId.trim(),
+          // data-chave local (mesma regra do avaliarConflitoProgramacao), sem deslocar o dia pelo fuso
+          dataProgramada: startOfDay(new Date(`${dto.avulsaPorConflito.dataProgramada.slice(0, 10)}T12:00:00`)),
+          codigo: dto.avulsaPorConflito.codigo?.trim() || null,
+          referenciaExiste: true,
+        }
+      : null;
+    if (avulsa) {
+      const ref = await this.prisma.cronogramaChecagem.findUnique({ where: { id: avulsa.cronogramaId }, select: { unidadeId: true } });
+      if (ref && ref.unidadeId !== unidade.id) {
+        throw new BadRequestException('A programação informada no conflito é de outro próprio.');
+      }
+      // Programação excluída (PROGRAMACAO_INEXISTENTE): a referência fica só na auditoria (FK opcional).
+      if (!ref) avulsa.referenciaExiste = false;
     }
 
     const checklistVersao = await this.prisma.checklistVersao.findUniqueOrThrow({
@@ -302,8 +327,44 @@ export class MobileService {
           dentroRaioPermitido: true,
           cronogramaId,
           dataProgramada: dto.dataProgramada ? new Date(dto.dataProgramada) : null,
+          ...(avulsa
+            ? {
+                avulsaPorConflito: true,
+                avulsaMotivo: avulsa.motivo,
+                conflitoCronogramaId: avulsa.referenciaExiste ? avulsa.cronogramaId : null,
+                conflitoDataProgramada: avulsa.dataProgramada,
+                conflitoCodigo: avulsa.codigo,
+              }
+            : {}),
         },
       });
+      if (avulsa) {
+        // 304/O6a: auditoria obrigatória (quem, quando, motivo), na MESMA transação — não depende da config de auditoria.
+        const tela = entidadeTipoParaTela('Fiscalizacao');
+        await tx.logAuditoria.create({
+          data: {
+            usuarioId: user.sub,
+            acao: AuditAction.CREATE,
+            entidadeTipo: 'Fiscalizacao',
+            entidadeId: fiscalizacao.id,
+            tela: tela.telaId,
+            funcao: tela.funcaoId,
+            descricao: `Vistoria enviada como avulsa por conflito de programação: ${avulsa.motivo}`,
+            valorNovo: {
+              evento: 'AVULSA_POR_CONFLITO',
+              enviadoPorId: user.sub,
+              enviadoPorNome: user.nome ?? null,
+              enviadoEm: new Date().toISOString(),
+              motivo: avulsa.motivo,
+              codigoConflito: avulsa.codigo,
+              cronogramaId: avulsa.cronogramaId,
+              dataProgramada: toDateKey(avulsa.dataProgramada),
+              clientEventId: dto.clientEventId,
+            },
+            secretariaAtivaId: user.secretariaId ?? null,
+          },
+        });
+      }
 
       for (const resposta of respostasPreparadas) {
         const item = itemById.get(resposta.itemId)!;
@@ -402,12 +463,15 @@ export class MobileService {
       });
 
       // 304/O5a: baixa da programação na MESMA transação da vistoria (falhou um, nenhum é gravado).
-      const programacao = await this.cronogramaService.registrarChecagemRealizadaTx(tx, {
-        cronogramaId,
-        unidadeId: unidade.id,
-        checklistId: checklistVersao.checklist.id,
-        concluidaEm: new Date(dto.concluidaEm),
-      });
+      // 304/O6a: avulsa por conflito NÃO baixa a programação (nem pela chave próprio+checklist); ela fica pendente e sinalizada.
+      const programacao = avulsa
+        ? null
+        : await this.cronogramaService.registrarChecagemRealizadaTx(tx, {
+            cronogramaId,
+            unidadeId: unidade.id,
+            checklistId: checklistVersao.checklist.id,
+            concluidaEm: new Date(dto.concluidaEm),
+          });
 
       return { fiscalizacao, syncEvent, programacao };
       });
@@ -437,6 +501,7 @@ export class MobileService {
         status: 'sincronizado' as const,
         reenvio: false,
         fiscalizacaoId: result.fiscalizacao.id,
+        avulsaPorConflito: Boolean(avulsa),
         syncEventId: result.syncEvent.id,
         programacao: result.programacao
           ? { cronogramaId: result.programacao.id, baixada: true, proximaChecagemEm: result.programacao.proximaChecagemEm.toISOString() }
@@ -446,7 +511,7 @@ export class MobileService {
       await this.storageService.deleteStoredObjects(persistedStorageKeys);
       // O5b: dois envios simultâneos da mesma vistoria — o perdedor responde como reenvio.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        const r = await this.respostaReenvio(dto.clientEventId);
+        const r = await this.respostaReenvio(dto.clientEventId, user);
         if (r) return r;
       }
       throw error;
@@ -454,12 +519,17 @@ export class MobileService {
   }
 
   /** O5b: vistoria já gravada para este clientEventId → mesmo id, programação baixada (garante a baixa de envios antigos). */
-  private async respostaReenvio(clientEventId: string) {
+  private async respostaReenvio(clientEventId: string, user: JwtPayload) {
     const fiscalizacao = await this.prisma.fiscalizacao.findUnique({
       where: { clientId: clientEventId },
-      select: { id: true, unidadeId: true, cronogramaId: true, concluidaEm: true, checklistVersao: { select: { checklistId: true } } },
+      select: { id: true, unidadeId: true, secretariaId: true, cronogramaId: true, concluidaEm: true, checklistVersao: { select: { checklistId: true } } },
     });
     if (!fiscalizacao) return null;
+    // M-1: reenvio de fora do escopo → 403 igual ao O10 (não revela o id nem mexe no evento já sincronizado).
+    const escopo = resolveSecretariaScopeIds(user);
+    if (escopo && !escopo.includes(fiscalizacao.secretariaId)) {
+      throw new ForbiddenException(MENSAGEM_FORA_DO_ESCOPO);
+    }
     const syncEvent = await this.prisma.offlineSyncEvent.findUnique({ where: { clientEventId }, select: { id: true } });
     let programacao: { id: string; proximaChecagemEm: Date } | null = null;
     if (fiscalizacao.cronogramaId && fiscalizacao.concluidaEm) {
