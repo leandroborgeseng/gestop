@@ -8,7 +8,7 @@ import {
 } from '@prisma/client';
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
 import { JwtPayload } from '../auth/jwt';
-import { resolveSecretariaFiltroEscopo } from '../auth/secretaria-scope';
+import { resolveSecretariaFiltroEscopo, secretariaIdsDaQuery } from '../auth/secretaria-scope';
 import { PrismaService } from '../prisma/prisma.service';
 import { escopoDashboard, EscopoDashboard } from './dashboard-escopo';
 import { loadExecucaoParticipantes } from '../relatorios/relatorios.execucao-participantes';
@@ -55,12 +55,13 @@ export class MonitoramentoService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** 306: escopo efetivo da sessão + filtro superior (403 se o filtro estiver fora do escopo). */
-  resolveEscopo(user: JwtPayload, filtroSecretariaId?: string | null): EscopoDashboard {
+  resolveEscopo(user: JwtPayload, filtroSecretariaId?: string | readonly string[] | null): EscopoDashboard {
     return escopoDashboard(resolveSecretariaFiltroEscopo(user, filtroSecretariaId));
   }
 
   async getDashboard(filtro: DashboardFiltroDto = {}, user: JwtPayload) {
-    const escopo = this.resolveEscopo(user, filtro.secretariaId);
+    const filtroSecretarias = secretariaIdsDaQuery(filtro as Record<string, unknown>);
+    const escopo = this.resolveEscopo(user, filtroSecretarias);
     const { from, to } = periodBounds(filtro);
     // Base sem status: cada card aplica o próprio status cruzado com o filtro.
     const { status: _filtroStatus, ...filtroSemStatus } = filtro;
@@ -164,7 +165,8 @@ export class MonitoramentoService {
       filtrosAplicados: {
         from: filtro.from ?? null,
         to: filtro.to ?? null,
-        secretariaId: filtro.secretariaId ?? null,
+        secretariaId: filtroSecretarias.length === 1 ? filtroSecretarias[0] : null,
+        secretariaIds: filtroSecretarias,
         secretariasEscopo: escopo.ids ?? null,
         equipeId: filtro.equipeId ?? null,
         cargo: filtro.cargo ?? null,
@@ -439,7 +441,7 @@ export class MonitoramentoService {
   }
 
   /** Tela (Dashboard): alertas no escopo de Secretaria da sessão. */
-  async getAlertasOperacionais(user: JwtPayload, filtroSecretariaId?: string | null) {
+  async getAlertasOperacionais(user: JwtPayload, filtroSecretariaId?: string | readonly string[] | null) {
     return this.alertasNoEscopo(this.resolveEscopo(user, filtroSecretariaId));
   }
 

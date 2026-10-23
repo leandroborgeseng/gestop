@@ -13,7 +13,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { hasAnyPermission, isAdministradorSistema } from '../auth/permissions';
 import { JwtPayload } from '../auth/jwt';
-import { resolveChamadoSecretariaFilter, resolveSecretariaFiltroEscopo, resolveSecretariaScopeIds } from '../auth/secretaria-scope';
+import { normalizarSecretariaIds, resolveChamadoSecretariaFilter, resolveSecretariaFiltroEscopo, resolveSecretariaScopeIds } from '../auth/secretaria-scope';
 import { permissionMatrixKey } from '../domain/permissions-catalog';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -117,19 +117,20 @@ export class ChamadoTarefasService {
     private readonly audit: AuditService,
   ) {}
 
-  async opcoes(user: JwtPayload, secretariaId?: string) {
+  async opcoes(user: JwtPayload, secretariaIdFiltro?: string | readonly string[]) {
     this.assertPodeAtribuir(user);
-    // 306: listas suspensas no escopo da sessão; secretariaId fora do escopo → 403.
-    resolveSecretariaFiltroEscopo(user, secretariaId);
+    // 306: listas suspensas no escopo da sessão; secretariaId fora do escopo → 403. R3: filtro sempre como array.
+    const filtroIds = normalizarSecretariaIds(secretariaIdFiltro);
+    resolveSecretariaFiltroEscopo(user, filtroIds);
     const scopeIds = resolveSecretariaScopeIds(user);
     const secretarias = await this.prisma.secretaria.findMany({
       where: { ativo: true, ...(scopeIds ? { id: { in: scopeIds } } : {}) },
       orderBy: { nome: 'asc' },
       select: { id: true, nome: true, sigla: true },
     });
-    const equipes = secretariaId
+    const equipes = filtroIds.length
       ? await this.prisma.equipe.findMany({
-          where: { ativo: true, secretariaId },
+          where: { ativo: true, secretariaId: { in: filtroIds } },
           orderBy: { nome: 'asc' },
           select: {
             id: true,

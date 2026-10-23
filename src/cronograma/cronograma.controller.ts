@@ -4,6 +4,7 @@ import { CurrentUser } from '../auth/current-user';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequireAnyPermissions } from '../auth/permissions';
 import { JwtPayload } from '../auth/jwt';
+import { SecretariaIdsQuery } from '../auth/secretaria-ids.query';
 import { CalendarioQueryDto, CronogramaDto } from './cronograma.dto';
 import {
   CRONOGRAMA_ALTERAR_KEYS,
@@ -25,7 +26,7 @@ export class CronogramaController {
     @CurrentUser() user: JwtPayload,
     @Query('from') from: string,
     @Query('to') to: string,
-    @Query('secretariaId') secretariaId?: string,
+    @SecretariaIdsQuery() secretariaId: string[],
     @Query('unidadeId') unidadeId?: string,
   ) {
     const query: CalendarioQueryDto = { from, to, secretariaId, unidadeId };
@@ -38,11 +39,26 @@ export class CronogramaController {
     return this.cronogramaService.listChecklistsParaCronograma(user);
   }
 
+  /** 307/R3: opções de responsáveis no escopo da sessão. */
+  @RequireAnyPermissions(...CRONOGRAMA_INSERIR_KEYS, ...CRONOGRAMA_ALTERAR_KEYS)
+  @Get('responsaveis/opcoes')
+  listResponsaveisOpcoes(@CurrentUser() user: JwtPayload, @Query('search') search?: string) {
+    return this.cronogramaService.listResponsaveisOpcoes(user, typeof search === 'string' ? search : undefined);
+  }
+
+  /** 307/R4/R5: situação (OK, INATIVO, OUTRA_SECRETARIA) dos responsáveis escolhidos, no escopo atual. */
+  @RequireAnyPermissions(...CRONOGRAMA_INSERIR_KEYS, ...CRONOGRAMA_ALTERAR_KEYS)
+  @Get('responsaveis/situacao')
+  situacaoResponsaveis(@CurrentUser() user: JwtPayload, @Query('ids') ids?: string | string[]) {
+    const lista = (Array.isArray(ids) ? ids : [ids ?? '']).flatMap((v) => String(v).split(','));
+    return this.cronogramaService.situacaoResponsaveis(user, lista);
+  }
+
   @RequireAnyPermissions(...CRONOGRAMA_VISUALIZAR_KEYS)
   @Get()
   list(
     @CurrentUser() user: JwtPayload,
-    @Query('secretariaId') secretariaId?: string,
+    @SecretariaIdsQuery() secretariaId: string[],
     @Query('unidadeId') unidadeId?: string,
   ) {
     return this.cronogramaService.listCronogramas({ secretariaId, unidadeId }, user);

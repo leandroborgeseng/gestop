@@ -1,6 +1,7 @@
 import type { ChamadoTarefaChamadoLeitura, ChamadoTarefaDetalhe, ChamadoTarefaResumo, RelatorioTarefasResponse, TarefasExecucaoResponse } from '@/lib/chamado-tarefa';
 import {
   AuthUser,
+  ResponsavelCronogramaOpcao,
   AdminPerfil,
   AdminSecretaria,
   AdminUnidade,
@@ -73,6 +74,8 @@ import { extractApiErrorMessage, readForbiddenMessage } from './api-errors';
 export const API_PROXY_PREFIX = '/api-gestop';
 const API_BASE_URL = API_PROXY_PREFIX;
 const AUTH_STORAGE_KEY = 'sigma.auth';
+/** Chave do localStorage da sessão (para o evento `storage` entre abas). */
+export const AUTH_STORAGE_KEY_PUBLICA = AUTH_STORAGE_KEY;
 const LEGACY_AUTH_STORAGE_KEY = 'gestop.auth';
 
 async function readApiError(response: Response, fallback: string) {
@@ -741,6 +744,18 @@ export function getCalendarioChecagens(filters: {
   if (filters.secretariaId) params.set('secretariaId', filters.secretariaId);
   if (filters.unidadeId) params.set('unidadeId', filters.unidadeId);
   return request<CalendarioChecagemResponse>(`/cronograma/calendario?${params.toString()}`);
+}
+
+/** 307/R3: responsáveis no escopo da sessão (Secretaria ativa / vínculos / "Todas" autorizadas). */
+export function listResponsaveisCronograma(search?: string) {
+  const query = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  return request<ResponsavelCronogramaOpcao[]>(`/cronograma/responsaveis/opcoes${query}`);
+}
+
+/** 307/R4/R5: situação dos responsáveis escolhidos no escopo ATUAL. */
+export function getSituacaoResponsaveisCronograma(ids: string[]) {
+  if (!ids.length) return Promise.resolve([] as ResponsavelCronogramaOpcao[]);
+  return request<ResponsavelCronogramaOpcao[]>(`/cronograma/responsaveis/situacao?ids=${encodeURIComponent(ids.join(','))}`);
 }
 
 export function saveCronograma(payload: Record<string, unknown>, id?: string) {

@@ -2,7 +2,10 @@
 
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { SESSAO_ESCOPO_EVENT } from '@/lib/session-events';
+import { ResponsaveisCombobox } from '@/components/cronograma/responsaveis-combobox';
+import { bloqueioSalvar, avisoCronogramaForaEscopo, MSG_REGULARIZAR, pendentesRegularizacao } from '@/lib/cronograma-responsaveis';
 import { CalendarDays, CalendarClock, CheckCircle2, Clock, Plus } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
@@ -19,7 +22,6 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { ErrorState, LoadingState } from '@/components/ui-states';
-import { UsuarioMultiPicker } from '@/components/usuarios/usuario-multi-picker';
 import { checklistAppliesToUnidade } from '@/lib/checklist-matching';
 import {
   deactivateCronograma,
@@ -31,6 +33,7 @@ import {
   listCronogramaChecklists,
   listCronogramas,
   saveCronograma,
+  getSituacaoResponsaveisCronograma,
 } from '@/lib/api';
 import { CRONOGRAMA_FREQUENCIAS, CRONOGRAMA_FREQUENCIA_LABELS, monthBounds, toInputDate } from '@/lib/cronograma';
 import { hasCronogramaAccess } from '@/lib/permissions-matrix';
@@ -43,7 +46,8 @@ import {
   CronogramaFrequencia,
   SecretariaOption,
   UnidadeOperacional,
-  UsuarioExecucaoOpcao,
+  ResponsavelCronogramaOpcao,
+  SituacaoResponsavel,
 } from '@/lib/types';
 
 export default function CronogramaPage() {
@@ -77,7 +81,18 @@ export default function CronogramaPage() {
   const [editing, setEditing] = useState<CronogramaChecagem | null>(null);
   const [formUnidadeId, setFormUnidadeId] = useState('');
   const [formResponsavelIds, setFormResponsavelIds] = useState<string[]>([]);
-  const [formResponsaveis, setFormResponsaveis] = useState<UsuarioExecucaoOpcao[]>([]);
+  const [formResponsaveis, setFormResponsaveis] = useState<ResponsavelCronogramaOpcao[]>([]);
+  // 307: situação dos responsáveis no escopo atual; troca de contexto com o modal aberto (R5).
+  const [situacoes, setSituacoes] = useState<Record<string, SituacaoResponsavel | undefined>>({});
+  const [escopoVersao, setEscopoVersao] = useState(0);
+  const [escopoTrocadoFlag, setEscopoTrocado] = useState(false);
+  // Ciclo 2: Secretaria ativa ao abrir o modal; voltar para ela desfaz a "troca de contexto" (Salvar volta a liberar).
+  const chaveEscopo = lockedSecretariaId ?? 'todas';
+  const [escopoAbertura, setEscopoAbertura] = useState<string | null>(null);
+  const escopoTrocado = escopoTrocadoFlag && chaveEscopo !== escopoAbertura;
+  const [confirmadoManter, setConfirmadoManter] = useState(false);
+  const formOpenRef = useRef(false);
+  formOpenRef.current = formOpen;
   const [coberturaOpen, setCoberturaOpen] = useState(false);
   const [coberturaFormato, setCoberturaFormato] = useState<'pdf' | 'xlsx'>('pdf');
   const [coberturaLoading, setCoberturaLoading] = useState(false);
@@ -135,12 +150,87 @@ export default function CronogramaPage() {
     void loadStatic().catch((err) => {
       setError(err instanceof Error ? err.message : 'Falha ao carregar dados base.');
     });
-  }, [canVisualizar, canManageForm]);
+  }, [canVisualizar, canManageForm, escopoVersao]);
+
+  useEffect(() => {
+    // 307/R5: troca de Secretaria sem recarregar a página; com o modal aberto, ele continua e os
+    // responsáveis fora do novo escopo são sinalizados (salvar exige regularizar).
+    function onEscopo(event: Event) {
+      event.preventDefault();
+      setEscopoVersao((v) => v + 1);
+      if (formOpenRef.current) {
+        setEscopoTrocado(true);
+        setConfirmadoManter(false);
+      }
+    }
+    window.addEventListener(SESSAO_ESCOPO_EVENT, onEscopo);
+    return () => window.removeEventListener(SESSAO_ESCOPO_EVENT, onEscopo);
+  }, []);
+
+  // Ciclo 2 (F1/R5c): depois de trocar a Secretaria com o modal de EDIÇÃO aberto, confere na API se o
+  // cronograma continua no escopo (a listagem do backend aplica o escopo da sessão). Fora do escopo: o modal
+  // continua aberto, mostra o aviso e trava o Salvar (nunca chega ao 404); voltando à Secretaria, destrava.
+  const editingRef = useRef<CronogramaChecagem | null>(null);
+  editingRef.current = editing;
+  const [cronogramaForaEscopo, setCronogramaForaEscopo] = useState<string | null>(null);
+  useEffect(() => {
+    if (!escopoVersao || !formOpenRef.current || !editingRef.current) return;
+    const alvo = editingRef.current;
+    let vivo = true;
+    listCronogramas({ unidadeId: alvo.unidadeId })
+      .then((rows) => rows.some((row) => row.id === alvo.id))
+      .catch(() => false)
+      .then((noEscopo) => {
+        if (!vivo || editingRef.current?.id !== alvo.id) return;
+        const sec = alvo.unidade.secretaria;
+        setCronogramaForaEscopo(noEscopo ? null : sec.sigla ? `${sec.sigla} – ${sec.nome}` : sec.nome);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [escopoVersao]);
+
+  const responsaveisChave = formResponsavelIds.join(',');
+  useEffect(() => {
+    if (!formOpen || !formResponsavelIds.length) {
+      setSituacoes({});
+      return;
+    }
+    let vivo = true;
+    getSituacaoResponsaveisCronograma(formResponsavelIds)
+      .then((rows) => {
+        if (!vivo) return;
+        setSituacoes(Object.fromEntries(rows.map((r) => [r.id, r.situacao])));
+        // Completa nomes de chips que vieram só com id (ex.: legado).
+        setFormResponsaveis((atual) =>
+          atual.map((u) => {
+            const r = rows.find((x) => x.id === u.id);
+            return r && (!u.nome || u.nome === u.id) ? { ...u, nome: r.nome } : u;
+          }),
+        );
+      })
+      .catch(() => {
+        if (vivo) setSituacoes({});
+      });
+    return () => {
+      vivo = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formOpen, responsaveisChave, escopoVersao]);
+
+  const pendentesResp = pendentesRegularizacao(formResponsavelIds, situacoes);
+  const salvarBloqueado =
+    Boolean(cronogramaForaEscopo) ||
+    bloqueioSalvar({
+      pendentes: pendentesResp.length,
+      escopoTrocado,
+      confirmado: confirmadoManter,
+    });
 
   useEffect(() => {
     if (!canVisualizar) return;
     void loadData();
-  }, [month, effectiveSecretariaId, unidadeId, canVisualizar]);
+  }, [month, effectiveSecretariaId, unidadeId, canVisualizar, escopoVersao]);
 
   const eventosPorDia = useMemo(() => {
     const map = new Map<string, CalendarioChecagemResponse['eventos']>();
@@ -185,6 +275,11 @@ export default function CronogramaPage() {
       return;
     }
 
+    if (salvarBloqueado) {
+      if (!cronogramaForaEscopo) setError(MSG_REGULARIZAR);
+      return;
+    }
+
     const form = new FormData(event.currentTarget);
     const payload = {
       unidadeId: formUnidadeId,
@@ -194,22 +289,36 @@ export default function CronogramaPage() {
       observacoes: String(form.get('observacoes') || ''),
       responsavelIds: formResponsavelIds,
       ativo: true,
+      // 307/ajuste 1: confirmação explícita de manter os destacados → auditoria no backend.
+      ...(escopoTrocado && confirmadoManter && pendentesResp.length ? { confirmarResponsaveisForaEscopo: true } : {}),
     };
 
     try {
       await saveCronograma(payload, editing?.id);
       setSuccess(editing ? 'Cronograma atualizado.' : 'Cronograma cadastrado.');
-      setFormOpen(false);
-      setEditing(null);
-      setFormResponsavelIds([]);
-      setFormResponsaveis([]);
+      fecharForm();
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Não foi possível salvar o cronograma.');
     }
   }
 
+  function fecharForm() {
+    setFormOpen(false);
+    setEditing(null);
+    setFormResponsavelIds([]);
+    setFormResponsaveis([]);
+    setSituacoes({});
+    setEscopoTrocado(false);
+    setConfirmadoManter(false);
+    setCronogramaForaEscopo(null);
+  }
+
   function openCreate() {
+    setEscopoAbertura(chaveEscopo);
+    setCronogramaForaEscopo(null);
+    setEscopoTrocado(false);
+    setConfirmadoManter(false);
     setEditing(null);
     setFormUnidadeId(unidadeId);
     setFormResponsavelIds([]);
@@ -218,6 +327,10 @@ export default function CronogramaPage() {
   }
 
   function openEdit(item: CronogramaChecagem) {
+    setEscopoAbertura(chaveEscopo);
+    setCronogramaForaEscopo(null);
+    setEscopoTrocado(false);
+    setConfirmadoManter(false);
     setEditing(item);
     setFormUnidadeId(item.unidadeId);
     const fromJunction = (item.responsaveis ?? []).map((row) => row.usuario);
@@ -433,13 +546,48 @@ export default function CronogramaPage() {
           <>
             <Sheet
               open={formOpen}
-              onClose={() => {
-                setFormOpen(false);
-                setEditing(null);
-              }}
+              onClose={fecharForm}
               title={editing ? 'Editar cronograma' : 'Novo cronograma de checagem'}
+              footer={
+                // 307/R1: rodapé fixo do modal — a lista de responsáveis nunca cobre o Salvar.
+                <div className="space-y-2">
+                  {cronogramaForaEscopo ? (
+                    <div data-testid="aviso-cronograma-fora-escopo">
+                      <Alert variant="warning">{avisoCronogramaForaEscopo(cronogramaForaEscopo)}</Alert>
+                    </div>
+                  ) : null}
+                  {!cronogramaForaEscopo && escopoTrocado && pendentesResp.length ? (
+                    <label className="flex items-start gap-2 text-[12px] text-[var(--ink-2)]" data-testid="confirmar-manter">
+                      <input
+                        type="checkbox"
+                        checked={confirmadoManter}
+                        onChange={(event) => setConfirmadoManter(event.target.checked)}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        A Secretaria ativa mudou. {MSG_REGULARIZAR}, ou marque aqui para manter os responsáveis destacados.
+                      </span>
+                    </label>
+                  ) : null}
+                  <div className="flex gap-2">
+                    <Button type="button" variant="outlined" className="flex-1" onClick={fecharForm}>
+                      Cancelar
+                    </Button>
+                    <Button
+                      type="submit"
+                      form="form-cronograma"
+                      variant="filled"
+                      className="flex-1"
+                      disabled={salvarBloqueado}
+                      data-testid="salvar-cronograma"
+                    >
+                      {editing ? 'Salvar alterações' : 'Cadastrar cronograma'}
+                    </Button>
+                  </div>
+                </div>
+              }
             >
-              <form onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
+              <form id="form-cronograma" onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
                 <Field label="Próprio público">
                   <SearchableSelect
                     value={formUnidadeId}
@@ -485,12 +633,14 @@ export default function CronogramaPage() {
                     }
                   />
                 </Field>
-                <UsuarioMultiPicker
+                <ResponsaveisCombobox
                   label="Responsável(is) pela vistoria"
                   hint="Responsáveis previstos para acompanhamento. Não restringem quem pode realizar a vistoria."
                   selectedIds={formResponsavelIds}
-                  initialUsers={formResponsaveis}
-                  preferSecretariaId={formUnidade?.secretaria.id}
+                  selectedUsers={formResponsaveis}
+                  situacoes={situacoes}
+                  escopoTodas={Boolean(sessionUser?.secretariaEscopoTodas)}
+                  escopoVersao={escopoVersao}
                   onChange={(ids, users) => {
                     setFormResponsavelIds(ids);
                     setFormResponsaveis(users);
@@ -499,9 +649,6 @@ export default function CronogramaPage() {
                 <Field label="Observações">
                   <Input name="observacoes" defaultValue={editing?.observacoes ?? ''} />
                 </Field>
-                <Button type="submit" variant="filled" className="w-full">
-                  {editing ? 'Salvar alterações' : 'Cadastrar cronograma'}
-                </Button>
               </form>
             </Sheet>
           </>
