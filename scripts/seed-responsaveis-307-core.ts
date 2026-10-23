@@ -8,7 +8,12 @@
  * - permissões de cronograma (visualizar/inserir/alterar) no perfil fictício "Teste 306 Dashboard";
  * - 8 usuários ativos em A (lista com mais de 6 → rolagem) e 1 INATIVO em A (`inativo.307`);
  * - um cronograma no "Próprio Fictício A" com responsáveis: gestor.a, inativo.307 e gestor.b (de B),
- *   para o R4 (editar mostra "Inativo" e "Outra Secretaria").
+ *   para o R4 (editar mostra "Inativo" e "Outra Secretaria");
+ * - ciclo 2 (R5b pela UI): usuário `todas.307` com acesso a "Todas as Secretarias" (vínculos A e B, sem
+ *   permissão de admin) e o cronograma "Cronograma fictício 307 B" no Próprio Fictício B com gestor.a e gestor.b.
+ *   Em "Todas" os dois estão OK; trocando para T306B o cronograma continua no escopo e gestor.a vira
+ *   "Outra Secretaria" → confirmar "manter" e salvar grava a auditoria.
+ *   (Não existe próprio compartilhado entre Secretarias no modelo: `UnidadePublica.secretariaId` é único.)
  */
 import { PrismaClient } from '@prisma/client';
 import { hashPassword } from '../src/auth/password';
@@ -20,9 +25,20 @@ export const T307 = {
   extrasA: Array.from({ length: 8 }, (_, i) => `extra${i + 1}.a.307@teste306.invalid`),
   permissoes: ['cronograma.visualizar', 'cronograma.inserir', 'cronograma.alterar'],
   observacao: 'Cronograma fictício 307',
+  todas: 'todas.307@teste306.invalid',
+  observacaoB: 'Cronograma fictício 307 B',
 } as const;
 
-export type Seed307 = Seed306 & { inativo: string; extrasA: string[]; cronogramaA: string; unidadeA: string; checklist: string };
+export type Seed307 = Seed306 & {
+  inativo: string;
+  extrasA: string[];
+  cronogramaA: string;
+  unidadeA: string;
+  checklist: string;
+  todas: string;
+  cronogramaB: string;
+  unidadeB: string;
+};
 
 export async function seedResponsaveis307(prisma: PrismaClient, senha: string, databaseUrl: string): Promise<Seed307> {
   assertBancoLocal306(databaseUrl);
@@ -79,5 +95,54 @@ export async function seedResponsaveis307(prisma: PrismaClient, senha: string, d
     },
   });
 
-  return { ...base, inativo, extrasA, cronogramaA: cronograma.id, unidadeA: unidadeA.id, checklist: checklist.id };
+  // Ciclo 2: usuário "Todas" (não admin) + cronograma em B com gestor.a (A) e gestor.b (B).
+  let todas = (await prisma.usuario.findUnique({ where: { email: T307.todas } }))?.id;
+  if (!todas) {
+    todas = (
+      await prisma.usuario.create({
+        data: {
+          nome: 'Usuário Fictício Todas 307',
+          email: T307.todas,
+          senhaHash,
+          secretariaId: base.secretarias.A,
+          secretariaAtivaId: null,
+          acessoTodasSecretarias: true,
+          perfilAtivoId: perfil.id,
+          perfis: { create: [{ perfilId: perfil.id }] },
+          secretariasVinculos: {
+            create: [
+              { secretariaId: base.secretarias.A, principal: true },
+              { secretariaId: base.secretarias.B, principal: false },
+            ],
+          },
+        },
+      })
+    ).id;
+  }
+  const unidadeB = await prisma.unidadePublica.findFirstOrThrow({ where: { codigoPatrimonial: 'T306-B' } });
+  const cronogramaB = await prisma.cronogramaChecagem.upsert({
+    where: { unidadeId_checklistId: { unidadeId: unidadeB.id, checklistId: checklist.id } },
+    update: {},
+    create: {
+      unidadeId: unidadeB.id,
+      checklistId: checklist.id,
+      frequencia: 'MENSAL',
+      proximaChecagemEm: new Date(Date.UTC(2026, 11, 1)),
+      responsavelId: base.usuarios.gestorB,
+      observacoes: T307.observacaoB,
+      responsaveis: { create: [base.usuarios.gestorA, base.usuarios.gestorB].map((usuarioId) => ({ usuarioId })) },
+    },
+  });
+
+  return {
+    ...base,
+    inativo,
+    extrasA,
+    cronogramaA: cronograma.id,
+    unidadeA: unidadeA.id,
+    checklist: checklist.id,
+    todas,
+    cronogramaB: cronogramaB.id,
+    unidadeB: unidadeB.id,
+  };
 }

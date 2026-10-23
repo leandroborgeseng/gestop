@@ -177,4 +177,21 @@ describe.skipIf(!URL)('307 — responsáveis do cronograma no escopo (Postgres l
     const cal = await svc.getCalendario({ ...per, secretariaId: [seed.secretarias.A] }, u);
     expect(cal.eventos.every((e) => e.unidade.secretariaSigla === "T306A")).toBe(true);
   });
+
+  it('ciclo 2 (F3): gestor B vê multi.ab sem a Secretaria principal (T306A), só as Secretarias do escopo', async () => {
+    const u = await sessao(seed.usuarios.gestorB);
+    const multi = (await svc.listResponsaveisOpcoes(u)).find((x) => x.id === seed.usuarios.multi)!;
+    expect(multi.secretaria).toBeNull();
+    expect(multi.secretarias.map((x) => x.id)).toEqual([seed.secretarias.B]);
+    expect(JSON.stringify(multi)).not.toContain('T306A');
+  });
+
+  it('ciclo 2 (seed R5b): usuário "Todas" vê o cronograma de B; em T306B continua no escopo e gestor.a vira OUTRA_SECRETARIA', async () => {
+    const t = await sessao(seed.todas);
+    expect((await svc.listCronogramas({}, t)).some((c) => c.id === seed.cronogramaB)).toBe(true);
+    const emB = { ...t, secretariaId: seed.secretarias.B } as JwtPayload;
+    expect((await svc.listCronogramas({}, emB)).some((c) => c.id === seed.cronogramaB)).toBe(true);
+    const sit = Object.fromEntries((await svc.situacaoResponsaveis(emB, [seed.usuarios.gestorA, seed.usuarios.gestorB])).map((x) => [x.id, x.situacao]));
+    expect(sit).toEqual({ [seed.usuarios.gestorA]: 'OUTRA_SECRETARIA', [seed.usuarios.gestorB]: 'OK' });
+  });
 });

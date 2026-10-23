@@ -192,6 +192,9 @@ export function normalizarSecretariaIds(raw: unknown): string[] {
 
 /** Lê `secretariaId` e `secretariaId[]` de um objeto de query (Express 5, parser simples). */
 export function secretariaIdsDaQuery(query: Record<string, unknown> | undefined): string[] {
+  // Ciclo 2 (F2): só `secretariaId` e `secretariaId[]`; `secretariaId[x]`, `secretariaId[0]` etc. → 400.
+  const invalida = Object.keys(query ?? {}).find((k) => k.startsWith('secretariaId[') && k !== 'secretariaId[]');
+  if (invalida) throw new BadRequestException('secretariaId deve ser um id ou uma lista de ids.');
   return normalizarSecretariaIds([
     ...normalizarSecretariaIds(query?.secretariaId),
     ...normalizarSecretariaIds(query?.['secretariaId[]']),

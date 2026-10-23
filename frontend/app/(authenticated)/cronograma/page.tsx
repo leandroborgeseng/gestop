@@ -5,7 +5,7 @@ import { formatSecretariaLabel } from '@/lib/format-secretaria';
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { SESSAO_ESCOPO_EVENT } from '@/lib/session-events';
 import { ResponsaveisCombobox } from '@/components/cronograma/responsaveis-combobox';
-import { bloqueioSalvar, MSG_REGULARIZAR, pendentesRegularizacao } from '@/lib/cronograma-responsaveis';
+import { bloqueioSalvar, avisoCronogramaForaEscopo, MSG_REGULARIZAR, pendentesRegularizacao } from '@/lib/cronograma-responsaveis';
 import { CalendarDays, CalendarClock, CheckCircle2, Clock, Plus } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
@@ -85,7 +85,11 @@ export default function CronogramaPage() {
   // 307: situação dos responsáveis no escopo atual; troca de contexto com o modal aberto (R5).
   const [situacoes, setSituacoes] = useState<Record<string, SituacaoResponsavel | undefined>>({});
   const [escopoVersao, setEscopoVersao] = useState(0);
-  const [escopoTrocado, setEscopoTrocado] = useState(false);
+  const [escopoTrocadoFlag, setEscopoTrocado] = useState(false);
+  // Ciclo 2: Secretaria ativa ao abrir o modal; voltar para ela desfaz a "troca de contexto" (Salvar volta a liberar).
+  const chaveEscopo = lockedSecretariaId ?? 'todas';
+  const [escopoAbertura, setEscopoAbertura] = useState<string | null>(null);
+  const escopoTrocado = escopoTrocadoFlag && chaveEscopo !== escopoAbertura;
   const [confirmadoManter, setConfirmadoManter] = useState(false);
   const formOpenRef = useRef(false);
   formOpenRef.current = formOpen;
@@ -163,6 +167,29 @@ export default function CronogramaPage() {
     return () => window.removeEventListener(SESSAO_ESCOPO_EVENT, onEscopo);
   }, []);
 
+  // Ciclo 2 (F1/R5c): depois de trocar a Secretaria com o modal de EDIÇÃO aberto, confere na API se o
+  // cronograma continua no escopo (a listagem do backend aplica o escopo da sessão). Fora do escopo: o modal
+  // continua aberto, mostra o aviso e trava o Salvar (nunca chega ao 404); voltando à Secretaria, destrava.
+  const editingRef = useRef<CronogramaChecagem | null>(null);
+  editingRef.current = editing;
+  const [cronogramaForaEscopo, setCronogramaForaEscopo] = useState<string | null>(null);
+  useEffect(() => {
+    if (!escopoVersao || !formOpenRef.current || !editingRef.current) return;
+    const alvo = editingRef.current;
+    let vivo = true;
+    listCronogramas({ unidadeId: alvo.unidadeId })
+      .then((rows) => rows.some((row) => row.id === alvo.id))
+      .catch(() => false)
+      .then((noEscopo) => {
+        if (!vivo || editingRef.current?.id !== alvo.id) return;
+        const sec = alvo.unidade.secretaria;
+        setCronogramaForaEscopo(noEscopo ? null : sec.sigla ? `${sec.sigla} – ${sec.nome}` : sec.nome);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [escopoVersao]);
+
   const responsaveisChave = formResponsavelIds.join(',');
   useEffect(() => {
     if (!formOpen || !formResponsavelIds.length) {
@@ -192,11 +219,13 @@ export default function CronogramaPage() {
   }, [formOpen, responsaveisChave, escopoVersao]);
 
   const pendentesResp = pendentesRegularizacao(formResponsavelIds, situacoes);
-  const salvarBloqueado = bloqueioSalvar({
-    pendentes: pendentesResp.length,
-    escopoTrocado,
-    confirmado: confirmadoManter,
-  });
+  const salvarBloqueado =
+    Boolean(cronogramaForaEscopo) ||
+    bloqueioSalvar({
+      pendentes: pendentesResp.length,
+      escopoTrocado,
+      confirmado: confirmadoManter,
+    });
 
   useEffect(() => {
     if (!canVisualizar) return;
@@ -247,7 +276,7 @@ export default function CronogramaPage() {
     }
 
     if (salvarBloqueado) {
-      setError(MSG_REGULARIZAR);
+      if (!cronogramaForaEscopo) setError(MSG_REGULARIZAR);
       return;
     }
 
@@ -282,9 +311,12 @@ export default function CronogramaPage() {
     setSituacoes({});
     setEscopoTrocado(false);
     setConfirmadoManter(false);
+    setCronogramaForaEscopo(null);
   }
 
   function openCreate() {
+    setEscopoAbertura(chaveEscopo);
+    setCronogramaForaEscopo(null);
     setEscopoTrocado(false);
     setConfirmadoManter(false);
     setEditing(null);
@@ -295,6 +327,8 @@ export default function CronogramaPage() {
   }
 
   function openEdit(item: CronogramaChecagem) {
+    setEscopoAbertura(chaveEscopo);
+    setCronogramaForaEscopo(null);
     setEscopoTrocado(false);
     setConfirmadoManter(false);
     setEditing(item);
@@ -517,7 +551,12 @@ export default function CronogramaPage() {
               footer={
                 // 307/R1: rodapé fixo do modal — a lista de responsáveis nunca cobre o Salvar.
                 <div className="space-y-2">
-                  {escopoTrocado && pendentesResp.length ? (
+                  {cronogramaForaEscopo ? (
+                    <div data-testid="aviso-cronograma-fora-escopo">
+                      <Alert variant="warning">{avisoCronogramaForaEscopo(cronogramaForaEscopo)}</Alert>
+                    </div>
+                  ) : null}
+                  {!cronogramaForaEscopo && escopoTrocado && pendentesResp.length ? (
                     <label className="flex items-start gap-2 text-[12px] text-[var(--ink-2)]" data-testid="confirmar-manter">
                       <input
                         type="checkbox"

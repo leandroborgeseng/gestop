@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agruparResponsaveis, avisoRegularizacao, bloqueioSalvar, pendentesRegularizacao } from './cronograma-responsaveis';
+import { agruparResponsaveis, avisoCronogramaForaEscopo, avisoRegularizacao, bloqueioSalvar, pendentesRegularizacao } from './cronograma-responsaveis';
 
 const A = { id: 'a', nome: 'A', sigla: 'A' };
 const B = { id: 'b', nome: 'B', sigla: 'B' };
@@ -10,6 +10,11 @@ describe('307 — responsáveis (front, puro)', () => {
     const g = agruparResponsaveis([u('x', [A, B]), u('y', [B]), u('x', [A, B])], true);
     expect(g.map((x) => x.titulo)).toEqual(['A', 'B']);
     expect(g.flatMap((x) => x.usuarios.map((y) => y.id))).toEqual(['x', 'y']);
+  });
+  it('R5c: aviso do cronograma fora da Secretaria ativa cita para onde voltar', () => {
+    expect(avisoCronogramaForaEscopo('T306A – Secretaria Fictícia 306 A')).toBe(
+      'Este cronograma não pertence à Secretaria ativa. Volte para T306A – Secretaria Fictícia 306 A para editar.',
+    );
   });
   it('Secretaria ativa: lista única', () => {
     expect(agruparResponsaveis([u('x', [A])], false)).toHaveLength(1);

@@ -17,7 +17,7 @@ async function main() {
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
   try {
     const r = await seedResponsaveis307(prisma, senha, url);
-    console.log(JSON.stringify({ ok: true, cronogramaA: r.cronogramaA, emails: { ...T306.emails, inativo: T307.inativo, extrasA: T307.extrasA } }, null, 2));
+    console.log(JSON.stringify({ ok: true, cronogramaA: r.cronogramaA, cronogramaB: r.cronogramaB, emails: { ...T306.emails, inativo: T307.inativo, todas: T307.todas, extrasA: T307.extrasA } }, null, 2));
   } finally {
     await prisma.$disconnect();
   }

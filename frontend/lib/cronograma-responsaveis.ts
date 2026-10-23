@@ -7,6 +7,10 @@ export const ROTULO_SITUACAO: Record<Exclude<SituacaoResponsavel, 'OK'>, string>
 };
 
 export const DICA_FORA_ESCOPO = 'Este responsável não pertence mais à Secretaria ativa';
+/** R5c: cronograma fora da Secretaria ativa após troca de contexto com o modal aberto. */
+export function avisoCronogramaForaEscopo(secretariaDoCronograma: string) {
+  return `Este cronograma não pertence à Secretaria ativa. Volte para ${secretariaDoCronograma} para editar.`;
+}
 export const MSG_REGULARIZAR = 'Remova ou substitua os responsáveis destacados para salvar';
 
 export function avisoRegularizacao(n: number) {

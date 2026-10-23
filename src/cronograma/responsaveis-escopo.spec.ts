@@ -23,6 +23,13 @@ describe('307 — responsáveis no escopo (puro)', () => {
     expect(situacaoResponsavel(u(), ['b'])).toBe('OK');
     expect(situacaoResponsavel(u({ secretaria: B, secretariasVinculos: [] }), undefined)).toBe('OK');
   });
+  it('F3: Secretaria principal fora do escopo não é exposta (sigla/nome); dentro do escopo, sim', () => {
+    const multiPrincipalA = u({ secretaria: A, secretariasVinculos: [{ secretaria: A }, { secretaria: B }] });
+    expect(responsavelOpcao(multiPrincipalA, ['b']).secretaria).toBeNull();
+    expect(JSON.stringify(responsavelOpcao(multiPrincipalA, ['b']))).not.toContain('"A"');
+    expect(responsavelOpcao(multiPrincipalA, ['a']).secretaria).toEqual(A);
+    expect(responsavelOpcao(multiPrincipalA, undefined).secretaria).toEqual(A);
+  });
   it('opção lista só as Secretarias do escopo', () => {
     expect(responsavelOpcao(u(), ['a']).secretarias.map((s) => s.id)).toEqual(['a']);
     expect(responsavelOpcao(u(), undefined).secretarias.map((s) => s.id)).toEqual(['a', 'b']);

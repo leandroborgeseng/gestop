@@ -58,7 +58,8 @@ export function responsavelOpcao(u: UsuarioResponsavelRow, scopeIds: string[] | 
     cargo: u.cargo,
     cargoRef: u.cargoRef,
     ativo: u.ativo,
-    secretaria: u.secretaria,
+    // Ciclo 2 (F3): a Secretaria principal só aparece se estiver no escopo de quem consulta.
+    secretaria: u.secretaria && (!scopeIds || scopeIds.includes(u.secretaria.id)) ? u.secretaria : null,
     secretarias: scopeIds ? todas.filter((s) => scopeIds.includes(s.id)) : todas,
     situacao: situacaoResponsavel(u, scopeIds),
   };

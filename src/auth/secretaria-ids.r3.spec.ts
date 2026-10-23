@@ -20,6 +20,9 @@ describe('R3 (306) — secretariaId sempre como array', () => {
     expect(secretariaIdsDaQuery({ 'secretariaId[]': 'B' })).toEqual(['B']);
     expect(secretariaIdsDaQuery({ secretariaId: 'A', 'secretariaId[]': ['A', 'B'] })).toEqual(['A', 'B']);
     expect(secretariaIdsDaQuery({})).toEqual([]);
+    // F2: chaves indexadas ou nomeadas → 400
+    expect(() => secretariaIdsDaQuery({ 'secretariaId[x]': 'A' })).toThrow(BadRequestException);
+    expect(() => secretariaIdsDaQuery({ 'secretariaId[0]': 'A' })).toThrow(BadRequestException);
   });
   it('mesma resposta para as 3 formas: fora do escopo → 403; dentro → array', () => {
     for (const forma of [['B'], 'B', ['A', 'B']]) {
