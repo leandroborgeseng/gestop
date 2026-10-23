@@ -260,6 +260,8 @@ export default function CronogramaPage() {
       observacoes: String(form.get('observacoes') || ''),
       responsavelIds: formResponsavelIds,
       ativo: true,
+      // 307/ajuste 1: confirmação explícita de manter os destacados → auditoria no backend.
+      ...(escopoTrocado && confirmadoManter && pendentesResp.length ? { confirmarResponsaveisForaEscopo: true } : {}),
     };
 
     try {

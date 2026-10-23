@@ -132,4 +132,49 @@ describe.skipIf(!URL)('307 — responsáveis do cronograma no escopo (Postgres l
     expect(por[seed.usuarios.gestorA]).toBe('OUTRA_SECRETARIA');
     expect(por[seed.usuarios.multi]).toBe('OK');
   });
+
+  it('ajuste 1 (a/d): confirmar "manter destacados" grava auditoria com quem, quando, ids mantidos, cronograma e Secretaria ativa', async () => {
+    const u = await sessao(seed.usuarios.gestorA);
+    const ids = [seed.usuarios.gestorA, seed.inativo, seed.usuarios.gestorB];
+    await svc.updateCronograma(cronogramaId, dtoA([seed.usuarios.gestorA]), u);
+    // repõe o estado com os destacados (inserção direta: o serviço não aceita NOVOS fora do escopo)
+    await prisma.cronogramaChecagemResponsavel.createMany({ data: [seed.inativo, seed.usuarios.gestorB].map((usuarioId) => ({ cronogramaId, usuarioId })) });
+    const antes = new Date(Date.now() - 1000);
+    await svc.updateCronograma(cronogramaId, { ...dtoA(ids), confirmarResponsaveisForaEscopo: true }, u);
+    const logs = await prisma.logAuditoria.findMany({ where: { entidadeId: cronogramaId, funcao: 'responsaveis.manter_fora_escopo' } });
+    expect(logs).toHaveLength(1);
+    const v = logs[0].valorNovo as Record<string, unknown>;
+    expect(logs[0].usuarioId).toBe(seed.usuarios.gestorA);
+    expect(logs[0].secretariaAtivaId).toBe(seed.secretarias.A);
+    expect(v.cronogramaId).toBe(cronogramaId);
+    expect(v.confirmadoPor).toBe(seed.usuarios.gestorA);
+    expect(v.secretariaAtivaId).toBe(seed.secretarias.A);
+    expect(new Date(String(v.confirmadoEm)).getTime()).toBeGreaterThanOrEqual(antes.getTime());
+    expect([...(v.responsavelIdsMantidos as string[])].sort()).toEqual([seed.inativo, seed.usuarios.gestorB].sort());
+  });
+
+  it('ajuste 1 (a): sem confirmação, ou sem destacados, não grava o registro de "manter"', async () => {
+    const u = await sessao(seed.usuarios.gestorA);
+    const antes = await prisma.logAuditoria.count({ where: { entidadeId: cronogramaId, funcao: 'responsaveis.manter_fora_escopo' } });
+    await svc.updateCronograma(cronogramaId, dtoA([seed.usuarios.gestorA, seed.inativo, seed.usuarios.gestorB]), u);
+    await svc.updateCronograma(cronogramaId, { ...dtoA([seed.usuarios.gestorA]), confirmarResponsaveisForaEscopo: true }, u);
+    expect(await prisma.logAuditoria.count({ where: { entidadeId: cronogramaId, funcao: 'responsaveis.manter_fora_escopo' } })).toBe(antes);
+  });
+
+  it('ajuste 1 (b): lista e calendário leem secretariaId como array; qualquer id fora do escopo → 403', async () => {
+    const u = await sessao(seed.usuarios.gestorA);
+    const per = { from: '2026-12-01', to: '2026-12-31' };
+    for (const forma of [[seed.secretarias.B], [seed.secretarias.A, seed.secretarias.B]]) {
+      await expect(svc.listCronogramas({ secretariaId: forma }, u)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(svc.getCalendario({ ...per, secretariaId: forma }, u)).rejects.toBeInstanceOf(ForbiddenException);
+    }
+    const lista = await svc.listCronogramas({ secretariaId: [seed.secretarias.A, seed.secretarias.A] }, u);
+    expect(lista.every((c) => c.unidade.secretariaId === seed.secretarias.A)).toBe(true);
+    expect(lista.some((c) => c.id === cronogramaId)).toBe(true);
+    const admin = await sessao(seed.usuarios.admin);
+    const ambos = await svc.listCronogramas({ secretariaId: [seed.secretarias.A, seed.secretarias.B] }, admin);
+    expect(ambos.every((c) => [seed.secretarias.A, seed.secretarias.B].includes(c.unidade.secretariaId))).toBe(true);
+    const cal = await svc.getCalendario({ ...per, secretariaId: [seed.secretarias.A] }, u);
+    expect(cal.eventos.every((e) => e.unidade.secretariaSigla === "T306A")).toBe(true);
+  });
 });

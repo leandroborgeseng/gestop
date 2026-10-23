@@ -4,6 +4,7 @@ import { CurrentUser } from '../auth/current-user';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { RequireAnyPermissions } from '../auth/permissions';
 import { JwtPayload } from '../auth/jwt';
+import { SecretariaIdsQuery } from '../auth/secretaria-ids.query';
 import { CalendarioQueryDto, CronogramaDto } from './cronograma.dto';
 import {
   CRONOGRAMA_ALTERAR_KEYS,
@@ -25,7 +26,7 @@ export class CronogramaController {
     @CurrentUser() user: JwtPayload,
     @Query('from') from: string,
     @Query('to') to: string,
-    @Query('secretariaId') secretariaId?: string,
+    @SecretariaIdsQuery() secretariaId: string[],
     @Query('unidadeId') unidadeId?: string,
   ) {
     const query: CalendarioQueryDto = { from, to, secretariaId, unidadeId };
@@ -57,7 +58,7 @@ export class CronogramaController {
   @Get()
   list(
     @CurrentUser() user: JwtPayload,
-    @Query('secretariaId') secretariaId?: string,
+    @SecretariaIdsQuery() secretariaId: string[],
     @Query('unidadeId') unidadeId?: string,
   ) {
     return this.cronogramaService.listCronogramas({ secretariaId, unidadeId }, user);

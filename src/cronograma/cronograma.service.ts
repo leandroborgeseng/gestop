@@ -3,6 +3,8 @@ import { AuditAction, CronogramaFrequencia, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import {
   assertSecretariaNoEscopo,
+  normalizarSecretariaIds,
+  resolveSecretariaFiltroEscopo,
   resolveSecretariaScopeIds,
   resolveUnidadeSecretariaFilter,
 } from '../auth/secretaria-scope';
@@ -114,7 +116,7 @@ export class CronogramaService {
     });
   }
 
-  listCronogramas(filters: { secretariaId?: string; unidadeId?: string } | undefined, user: JwtPayload) {
+  async listCronogramas(filters: { secretariaId?: string | readonly string[]; unidadeId?: string } | undefined, user: JwtPayload) {
     const secretariaId = this.resolveFiltroSecretaria(user, filters?.secretariaId);
     return this.prisma.cronogramaChecagem.findMany({
       where: {
@@ -248,7 +250,46 @@ export class CronogramaService {
       this.auditSnapshot(before, user),
       this.auditSnapshot(cronograma, user),
     );
+    if (dto.confirmarResponsaveisForaEscopo) {
+      await this.auditarResponsaveisMantidos(id, responsavelIds, user);
+    }
     return cronograma;
+  }
+
+  /**
+   * 307/ajuste 1: auditoria da confirmação "manter os responsáveis destacados".
+   * Registra quem confirmou (usuarioId + Secretaria ativa), o cronograma e os responsáveis mantidos
+   * que estão INATIVO ou OUTRA_SECRETARIA no escopo atual. Sem nenhum destacado, não grava nada.
+   */
+  private async auditarResponsaveisMantidos(cronogramaId: string, responsavelIds: string[], user: JwtPayload) {
+    if (!responsavelIds.length) return null;
+    const scopeIds = resolveSecretariaScopeIds(user);
+    const rows = await this.prisma.usuario.findMany({ where: { id: { in: responsavelIds } }, select: usuarioResponsavelSelect });
+    const mantidos = rows
+      .map((u) => ({ id: u.id, nome: u.nome, situacao: situacaoResponsavel(u, scopeIds) }))
+      .filter((u) => u.situacao !== 'OK');
+    if (!mantidos.length) return null;
+    return this.prisma.logAuditoria.create({
+      data: {
+        usuarioId: user.sub,
+        acao: AuditAction.UPDATE,
+        entidadeTipo: 'CronogramaChecagem',
+        entidadeId: cronogramaId,
+        funcao: 'responsaveis.manter_fora_escopo',
+        descricao: `Confirmou manter ${mantidos.length} responsável(is) destacado(s) no cronograma.`,
+        secretariaAtivaId: user.secretariaId?.trim() || null,
+        valorNovo: JSON.parse(
+          JSON.stringify({
+            cronogramaId,
+            confirmadoPor: user.sub,
+            confirmadoEm: new Date().toISOString(),
+            secretariaAtivaId: user.secretariaId?.trim() || null,
+            responsavelIdsMantidos: mantidos.map((u) => u.id),
+            responsaveisMantidos: mantidos,
+          }),
+        ) as Prisma.InputJsonValue,
+      },
+    });
   }
 
   async deactivateCronograma(id: string, user: JwtPayload) {
@@ -614,14 +655,15 @@ export class CronogramaService {
     return cronograma;
   }
 
-  private resolveFiltroSecretaria(user: JwtPayload, secretariaId?: string) {
-    const requested = secretariaId?.trim();
-    if (requested) {
-      assertSecretariaNoEscopo(user, requested);
-      return requested;
-    }
+  /**
+   * Ajuste 1 (R3 no cronograma): `secretariaId` como array (valor único, repetido ou `secretariaId[]`).
+   * Qualquer id fora do escopo → 403. Sem filtro: Secretaria única do escopo, ou sem filtro extra.
+   */
+  private resolveFiltroSecretaria(user: JwtPayload, secretariaId?: string | readonly string[]): { in: string[] } | undefined {
+    const filtro = normalizarSecretariaIds(secretariaId);
+    if (filtro.length) return { in: resolveSecretariaFiltroEscopo(user, filtro)! };
     const scopeIds = resolveSecretariaScopeIds(user);
-    if (scopeIds?.length === 1) return scopeIds[0];
+    if (scopeIds?.length === 1) return { in: [scopeIds[0]] };
     return undefined;
   }
 

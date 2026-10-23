@@ -218,7 +218,8 @@ export function ResponsaveisCombobox({
         {chips.length > 0 ? (
           <span className="sr-only" aria-live="polite">{`${chips.length} selecionados`}</span>
         ) : null}
-        <span className="relative flex min-w-[10rem] flex-1 items-center">
+        {/* Ajuste 1: sem espaço ao lado dos chips, a busca quebra para a linha inteira (placeholder nunca cortado). */}
+        <span className="relative flex min-w-[15rem] flex-1 basis-[15rem] items-center">
           <Search className="pointer-events-none absolute left-1 h-4 w-4 text-[var(--ink-3)]" aria-hidden />
           <input
             ref={inputRef}
