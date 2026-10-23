@@ -16,6 +16,7 @@ import { ChamadoTarefasService } from '../chamados/chamado-tarefas.service';
 import { MonitoramentoService } from './monitoramento.service';
 
 const URL = process.env.ESCOPO_306_TEST_DATABASE_URL;
+const doSeed306 = (l: { entidadeTipo: string }) => l.entidadeTipo === 'Teste306';
 
 describe.skipIf(!URL)('306 — Dashboard respeita a Secretaria ativa (Postgres local)', () => {
   let prisma: PrismaClient;
@@ -60,7 +61,8 @@ describe.skipIf(!URL)('306 — Dashboard respeita a Secretaria ativa (Postgres l
     expect(alertas.resumo.syncFalhas).toBe(e.syncFalhas);
 
     const logs = await svc.listAuditoria(u);
-    expect(logs.length).toBe(e.auditoria);
+    // N1: conta só os logs gravados pelo seed (marcador entidadeTipo 'Teste306'), para passar em banco já usado.
+    expect(logs.filter(doSeed306).length).toBe(e.auditoria);
     expect(logs.every((l) => l.secretariaAtivaId === seed.secretarias.A)).toBe(true);
   });
 
@@ -73,26 +75,26 @@ describe.skipIf(!URL)('306 — Dashboard respeita a Secretaria ativa (Postgres l
     expect(d.indicadores.chamados.abertos).toBe(e.chamadosAbertos);
     expect(d.indicadores.syncPendentes).toBe(e.syncFalhas);
     expect(d.pendenciasPorSecretaria.map((s) => s.sigla)).toEqual([T306.siglas.B]);
-    expect((await svc.listAuditoria(u)).length).toBe(e.auditoria);
+    expect((await svc.listAuditoria(u)).filter(doSeed306).length).toBe(e.auditoria);
   });
 
   it('S4: filtro/URL/API forçando outra Secretaria → 403 (Dashboard, alertas e opções de tarefas)', async () => {
     const u = await sessao(seed.usuarios.gestorA);
-    await expect(svc.getDashboard({ secretariaId: seed.secretarias.B }, u)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc.getDashboard({ secretariaId: [seed.secretarias.B] }, u)).rejects.toBeInstanceOf(ForbiddenException);
     await expect(svc.getAlertasOperacionais(u, seed.secretarias.B)).rejects.toBeInstanceOf(ForbiddenException);
     const tarefas = new ChamadoTarefasService(prisma as never, {} as never, {} as never);
     await expect(tarefas.opcoes(u, seed.secretarias.B)).rejects.toBeInstanceOf(ForbiddenException);
     const op = await tarefas.opcoes(u);
     expect(op.secretarias.map((s) => s.sigla)).toEqual([T306.siglas.A]);
     // filtro dentro do escopo funciona
-    const d = await svc.getDashboard({ secretariaId: seed.secretarias.A }, u);
+    const d = await svc.getDashboard({ secretariaId: [seed.secretarias.A] }, u);
     expect(d.indicadores.naoConformidades).toBe(T306.esperado.A.naoConformidades);
   });
 
   it('S5: selecionar Secretaria não dá erro na contagem de NC e bate com a lista', async () => {
     const admin = await sessao(seed.usuarios.admin);
     for (const lado of ['A', 'B'] as const) {
-      const d = await svc.getDashboard({ secretariaId: seed.secretarias[lado] }, admin);
+      const d = await svc.getDashboard({ secretariaId: [seed.secretarias[lado]] }, admin);
       const lista = await prisma.naoConformidade.findMany({
         where: { status: { not: 'RESOLVIDA' }, fiscalizacao: { secretariaId: seed.secretarias[lado] } },
       });
@@ -111,7 +113,7 @@ describe.skipIf(!URL)('306 — Dashboard respeita a Secretaria ativa (Postgres l
     const multi = await sessao(seed.usuarios.multi);
     const dm = await svc.getDashboard({}, multi);
     expect(siglasT306(dm.pendenciasPorSecretaria)).toEqual([T306.siglas.A]);
-    await expect(svc.getDashboard({ secretariaId: seed.secretarias.B }, multi)).rejects.toBeInstanceOf(ForbiddenException);
+    await expect(svc.getDashboard({ secretariaId: [seed.secretarias.B] }, multi)).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it('S3 (backend): trocar a Secretaria ativa muda o escopo na próxima requisição, sem novo login', async () => {

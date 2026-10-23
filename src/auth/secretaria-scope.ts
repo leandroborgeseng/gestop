@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { JwtPayload } from './jwt';
 
@@ -164,14 +164,38 @@ export function resolveDirectSecretariaFilter(user: JwtPayload): { secretariaId?
  * - `[]` = sem Secretaria autorizada (nada é retornado).
  * - Filtro fora do escopo (URL/API forçada) → 403.
  */
-export function resolveSecretariaFiltroEscopo(user: JwtPayload, filtroSecretariaId?: string | null): string[] | undefined {
+export function resolveSecretariaFiltroEscopo(
+  user: JwtPayload,
+  filtroSecretariaId?: string | readonly string[] | null,
+): string[] | undefined {
   const scope = resolveSecretariaScopeIds(user);
-  const filtro = filtroSecretariaId?.trim();
-  if (!filtro) return scope;
-  if (scope && !scope.includes(filtro)) {
+  const filtro = normalizarSecretariaIds(filtroSecretariaId);
+  if (!filtro.length) return scope;
+  if (scope && filtro.some((id) => !scope.includes(id))) {
     throw new ForbiddenException('Secretaria fora do escopo da sessão.');
   }
-  return [filtro];
+  return filtro;
+}
+
+/**
+ * R3 (306) — forma única do filtro `secretariaId` em query: sempre array de ids (trim, sem vazios, sem repetidos).
+ * Aceita `secretariaId=A`, `secretariaId=A&secretariaId=B` e `secretariaId[]=A`. Qualquer outro tipo → 400.
+ */
+export function normalizarSecretariaIds(raw: unknown): string[] {
+  if (raw === undefined || raw === null) return [];
+  const lista = Array.isArray(raw) ? raw : [raw];
+  if (lista.some((v) => typeof v !== 'string')) {
+    throw new BadRequestException('secretariaId deve ser um id ou uma lista de ids.');
+  }
+  return [...new Set((lista as string[]).map((v) => v.trim()).filter(Boolean))];
+}
+
+/** Lê `secretariaId` e `secretariaId[]` de um objeto de query (Express 5, parser simples). */
+export function secretariaIdsDaQuery(query: Record<string, unknown> | undefined): string[] {
+  return normalizarSecretariaIds([
+    ...normalizarSecretariaIds(query?.secretariaId),
+    ...normalizarSecretariaIds(query?.['secretariaId[]']),
+  ]);
 }
 
 /** `{ secretariaId: { in: ids } }` ou `{}` (global). `[]` vira `{ in: [] }` (zero linhas). */

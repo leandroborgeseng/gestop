@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditAction, CronogramaFrequencia, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import {
@@ -6,6 +6,12 @@ import {
   resolveSecretariaScopeIds,
   resolveUnidadeSecretariaFilter,
 } from '../auth/secretaria-scope';
+import {
+  responsavelOpcao,
+  usuarioResponsavelSelect,
+  whereUsuarioNoEscopo,
+  situacaoResponsavel,
+} from './responsaveis-escopo';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 import { PrismaService } from '../prisma/prisma.service';
 import { CalendarioQueryDto, CronogramaDto } from './cronograma.dto';
@@ -123,9 +129,43 @@ export class CronogramaService {
     });
   }
 
+  /** 307/R3: usuários ativos no escopo da sessão (Secretaria ativa, vínculos ou "Todas" autorizadas), sem duplicar. */
+  async listResponsaveisOpcoes(user: JwtPayload, search?: string) {
+    const scopeIds = resolveSecretariaScopeIds(user);
+    const q = search?.trim();
+    const rows = await this.prisma.usuario.findMany({
+      where: {
+        ativo: true,
+        AND: [
+          whereUsuarioNoEscopo(scopeIds),
+          ...(q
+            ? [{ OR: [{ nome: { contains: q, mode: 'insensitive' as const } }, { email: { contains: q, mode: 'insensitive' as const } }] }]
+            : []),
+        ],
+      },
+      orderBy: { nome: 'asc' },
+      take: 80,
+      select: usuarioResponsavelSelect,
+    });
+    return rows.map((row) => responsavelOpcao(row, scopeIds));
+  }
+
+  /** 307/R4/R5: situação de responsáveis já escolhidos em relação ao escopo ATUAL da sessão. */
+  async situacaoResponsaveis(user: JwtPayload, ids: string[]) {
+    const unicos = [...new Set(ids.map((id) => id.trim()).filter(Boolean))].slice(0, 100);
+    if (!unicos.length) return [];
+    const scopeIds = resolveSecretariaScopeIds(user);
+    const rows = await this.prisma.usuario.findMany({ where: { id: { in: unicos } }, select: usuarioResponsavelSelect });
+    return rows.map((row) => {
+      const opcao = responsavelOpcao(row, scopeIds);
+      // Fora do escopo: não expõe as Secretarias do usuário, só o nome e a situação.
+      return opcao.situacao === 'OUTRA_SECRETARIA' ? { ...opcao, secretaria: null, secretarias: [], email: '' } : opcao;
+    });
+  }
+
   async createCronograma(dto: CronogramaDto, user: JwtPayload) {
     await this.assertVinculoValido(dto.unidadeId, dto.checklistId, user);
-    const responsavelIds = await this.resolveResponsavelIds(dto);
+    const responsavelIds = await this.resolveResponsavelIds(dto, user, []);
 
     const proximaChecagemEm = startOfDay(new Date(dto.proximaChecagemEm));
     const cronograma = await this.prisma.$transaction(async (tx) => {
@@ -164,7 +204,11 @@ export class CronogramaService {
   async updateCronograma(id: string, dto: CronogramaDto, user: JwtPayload) {
     const before = await this.getCronogramaOrThrow(id, user);
     await this.assertVinculoValido(dto.unidadeId, dto.checklistId, user);
-    const responsavelIds = await this.resolveResponsavelIds(dto);
+    const responsavelIds = await this.resolveResponsavelIds(
+      dto,
+      user,
+      formatResponsaveis(before.responsaveis, before.responsavel).map((item) => item.id),
+    );
 
     const cronograma = await this.prisma.$transaction(async (tx) => {
       await tx.cronogramaChecagem.update({
@@ -499,7 +543,12 @@ export class CronogramaService {
     });
   }
 
-  private async resolveResponsavelIds(dto: CronogramaDto) {
+  /**
+   * 307: responsáveis NOVOS precisam estar ativos e no escopo da sessão.
+   * Os já salvos no cronograma (`existentes`) podem continuar mesmo inativos ou de outra Secretaria (R4):
+   * o front sinaliza e pede para regularizar, mas não somem sem aviso.
+   */
+  private async resolveResponsavelIds(dto: CronogramaDto, user: JwtPayload, existentes: string[]) {
     const rawIds = [
       ...(dto.responsavelIds ?? []),
       ...(dto.responsavelId ? [dto.responsavelId] : []),
@@ -507,14 +556,22 @@ export class CronogramaService {
     const uniqueIds = [...new Set(rawIds.map((id) => id.trim()).filter(Boolean))];
     if (!uniqueIds.length) return [];
 
+    const novos = uniqueIds.filter((id) => !existentes.includes(id));
+    const mantidos = uniqueIds.filter((id) => existentes.includes(id));
+    if (!novos.length) return uniqueIds;
+
+    const scopeIds = resolveSecretariaScopeIds(user);
     const users = await this.prisma.usuario.findMany({
-      where: { id: { in: uniqueIds }, ativo: true },
-      select: { id: true },
+      where: { id: { in: novos } },
+      select: usuarioResponsavelSelect,
     });
-    if (users.length !== uniqueIds.length) {
+    if (users.length !== novos.length || users.some((u) => !u.ativo)) {
       throw new BadRequestException('Um ou mais responsaveis sao invalidos ou inativos.');
     }
-    return uniqueIds;
+    if (users.some((u) => situacaoResponsavel(u, scopeIds) === 'OUTRA_SECRETARIA')) {
+      throw new ForbiddenException('Responsavel fora da Secretaria ativa. Remova ou substitua os responsaveis destacados para salvar.');
+    }
+    return [...mantidos, ...novos].sort((a, b) => uniqueIds.indexOf(a) - uniqueIds.indexOf(b));
   }
 
   private auditSnapshot(

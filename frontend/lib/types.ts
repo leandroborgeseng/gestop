@@ -1208,8 +1208,17 @@ export type CronogramaChecagem = {
     email: string;
   } | null;
   responsaveis?: Array<{
-    usuario: { id: string; nome: string; email: string };
+    usuario: { id: string; nome: string; email: string; ativo?: boolean };
   }>;
+};
+
+/** 307: responsável do cronograma com a situação em relação ao escopo atual da sessão. */
+export type SituacaoResponsavel = 'OK' | 'INATIVO' | 'OUTRA_SECRETARIA';
+
+export type ResponsavelCronogramaOpcao = UsuarioExecucaoOpcao & {
+  ativo?: boolean;
+  secretarias?: SecretariaOption[];
+  situacao?: SituacaoResponsavel;
 };
 
 export type CalendarioChecagemEvento = {

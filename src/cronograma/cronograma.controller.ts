@@ -38,6 +38,21 @@ export class CronogramaController {
     return this.cronogramaService.listChecklistsParaCronograma(user);
   }
 
+  /** 307/R3: opções de responsáveis no escopo da sessão. */
+  @RequireAnyPermissions(...CRONOGRAMA_INSERIR_KEYS, ...CRONOGRAMA_ALTERAR_KEYS)
+  @Get('responsaveis/opcoes')
+  listResponsaveisOpcoes(@CurrentUser() user: JwtPayload, @Query('search') search?: string) {
+    return this.cronogramaService.listResponsaveisOpcoes(user, typeof search === 'string' ? search : undefined);
+  }
+
+  /** 307/R4/R5: situação (OK, INATIVO, OUTRA_SECRETARIA) dos responsáveis escolhidos, no escopo atual. */
+  @RequireAnyPermissions(...CRONOGRAMA_INSERIR_KEYS, ...CRONOGRAMA_ALTERAR_KEYS)
+  @Get('responsaveis/situacao')
+  situacaoResponsaveis(@CurrentUser() user: JwtPayload, @Query('ids') ids?: string | string[]) {
+    const lista = (Array.isArray(ids) ? ids : [ids ?? '']).flatMap((v) => String(v).split(','));
+    return this.cronogramaService.situacaoResponsaveis(user, lista);
+  }
+
   @RequireAnyPermissions(...CRONOGRAMA_VISUALIZAR_KEYS)
   @Get()
   list(

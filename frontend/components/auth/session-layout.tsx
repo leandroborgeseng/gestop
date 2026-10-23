@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getMe, getStoredAuth, setStoredAuth, StoredAuth } from '@/lib/api';
+import { AUTH_STORAGE_KEY_PUBLICA, getMe, getStoredAuth, setStoredAuth, StoredAuth } from '@/lib/api';
 import { AUTH_EXPIRED_EVENT } from '@/lib/security';
 import { SessionProvider } from '@/components/auth/session-context';
 import { AppShell } from '@/components/layout/app-shell';
@@ -11,7 +11,7 @@ import { PwaUpdateBanner } from '@/components/pwa/pwa-update-banner';
 import { PageContainer } from '@/components/layout/page-shell';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { registerServiceWorker } from '@/lib/pwa';
-import { SESSAO_ESCOPO_EVENT, SessaoEscopoDetail } from '@/lib/session-events';
+import { emitirTrocaEscopo, SESSAO_ESCOPO_EVENT, SessaoEscopoDetail } from '@/lib/session-events';
 
 export function SessionLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -30,6 +30,25 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
     }
     window.addEventListener(SESSAO_ESCOPO_EVENT, onEscopo);
     return () => window.removeEventListener(SESSAO_ESCOPO_EVENT, onEscopo);
+  }, []);
+
+  // 307/R5: troca de Secretaria feita em OUTRA aba (mesma sessão no servidor) chega aqui pelo evento
+  // `storage`; repassa como troca de escopo para as telas que tratam (ex.: Cronograma com o modal aberto).
+  useEffect(() => {
+    function onStorage(event: StorageEvent) {
+      if (event.key !== AUTH_STORAGE_KEY_PUBLICA || !event.newValue) return;
+      try {
+        const novo = JSON.parse(event.newValue) as StoredAuth;
+        const anterior = event.oldValue ? (JSON.parse(event.oldValue) as StoredAuth) : null;
+        const idNovo = novo.user?.secretariaAtiva?.id ?? null;
+        const idAnterior = anterior?.user?.secretariaAtiva?.id ?? null;
+        if (novo.user && idNovo !== idAnterior) emitirTrocaEscopo(novo.user);
+      } catch {
+        /* conteúdo inválido: ignora */
+      }
+    }
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   useEffect(() => {
