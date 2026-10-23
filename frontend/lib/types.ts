@@ -689,8 +689,20 @@ export type ChecklistModel = {
   versoes: ChecklistVersao[];
 };
 
+/** 304/O1: programação levada no pacote offline (mesmos campos da lista online + versão do checklist). */
+export type ProgramacaoOffline = VistoriaProgramadaItem & {
+  checklistVersao: { id: string; versao: number } | null;
+};
+
 export type MobileFieldPackage = {
   downloadedAt: string;
+  /** 304/O9: validade do pacote (D3: 7 dias). Pacotes antigos não têm o campo. */
+  validoAte?: string;
+  validadeDias?: number;
+  /** 303/G2a: limite de precisão do check-in (m), o mesmo do backend. */
+  config?: { precisaoMaxCheckinMetros: number };
+  contadores?: { unidades: number; checklists: number; programacoes: number };
+  programacoes?: ProgramacaoOffline[];
   secretariaEscopo?: {
     ativaId: string | null;
     todas: boolean;
@@ -719,6 +731,10 @@ export type MobileQueuedInspection = {
   concluidaEm: string;
   cronogramaId?: string;
   dataProgramada?: string;
+  /** 304/O6: `cronogramaAtualizadoEm` da programação no pacote. */
+  programacaoAtualizadaEm?: string;
+  /** 304/O10/O6: estado local do item na fila (não é enviado). */
+  sync?: FilaItemSync;
   checkin: {
     latitude: number;
     longitude: number;
@@ -747,9 +763,18 @@ export type MobileQueuedInspection = {
   }>;
 };
 
+export type FilaItemSync = {
+  tipo: 'CONFLITO' | 'ESCOPO' | 'VALIDACAO' | 'REDE' | 'ERRO';
+  mensagem: string;
+  codigo?: string;
+  tentativas: number;
+  ultimaTentativaEm: string;
+};
+
 export type VistoriaProgramadaItem = {
   id: string;
   cronogramaId: string;
+  cronogramaAtualizadoEm?: string;
   data: string;
   tipo: 'AGENDADA' | 'REALIZADA' | 'ATRASADA';
   frequencia: 'SEMANAL' | 'QUINZENAL' | 'MENSAL' | 'BIMESTRAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL';

@@ -302,6 +302,22 @@ export function ChecklistItemCard({
                 }}
               />
             </label>
+            {/* 303/G7: se a câmera falhar, a galeria fica como alternativa (sem `capture`). */}
+            <label
+              className="flex min-h-11 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-[var(--md-shape-md)] px-3 text-center text-[13px] font-semibold text-[var(--md-primary)] underline-offset-2 hover:underline"
+              data-testid="evidencia-galeria"
+            >
+              Escolher da galeria
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  onEvidence(event);
+                  event.target.value = '';
+                }}
+              />
+            </label>
 
             {evidencias.length > 0 ? (
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

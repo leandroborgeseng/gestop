@@ -533,6 +533,7 @@ export class CronogramaService {
         items.push({
           id: `${cronograma.id}:${dataKey}`,
           cronogramaId: cronograma.id,
+          cronogramaAtualizadoEm: cronograma.updatedAt.toISOString(),
           data: dataKey,
           tipo,
           frequencia: cronograma.frequencia,
@@ -561,21 +562,33 @@ export class CronogramaService {
     checklistId: string;
     concluidaEm: Date;
   }) {
-    const cronograma = await this.prisma.cronogramaChecagem.findUnique({
-      where: {
-        unidadeId_checklistId: {
-          unidadeId: input.unidadeId,
-          checklistId: input.checklistId,
-        },
-      },
-    });
+    return this.registrarChecagemRealizadaTx(this.prisma, input);
+  }
+
+  /**
+   * 304 (O5a/O7): baixa da programação dentro da transação da vistoria. Com `cronogramaId`, usa o vínculo
+   * enviado pelo app; sem ele (avulsa), mantém a regra antiga por unidade+checklist. A recorrência segue
+   * (`proximaChecagemEm` a partir do dia da conclusão) e um sync atrasado nunca faz a programação regredir.
+   */
+  async registrarChecagemRealizadaTx(
+    tx: Pick<Prisma.TransactionClient, 'cronogramaChecagem'>,
+    input: { cronogramaId?: string | null; unidadeId: string; checklistId: string; concluidaEm: Date },
+  ) {
+    const cronograma = input.cronogramaId
+      ? await tx.cronogramaChecagem.findUnique({ where: { id: input.cronogramaId } })
+      : await tx.cronogramaChecagem.findUnique({
+          where: { unidadeId_checklistId: { unidadeId: input.unidadeId, checklistId: input.checklistId } },
+        });
 
     if (!cronograma || !cronograma.ativo) {
       return null;
     }
 
     const concluidaEm = startOfDay(input.concluidaEm);
-    return this.prisma.cronogramaChecagem.update({
+    if (cronograma.ultimaChecagemEm && cronograma.ultimaChecagemEm >= concluidaEm) {
+      return cronograma;
+    }
+    return tx.cronogramaChecagem.update({
       where: { id: cronograma.id },
       data: {
         ultimaChecagemEm: concluidaEm,

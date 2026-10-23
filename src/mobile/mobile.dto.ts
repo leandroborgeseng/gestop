@@ -20,6 +20,11 @@ class MobileGeoDto {
 
   @IsNumber()
   precisaoMetros!: number;
+
+  /** 303/G3: horário da leitura do GPS (check-in). */
+  @IsOptional()
+  @IsDateString()
+  capturadoEm?: string;
 }
 
 class MobileEvidenciaDto {
@@ -114,4 +119,9 @@ export class MobileSyncFiscalizacaoDto {
   @IsOptional()
   @IsDateString()
   dataProgramada?: string;
+
+  /** 304/O6: `cronogramaAtualizadoEm` da programação no pacote offline (detecta alteração no servidor). */
+  @IsOptional()
+  @IsDateString()
+  programacaoAtualizadaEm?: string;
 }

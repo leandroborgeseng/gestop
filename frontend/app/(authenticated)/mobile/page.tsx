@@ -30,7 +30,19 @@ import { Select } from '@/components/ui/select';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
-import { captureCurrentPosition, toGeoCheckin } from '@/lib/geolocation';
+import { toGeoCheckin } from '@/lib/geolocation';
+import {
+  CheckinGps,
+  distanciaMetros,
+  fazerCheckinGps,
+  MENSAGEM_SEM_CONEXAO,
+  mensagemForaDoRaio,
+  PRECISAO_CHECKIN_PADRAO_METROS,
+} from '@/lib/checkin-gps';
+import { gravarRascunho, lerRascunho, limparRascunho, rascunhoTemConteudo } from '@/lib/mobile-draft';
+import { avisoPacoteVencido, pacoteVencido, rotuloDadosLocais } from '@/lib/pacote-offline';
+import { classificarErroSync, rotuloErroSync } from '@/lib/fila-sync';
+import { IndicadorCampo, OnboardingPermissoes, usePermissoesCampo } from '@/components/mobile/estado-campo';
 import { filterChecklistsForUnidade } from '@/lib/checklist-matching';
 import { migrateLegacyQueueIfNeeded, readMobileQueue, writeMobileQueue } from '@/lib/mobile-queue';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
@@ -72,15 +84,28 @@ export default function MobilePage() {
     cronogramaId: string;
     dataProgramada: string;
     checklistNome: string;
+    programacaoAtualizadaEm?: string;
   } | null>(null);
   const queueRef = useRef<MobileQueuedInspection[]>([]);
+  // 303/G3: check-in (GPS validado na hora); o Concluir usa estes dados e não chama o GPS de novo.
+  const [checkin, setCheckin] = useState<CheckinGps | null>(null);
+  const [checkinErro, setCheckinErro] = useState<string | null>(null);
+  const [fazendoCheckin, setFazendoCheckin] = useState(false);
+  const permissoes = usePermissoesCampo();
+  // 303/G5: rascunho local — restaurado uma vez, depois salvo a cada alteração.
+  const rascunhoPronto = useRef(false);
+  const [rascunhoRestaurado, setRascunhoRestaurado] = useState(false);
 
   useEffect(() => {
     queueRef.current = queue;
   }, [queue]);
 
-  const syncQueue = useCallback(async () => {
+  const syncQueue = useCallback(async (manual = true) => {
     if (queueRef.current.length === 0 || syncing) return;
+    // Automático (ao reconectar): não reenvia o que o servidor já recusou (conflito, escopo, validação);
+    // esses itens esperam o usuário agir (botão Sincronizar ou "Enviar como avulsa").
+    const pendentesAuto = queueRef.current.filter((item) => !item.sync || item.sync.tipo === 'REDE' || item.sync.tipo === 'ERRO');
+    if (!manual && pendentesAuto.length === 0) return;
 
     const initialCount = queueRef.current.length;
     setSyncing(true);
@@ -88,12 +113,20 @@ export default function MobilePage() {
     const remaining: MobileQueuedInspection[] = [];
 
     for (const item of queueRef.current) {
+      if (!manual && !pendentesAuto.includes(item)) {
+        remaining.push(item);
+        continue;
+      }
       try {
+        // O5b: reenvio já gravado volta como sucesso (mesmo id, programação baixada) e sai da fila.
         await syncMobileInspection(item);
       } catch (err) {
-        remaining.push(item);
-        setError(err instanceof Error ? err.message : 'Falha ao sincronizar um item.');
+        // O6/O10: o item fica na fila com o motivo visível; nada se perde.
+        remaining.push({ ...item, sync: classificarErroSync(err, new Date(), item.sync) });
       }
+    }
+    if (remaining.some((item) => item.sync && item.sync.tipo !== 'REDE')) {
+      setError('Algumas vistorias não sincronizaram. Veja o motivo de cada uma na fila.');
     }
 
     setQueue(remaining);
@@ -136,8 +169,12 @@ export default function MobilePage() {
 
     migrateLegacyQueueIfNeeded()
       .then(() => readMobileQueue())
-      .then(setQueue)
-      .catch(() => setQueue([]));
+      .then((itens) => {
+        queueRef.current = itens;
+        setQueue(itens);
+      })
+      .catch(() => setQueue([]))
+      .finally(() => setFilaCarregada(true));
   }, []);
 
   useEffect(() => {
@@ -187,6 +224,38 @@ export default function MobilePage() {
   }, [secretariaEscopoKey, sessionUser?.secretaria?.id]);
 
   useEffect(() => {
+    if (!fieldPackage || rascunhoPronto.current) return;
+    void lerRascunho()
+      .then((r) => {
+        if (!r || r.escopoKey !== secretariaEscopoKey || !fieldPackage.unidades.some((u) => u.id === r.unidadeId)) return;
+        setUnidadeId(r.unidadeId);
+        setChecklistId(r.checklistId);
+        setProgramadaCtx(r.programadaCtx);
+        setResponses(r.responses as Record<string, ResponseDraft>);
+        setCheckin(r.checkin);
+        setVistoriaTab('avulsa');
+        setRascunhoRestaurado(true);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        rascunhoPronto.current = true;
+      });
+  }, [fieldPackage, secretariaEscopoKey]);
+
+  useEffect(() => {
+    if (!rascunhoPronto.current) return;
+    const dados = { unidadeId, checklistId, responses, checkin };
+    const handle = window.setTimeout(() => {
+      if (rascunhoTemConteudo(dados)) {
+        void gravarRascunho({ versao: 1, escopoKey: secretariaEscopoKey, programadaCtx, atualizadoEm: new Date().toISOString(), ...dados }).catch(() => undefined);
+      } else {
+        void limparRascunho().catch(() => undefined);
+      }
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [unidadeId, checklistId, responses, checkin, programadaCtx, secretariaEscopoKey]);
+
+  useEffect(() => {
     if (!fieldPackage) return;
     if (unidadeId && !fieldPackage.unidades.some((unidade) => unidade.id === unidadeId)) {
       setUnidadeId('');
@@ -195,10 +264,14 @@ export default function MobilePage() {
     }
   }, [fieldPackage, unidadeId]);
 
+  // Sync automático só na transição para online (não em loop a cada render do `syncing`).
+  const [filaCarregada, setFilaCarregada] = useState(false);
+  const syncQueueRef = useRef(syncQueue);
+  syncQueueRef.current = syncQueue;
   useEffect(() => {
     if (!online || queueRef.current.length === 0) return;
-    void syncQueue();
-  }, [online, syncQueue]);
+    void syncQueueRef.current(false);
+  }, [online, filaCarregada]);
 
   const selectedChecklist = useMemo(
     () => fieldPackage?.checklists.find((checklist) => checklist.id === checklistId) ?? null,
@@ -295,16 +368,9 @@ export default function MobilePage() {
       throw new Error(invalidMessage);
     }
 
-    const fallback = {
-      latitude: selectedUnit.latitude,
-      longitude: selectedUnit.longitude,
-      precisaoMetros: selectedUnit.raioValidacaoMetros,
-      source: 'fallback' as const,
-    };
-
-    const checkin = await captureCurrentPosition(fallback);
-    if (checkin.source === 'fallback') {
-      throw new Error('GPS indisponível. Ative a localização do dispositivo para registrar a vistoria.');
+    // G3: Concluir NÃO chama o GPS — usa o check-in feito no início.
+    if (!checkin) {
+      throw new Error('Faça o check-in no local antes de concluir a vistoria.');
     }
 
     const geo = toGeoCheckin(checkin);
@@ -314,10 +380,15 @@ export default function MobilePage() {
       deviceId: getDeviceId(),
       unidadeId: selectedUnit.id,
       checklistVersaoId: selectedVersion.id,
-      iniciadaEm: now,
+      // G3a: início = horário do check-in; fim = agora (Concluir).
+      iniciadaEm: checkin.capturadoEm,
       concluidaEm: now,
       ...(programadaCtx
-        ? { cronogramaId: programadaCtx.cronogramaId, dataProgramada: programadaCtx.dataProgramada }
+        ? {
+            cronogramaId: programadaCtx.cronogramaId,
+            dataProgramada: programadaCtx.dataProgramada,
+            ...(programadaCtx.programacaoAtualizadaEm ? { programacaoAtualizadaEm: programadaCtx.programacaoAtualizadaEm } : {}),
+          }
         : {}),
       checkin: geo,
       respostas: selectedVersion.itens.map((item) =>
@@ -334,9 +405,20 @@ export default function MobilePage() {
     try {
       const inspection = await buildInspectionPayload();
 
+      let enviarParaFila = !online;
       if (online) {
-        await syncMobileInspection(inspection);
+        try {
+          await syncMobileInspection(inspection);
+        } catch (err) {
+          // Caiu a conexão no envio: vai para a fila (G4/G5), não perde nada.
+          if (!(err as { rede?: boolean })?.rede) throw err;
+          enviarParaFila = true;
+        }
+      }
+      if (!enviarParaFila) {
         setResponses({});
+        setCheckin(null);
+        await limparRascunho().catch(() => undefined);
         setChecklistId('');
         const wasProgramada = Boolean(programadaCtx);
         setProgramadaCtx(null);
@@ -350,6 +432,8 @@ export default function MobilePage() {
       setQueue(nextQueue);
       await writeMobileQueue(nextQueue);
       setResponses({});
+      setCheckin(null);
+      await limparRascunho().catch(() => undefined);
       setChecklistId('');
       const wasProgramada = Boolean(programadaCtx);
       setProgramadaCtx(null);
@@ -369,6 +453,45 @@ export default function MobilePage() {
     setUnidadeId('');
     setChecklistId('');
     setResponses({});
+    setCheckin(null);
+    setCheckinErro(null);
+    setRascunhoRestaurado(false);
+  }
+
+  const limitePrecisao = fieldPackage?.config?.precisaoMaxCheckinMetros ?? PRECISAO_CHECKIN_PADRAO_METROS;
+
+  async function fazerCheckin() {
+    if (!selectedUnit) return;
+    setFazendoCheckin(true);
+    setCheckinErro(null);
+    try {
+      const r = await fazerCheckinGps({ limiteMetros: limitePrecisao });
+      if (!r.ok) {
+        setCheckinErro(r.mensagem);
+        return;
+      }
+      const distancia = distanciaMetros(r.checkin, selectedUnit);
+      if (distancia > selectedUnit.raioValidacaoMetros) {
+        setCheckinErro(mensagemForaDoRaio(distancia, selectedUnit.raioValidacaoMetros));
+        return;
+      }
+      setCheckin(r.checkin);
+    } finally {
+      setFazendoCheckin(false);
+      void permissoes.atualizar();
+    }
+  }
+
+  async function enviarComoAvulsa(clientEventId: string) {
+    const next = queue.map((item) => {
+      if (item.clientEventId !== clientEventId) return item;
+      const { cronogramaId: _c, dataProgramada: _d, programacaoAtualizadaEm: _p, sync: _s, ...resto } = item;
+      void _c; void _d; void _p; void _s;
+      return resto;
+    });
+    setQueue(next);
+    await writeMobileQueue(next);
+    snackbar.show('A vistoria será enviada sem vínculo com a programação.', 'info');
   }
 
   function startProgramada(item: VistoriaProgramadaItem) {
@@ -389,10 +512,13 @@ export default function MobilePage() {
     setUnidadeId(item.unidade.id);
     setChecklistId(item.checklist.id);
     setResponses({});
+    setCheckin(null);
+    setCheckinErro(null);
     setProgramadaCtx({
       cronogramaId: item.cronogramaId,
       dataProgramada: item.data,
       checklistNome: item.checklist.nome,
+      programacaoAtualizadaEm: item.cronogramaAtualizadoEm,
     });
     setVistoriaTab('avulsa');
   }
@@ -440,6 +566,8 @@ export default function MobilePage() {
             </div>
             <ConnectionPill online={online} browserOnline={browserOnline} onRefresh={() => void refreshConnectivity()} />
           </div>
+          <IndicadorCampo gps={permissoes.gps} camera={permissoes.camera} online={online} ultimoGps={checkin ? `${checkin.precisaoMetros} m` : null} />
+          <OnboardingPermissoes gps={permissoes.gps} camera={permissoes.camera} onAtualizar={() => void permissoes.atualizar()} />
 
           <TipBanner id="mobile-offline-queue">
             {online
@@ -448,6 +576,16 @@ export default function MobilePage() {
           </TipBanner>
 
           {error ? <ErrorState message={error} /> : null}
+          {fieldPackage && pacoteVencido(fieldPackage) ? (
+            <div data-testid="aviso-pacote-vencido">
+              <Alert variant="warning">{avisoPacoteVencido(fieldPackage)}</Alert>
+            </div>
+          ) : null}
+          {rascunhoRestaurado ? (
+            <div data-testid="aviso-rascunho-restaurado">
+              <Alert variant="info">Vistoria em andamento restaurada do rascunho local (respostas, fotos e check-in).</Alert>
+            </div>
+          ) : null}
           {gpsNotice ? <Alert variant="warning">{gpsNotice}</Alert> : null}
           {loading ? <LoadingState label="Baixando pacote de vistoria..." /> : null}
 
@@ -463,13 +601,14 @@ export default function MobilePage() {
                     {fieldPackage.unidades.length} próprios no pacote
                   </p>
                   {cachedAt ? (
-                    <p className="mt-1 text-[11px] text-[var(--ink-3)]">
-                      Cache local: {new Date(cachedAt).toLocaleString('pt-BR')}
+                    <p className="mt-1 text-[11px] text-[var(--ink-3)]" data-testid="pacote-dados-locais">
+                      {rotuloDadosLocais(cachedAt)}
                     </p>
                   ) : null}
                 </div>
-                <div className="grid grid-cols-3 divide-x divide-[var(--line-2)]">
+                <div className="grid grid-cols-4 divide-x divide-[var(--line-2)]">
                   <HeroStat label="Checklists" value={fieldPackage.checklists.length} />
+                  <HeroStat label="Programações" value={fieldPackage.contadores?.programacoes ?? fieldPackage.programacoes?.length ?? 0} testid="contador-programacoes" />
                   <HeroStat label="Na fila" value={queue.length} highlight={queue.length > 0} />
                   <HeroStat label="Conexão" value={online ? 'Online' : 'Offline'} />
                 </div>
@@ -520,7 +659,7 @@ export default function MobilePage() {
               ) : null}
 
               {showProgramadas ? (
-                <VistoriasProgramadasPanel fieldPackage={fieldPackage} onIniciar={startProgramada} />
+                <VistoriasProgramadasPanel fieldPackage={fieldPackage} onIniciar={startProgramada} online={online} usuarioId={sessionUser?.id} />
               ) : (
                 <>
               <Card elevation={1}>
@@ -537,6 +676,8 @@ export default function MobilePage() {
                         setUnidadeId(next);
                         setChecklistId('');
                         setResponses({});
+                        setCheckin(null);
+                        setCheckinErro(null);
                       }}
                       options={fieldPackage.unidades.map((unidade) => ({
                         value: unidade.id,
@@ -586,11 +727,30 @@ export default function MobilePage() {
                       {formatUnidadeTipo(selectedUnit.tipo)} · {selectedUnit.secretaria.sigla} ·{' '}
                       {selectedUnit.bairro ?? 'Sem bairro'} · raio {selectedUnit.raioValidacaoMetros} m
                     </p>
+                    <div className="mt-3 space-y-2" data-testid="checkin-card">
+                      {checkin ? (
+                        <p data-testid="checkin-ok" className="text-[13px] font-semibold text-[var(--ok)]">
+                          Check-in feito às {new Date(checkin.capturadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · precisão{' '}
+                          {checkin.precisaoMetros} m
+                        </p>
+                      ) : (
+                        <Button type="button" variant="filled" size="sm" disabled={fazendoCheckin} onClick={() => void fazerCheckin()} data-testid="fazer-checkin">
+                          <Satellite className="mr-1.5 h-4 w-4" />
+                          {fazendoCheckin ? 'Obtendo localização...' : 'Fazer check-in'}
+                        </Button>
+                      )}
+                      {checkinErro ? (
+                        <div data-testid="checkin-erro">
+                          <Alert variant="warning">{checkinErro}</Alert>
+                        </div>
+                      ) : null}
+                      {!online ? (
+                        <p data-testid="checkin-sem-conexao" className="text-[12px] text-[var(--ink-3)]">
+                          {MENSAGEM_SEM_CONEXAO}
+                        </p>
+                      ) : null}
+                    </div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <Chip variant="brand" className="gap-1.5">
-                        <Satellite className="h-3.5 w-3.5" />
-                        GPS ativo no check-in
-                      </Chip>
                       <Button
                         type="button"
                         variant="outlined"
@@ -632,21 +792,44 @@ export default function MobilePage() {
                       {queue.length} vistoria(s) pendente(s) · sync automático ao voltar online
                     </p>
                   </div>
-                  <Button variant="filled" disabled={queue.length === 0 || syncing || !online} onClick={() => void syncQueue()}>
+                  <Button variant="filled" disabled={queue.length === 0 || syncing || !online} onClick={() => void syncQueue(true)}>
                     {syncing ? <RefreshCcw className="h-4 w-4 animate-spin" /> : <CloudUpload className="h-4 w-4" />}
                     Sincronizar
                   </Button>
                 </CardContent>
+                {queue.some((item) => item.sync) ? (
+                  <ul className="space-y-2 border-t border-[var(--line-2)] px-4 py-3" data-testid="fila-erros">
+                    {queue
+                      .filter((item) => item.sync)
+                      .map((item) => {
+                        const unidade = fieldPackage.unidades.find((u) => u.id === item.unidadeId);
+                        return (
+                          <li key={item.clientEventId} data-testid="fila-item-erro" data-tipo={item.sync!.tipo} className="text-[12px]">
+                            <p className="font-semibold text-[var(--ink)]">
+                              {unidade?.nome ?? 'Próprio'} · {new Date(item.concluidaEm).toLocaleString('pt-BR')}
+                              {item.cronogramaId ? ' · programada' : ' · avulsa'}
+                            </p>
+                            <p className={item.sync!.tipo === 'REDE' ? 'text-[var(--ink-3)]' : 'text-[var(--danger)]'}>{rotuloErroSync(item.sync!)}</p>
+                            {item.sync!.tipo === 'CONFLITO' && item.cronogramaId ? (
+                              <Button type="button" variant="text" size="sm" onClick={() => void enviarComoAvulsa(item.clientEventId)}>
+                                Enviar como vistoria avulsa (sem baixar a programação)
+                              </Button>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                  </ul>
+                ) : null}
               </Card>
 
               {selectedVersion ? (
-                <MobileInspectionFooter online={online} saving={saving} onSubmit={() => void submitInspection()} />
+                <MobileInspectionFooter online={online} saving={saving} semCheckin={!checkin} onSubmit={() => void submitInspection()} />
               ) : null}
 
               {queue.length > 0 && online ? (
                 <Fab
                   size="icon"
-                  onClick={() => void syncQueue()}
+                  onClick={() => void syncQueue(true)}
                   aria-label={`Sincronizar ${queue.length} item(ns)`}
                   disabled={syncing || !online}
                   className={cn(
@@ -689,10 +872,12 @@ function getDeviceId() {
 function MobileInspectionFooter({
   online,
   saving,
+  semCheckin,
   onSubmit,
 }: {
   online: boolean;
   saving: boolean;
+  semCheckin: boolean;
   onSubmit: () => void;
 }) {
   return (
@@ -702,7 +887,9 @@ function MobileInspectionFooter({
           <Button
             variant="filled"
             size="lg"
-            disabled={saving}
+            disabled={saving || semCheckin}
+            title={semCheckin ? 'Faça o check-in antes de concluir' : undefined}
+            data-testid="concluir-vistoria"
             onClick={onSubmit}
             className="min-h-14 w-full max-w-sm gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)] sm:w-auto"
           >
@@ -713,7 +900,9 @@ function MobileInspectionFooter({
           <Button
             variant="filled"
             size="lg"
-            disabled={saving}
+            disabled={saving || semCheckin}
+            title={semCheckin ? 'Faça o check-in antes de concluir' : undefined}
+            data-testid="concluir-vistoria"
             onClick={onSubmit}
             aria-label="Salvar na fila offline"
             className="min-h-14 w-full max-w-sm gap-2 rounded-[var(--md-shape-lg)] px-6 shadow-[var(--md-elevation-3)] sm:w-auto"
@@ -757,9 +946,9 @@ function ConnectionPill({
   );
 }
 
-function HeroStat({ label, value, highlight = false }: { label: string; value: string | number; highlight?: boolean }) {
+function HeroStat({ label, value, highlight = false, testid }: { label: string; value: string | number; highlight?: boolean; testid?: string }) {
   return (
-    <div className="px-3 py-3 text-center">
+    <div className="px-3 py-3 text-center" data-testid={testid}>
       <p className={cn('text-[18px] font-semibold', highlight ? 'text-[var(--warn)]' : 'text-[var(--ink)]')}>{value}</p>
       <p className="text-[11px] font-semibold text-[var(--ink-3)]">{label}</p>
     </div>
