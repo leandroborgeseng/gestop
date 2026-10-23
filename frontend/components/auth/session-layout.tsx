@@ -11,6 +11,7 @@ import { PwaUpdateBanner } from '@/components/pwa/pwa-update-banner';
 import { PageContainer } from '@/components/layout/page-shell';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { registerServiceWorker } from '@/lib/pwa';
+import { SESSAO_ESCOPO_EVENT, SessaoEscopoDetail } from '@/lib/session-events';
 
 export function SessionLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -19,6 +20,16 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     registerServiceWorker();
+  }, []);
+
+  // 306/S3: troca de Secretaria sem reload — atualiza o usuário do contexto (menu, seletores).
+  useEffect(() => {
+    function onEscopo(event: Event) {
+      const { user } = (event as CustomEvent<SessaoEscopoDetail>).detail;
+      setAuth((atual) => (atual ? { ...atual, user } : atual));
+    }
+    window.addEventListener(SESSAO_ESCOPO_EVENT, onEscopo);
+    return () => window.removeEventListener(SESSAO_ESCOPO_EVENT, onEscopo);
   }, []);
 
   useEffect(() => {

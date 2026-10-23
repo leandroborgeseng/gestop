@@ -43,7 +43,8 @@ describe('MonitoramentoService — indicadores de chamados (254)', () => {
   });
 
   it('tarefa não entra nos indicadores de chamados', async () => {
-    const dashboard = await service.getDashboard({});
+    // 306: admin em "Todas" (sem filtro de Secretaria)
+    const dashboard = await service.getDashboard({}, { sub: 'u', nome: 'Admin', email: 'a@teste306.invalid', perfis: [], permissoes: ['usuarios.gerenciar'], secretariaId: null, acessoTodasSecretarias: true });
 
     expect(dashboard.indicadores.chamados.abertos).toBe(2);
     expect(dashboard.indicadores.chamados.emAtendimento).toBe(2);

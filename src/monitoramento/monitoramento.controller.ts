@@ -1,5 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
+import { CurrentUser } from '../auth/current-user';
+import { JwtPayload } from '../auth/jwt';
 import { RequirePermissions } from '../auth/permissions';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { DashboardFiltroDto } from './monitoramento.dto';
@@ -12,19 +14,19 @@ export class MonitoramentoController {
 
   @RequirePermissions('dashboard.visualizar')
   @Get('dashboard')
-  getDashboard(@Query() filtro: DashboardFiltroDto) {
-    return this.monitoramentoService.getDashboard(filtro);
+  getDashboard(@Query() filtro: DashboardFiltroDto, @CurrentUser() user: JwtPayload) {
+    return this.monitoramentoService.getDashboard(filtro, user);
   }
 
   @RequirePermissions('auditoria.visualizar')
   @Get('auditoria')
-  listAuditoria() {
-    return this.monitoramentoService.listAuditoria();
+  listAuditoria(@CurrentUser() user: JwtPayload) {
+    return this.monitoramentoService.listAuditoria(user);
   }
 
   @RequirePermissions('dashboard.visualizar')
   @Get('alertas')
-  getAlertas() {
-    return this.monitoramentoService.getAlertasOperacionais();
+  getAlertas(@CurrentUser() user: JwtPayload, @Query('secretariaId') secretariaId?: string) {
+    return this.monitoramentoService.getAlertasOperacionais(user, secretariaId);
   }
 }
