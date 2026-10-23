@@ -1,8 +1,10 @@
 /**
  * 306 — integração com Postgres LOCAL descartável: escopo de Secretaria no Dashboard.
- * Só roda com ESCOPO_306_TEST_DATABASE_URL (banco local migrado). Usa o seed fictício T306A/T306B
+ * Só roda com ESCOPO_306_TEST_DATABASE_URL (banco local migrado; antes: npx prisma generate).
+ * A trava de banco local/NODE_ENV fica em seedEscopo306; a senha é aleatória por execução. Usa o seed fictício T306A/T306B
  * (scripts/seed-escopo-306-core.ts). Sessão montada pelo mesmo AuthService.resolveActiveSession do AuthGuard.
  */
+import { randomBytes } from 'node:crypto';
 import { ForbiddenException } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
@@ -29,7 +31,7 @@ describe.skipIf(!URL)('306 — Dashboard respeita a Secretaria ativa (Postgres l
 
   beforeAll(async () => {
     prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: URL! }) });
-    seed = await seedEscopo306(prisma, 'Teste306-ficticio!');
+    seed = await seedEscopo306(prisma, randomBytes(24).toString('base64url'), URL!);
     svc = new MonitoramentoService(prisma as never);
     auth = new AuthService(prisma as never, {} as never, {} as never, {} as never);
   });

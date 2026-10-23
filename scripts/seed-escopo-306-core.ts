@@ -1,6 +1,7 @@
 /**
  * 306 — seed FICTÍCIO de duas Secretarias para testar o escopo do Dashboard.
  * Tudo com marcador "T306" (siglas T306A/T306B, e-mails @teste306.invalid). Nenhum dado real.
+ * Antes de rodar: npx prisma generate (e npx prisma migrate deploy no banco local).
  * Idempotente: se as Secretarias T306A/T306B já existem, só devolve os ids.
  *
  * Volumes distintos por Secretaria, para o teste distinguir vazamento:
@@ -31,7 +32,20 @@ export type Seed306 = {
   usuarios: { gestorA: string; gestorB: string; multi: string; admin: string };
 };
 
-export async function seedEscopo306(prisma: PrismaClient, senha: string): Promise<Seed306> {
+/**
+ * Trava única (script e teste de banco): só banco LOCAL (localhost/127.0.0.1/socket local) e nunca NODE_ENV=production.
+ */
+export function assertBancoLocal306(databaseUrl: string | undefined): void {
+  const url = databaseUrl ?? '';
+  const local = /@(localhost|127\.0\.0\.1)(:\d+)?\//.test(url) || /[?&]host=\//.test(url);
+  if (!local || process.env.NODE_ENV === 'production') {
+    throw new Error('seed 306 só roda em banco LOCAL de teste (URL em localhost) e fora de produção.');
+  }
+}
+
+export async function seedEscopo306(prisma: PrismaClient, senha: string, databaseUrl: string): Promise<Seed306> {
+  assertBancoLocal306(databaseUrl);
+  if (!senha || senha.length < 12) throw new Error('Senha dos usuários fictícios precisa de >= 12 caracteres.');
   const existentes = await prisma.secretaria.findMany({ where: { sigla: { in: [T306.siglas.A, T306.siglas.B] } } });
   if (existentes.length === 2) {
     const sec = Object.fromEntries(existentes.map((s) => [s.sigla === T306.siglas.A ? 'A' : 'B', s.id])) as Seed306['secretarias'];
