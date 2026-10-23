@@ -13,7 +13,7 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { hasAnyPermission, isAdministradorSistema } from '../auth/permissions';
 import { JwtPayload } from '../auth/jwt';
-import { resolveChamadoSecretariaFilter, resolveSecretariaScopeIds } from '../auth/secretaria-scope';
+import { resolveChamadoSecretariaFilter, resolveSecretariaFiltroEscopo, resolveSecretariaScopeIds } from '../auth/secretaria-scope';
 import { permissionMatrixKey } from '../domain/permissions-catalog';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -119,8 +119,11 @@ export class ChamadoTarefasService {
 
   async opcoes(user: JwtPayload, secretariaId?: string) {
     this.assertPodeAtribuir(user);
+    // 306: listas suspensas no escopo da sessão; secretariaId fora do escopo → 403.
+    resolveSecretariaFiltroEscopo(user, secretariaId);
+    const scopeIds = resolveSecretariaScopeIds(user);
     const secretarias = await this.prisma.secretaria.findMany({
-      where: { ativo: true },
+      where: { ativo: true, ...(scopeIds ? { id: { in: scopeIds } } : {}) },
       orderBy: { nome: 'asc' },
       select: { id: true, nome: true, sigla: true },
     });

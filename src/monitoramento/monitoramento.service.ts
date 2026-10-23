@@ -7,7 +7,10 @@ import {
   Prisma,
 } from '@prisma/client';
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
+import { JwtPayload } from '../auth/jwt';
+import { resolveSecretariaFiltroEscopo } from '../auth/secretaria-scope';
 import { PrismaService } from '../prisma/prisma.service';
+import { escopoDashboard, EscopoDashboard } from './dashboard-escopo';
 import { loadExecucaoParticipantes } from '../relatorios/relatorios.execucao-participantes';
 import { DashboardFiltroDto } from './monitoramento.dto';
 
@@ -51,17 +54,24 @@ function resolveCardStatus(
 export class MonitoramentoService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getDashboard(filtro: DashboardFiltroDto = {}) {
+  /** 306: escopo efetivo da sessão + filtro superior (403 se o filtro estiver fora do escopo). */
+  resolveEscopo(user: JwtPayload, filtroSecretariaId?: string | null): EscopoDashboard {
+    return escopoDashboard(resolveSecretariaFiltroEscopo(user, filtroSecretariaId));
+  }
+
+  async getDashboard(filtro: DashboardFiltroDto = {}, user: JwtPayload) {
+    const escopo = this.resolveEscopo(user, filtro.secretariaId);
     const { from, to } = periodBounds(filtro);
     // Base sem status: cada card aplica o próprio status cruzado com o filtro.
     const { status: _filtroStatus, ...filtroSemStatus } = filtro;
-    const chamadoWhereBase = this.chamadoWhere(filtroSemStatus, from, to, 'createdAt');
-    const chamadoWhere = this.chamadoWhere(filtro, from, to, 'createdAt');
+    const chamadoWhereBase = this.chamadoWhere(filtroSemStatus, from, to, 'createdAt', escopo);
+    const chamadoWhere = this.chamadoWhere(filtro, from, to, 'createdAt', escopo);
     const chamadoConcluidoWhere = this.chamadoWhere(
       { ...filtroSemStatus, status: ChamadoStatus.CONCLUIDO },
       from,
       to,
       'concluidoEm',
+      escopo,
     );
 
     const statusAbertos = resolveCardStatus(filtro.status, [...CHAMADO_OPEN_STATUSES]);
@@ -87,12 +97,12 @@ export class MonitoramentoService {
       this.prisma.unidadePublica.count({
         where: {
           ativo: true,
-          ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
+          ...escopo.unidade(),
         },
       }),
       this.prisma.fiscalizacao.count({
         where: {
-          ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
+          ...escopo.fiscalizacao(),
           ...(from || to
             ? {
                 iniciadaEm: {
@@ -106,7 +116,8 @@ export class MonitoramentoService {
       this.prisma.naoConformidade.count({
         where: {
           status: { not: NaoConformidadeStatus.RESOLVIDA },
-          ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
+          // 306/S5: NaoConformidade não tem secretariaId — filtra pela Secretaria da vistoria.
+          ...escopo.naoConformidade(),
         },
       }),
       statusAbertos
@@ -125,10 +136,13 @@ export class MonitoramentoService {
         ? this.prisma.chamado.count({ where: chamadoConcluidoWhere })
         : Promise.resolve(0),
       this.prisma.offlineSyncEvent.count({
-        where: { status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.CONFLITO, OfflineSyncStatus.FALHOU] } },
+        where: {
+          status: { in: [OfflineSyncStatus.PENDENTE, OfflineSyncStatus.CONFLITO, OfflineSyncStatus.FALHOU] },
+          ...escopo.syncEvent(),
+        },
       }),
       this.prisma.secretaria.findMany({
-        where: { ativo: true },
+        where: { ativo: true, ...escopo.secretaria() },
         select: {
           id: true,
           sigla: true,
@@ -143,7 +157,7 @@ export class MonitoramentoService {
         orderBy: { sigla: 'asc' },
       }),
       this.buildAnaliseChamados(filtro, chamadoWhere, chamadoConcluidoWhere),
-      this.buildAnaliseVistorias(filtro, from, to),
+      this.buildAnaliseVistorias(escopo, from, to),
     ]);
 
     return {
@@ -151,6 +165,7 @@ export class MonitoramentoService {
         from: filtro.from ?? null,
         to: filtro.to ?? null,
         secretariaId: filtro.secretariaId ?? null,
+        secretariasEscopo: escopo.ids ?? null,
         equipeId: filtro.equipeId ?? null,
         cargo: filtro.cargo ?? null,
         tipoChamadoId: filtro.tipoChamadoId ?? null,
@@ -189,6 +204,7 @@ export class MonitoramentoService {
     from: Date | null,
     to: Date | null,
     dateField: 'createdAt' | 'concluidoEm',
+    escopo: EscopoDashboard,
   ): Prisma.ChamadoWhereInput {
     const dateFilter =
       from || to
@@ -202,7 +218,7 @@ export class MonitoramentoService {
 
     return {
       excluidoEm: null,
-      ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
+      ...escopo.chamado(),
       ...(filtro.tipoChamadoId ? { tipoChamadoId: filtro.tipoChamadoId } : {}),
       ...(filtro.prioridade ? { prioridade: filtro.prioridade as ChamadoPrioridade } : {}),
       ...(filtro.status ? { status: filtro.status as ChamadoStatus } : {}),
@@ -319,11 +335,11 @@ export class MonitoramentoService {
     };
   }
 
-  private async buildAnaliseVistorias(filtro: DashboardFiltroDto, from: Date | null, to: Date | null) {
+  private async buildAnaliseVistorias(escopo: EscopoDashboard, from: Date | null, to: Date | null) {
     const fiscalizacoes = await this.prisma.fiscalizacao.findMany({
       where: {
         status: 'CONCLUIDA',
-        ...(filtro.secretariaId ? { secretariaId: filtro.secretariaId } : {}),
+        ...escopo.fiscalizacao(),
         ...(from || to
           ? {
               OR: [
@@ -410,8 +426,10 @@ export class MonitoramentoService {
     };
   }
 
-  listAuditoria() {
+  async listAuditoria(user: JwtPayload) {
+    const escopo = this.resolveEscopo(user);
     return this.prisma.logAuditoria.findMany({
+      where: escopo.auditoria(),
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: {
@@ -420,7 +438,17 @@ export class MonitoramentoService {
     });
   }
 
-  async getAlertasOperacionais() {
+  /** Tela (Dashboard): alertas no escopo de Secretaria da sessão. */
+  async getAlertasOperacionais(user: JwtPayload, filtroSecretariaId?: string | null) {
+    return this.alertasNoEscopo(this.resolveEscopo(user, filtroSecretariaId));
+  }
+
+  /** Job do sistema (webhook/push de operação): visão global, sem usuário — não é exposto em rota. */
+  getAlertasOperacionaisSistema() {
+    return this.alertasNoEscopo(escopoDashboard(undefined));
+  }
+
+  private async alertasNoEscopo(escopo: EscopoDashboard) {
     const now = new Date();
     const chamadoLimite = new Date(now.getTime() - CHAMADO_ALERTA_HORAS * 60 * 60 * 1000);
 
@@ -428,6 +456,7 @@ export class MonitoramentoService {
       this.prisma.chamado.findMany({
         where: {
           excluidoEm: null,
+          ...escopo.chamado(),
           prazoEm: { lt: now },
           status: { in: CHAMADO_OPEN_STATUSES },
         },
@@ -448,6 +477,7 @@ export class MonitoramentoService {
       this.prisma.chamado.findMany({
         where: {
           excluidoEm: null,
+          ...escopo.chamado(),
           status: { in: [ChamadoStatus.ABERTO, ChamadoStatus.EM_TRIAGEM] },
           createdAt: { lt: chamadoLimite },
         },
@@ -464,11 +494,12 @@ export class MonitoramentoService {
         },
       }),
       this.prisma.offlineSyncEvent.count({
-        where: { status: { in: [OfflineSyncStatus.FALHOU, OfflineSyncStatus.CONFLITO] } },
+        where: { status: { in: [OfflineSyncStatus.FALHOU, OfflineSyncStatus.CONFLITO] }, ...escopo.syncEvent() },
       }),
       this.prisma.chamado.count({
         where: {
           excluidoEm: null,
+          ...escopo.chamado(),
           prioridade: 'URGENTE',
           status: { in: CHAMADO_OPEN_STATUSES },
         },

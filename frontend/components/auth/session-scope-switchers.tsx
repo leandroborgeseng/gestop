@@ -7,17 +7,22 @@ import { getDefaultAuthenticatedHref, getVisibleNavItems, isNavActive } from '@/
 import { Select } from '@/components/ui/select';
 import { cn } from '@/lib/cn';
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
+import { emitirTrocaEscopo } from '@/lib/session-events';
 
-function afterSessionSwitch(user: AuthUser) {
+/** `trocaSecretaria`: só a troca de Secretaria tenta atualizar sem reload (perfil muda permissões/menu → recarrega). */
+function afterSessionSwitch(user: AuthUser, trocaSecretaria = false): boolean {
   const currentPath = window.location.pathname;
   const stillAllowed = getVisibleNavItems(user.permissoes, user).some((item) =>
     isNavActive(currentPath, item.href),
   );
   if (stillAllowed) {
+    // 306/S3: telas que sabem se atualizar (ex.: Dashboard) tratam o evento sem reload.
+    if (trocaSecretaria && emitirTrocaEscopo(user)) return true;
     window.location.assign(`${currentPath}${window.location.search}`);
-    return;
+    return false;
   }
   window.location.assign(getDefaultAuthenticatedHref(user.permissoes, user));
+  return false;
 }
 
 export function SessionScopeSwitchers({
@@ -68,7 +73,7 @@ export function SessionScopeSwitchers({
     setSwitching(true);
     try {
       const nextUser = await switchSecretariaAtiva(nextId);
-      afterSessionSwitch(nextUser);
+      if (afterSessionSwitch(nextUser, true)) setSwitching(false);
     } catch (err) {
       setSwitching(false);
       setError(err instanceof Error ? err.message : 'Falha ao trocar secretaria.');

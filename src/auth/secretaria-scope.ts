@@ -156,3 +156,25 @@ export function resolveDirectSecretariaFilter(user: JwtPayload): { secretariaId?
   if (ids.length === 0) return { id: { in: [] } };
   return ids.length === 1 ? { secretariaId: ids[0] } : { secretariaId: { in: ids } };
 }
+
+/**
+ * 306 — função única de escopo para leituras agregadas (Dashboard, pendências, sync, auditoria, alertas).
+ * Escopo efetivo = escopo da sessão (Secretaria ativa / vínculos / global) refinado pelo filtro superior.
+ * - `undefined` = visão global real (administrador em "Todas"), sem filtro.
+ * - `[]` = sem Secretaria autorizada (nada é retornado).
+ * - Filtro fora do escopo (URL/API forçada) → 403.
+ */
+export function resolveSecretariaFiltroEscopo(user: JwtPayload, filtroSecretariaId?: string | null): string[] | undefined {
+  const scope = resolveSecretariaScopeIds(user);
+  const filtro = filtroSecretariaId?.trim();
+  if (!filtro) return scope;
+  if (scope && !scope.includes(filtro)) {
+    throw new ForbiddenException('Secretaria fora do escopo da sessão.');
+  }
+  return [filtro];
+}
+
+/** `{ secretariaId: { in: ids } }` ou `{}` (global). `[]` vira `{ in: [] }` (zero linhas). */
+export function whereSecretariaIdIn(ids: string[] | undefined): { secretariaId?: { in: string[] } } {
+  return ids ? { secretariaId: { in: ids } } : {};
+}
