@@ -1,3 +1,4 @@
+import { assertRegistroPodeIniciar, CHECKLIST_INATIVO } from '../common/inativos/registro-inativo';
 import { assertDocumentoNaoCancelado, cancelarDocumentoLogico, filtroCanceladosNaLista, podeCancelarDocumento } from './documento-cancelamento';
 import { verificarAberturaDiaria } from '../pendencias/abertura-diaria';
 import { formatSecretariaLabel } from '../common/format-secretaria';
@@ -2710,9 +2711,7 @@ export class DocumentosService {
     if (!versao || versao.status !== ChecklistVersaoStatus.PUBLICADA) {
       throw new BadRequestException('Somente versões publicadas podem ser usadas em documento avulso.');
     }
-    if (!versao.checklist.ativo) {
-      throw new BadRequestException('Checklist inativo.');
-    }
+    assertRegistroPodeIniciar(versao.checklist, CHECKLIST_INATIVO);
 
     const finalidades = versao.checklist.finalidades ?? [];
     const ok =

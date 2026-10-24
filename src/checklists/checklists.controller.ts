@@ -23,6 +23,12 @@ export class ChecklistsController {
     return this.checklistsService.listChecklists(user);
   }
 
+  /** 309: contadores de ativos/inativos para a sanfona (mesmo escopo da lista). */
+  @Get('resumo')
+  resumo(@CurrentUser() user: JwtPayload) {
+    return this.checklistsService.resumoChecklists(user);
+  }
+
   @Get('tipos-proprio/opcoes')
   listTiposProprioOpcoes() {
     return this.checklistsService.listTiposProprioOpcoes();
@@ -43,9 +49,20 @@ export class ChecklistsController {
     return this.checklistsService.updateChecklist(id, body, user);
   }
 
+  /** Mantido por compatibilidade: equivale a POST /checklists/:id/inativar (não apaga nada). */
   @Delete(':id')
   deactivateChecklist(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.checklistsService.deactivateChecklist(id, user);
+  }
+
+  @Post(':id/inativar')
+  inativarChecklist(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.checklistsService.deactivateChecklist(id, user);
+  }
+
+  @Post(':id/reativar')
+  reativarChecklist(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.checklistsService.reactivateChecklist(id, user);
   }
 
   @Post(':id/versions')

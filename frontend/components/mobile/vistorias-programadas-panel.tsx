@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarClock, Map as MapIcon, MapPinned, Navigation, UserCheck } from 'lucide-react';
 import { ChamadosExecucaoMap } from '@/components/chamados/chamados-execucao-map';
+import { AvisoChecklistInativoCronograma } from '@/components/inativos/inativos';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Chip } from '@/components/ui/chip';
@@ -293,6 +294,7 @@ export function VistoriasProgramadasPanel({
                       <p className="break-words text-[12px] text-[var(--ink-2)]">
                         {item.checklist.nome} · {CRONOGRAMA_FREQUENCIA_LABELS[item.frequencia]}
                       </p>
+                      {item.checklistInativo ? <AvisoChecklistInativoCronograma compacto /> : null}
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--ink-3)]">
                         <span>
                           {new Date(`${item.data}T12:00:00`).toLocaleDateString('pt-BR')} · {item.unidade.secretaria.sigla}
@@ -357,8 +359,10 @@ export function VistoriasProgramadasPanel({
               <Button
                 type="button"
                 variant="filled"
+                disabled={Boolean(confirmItem.checklistInativo)}
                 onClick={() => {
                   const item = confirmItem;
+                  if (item.checklistInativo) return;
                   setConfirmItem(null);
                   onIniciar(item);
                 }}
@@ -376,6 +380,7 @@ export function VistoriasProgramadasPanel({
               {confirmItem.unidade.endereco}
               {confirmItem.unidade.bairro ? ` · ${confirmItem.unidade.bairro}` : ''}
             </p>
+            {confirmItem.checklistInativo ? <AvisoChecklistInativoCronograma /> : null}
             <div className="grid gap-2 sm:grid-cols-2">
               <Info label="Checklist programado" value={confirmItem.checklist.nome} />
               <Info

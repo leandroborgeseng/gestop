@@ -1,3 +1,4 @@
+import { assertRegistroPodeIniciar, CHECKLIST_INATIVO } from '../common/inativos/registro-inativo';
 import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AuditAction,
@@ -158,6 +159,7 @@ export class MobileService {
     if (checklistVersao.status !== 'PUBLICADA') {
       throw new BadRequestException('Somente versoes publicadas podem ser usadas em campo.');
     }
+    assertRegistroPodeIniciar(checklistVersao.checklist, CHECKLIST_INATIVO);
 
     if (
       !checklistAppliesToUnidade(checklistVersao.checklist, {

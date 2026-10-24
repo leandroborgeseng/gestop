@@ -9,6 +9,8 @@ import {
   getDraftVersion,
   getPublishedVersion,
 } from '@/components/checklists/checklist-shared';
+import { AvisoSomenteLeitura, SanfonaInativos, TagInativo } from '@/components/inativos/inativos';
+import { separarAtivosInativos, TEXTOS_CHECKLIST } from '@/lib/inativos';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Badge } from '@/components/ui/badge';
@@ -70,7 +72,7 @@ export default function ChecklistsPage() {
       setChecklists(nextChecklists);
       setSecretarias(nextSecretarias);
       setTiposChamado(nextTipos);
-      setSelectedId((current) => current ?? nextChecklists[0]?.id ?? null);
+      setSelectedId((current) => current ?? (nextChecklists.find((c) => c.ativo) ?? nextChecklists[0])?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar checklists.');
     } finally {
@@ -82,10 +84,54 @@ export default function ChecklistsPage() {
     void load();
   }, []);
 
+  const { ativos, inativos } = useMemo(() => separarAtivosInativos(checklists), [checklists]);
+
   const selected = useMemo(() => {
     if (selectedId) return checklists.find((item) => item.id === selectedId) ?? null;
     return checklists[0] ?? null;
   }, [checklists, selectedId]);
+
+  function renderItem(checklist: ChecklistModel) {
+                      const published = getPublishedVersion(checklist.versoes);
+                      const draft = getDraftVersion(checklist.versoes);
+                      const isSelected = selected?.id === checklist.id;
+
+                      return (
+                        <button
+                          key={checklist.id}
+                          type="button"
+                          onClick={() => setSelectedId(checklist.id)}
+                          data-testid="checklist-item"
+                          data-ativo={checklist.ativo ? 'true' : 'false'}
+                          className={cn(
+                            'mb-0.5 flex w-full flex-col gap-1.5 rounded-[var(--r-md)] border border-transparent px-3 py-2.5 text-left transition-colors',
+                            isSelected
+                              ? 'border-[color-mix(in_srgb,var(--brand)_30%,transparent)] bg-[var(--brand-soft)]'
+                              : 'hover:bg-[var(--surface-2)]',
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="mono text-[11px] font-semibold text-[var(--brand-hover)]">
+                              v{published?.versao ?? draft?.versao ?? 1}
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              {!checklist.ativo ? <TagInativo /> : null}
+                              <Badge variant={published ? 'success' : draft ? 'warning' : 'muted'}>
+                              {published ? 'Publicado' : draft ? 'Rascunho' : 'Sem versão'}
+                            </Badge>
+                            </span>
+                          </div>
+                          <p className="line-clamp-2 text-[13px] font-semibold text-[var(--ink)]">{checklist.nome}</p>
+                          <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] text-[var(--ink-3)]">
+                            <span className="inline-flex items-center gap-1">
+                              <Layers className="h-3 w-3" />
+                              {published?.itens.length ?? draft?.itens.length ?? 0} itens
+                            </span>
+                            <span>{formatChecklistVinculo(checklist)}</span>
+                          </div>
+                        </button>
+                      );
+                    }
 
   async function handleCreate(payload: Record<string, unknown>) {
     setError(null);
@@ -142,47 +188,18 @@ export default function ChecklistsPage() {
                     <Layers className="h-4 w-4 text-[var(--brand)]" />
                     <h2 className="text-[13.5px] font-semibold text-[var(--ink)]">Modelos</h2>
                     <span className="mono ml-auto rounded-[var(--r-pill)] border border-[var(--line)] bg-[var(--surface-2)] px-2 py-0.5 text-xs font-semibold text-[var(--ink-3)]">
-                      {checklists.length}
+                      {ativos.length}
                     </span>
                   </div>
 
                   <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
-                    {checklists.map((checklist) => {
-                      const published = getPublishedVersion(checklist.versoes);
-                      const draft = getDraftVersion(checklist.versoes);
-                      const isSelected = selected?.id === checklist.id;
-
-                      return (
-                        <button
-                          key={checklist.id}
-                          type="button"
-                          onClick={() => setSelectedId(checklist.id)}
-                          className={cn(
-                            'mb-0.5 flex w-full flex-col gap-1.5 rounded-[var(--r-md)] border border-transparent px-3 py-2.5 text-left transition-colors',
-                            isSelected
-                              ? 'border-[color-mix(in_srgb,var(--brand)_30%,transparent)] bg-[var(--brand-soft)]'
-                              : 'hover:bg-[var(--surface-2)]',
-                          )}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="mono text-[11px] font-semibold text-[var(--brand-hover)]">
-                              v{published?.versao ?? draft?.versao ?? 1}
-                            </span>
-                            <Badge variant={published ? 'success' : draft ? 'warning' : 'muted'}>
-                              {published ? 'Publicado' : draft ? 'Rascunho' : 'Sem versão'}
-                            </Badge>
-                          </div>
-                          <p className="line-clamp-2 text-[13px] font-semibold text-[var(--ink)]">{checklist.nome}</p>
-                          <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px] text-[var(--ink-3)]">
-                            <span className="inline-flex items-center gap-1">
-                              <Layers className="h-3 w-3" />
-                              {published?.itens.length ?? draft?.itens.length ?? 0} itens
-                            </span>
-                            <span>{formatChecklistVinculo(checklist)}</span>
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {ativos.map(renderItem)}
+                    {ativos.length === 0 ? (
+                      <p className="px-3 py-4 text-[13px] text-[var(--ink-3)]">Nenhum checklist ativo.</p>
+                    ) : null}
+                    <SanfonaInativos textos={TEXTOS_CHECKLIST} total={inativos.length}>
+                      {inativos.map(renderItem)}
+                    </SanfonaInativos>
                   </div>
                 </section>
 
@@ -260,7 +277,7 @@ function ChecklistPreviewPanel({
             <div className="flex flex-wrap gap-1.5">
               {published ? <Badge variant="success">Publicado</Badge> : null}
               {draft ? <Badge variant="warning">Rascunho ativo</Badge> : null}
-              {!checklist.ativo ? <Badge variant="muted">Inativo</Badge> : null}
+              {!checklist.ativo ? <TagInativo /> : null}
             </div>
           </div>
           <h2 className="mt-3 text-[17px] font-semibold leading-snug text-[var(--ink)]">{checklist.nome}</h2>
@@ -271,6 +288,7 @@ function ChecklistPreviewPanel({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5">
+          {!checklist.ativo ? <AvisoSomenteLeitura mensagem={TEXTOS_CHECKLIST.somenteLeitura} className="mb-3" /> : null}
           {!published ? (
             <EmptyState
               title="Nenhuma versão publicada"
