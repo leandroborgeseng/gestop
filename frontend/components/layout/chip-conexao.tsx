@@ -46,7 +46,7 @@ export function ChipConexao({ compacto = false, syncPendentesServidor = 0 }: { c
           void permissoes.atualizar();
         }}
         className={cn(
-          'inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-[var(--r-pill)] border px-2.5 font-semibold',
+          'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[var(--r-pill)] border px-2.5 font-semibold',
           compacto ? 'text-[11px]' : 'text-xs',
           r.tom === 'ok'
             ? 'border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok)]'
