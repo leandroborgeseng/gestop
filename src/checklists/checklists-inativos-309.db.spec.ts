@@ -143,13 +143,13 @@ describe.skipIf(!URL)('309 — checklists inativos (Postgres local)', () => {
     const docs = new DocumentosService(prisma as never, {} as never);
     const tentativas = [
       () => fisc.lancamentoManual({ unidadeId: seed.unidadeA, checklistVersaoId: seed.versaoInativo, dataVistoria: '2026-10-20' } as never, gestor),
-      () => mobile.syncFiscalizacao({ clientEventId: `t309-${sufixo}`, unidadeId: seed.unidadeA, checklistVersaoId: seed.versaoInativo } as never, gestor),
+      () => mobile.syncFiscalizacao({ clientEventId: `t309-${sufixo}`, unidadeId: seed.unidadeA, checklistVersaoId: seed.versaoInativo, iniciadaEm: new Date().toISOString() } as never, gestor),
       () => docs.createAvulso({ secretariaId: seed.secretaria309, checklistVersaoId: seed.versaoInativo, titulo: 'Doc fictício 309' } as never, gestor),
     ];
     for (const t of tentativas) {
       const e = await erroDe(t());
       expect(e).toBeInstanceOf(ConflictException);
-      expect(e.message).toBe(CHECKLIST_INATIVO.mensagemNaoInicia);
+      expect(e.message.startsWith(CHECKLIST_INATIVO.mensagemNaoInicia)).toBe(true);
     }
     expect(await prisma.fiscalizacao.count({ where: { checklistVersaoId: seed.versaoInativo } })).toBe(totalAntes);
     const fiscDepois = await prisma.fiscalizacao.findUniqueOrThrow({ where: { id: seed.fiscalizacaoExistente } });

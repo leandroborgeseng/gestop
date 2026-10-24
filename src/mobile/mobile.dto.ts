@@ -92,8 +92,10 @@ export class MobileSyncFiscalizacaoDto {
   @IsString()
   checklistVersaoId!: string;
 
+  /** Check-in (início). Opcional: sem ele, o 309/C4a usa o primeiro horário do aparelho no pacote. */
+  @IsOptional()
   @IsDateString()
-  iniciadaEm!: string;
+  iniciadaEm?: string;
 
   @IsDateString()
   concluidaEm!: string;

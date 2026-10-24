@@ -4,7 +4,7 @@
  * Mesma trava do 306: só banco LOCAL e nunca NODE_ENV=production. Idempotente; só inserções (nada é apagado).
  *
  * Cria:
- * - perfil "Teste 309 Checklists" (checklists.gerenciar + documentos.criar_avulso) e perfil "Teste 309 Sem Excluir"
+ * - perfil "Teste 309 Checklists" (checklists.gerenciar, documentos.criar_avulso e fiscalizacoes.executar) e perfil "Teste 309 Sem Excluir"
  *   (matriz de checklists só com visualizar/alterar → não pode Inativar/Reativar);
  * - usuários `gestor.309@aion.local` (T309), `todas.309@aion.local` (Todas, vínculos T309 e T306B) e `leitor.309@aion.local` (T309, sem excluir);
  * - Secretaria própria "Secretaria Fictícia 309" (T309) com o "Próprio Fictício 309" (T309-A), para não alterar
@@ -23,7 +23,7 @@ export const T309 = {
   leitor: 'leitor.309@aion.local',
   perfil: 'Teste 309 Checklists',
   perfilSemExcluir: 'Teste 309 Sem Excluir',
-  permissoes: ['checklists.gerenciar', 'documentos.criar_avulso', 'cronograma.visualizar'],
+  permissoes: ['checklists.gerenciar', 'documentos.criar_avulso', 'cronograma.visualizar', 'fiscalizacoes.executar'],
   permissoesSemExcluir: ['matriz.checklists._tela.visualizar', 'matriz.checklists._tela.alterar'],
   ativo: 'Checklist Fictício 309 Ativo',
   inativo: 'Checklist Fictício 309 Inativo',

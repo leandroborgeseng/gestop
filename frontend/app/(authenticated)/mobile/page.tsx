@@ -1,5 +1,6 @@
 'use client';
 
+import { processarFilaSync } from '@/lib/mobile-queue-sync';
 import Link from 'next/link';
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, ClipboardPen, CloudUpload, MapPin, Printer, RefreshCcw, Save, Smartphone, Satellite, Wifi, WifiOff, Megaphone } from 'lucide-react';
@@ -85,16 +86,8 @@ export default function MobilePage() {
     const initialCount = queueRef.current.length;
     setSyncing(true);
     setError(null);
-    const remaining: MobileQueuedInspection[] = [];
-
-    for (const item of queueRef.current) {
-      try {
-        await syncMobileInspection(item);
-      } catch (err) {
-        remaining.push(item);
-        setError(err instanceof Error ? err.message : 'Falha ao sincronizar um item.');
-      }
-    }
+    const { restantes: remaining, erros } = await processarFilaSync<MobileQueuedInspection>(queueRef.current, syncMobileInspection);
+    if (erros.length) setError(erros[erros.length - 1].mensagem);
 
     setQueue(remaining);
     await writeMobileQueue(remaining);
@@ -195,10 +188,16 @@ export default function MobilePage() {
     }
   }, [fieldPackage, unidadeId]);
 
+  // 309: sync automático só na TRANSIÇÃO para online. Antes o efeito dependia de `syncQueue`, que muda a cada
+  // troca de `syncing`; com um item recusado (ex.: 409 de checklist inativado) isso virava um laço de reenvios.
+  const syncQueueRef = useRef(syncQueue);
+  useEffect(() => {
+    syncQueueRef.current = syncQueue;
+  }, [syncQueue]);
   useEffect(() => {
     if (!online || queueRef.current.length === 0) return;
-    void syncQueue();
-  }, [online, syncQueue]);
+    void syncQueueRef.current();
+  }, [online]);
 
   const selectedChecklist = useMemo(
     () => fieldPackage?.checklists.find((checklist) => checklist.id === checklistId) ?? null,

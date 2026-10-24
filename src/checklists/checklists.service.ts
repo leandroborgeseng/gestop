@@ -220,14 +220,19 @@ export class ChecklistsService {
     const ativo = planejarStatusAtivo(before.ativo, acao, CHECKLIST_INATIVO);
     const quando = new Date();
     return this.prisma.$transaction(async (tx) => {
-      const trocou = await tx.checklist.updateMany({ where: { id, ativo: before.ativo }, data: { ativo } });
+      // inativadoEm: Inativar grava o instante; Reativar limpa (o histórico de cada troca fica na auditoria).
+      const trocou = await tx.checklist.updateMany({
+        where: { id, ativo: before.ativo },
+        data: { ativo, inativadoEm: ativo ? null : quando },
+      });
       if (trocou.count !== 1) planejarStatusAtivo(!before.ativo, acao, CHECKLIST_INATIVO);
       const checklist = await tx.checklist.findUniqueOrThrow({ where: { id } });
       const cronogramasVinculados = await tx.cronogramaChecagem.count({ where: { checklistId: id } });
-      const resumo = (c: { ativo: boolean; nome: string; updatedAt: Date }) => ({
+      const resumo = (c: { ativo: boolean; nome: string; updatedAt: Date; inativadoEm: Date | null }) => ({
         id,
         nome: c.nome,
         ativo: c.ativo,
+        inativadoEm: c.inativadoEm ? c.inativadoEm.toISOString() : null,
         atualizadoEm: c.updatedAt.toISOString(),
         cronogramasVinculados,
       });
