@@ -2,7 +2,8 @@
  * 303/304 — seed FICTÍCIO de campo/offline, em cima do seed 306+307 (T306A/T306B, @teste306.invalid).
  * Só inserções/atualizações de dados fictícios (nada é apagado). Mesma trava de banco local do 306.
  * - permissão `fiscalizacoes.executar` no perfil fictício "Teste 306 Dashboard" (app de vistoria);
- * - "Checklist Fictício 304" (GLOBAL, publicado, 2 itens booleanos sem NC/evidência obrigatória);
+ * - "Checklist Fictício 304" (GLOBAL, publicado, 2 itens booleanos sem NC/evidência obrigatória
+ *   + item 3 FOTO opcional que exige evidência, para o QA testar câmera/galeria);
  * - Secretarias PRÓPRIAS T304A/T304B ("Próprio Fictício 304 A/B", gestor.a.304/gestor.b.304@teste306.invalid), para que as
  *   vistorias/falhas de sync geradas pelos testes 304 NÃO alterem as contagens exatas do Dashboard 306 (T306A/T306B);
  * - "Cronograma fictício 304 A" (semanal) no Próprio Fictício 304 A, responsável gestor.a.304;
@@ -26,7 +27,9 @@ export const T304 = {
 export type Seed304 = Seed307 & {
   checklist304: string;
   checklistVersao304: string;
+  /** Só os 2 itens booleanos (o item de foto é opcional). */
   itens304: string[];
+  itemFoto304: string;
   secretarias304: { A: string; B: string };
   unidade304A: string;
   unidade304B: string;
@@ -77,6 +80,13 @@ export async function seedCampo304(prisma: PrismaClient, senha: string, database
     });
   }
   const versao = checklist.versoes.find((v) => v.status === 'PUBLICADA')!;
+  // Item de foto (fictício, só inserção): opcional, mas se respondido exige evidência.
+  let itemFoto = versao.itens.find((i) => i.codigo === 'T304-3');
+  if (!itemFoto) {
+    itemFoto = await prisma.checklistItem.create({
+      data: { checklistVersaoId: versao.id, ordem: 3, codigo: 'T304-3', titulo: 'Foto fictícia da fachada 304', tipo: 'FOTO', obrigatorio: false, exigeEvidencia: true },
+    });
+  }
 
   const cronograma = async (unidadeId: string, responsavelId: string, observacoes: string) => {
     const c = await prisma.cronogramaChecagem.upsert({
@@ -131,7 +141,8 @@ export async function seedCampo304(prisma: PrismaClient, senha: string, database
     usuarios304: { gestorA: A.usuario, gestorB: B.usuario },
     checklist304: checklist.id,
     checklistVersao304: versao.id,
-    itens304: versao.itens.sort((a, b) => a.ordem - b.ordem).map((i) => i.id),
+    itens304: versao.itens.filter((i) => i.codigo !== 'T304-3').sort((a, b) => a.ordem - b.ordem).map((i) => i.id),
+    itemFoto304: itemFoto.id,
     cronograma304A: await cronograma(A.unidade, A.usuario, T304.observacaoA),
     cronograma304B: await cronograma(B.unidade, B.usuario, T304.observacaoB),
   };

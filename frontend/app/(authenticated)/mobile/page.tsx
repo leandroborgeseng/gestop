@@ -51,6 +51,7 @@ import {
   type RascunhoVistoria,
 } from '@/lib/mobile-draft';
 import { DialogoConfirmacao } from '@/components/mobile/dialogo-confirmacao';
+import { publicarEstadoFila } from '@/lib/estado-fila';
 import { avisoPacoteVencido, pacoteVencido, rotuloDadosLocais } from '@/lib/pacote-offline';
 import { classificarErroSync, marcarComoAvulsaPorConflito, rotuloErroSync } from '@/lib/fila-sync';
 import { IndicadorCampo, OnboardingPermissoes, usePermissoesCampo } from '@/components/mobile/estado-campo';
@@ -77,7 +78,7 @@ export default function MobilePage() {
   const secretariaEscopoKey = `${sessionUser?.secretaria?.id ?? 'todas'}|${sessionUser?.secretariaEscopoTodas ? '1' : '0'}`;
   const [fieldPackage, setFieldPackage] = useState<MobileFieldPackage | null>(null);
   const [queue, setQueue] = useState<MobileQueuedInspection[]>([]);
-  const { online, browserOnline, refreshConnectivity } = useEffectiveOnline();
+  const { online, refreshConnectivity } = useEffectiveOnline();
   const [unidadeId, setUnidadeId] = useState('');
   const [checklistId, setChecklistId] = useState('');
   const [responses, setResponses] = useState<Record<string, ResponseDraft>>({});
@@ -115,7 +116,6 @@ export default function MobilePage() {
       .then(setRascunhos)
       .catch(() => undefined);
   }, []);
-  const [detalhesCampoOpen, setDetalhesCampoOpen] = useState(false);
   const [avisoOfflineVisto, setAvisoOfflineVisto] = useState(true);
   const [avulsaEdicao, setAvulsaEdicao] = useState<{ clientEventId: string; motivo: string; erro?: string } | null>(null);
 
@@ -130,6 +130,11 @@ export default function MobilePage() {
       setAvisoOfflineVisto(false);
     }
   }, []);
+
+  // M1: o chip do cabeçalho mostra as pendências da fila local.
+  useEffect(() => {
+    publicarEstadoFila({ pendentes: queue.length });
+  }, [queue.length]);
 
   const syncQueue = useCallback(async (manual = true) => {
     if (queueRef.current.length === 0 || syncing) return;
@@ -162,6 +167,7 @@ export default function MobilePage() {
 
     setQueue(remaining);
     await writeMobileQueue(remaining);
+    if (remaining.length < initialCount) publicarEstadoFila({ ultimoSyncEm: new Date().toISOString() });
     if (remaining.length === 0 && initialCount > 0) {
       snackbar.show('Fila sincronizada com sucesso.', 'success');
       showLocalNotification('SIGMA Vistoria', 'Vistorias sincronizadas com sucesso.');
@@ -425,7 +431,8 @@ export default function MobilePage() {
           }
         : {}),
       checkin: geo,
-      respostas: selectedVersion.itens.map((item) =>
+      // Item de foto/assinatura opcional sem nenhum anexo não vai no envio (o servidor exigiria a evidência).
+      respostas: selectedVersion.itens.filter((item) => !itemDeAnexoOpcionalVazio(item, responses[item.id])).map((item) =>
         buildRespostaPayload(item, responses[item.id] ?? { conformidade: 'CONFORME', comentario: '' }, geo, now),
       ),
     } satisfies MobileQueuedInspection;
@@ -457,6 +464,7 @@ export default function MobilePage() {
         const wasProgramada = Boolean(programadaCtx);
         setProgramadaCtx(null);
         if (wasProgramada) setVistoriaTab('programadas');
+        publicarEstadoFila({ ultimoSyncEm: new Date().toISOString() });
         snackbar.show('Vistoria registrada com sucesso.', 'success');
         showLocalNotification('SIGMA Vistoria', 'Vistoria enviada e registrada no sistema.');
         return;
@@ -652,32 +660,9 @@ export default function MobilePage() {
             <div className="flex-1">
               <PwaInstallBanner />
             </div>
-            <ConnectionPill
-              online={online}
-              browserOnline={browserOnline}
-              aberto={detalhesCampoOpen}
-              onClick={() => {
-                setDetalhesCampoOpen((v) => !v);
-                void refreshConnectivity();
-                void permissoes.atualizar();
-              }}
-            />
           </div>
-          {detalhesCampoOpen ? (
-            <section
-              data-testid="detalhes-campo"
-              className="space-y-2 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] p-3 shadow-[var(--sh-sm)]"
-            >
-              <p className="text-[13px] font-semibold text-[var(--ink)]">Estado do aparelho</p>
-              <IndicadorCampo gps={permissoes.gps} camera={permissoes.camera} online={online} ultimoGps={checkin ? `${checkin.precisaoMetros} m` : null} />
-              <p data-testid="detalhes-fila" className="text-[12px] text-[var(--ink-3)]">
-                Fila: {queue.length === 0 ? 'nenhuma vistoria pendente' : `${queue.length} vistoria${queue.length === 1 ? '' : 's'} pendente${queue.length === 1 ? '' : 's'}`}
-              </p>
-            </section>
-          ) : (
-            // Designer M1: inline só o que está bloqueado.
-            <IndicadorCampo gps={permissoes.gps} camera={permissoes.camera} online={online} somenteBloqueios />
-          )}
+          {/* M1: o chip de conexão (e os detalhes) fica só no cabeçalho; aqui só avisos do que está bloqueado. */}
+          <IndicadorCampo gps={permissoes.gps} camera={permissoes.camera} online={online} somenteBloqueios />
           <OnboardingPermissoes gps={permissoes.gps} camera={permissoes.camera} onAtualizar={() => void permissoes.atualizar()} />
 
           {online ? (
@@ -1135,38 +1120,9 @@ function MobileInspectionFooter({
   );
 }
 
-function ConnectionPill({
-  online,
-  browserOnline,
-  aberto,
-  onClick,
-}: {
-  online: boolean;
-  browserOnline: boolean;
-  aberto: boolean;
-  onClick: () => void;
-}) {
-  const label = online ? 'Online' : browserOnline ? 'Sem servidor' : 'Offline';
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      data-testid="chip-conexao"
-      aria-expanded={aberto}
-      title="Ver GPS, rede, câmera e fila"
-      className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 rounded-[var(--r-pill)] border px-3 py-1.5 text-[12px] font-semibold transition-colors',
-        online
-          ? 'border-[var(--ok-bd)] bg-[var(--ok-bg)] text-[var(--ok)]'
-          : 'border-[var(--warn-bd)] bg-[var(--warn-bg)] text-[var(--warn)]',
-      )}
-    >
-      <span className={cn('h-2 w-2 rounded-full', online ? 'bg-[var(--ok)]' : 'bg-[var(--warn)]')} />
-      {online ? <Wifi className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
-      {label}
-    </button>
-  );
+function itemDeAnexoOpcionalVazio(item: { tipo: string; obrigatorio: boolean }, resposta: ResponseDraft | undefined) {
+  if (item.obrigatorio || (item.tipo !== 'FOTO' && item.tipo !== 'ASSINATURA')) return false;
+  return getResponseEvidencias(resposta).length === 0;
 }
 
 function HeroStat({ label, value, highlight = false, testid }: { label: string; value: string | number; highlight?: boolean; testid?: string }) {

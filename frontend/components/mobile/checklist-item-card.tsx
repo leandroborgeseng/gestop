@@ -287,7 +287,7 @@ export function ChecklistItemCard({
 
         {showEvidenceUi ? (
           <div className="space-y-3">
-            <label className="flex min-h-14 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-[var(--md-shape-md)] border border-dashed border-[var(--md-outline)] bg-[var(--md-surface-container-low)] px-3 text-center md-label-lg break-words text-[var(--md-on-surface-variant)] transition hover:bg-[var(--md-surface-container)]">
+            <label data-testid="evidencia-camera" className="flex min-h-14 min-w-0 cursor-pointer items-center justify-center gap-2 rounded-[var(--md-shape-md)] border border-dashed border-[var(--md-outline)] bg-[var(--md-surface-container-low)] px-3 text-center md-label-lg break-words text-[var(--md-on-surface-variant)] transition hover:bg-[var(--md-surface-container)]">
               <Camera className="h-5 w-5" />
               {attachLabel}
               <input
@@ -320,7 +320,7 @@ export function ChecklistItemCard({
             </label>
 
             {evidencias.length > 0 ? (
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" data-testid="evidencias-lista" data-qtd={evidencias.length}>
                 {evidencias.map((evidencia, index) => (
                   <div
                     key={evidencia.id}

@@ -367,10 +367,10 @@ export function VistoriasProgramadasPanel({
                         </span>
                       </div>
                       {item.conflitoAvulsa ? (
-                        <p data-testid="programada-conflito-avulsa" className="break-words rounded-[var(--r-sm)] bg-[var(--warn-bg)] px-2 py-1 text-[11px] font-semibold text-[var(--warn)]">
-                          Pendente · vistoria enviada como avulsa por conflito ({item.conflitoAvulsa.agente.nome}
-                          {item.conflitoAvulsa.motivo ? `: ${item.conflitoAvulsa.motivo}` : ''})
-                        </p>
+                        <div data-testid="programada-conflito-avulsa" className="flex flex-wrap items-center gap-1.5 rounded-[var(--r-sm)] bg-[var(--warn-bg)] px-2 py-1">
+                          <Badge variant="warning">Avulsa por conflito</Badge>
+                          <span className="break-words text-[11px] font-semibold text-[var(--warn)]">Programação não baixada · vistoria avulsa enviada</span>
+                        </div>
                       ) : null}
                       <p className="break-words text-[12px] text-[var(--ink-3)]">
                         {item.unidade.endereco}

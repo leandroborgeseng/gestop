@@ -247,8 +247,15 @@ describe.skipIf(!URL)('303/304 — pacote offline e sync das programadas (Postgr
 
       // programação continua na lista (atrasada) e sinalizada, no pacote e na API das programadas
       const pkg = await svc.getFieldPackage(u);
-      const p = pkg.programacoes.find((x) => x.cronogramaId === seed.cronograma304A && x.data === toDateKey(programada()));
-      expect(p?.conflitoAvulsa).toMatchObject({ fiscalizacaoId: f.id, motivo: 'Programação mudou; vistoria feita no local', codigo: 'PROGRAMACAO_ALTERADA' });
+      // B-3: exatamente 1 card (o da data que conflitou) com a sinalização desta avulsa
+      const sinalizados = pkg.programacoes.filter((x) => x.conflitoAvulsa?.fiscalizacaoId === f.id);
+      expect(sinalizados).toHaveLength(1);
+      expect(sinalizados[0]).toMatchObject({ cronogramaId: seed.cronograma304A, data: diaBaixado });
+      expect(sinalizados[0].conflitoAvulsa).toMatchObject({ motivo: 'Programação mudou; vistoria feita no local', codigo: 'PROGRAMACAO_ALTERADA', dataProgramada: diaBaixado });
+      // a programação atrasada "real" continua na lista, pendente, sem a sinalização desta avulsa
+      const real = pkg.programacoes.find((x) => x.cronogramaId === seed.cronograma304A && x.data === toDateKey(programada()));
+      expect(real).toBeTruthy();
+      expect(real!.conflitoAvulsa?.fiscalizacaoId).not.toBe(f.id);
 
       // reenvio da mesma avulsa: mesmo id, sem duplicar fiscalização nem auditoria
       const r2 = await svc.syncFiscalizacao(comoAvulsa(d, diaBaixado), u);
