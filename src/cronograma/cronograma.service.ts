@@ -496,6 +496,8 @@ export class CronogramaService {
       const fiscalizacoes = await this.prisma.fiscalizacao.findMany({
         where: {
           status: 'CONCLUIDA',
+          // 304/O6a: avulsa por conflito NÃO realiza a programação (ela continua pendente e sinalizada).
+          avulsaPorConflito: false,
           concluidaEm: { gte: from, lte: new Date(to.getTime() + 86_399_999) },
           unidadeId: { in: cronogramas.map((item) => item.unidadeId) },
         },
@@ -513,6 +515,73 @@ export class CronogramaService {
       }
     }
 
+    // 304/O6a: programações com vistoria avulsa por conflito ficam sinalizadas para o gestor.
+    const avulsasConflito = await this.prisma.fiscalizacao.findMany({
+      where: { avulsaPorConflito: true, conflitoCronogramaId: { in: cronogramas.map((item) => item.id) } },
+      select: {
+        id: true,
+        avulsaMotivo: true,
+        conflitoCronogramaId: true,
+        conflitoDataProgramada: true,
+        conflitoCodigo: true,
+        concluidaEm: true,
+        createdAt: true,
+        agente: { select: { id: true, nome: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    // B-3: a sinalização fica SÓ no card da data que conflitou (cronograma+data), até uma baixa real depois da avulsa.
+    const conflitoPorData = new Map<string, (typeof avulsasConflito)[number]>();
+    const ultimaPorCronograma = new Map(cronogramas.map((c) => [c.id, c.ultimaChecagemEm]));
+    for (const f of avulsasConflito) {
+      if (!f.conflitoCronogramaId || !f.conflitoDataProgramada) continue;
+      const chave = `${f.conflitoCronogramaId}:${toDateKey(startOfDay(f.conflitoDataProgramada))}`;
+      if (conflitoPorData.has(chave)) continue; // mais recente primeiro
+      const ultima = ultimaPorCronograma.get(f.conflitoCronogramaId);
+      // a baixa é gravada no início do dia: baixa no mesmo dia (ou depois) da avulsa resolve a sinalização.
+      if (ultima && startOfDay(f.createdAt).getTime() <= ultima.getTime()) continue;
+      conflitoPorData.set(chave, f);
+    }
+    const resumoConflito = (f: (typeof avulsasConflito)[number] | undefined) =>
+      f
+        ? {
+            fiscalizacaoId: f.id,
+            motivo: f.avulsaMotivo,
+            codigo: f.conflitoCodigo,
+            dataProgramada: f.conflitoDataProgramada ? toDateKey(startOfDay(f.conflitoDataProgramada)) : null,
+            enviadaEm: f.concluidaEm?.toISOString() ?? null,
+            agente: f.agente,
+          }
+        : null;
+
+    const montarItem = (cronograma: (typeof cronogramas)[number], date: Date, dataKey: string) => {
+      const responsaveis = formatResponsaveis(cronograma.responsaveis, cronograma.responsavel);
+      const chave = `${cronograma.id}:${dataKey}`;
+      const conflito = conflitoPorData.get(chave);
+      conflitoPorData.delete(chave);
+      return {
+        id: chave,
+        cronogramaId: cronograma.id,
+        cronogramaAtualizadoEm: cronograma.updatedAt.toISOString(),
+        data: dataKey,
+        tipo: resolveEventoTipo(date, hoje),
+        frequencia: cronograma.frequencia,
+        checklist: cronograma.checklist,
+        unidade: {
+          id: cronograma.unidade.id,
+          nome: cronograma.unidade.nome,
+          tipo: cronograma.unidade.tipo,
+          endereco: cronograma.unidade.endereco,
+          bairro: cronograma.unidade.bairro,
+          latitude: cronograma.unidade.latitude != null ? Number(cronograma.unidade.latitude) : null,
+          longitude: cronograma.unidade.longitude != null ? Number(cronograma.unidade.longitude) : null,
+          secretaria: cronograma.unidade.secretaria,
+        },
+        responsaveis: responsaveis.map((item) => ({ id: item.id, nome: item.nome })),
+        conflitoAvulsa: resumoConflito(conflito),
+      };
+    };
+
     const items = [];
     for (const cronograma of cronogramas) {
       const dates = projectChecagensNoPeriodo({
@@ -529,27 +598,16 @@ export class CronogramaService {
         }
         const tipo = resolveEventoTipo(date, hoje);
         if (!query.incluirRealizadas && tipo === 'REALIZADA') continue;
-        const responsaveis = formatResponsaveis(cronograma.responsaveis, cronograma.responsavel);
-        items.push({
-          id: `${cronograma.id}:${dataKey}`,
-          cronogramaId: cronograma.id,
-          data: dataKey,
-          tipo,
-          frequencia: cronograma.frequencia,
-          checklist: cronograma.checklist,
-          unidade: {
-            id: cronograma.unidade.id,
-            nome: cronograma.unidade.nome,
-            tipo: cronograma.unidade.tipo,
-            endereco: cronograma.unidade.endereco,
-            bairro: cronograma.unidade.bairro,
-            latitude: cronograma.unidade.latitude != null ? Number(cronograma.unidade.latitude) : null,
-            longitude: cronograma.unidade.longitude != null ? Number(cronograma.unidade.longitude) : null,
-            secretaria: cronograma.unidade.secretaria,
-          },
-          responsaveis: responsaveis.map((item) => ({ id: item.id, nome: item.nome })),
-        });
+        items.push(montarItem(cronograma, date, dataKey));
       }
+    }
+    // Data que conflitou e saiu da recorrência (ex.: PROGRAMACAO_ALTERADA): o card dela continua, sinalizado e não baixado.
+    const porId = new Map(cronogramas.map((c) => [c.id, c]));
+    for (const [chave, f] of conflitoPorData) {
+      const cronograma = porId.get(f.conflitoCronogramaId!);
+      const dia = startOfDay(f.conflitoDataProgramada!);
+      if (!cronograma || dia < from || dia > to) continue;
+      items.push(montarItem(cronograma, dia, chave.slice(cronograma.id.length + 1)));
     }
 
     items.sort((a, b) => a.data.localeCompare(b.data) || a.unidade.nome.localeCompare(b.unidade.nome));
@@ -561,21 +619,33 @@ export class CronogramaService {
     checklistId: string;
     concluidaEm: Date;
   }) {
-    const cronograma = await this.prisma.cronogramaChecagem.findUnique({
-      where: {
-        unidadeId_checklistId: {
-          unidadeId: input.unidadeId,
-          checklistId: input.checklistId,
-        },
-      },
-    });
+    return this.registrarChecagemRealizadaTx(this.prisma, input);
+  }
+
+  /**
+   * 304 (O5a/O7): baixa da programação dentro da transação da vistoria. Com `cronogramaId`, usa o vínculo
+   * enviado pelo app; sem ele (avulsa), mantém a regra antiga por unidade+checklist. A recorrência segue
+   * (`proximaChecagemEm` a partir do dia da conclusão) e um sync atrasado nunca faz a programação regredir.
+   */
+  async registrarChecagemRealizadaTx(
+    tx: Pick<Prisma.TransactionClient, 'cronogramaChecagem'>,
+    input: { cronogramaId?: string | null; unidadeId: string; checklistId: string; concluidaEm: Date },
+  ) {
+    const cronograma = input.cronogramaId
+      ? await tx.cronogramaChecagem.findUnique({ where: { id: input.cronogramaId } })
+      : await tx.cronogramaChecagem.findUnique({
+          where: { unidadeId_checklistId: { unidadeId: input.unidadeId, checklistId: input.checklistId } },
+        });
 
     if (!cronograma || !cronograma.ativo) {
       return null;
     }
 
     const concluidaEm = startOfDay(input.concluidaEm);
-    return this.prisma.cronogramaChecagem.update({
+    if (cronograma.ultimaChecagemEm && cronograma.ultimaChecagemEm >= concluidaEm) {
+      return cronograma;
+    }
+    return tx.cronogramaChecagem.update({
       where: { id: cronograma.id },
       data: {
         ultimaChecagemEm: concluidaEm,

@@ -155,7 +155,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'erro de rede';
-    throw new Error(`Falha de conexao com a API (${API_BASE_URL}). ${detail}`);
+    // 304: `rede: true` para a fila distinguir "sem conexão" de erro do servidor.
+    throw Object.assign(new Error(`Falha de conexao com a API (${API_BASE_URL}). ${detail}`), { rede: true });
   }
 
   if (response.status === 401) {
@@ -169,7 +170,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    throw new Error(await readApiError(response, `Falha ao consultar API (${response.status})`));
+    // 304: status e `codigo` (ex.: conflito da programação) junto da mensagem, sem mudar o texto do erro.
+    const fallback = `Falha ao consultar API (${response.status})`;
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+    const codigo = body && typeof body === 'object' && typeof (body as { codigo?: unknown }).codigo === 'string' ? (body as { codigo: string }).codigo : undefined;
+    throw Object.assign(new Error(body ? extractApiErrorMessage(body, fallback) : fallback), { status: response.status, codigo });
   }
 
   return response.json() as Promise<T>;
@@ -837,8 +847,11 @@ export function listMobileChamadosPendentes(unidadeId: string) {
   }>(`/mobile/unidades/${unidadeId}/chamados-pendentes`);
 }
 
-export function syncMobileInspection(payload: MobileQueuedInspection) {
-  const sanitized: MobileQueuedInspection = {
+export function syncMobileInspection(item: MobileQueuedInspection) {
+  // 304: `sync` (estado/erro do item na fila) é só local; não vai para a API (forbidNonWhitelisted).
+  const { sync: _estadoLocal, ...payload } = item;
+  void _estadoLocal;
+  const sanitized: Omit<MobileQueuedInspection, 'sync'> = {
     ...payload,
     checkin: toGeoCheckin(payload.checkin),
     respostas: payload.respostas.map((resposta) => ({
@@ -850,7 +863,13 @@ export function syncMobileInspection(payload: MobileQueuedInspection) {
     })),
   };
 
-  return request<{ status: string; fiscalizacaoId?: string; syncEventId: string }>('/mobile/sync/fiscalizacoes', {
+  return request<{
+    status: string;
+    reenvio?: boolean;
+    fiscalizacaoId?: string;
+    syncEventId: string | null;
+    programacao?: { cronogramaId: string; baixada: boolean; proximaChecagemEm: string } | null;
+  }>('/mobile/sync/fiscalizacoes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(sanitized),
@@ -1244,11 +1263,13 @@ export function listFiscalizacoes(params?: {
   from?: string;
   to?: string;
   q?: string;
+  avulsaPorConflito?: 'true' | 'false';
   limit?: number;
   offset?: number;
 }) {
   const query = new URLSearchParams();
   if (params?.secretariaId) query.set('secretariaId', params.secretariaId);
+  if (params?.avulsaPorConflito) query.set('avulsaPorConflito', params.avulsaPorConflito);
   if (params?.unidadeId) query.set('unidadeId', params.unidadeId);
   if (params?.agenteId) query.set('agenteId', params.agenteId);
   if (params?.tipo) query.set('tipo', params.tipo);

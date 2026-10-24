@@ -27,7 +27,8 @@
     "backup:db": "tsx scripts/backup-database.ts",
     "vapid:generate": "tsx scripts/generate-vapid-keys.ts",
     "seed:escopo-306": "tsx scripts/seed-escopo-306.ts",
-    "seed:responsaveis-307": "tsx scripts/seed-responsaveis-307.ts"
+    "seed:responsaveis-307": "tsx scripts/seed-responsaveis-307.ts",
+    "seed:campo-304": "tsx scripts/seed-campo-304.ts"
   },
   "keywords": [],
   "author": "",

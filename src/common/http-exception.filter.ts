@@ -35,9 +35,17 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
       this.logger.warn(`${request.method} ${request.url} -> ${status} ${message}`);
     }
 
+    // 304/O6: `codigo` opcional (ex.: PROGRAMACAO_JA_BAIXADA) repassado para o app distinguir o conflito.
+    const payload = exception instanceof HttpException ? exception.getResponse() : null;
+    const codigo =
+      payload && typeof payload === 'object' && typeof (payload as { codigo?: unknown }).codigo === 'string'
+        ? (payload as { codigo: string }).codigo
+        : undefined;
+
     response.status(status).json({
       statusCode: status,
       message,
+      ...(codigo ? { codigo } : {}),
       path: request.url,
       timestamp: new Date().toISOString(),
     });

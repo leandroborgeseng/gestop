@@ -10,7 +10,6 @@ import {
   FileText,
   KeyRound,
   LogOut,
-  RefreshCw,
   Search,
 } from 'lucide-react';
 import { SIGMA_NAME, SIGMA_TAGLINE } from '@/lib/brand';
@@ -26,6 +25,7 @@ import { PendenciasButton } from '@/components/pendencias/pendencias-button';
 import { PendenciasAberturaAutomatica } from '@/components/pendencias/pendencias-abertura-automatica';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
+import { ChipConexao } from '@/components/layout/chip-conexao';
 
 function NavLink({
   item,
@@ -287,19 +287,8 @@ function DesktopTopbar({ syncPending, permissions }: { syncPending: number; perm
           </kbd>
         </button>
 
-        {syncPending > 0 ? (
-          <div className="flex h-[30px] items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-2.5 text-xs font-semibold text-[var(--warn)]">
-            <span className="h-[7px] w-[7px] animate-pulse rounded-full bg-[var(--warn)]" />
-            <RefreshCw className="h-3.5 w-3.5" />
-            <span className="mono">{syncPending}</span>
-            <span className="hidden xl:inline">sync pendentes</span>
-          </div>
-        ) : null}
-
-        <div className="flex h-[30px] items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-2.5 text-xs font-semibold text-[var(--ok)]">
-          <span className="h-[7px] w-[7px] rounded-full bg-[var(--ok)]" />
-          Online
-        </div>
+        {/* M1: chip único de conexão (estado real; nunca verde offline). */}
+        <ChipConexao syncPendentesServidor={syncPending} />
       </div>
     </header>
   );
@@ -334,14 +323,7 @@ export function MobileAppBar({ userName, syncPending }: { userName: string; sync
           >
             <FileText className="h-4 w-4" />
           </button>
-          <span className="inline-flex h-7 items-center rounded-[var(--r-pill)] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-2 text-[11px] font-semibold text-[var(--ok)]">
-            Online
-          </span>
-          {syncPending > 0 ? (
-            <span className="mono inline-flex h-7 min-w-7 items-center justify-center rounded-[var(--r-pill)] bg-[var(--warn-bg)] px-2 text-[11px] font-bold text-[var(--warn)]">
-              {syncPending}
-            </span>
-          ) : null}
+          <ChipConexao compacto syncPendentesServidor={syncPending} />
         </div>
       </div>
     </header>

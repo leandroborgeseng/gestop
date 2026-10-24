@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CalendarClock, Map as MapIcon, MapPinned, Navigation, UserCheck } from 'lucide-react';
+import { CalendarClock, Map as MapIcon, MapPinned, Navigation, UserCheck, WifiOff } from 'lucide-react';
 import { ChamadosExecucaoMap } from '@/components/chamados/chamados-execucao-map';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Sheet } from '@/components/ui/sheet';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { listVistoriasProgramadas } from '@/lib/api';
+import { estadoListaOffline, filtrarProgramacoesLocais, rotuloDadosLocais } from '@/lib/pacote-offline';
 import { cn } from '@/lib/cn';
 import { CRONOGRAMA_FREQUENCIA_LABELS, monthBounds, toInputDate } from '@/lib/cronograma';
 import { openMapsRoute } from '@/lib/maps-route';
@@ -40,9 +41,17 @@ function situacaoMeta(item: VistoriaProgramadaItem) {
 export function VistoriasProgramadasPanel({
   fieldPackage,
   onIniciar,
+  online = true,
+  usuarioId,
+  rascunhos,
 }: {
   fieldPackage: MobileFieldPackage | null;
   onIniciar: (item: VistoriaProgramadaItem) => void;
+  /** 304/O2/O3: offline, a lista lê do pacote local e o mapa fica desabilitado. */
+  online?: boolean;
+  usuarioId?: string;
+  /** M-2: chaves `prog:cronogramaId:data` com rascunho local (badge "Rascunho"; tocar retoma). */
+  rascunhos?: Set<string>;
 }) {
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -56,6 +65,12 @@ export function VistoriasProgramadasPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [confirmItem, setConfirmItem] = useState<VistoriaProgramadaItem | null>(null);
+  // 304/O2: fonte da lista — API (online) ou pacote local (offline ou API inacessível).
+  const [fonteLocal, setFonteLocal] = useState(!online);
+  // Lows/Designer: sem conexão o Mapa fica desabilitado de verdade; volta para a Lista.
+  useEffect(() => {
+    if (fonteLocal) setMobilePanel('lista');
+  }, [fonteLocal]);
 
   const tipoOptions = useMemo(() => {
     const seen = new Map<string, string>();
@@ -85,22 +100,37 @@ export function VistoriasProgramadasPanel({
   }, [fieldPackage, tipo]);
 
   const load = useCallback(() => {
-    setLoading(true);
     setError(null);
-    listVistoriasProgramadas({
-      from: from || undefined,
-      to: to || undefined,
-      atribuidoAMim: atribuidoAMim || undefined,
-      tipo: tipo || undefined,
-      unidadeId: unidadeId || undefined,
-    })
+    const filtros = { from: from || undefined, to: to || undefined, atribuidoAMim: atribuidoAMim || undefined, tipo: tipo || undefined, unidadeId: unidadeId || undefined };
+    const usarLocal = () => {
+      const locais = filtrarProgramacoesLocais(fieldPackage?.programacoes ?? [], { ...filtros, usuarioId });
+      setFonteLocal(true);
+      setItems(locais);
+      setSelectedId((current) => (current && locais.some((item) => item.id === current) ? current : null));
+      setLoading(false);
+    };
+    if (!online) {
+      usarLocal();
+      return;
+    }
+    setLoading(true);
+    listVistoriasProgramadas(filtros)
       .then((response) => {
+        setFonteLocal(false);
         setItems(response.items);
         setSelectedId((current) => current && response.items.some((item) => item.id === current) ? current : null);
+        setLoading(false);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar vistorias programadas.'))
-      .finally(() => setLoading(false));
-  }, [from, to, atribuidoAMim, tipo, unidadeId]);
+      .catch((err) => {
+        // Sem conexão com o servidor: cai para o pacote local (não é "lista vazia").
+        if ((err as { rede?: boolean })?.rede && fieldPackage?.programacoes) {
+          usarLocal();
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Falha ao carregar vistorias programadas.');
+        setLoading(false);
+      });
+  }, [from, to, atribuidoAMim, tipo, unidadeId, online, fieldPackage, usuarioId]);
 
   useEffect(() => {
     const handle = window.setTimeout(() => load(), 150);
@@ -148,6 +178,10 @@ export function VistoriasProgramadasPanel({
     const match = items.find((item) => item.id === id);
     if (!match) return;
     setSelectedId(id);
+    if (rascunhos?.has(`prog:${match.cronogramaId}:${match.data}`)) {
+      onIniciar(match);
+      return;
+    }
     setConfirmItem(match);
   }
 
@@ -217,36 +251,75 @@ export function VistoriasProgramadasPanel({
         </Field>
       </div>
 
+      {fonteLocal && fieldPackage ? (
+        <p data-testid="programadas-dados-locais" className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[var(--warn)]">
+          <WifiOff className="h-3.5 w-3.5" />
+          Sem conexão · {rotuloDadosLocais(fieldPackage.downloadedAt)}
+        </p>
+      ) : null}
       {error ? <ErrorState message={error} onRetry={load} /> : null}
       {loading ? <LoadingState label="Carregando vistorias programadas..." /> : null}
 
-      {!loading && items.length === 0 ? (
-        <EmptyState
-          title="Nenhuma vistoria programada"
-          description="Não há vistorias previstas no período e nos filtros selecionados."
-        />
+      {!loading && fonteLocal && estadoListaOffline(fieldPackage, items) === 'SEM_DADOS_LOCAIS' ? (
+        <div data-testid="programadas-sem-dados-locais">
+          <EmptyState
+            title="Sem conexão e sem programações salvas"
+            description="Este aparelho não tem as programações no pacote offline. Quando tiver internet, toque em “Baixar dados offline”."
+          />
+        </div>
+      ) : !loading && items.length === 0 ? (
+        <div data-testid="programadas-lista-vazia">
+          <EmptyState
+            title="Nenhuma vistoria programada"
+            description={
+              fonteLocal
+                ? 'O pacote local não tem vistorias previstas no período e nos filtros selecionados.'
+                : 'Não há vistorias previstas no período e nos filtros selecionados.'
+            }
+          />
+        </div>
       ) : null}
 
       {!loading && items.length > 0 ? (
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="brand">{items.length} programada{items.length === 1 ? '' : 's'}</Badge>
-            <Badge variant="neutral">{mapPoints.length} no mapa</Badge>
+            {fonteLocal ? null : <Badge variant="neutral">{mapPoints.length} no mapa</Badge>}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 xl:hidden">
-            <Chip active={mobilePanel === 'mapa'} onClick={() => setMobilePanel('mapa')}>
-              <span className="inline-flex items-center gap-1.5">
-                <MapIcon className="h-3.5 w-3.5" />
-                Mapa
-              </span>
-            </Chip>
+            {fonteLocal ? (
+              <>
+                <button
+                  type="button"
+                  disabled
+                  data-testid="chip-mapa"
+                  title="Mapa indisponível sem conexão"
+                  className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] px-3 py-1.5 text-[12px] font-semibold text-[var(--ink-3)] opacity-60"
+                >
+                  <MapIcon className="h-3.5 w-3.5" />
+                  Mapa
+                </button>
+              </>
+            ) : (
+              <Chip active={mobilePanel === 'mapa'} onClick={() => setMobilePanel('mapa')}>
+                <span className="inline-flex items-center gap-1.5" data-testid="chip-mapa">
+                  <MapIcon className="h-3.5 w-3.5" />
+                  Mapa
+                </span>
+              </Chip>
+            )}
             <Chip active={mobilePanel === 'lista'} onClick={() => setMobilePanel('lista')}>
               <span className="inline-flex items-center gap-1.5">
                 <MapPinned className="h-3.5 w-3.5" />
                 Lista
               </span>
             </Chip>
+            {fonteLocal ? (
+              <span data-testid="mapa-hint" className="text-[11px] text-[var(--ink-3)]">
+                Mapa indisponível sem conexão
+              </span>
+            ) : null}
           </div>
 
           <div className="cco-workspace grid min-h-0 gap-3 xl:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] xl:items-stretch">
@@ -284,8 +357,21 @@ export function VistoriasProgramadasPanel({
                     >
                       <div className="flex min-w-0 items-start justify-between gap-2">
                         <span className="min-w-0 break-words text-[13px] font-semibold text-[var(--ink)]">{item.unidade.nome}</span>
-                        <Badge variant={meta.badge} className="shrink-0">{meta.label}</Badge>
+                        <span className="flex shrink-0 items-center gap-1">
+                          {rascunhos?.has(`prog:${item.cronogramaId}:${item.data}`) ? (
+                            <span data-testid="badge-rascunho">
+                              <Badge variant="info">Rascunho</Badge>
+                            </span>
+                          ) : null}
+                          <Badge variant={meta.badge} className="shrink-0">{meta.label}</Badge>
+                        </span>
                       </div>
+                      {item.conflitoAvulsa ? (
+                        <div data-testid="programada-conflito-avulsa" className="flex flex-wrap items-center gap-1.5 rounded-[var(--r-sm)] bg-[var(--warn-bg)] px-2 py-1">
+                          <Badge variant="warning">Avulsa por conflito</Badge>
+                          <span className="break-words text-[11px] font-semibold text-[var(--warn)]">Programação não baixada · vistoria avulsa enviada</span>
+                        </div>
+                      ) : null}
                       <p className="break-words text-[12px] text-[var(--ink-3)]">
                         {item.unidade.endereco}
                         {item.unidade.bairro ? ` · ${item.unidade.bairro}` : ''}
@@ -315,6 +401,18 @@ export function VistoriasProgramadasPanel({
                 mobilePanel === 'mapa' ? 'flex' : 'hidden xl:flex',
               )}
             >
+              {fonteLocal ? (
+                <section
+                  data-testid="mapa-offline-desabilitado"
+                  className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 rounded-[var(--r-card)] border border-dashed border-[var(--line)] bg-[var(--surface-2)] p-6 text-center"
+                >
+                  <WifiOff className="h-6 w-6 text-[var(--ink-3)]" />
+                  <p className="text-[14px] font-semibold text-[var(--ink)]">Mapa indisponível sem conexão</p>
+                  <p className="max-w-sm text-[12px] text-[var(--ink-3)]">
+                    O mapa precisa da internet para carregar. Use a lista; as programações vêm do pacote offline.
+                  </p>
+                </section>
+              ) : (
               <section className="cco-map-panel min-h-0 flex-1 overflow-hidden">
                 <ChamadosExecucaoMap
                   pontos={mapPoints}
@@ -328,6 +426,7 @@ export function VistoriasProgramadasPanel({
                   popupActionKind="modal"
                 />
               </section>
+              )}
             </div>
           </div>
         </>
@@ -343,6 +442,7 @@ export function VistoriasProgramadasPanel({
               <Button
                 type="button"
                 variant="outlined"
+                disabled={fonteLocal}
                 onClick={() =>
                   openMapsRoute(
                     confirmItem.unidade.latitude ?? 0,
