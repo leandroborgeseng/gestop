@@ -1,6 +1,7 @@
 'use client';
 
 import { processarFilaSync } from '@/lib/mobile-queue-sync';
+import { criarAutoSync } from '@/lib/mobile-auto-sync';
 import Link from 'next/link';
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, ClipboardPen, CloudUpload, MapPin, Printer, RefreshCcw, Save, Smartphone, Satellite, Wifi, WifiOff, Megaphone } from 'lucide-react';
@@ -62,6 +63,7 @@ export default function MobilePage() {
   const [downloading, setDownloading] = useState(false);
   const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [queueLoaded, setQueueLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gpsNotice, setGpsNotice] = useState<string | null>(null);
@@ -75,14 +77,17 @@ export default function MobilePage() {
     checklistNome: string;
   } | null>(null);
   const queueRef = useRef<MobileQueuedInspection[]>([]);
+  // 309 ajuste 2: trava de requisição em andamento (o estado `syncing` pode estar defasado no closure).
+  const syncEmAndamentoRef = useRef(false);
 
   useEffect(() => {
     queueRef.current = queue;
   }, [queue]);
 
   const syncQueue = useCallback(async () => {
-    if (queueRef.current.length === 0 || syncing) return;
-
+    if (queueRef.current.length === 0 || syncing || syncEmAndamentoRef.current) return;
+    syncEmAndamentoRef.current = true;
+    try {
     const initialCount = queueRef.current.length;
     setSyncing(true);
     setError(null);
@@ -95,7 +100,10 @@ export default function MobilePage() {
       snackbar.show('Fila sincronizada com sucesso.', 'success');
       showLocalNotification('SIGMA Vistoria', 'Vistorias sincronizadas com sucesso.');
     }
-    setSyncing(false);
+    } finally {
+      syncEmAndamentoRef.current = false;
+      setSyncing(false);
+    }
   }, [syncing, snackbar]);
 
   const downloadFieldPackage = useCallback(async (showToast = false) => {
@@ -129,8 +137,12 @@ export default function MobilePage() {
 
     migrateLegacyQueueIfNeeded()
       .then(() => readMobileQueue())
-      .then(setQueue)
-      .catch(() => setQueue([]));
+      .then((fila) => {
+        queueRef.current = fila;
+        setQueue(fila);
+      })
+      .catch(() => setQueue([]))
+      .finally(() => setQueueLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -188,16 +200,17 @@ export default function MobilePage() {
     }
   }, [fieldPackage, unidadeId]);
 
-  // 309: sync automático só na TRANSIÇÃO para online. Antes o efeito dependia de `syncQueue`, que muda a cada
-  // troca de `syncing`; com um item recusado (ex.: 409 de checklist inativado) isso virava um laço de reenvios.
+  // 309 ajuste 2: 1 tentativa ao abrir (online, com fila) e 1 a cada volta da conexão; sem laço e sem chamadas
+  // duplicadas (strict mode / requisição em andamento). A regra fica em lib/mobile-auto-sync.ts.
   const syncQueueRef = useRef(syncQueue);
   useEffect(() => {
     syncQueueRef.current = syncQueue;
   }, [syncQueue]);
+  const autoSyncRef = useRef<ReturnType<typeof criarAutoSync> | null>(null);
+  if (!autoSyncRef.current) autoSyncRef.current = criarAutoSync(() => syncQueueRef.current());
   useEffect(() => {
-    if (!online || queueRef.current.length === 0) return;
-    void syncQueueRef.current();
-  }, [online]);
+    autoSyncRef.current?.avaliar({ online, filaCarregada: queueLoaded, temItens: queueRef.current.length > 0 });
+  }, [online, queueLoaded]);
 
   const selectedChecklist = useMemo(
     () => fieldPackage?.checklists.find((checklist) => checklist.id === checklistId) ?? null,

@@ -15,7 +15,7 @@ import { seedChecklists309, Seed309 } from '../../scripts/seed-checklists-309-co
 import { AuthService } from '../auth/auth.service';
 import { JwtPayload } from '../auth/jwt';
 import { ChecklistsService } from '../checklists/checklists.service';
-import { formatarDataHoraBr } from '../common/inativos/registro-inativo';
+import { formatarDataHoraBr, instanteCorteSync } from '../common/inativos/registro-inativo';
 import { CronogramaService } from '../cronograma/cronograma.service';
 import { MobileService } from './mobile.service';
 
@@ -98,7 +98,7 @@ describe.skipIf(!URL)('309/C4a — sync offline contra checklist inativo (Postgr
     expect(r.status).toBe('sincronizado');
     const f = await prisma.fiscalizacao.findUniqueOrThrow({ where: { id: r.fiscalizacaoId! } });
     expect(f.checklistVersaoId).toBe(c.versao);
-    expect(f.iniciadaEm.toISOString()).toBe(dto.iniciadaEm);
+    expect(f.iniciadaEm?.toISOString()).toBe(dto.iniciadaEm);
     const log = await prisma.logAuditoria.findFirstOrThrow({ where: { entidadeId: f.id, acao: 'SYNC' } });
     expect(log.descricao).toBe('Sync de vistoria contra checklist já inativo (check-in anterior à inativação)');
     expect(log.valorNovo).toMatchObject({
@@ -156,7 +156,7 @@ describe.skipIf(!URL)('309/C4a — sync offline contra checklist inativo (Postgr
     const antes = { ...payload(c.versao, c.item, em), iniciadaEm: emSp(-1000) };
     const r = await mobile.syncFiscalizacao(antes as never, gestor);
     const f = await prisma.fiscalizacao.findUniqueOrThrow({ where: { id: r.fiscalizacaoId! } });
-    expect(f.iniciadaEm.getTime()).toBe(em.getTime() - 1000);
+    expect(f.iniciadaEm?.getTime()).toBe(em.getTime() - 1000);
   });
 
   it('SEM CHECK-IN: usa o primeiro horário do aparelho no pacote (aqui, a captura da evidência)', async () => {
@@ -169,12 +169,12 @@ describe.skipIf(!URL)('309/C4a — sync offline contra checklist inativo (Postgr
     const dtoAceito = { ...semCheckin, concluidaEm: new Date(em.getTime() + H).toISOString(), respostas: [{ ...base.respostas[0], evidencias: [] }] };
     const vazio = await mobile.syncFiscalizacao({ ...dtoAceito, clientEventId: `${base.clientEventId}-x`, concluidaEm: new Date(em.getTime() + H).toISOString() } as never, gestor).catch((x) => x);
     expect(vazio).toBeInstanceOf(ConflictException); // sem check-in e sem captura: corte = conclusão (depois) → 409
-    const decisao = (await import('../common/inativos/registro-inativo')).instanteCorteSync({ ...dtoAceito, respostas: [{ evidencias: [{ capturadaEm: capturaAntes }] }] });
+    const decisao = instanteCorteSync({ ...dtoAceito, respostas: [{ evidencias: [{ capturadaEm: capturaAntes }] }] });
     expect(decisao!.toISOString()).toBe(capturaAntes);
     const r = await mobile.syncFiscalizacao({ ...dtoAceito, concluidaEm: capturaAntes } as never, gestor);
     expect(r.status).toBe('sincronizado');
     const f = await prisma.fiscalizacao.findUniqueOrThrow({ where: { id: r.fiscalizacaoId! } });
-    expect(f.iniciadaEm.toISOString()).toBe(capturaAntes);
+    expect(f.iniciadaEm?.toISOString()).toBe(capturaAntes);
   });
 
   it('REATIVADO: depois de reativar o checklist volta a valer como ativo (inativadoEm limpo) — vistoria feita na janela inativa é aceita', async () => {
