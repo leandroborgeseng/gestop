@@ -753,7 +753,9 @@ export type VistoriaProgramadaItem = {
   data: string;
   tipo: 'AGENDADA' | 'REALIZADA' | 'ATRASADA';
   frequencia: 'SEMANAL' | 'QUINZENAL' | 'MENSAL' | 'BIMESTRAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL';
-  checklist: { id: string; nome: string };
+  checklist: { id: string; nome: string; ativo?: boolean };
+  /** 309/C5: checklist inativo, programação sinalizada e sem iniciar vistoria. */
+  checklistInativo?: boolean;
   unidade: {
     id: string;
     nome: string;
@@ -1201,6 +1203,8 @@ export type CronogramaChecagem = {
     nome: string;
     escopo: ChecklistEscopo;
     unidadeTipo?: UnidadeTipo | null;
+    /** 309/C5 */
+    ativo?: boolean;
   };
   responsavel?: {
     id: string;

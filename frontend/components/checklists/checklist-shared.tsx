@@ -3,6 +3,8 @@
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
+import { BotaoStatusAtivo } from '@/components/inativos/inativos';
+import { TEXTOS_CHECKLIST } from '@/lib/inativos';
 import { ImportarOpcoesDialog } from '@/components/checklists/importar-opcoes-dialog';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { aplicarImportacao, opcoesAtuaisPreenchidas, type FinalidadeImportacao } from '@/lib/checklist-importar-opcoes';
@@ -395,7 +397,7 @@ export function ChecklistHeader({
   secretarias,
   tiposChamado = [],
   onNewVersion,
-  onDeactivate,
+  onStatusAtivo,
   onUpdateBinding,
   onFinalidadesChange,
   podeAlterar = true,
@@ -405,7 +407,8 @@ export function ChecklistHeader({
   secretarias: AdminSecretaria[];
   tiposChamado?: TipoChamadoOpcao[];
   onNewVersion: () => void;
-  onDeactivate: () => void;
+  /** 309: Inativar (ativo) ou Reativar (inativo), sempre depois da confirmação. */
+  onStatusAtivo: (acao: 'INATIVAR' | 'REATIVAR') => Promise<unknown> | void;
   onUpdateBinding: (payload: Record<string, unknown>) => void;
   onFinalidadesChange?: (finalidades: Array<'VISTORIA' | 'CHAMADO' | 'DOCUMENTO_AVULSO'>) => void;
   podeAlterar?: boolean;
@@ -501,20 +504,18 @@ export function ChecklistHeader({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {podeAlterar ? (
+            {podeAlterar && checklist.ativo ? (
               <Button variant="tonal" size="sm" onClick={() => setEditOpen(true)}>
                 Editar vínculo
               </Button>
             ) : null}
-            {podeAlterar ? (
+            {podeAlterar && checklist.ativo ? (
               <Button variant="tonal" size="sm" onClick={onNewVersion}>
                 Nova versão
               </Button>
             ) : null}
             {podeExcluir ? (
-              <Button variant="text" size="sm" className="text-red-700" onClick={onDeactivate}>
-                Inativar
-              </Button>
+              <BotaoStatusAtivo registro={checklist} textos={TEXTOS_CHECKLIST} onConfirmar={onStatusAtivo} />
             ) : null}
           </div>
         </CardContent>

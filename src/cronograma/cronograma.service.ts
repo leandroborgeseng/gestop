@@ -39,6 +39,8 @@ type CalendarioEvento = {
     id: string;
     nome: string;
   };
+  /** 309/C5: o checklist da programação está inativo. */
+  checklistInativo?: boolean;
   cronogramaId?: string;
   fiscalizacaoId?: string;
   frequencia?: CronogramaFrequencia;
@@ -57,7 +59,7 @@ const cronogramaInclude = {
       secretaria: { select: { id: true, nome: true, sigla: true } },
     },
   },
-  checklist: { select: { id: true, nome: true, escopo: true, unidadeTipo: true } },
+  checklist: { select: { id: true, nome: true, escopo: true, unidadeTipo: true, ativo: true } },
   responsavel: { select: { id: true, nome: true, email: true } },
   responsaveis: {
     include: {
@@ -416,6 +418,7 @@ export class CronogramaService {
             secretariaSigla: cronograma.unidade.secretaria.sigla,
           },
           checklist: { id: cronograma.checklist.id, nome: cronograma.checklist.nome },
+          checklistInativo: !cronograma.checklist.ativo,
           cronogramaId: cronograma.id,
           frequencia: cronograma.frequencia,
           responsavelNome: responsaveisLabel(cronograma.responsaveis, cronograma.responsavel),
@@ -483,7 +486,7 @@ export class CronogramaService {
             secretaria: { select: { id: true, nome: true, sigla: true } },
           },
         },
-        checklist: { select: { id: true, nome: true } },
+        checklist: { select: { id: true, nome: true, ativo: true } },
         responsavel: { select: { id: true, nome: true, email: true } },
         responsaveis: {
           include: { usuario: { select: { id: true, nome: true, email: true, ativo: true } } },
@@ -537,6 +540,8 @@ export class CronogramaService {
           tipo,
           frequencia: cronograma.frequencia,
           checklist: cronograma.checklist,
+          /** 309/C5: programação de checklist inativo fica sinalizada e não inicia vistoria. */
+          checklistInativo: !cronograma.checklist.ativo,
           unidade: {
             id: cronograma.unidade.id,
             nome: cronograma.unidade.nome,

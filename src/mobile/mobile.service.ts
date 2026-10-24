@@ -1,3 +1,4 @@
+import { decidirSyncContraInativo, instanteCorteSync, RegistroInativoException } from '../common/inativos/registro-inativo';
 import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AuditAction,
@@ -150,17 +151,27 @@ export class MobileService {
             unidadeId: true,
             unidadeTipo: true,
             ativo: true,
+            inativadoEm: true,
           },
         },
       },
     });
 
-    if (checklistVersao.status !== 'PUBLICADA') {
+    // 309/C4a: check-in do aparelho (ou, sem check-in, o primeiro horário do pacote) x inativadoEm, em UTC.
+    const corte = instanteCorteSync(dto);
+    if (!corte) throw new BadRequestException('A vistoria não tem horário de check-in nem outro horário do aparelho.');
+    const decisaoInativo = decidirSyncContraInativo(checklistVersao.checklist, corte);
+    if (decisaoInativo.tipo === 'REJEITA') throw new RegistroInativoException(decisaoInativo.mensagem);
+    const aceitaExistente = decisaoInativo.tipo === 'ACEITA_EXISTENTE';
+
+    // Aceita como existente: grava com a versão do pacote offline, mesmo que já tenha sido arquivada depois.
+    const versaoValida = checklistVersao.status === 'PUBLICADA' || (aceitaExistente && checklistVersao.status === 'ARQUIVADA');
+    if (!versaoValida) {
       throw new BadRequestException('Somente versoes publicadas podem ser usadas em campo.');
     }
 
     if (
-      !checklistAppliesToUnidade(checklistVersao.checklist, {
+      !checklistAppliesToUnidade({ ...checklistVersao.checklist, ativo: true }, {
         id: unidade.id,
         tipo: unidade.tipo,
         secretariaId: unidade.secretariaId,
@@ -234,7 +245,7 @@ export class MobileService {
           agenteId: user.sub,
           status: FiscalizacaoStatus.CONCLUIDA,
           origem: FiscalizacaoOrigem.OFFLINE,
-          iniciadaEm: new Date(dto.iniciadaEm),
+          iniciadaEm: corte,
           concluidaEm: new Date(dto.concluidaEm),
           checkinLatitude: dto.checkin.latitude,
           checkinLongitude: dto.checkin.longitude,
@@ -327,7 +338,21 @@ export class MobileService {
           acao: AuditAction.SYNC,
           entidadeTipo: 'Fiscalizacao',
           entidadeId: fiscalizacao.id,
-          valorNovo: dto as unknown as Prisma.InputJsonValue,
+          valorNovo: (aceitaExistente
+            ? {
+                ...dto,
+                syncContraChecklistInativo: {
+                  checklistId: checklistVersao.checklist.id,
+                  checklistVersaoId: checklistVersao.id,
+                  versaoStatus: checklistVersao.status,
+                  checkinEm: decisaoInativo.checkinEm.toISOString(),
+                  inativadoEm: decisaoInativo.inativadoEm.toISOString(),
+                },
+              }
+            : dto) as unknown as Prisma.InputJsonValue,
+          ...(aceitaExistente
+            ? { descricao: 'Sync de vistoria contra checklist já inativo (check-in anterior à inativação)' }
+            : {}),
         },
       });
 

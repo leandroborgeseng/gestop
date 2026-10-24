@@ -1,3 +1,4 @@
+import { assertRegistroPodeIniciar, CHECKLIST_INATIVO } from '../common/inativos/registro-inativo';
 import {
   BadRequestException,
   forwardRef,
@@ -496,6 +497,7 @@ export class FiscalizacoesService {
     if (!versao || versao.status !== 'PUBLICADA') {
       throw new BadRequestException('Checklist/versão inválida ou não publicada.');
     }
+    assertRegistroPodeIniciar(versao.checklist, CHECKLIST_INATIVO);
     if (versao.checklist.finalidade === 'CHAMADO') {
       throw new BadRequestException('Este checklist é de execução de chamado e não pode ser impresso como vistoria.');
     }
@@ -648,6 +650,7 @@ export class FiscalizacoesService {
     if (!checklistVersao || checklistVersao.status !== 'PUBLICADA') {
       throw new BadRequestException('Somente versões publicadas podem ser usadas.');
     }
+    assertRegistroPodeIniciar(checklistVersao.checklist, CHECKLIST_INATIVO);
     if (checklistVersao.checklist.finalidade === 'CHAMADO') {
       throw new BadRequestException('Este checklist é exclusivo de execução de chamado.');
     }
