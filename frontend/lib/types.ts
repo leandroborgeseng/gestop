@@ -689,8 +689,20 @@ export type ChecklistModel = {
   versoes: ChecklistVersao[];
 };
 
+/** 304/O1: programação levada no pacote offline (mesmos campos da lista online + versão do checklist). */
+export type ProgramacaoOffline = VistoriaProgramadaItem & {
+  checklistVersao: { id: string; versao: number } | null;
+};
+
 export type MobileFieldPackage = {
   downloadedAt: string;
+  /** 304/O9: validade do pacote (D3: 7 dias). Pacotes antigos não têm o campo. */
+  validoAte?: string;
+  validadeDias?: number;
+  /** 303/G2a: limite de precisão do check-in (m), o mesmo do backend. */
+  config?: { precisaoMaxCheckinMetros: number };
+  contadores?: { unidades: number; checklists: number; programacoes: number };
+  programacoes?: ProgramacaoOffline[];
   secretariaEscopo?: {
     ativaId: string | null;
     todas: boolean;
@@ -719,6 +731,12 @@ export type MobileQueuedInspection = {
   concluidaEm: string;
   cronogramaId?: string;
   dataProgramada?: string;
+  /** 304/O6: `cronogramaAtualizadoEm` da programação no pacote. */
+  programacaoAtualizadaEm?: string;
+  /** 304/O10/O6: estado local do item na fila (não é enviado). */
+  sync?: FilaItemSync;
+  /** 304/O6a: "Enviar como avulsa" após conflito — referência da programação + motivo (obrigatório). */
+  avulsaPorConflito?: { motivo: string; cronogramaId: string; dataProgramada: string; codigo?: string };
   checkin: {
     latitude: number;
     longitude: number;
@@ -747,9 +765,18 @@ export type MobileQueuedInspection = {
   }>;
 };
 
+export type FilaItemSync = {
+  tipo: 'CONFLITO' | 'ESCOPO' | 'VALIDACAO' | 'REDE' | 'ERRO';
+  mensagem: string;
+  codigo?: string;
+  tentativas: number;
+  ultimaTentativaEm: string;
+};
+
 export type VistoriaProgramadaItem = {
   id: string;
   cronogramaId: string;
+  cronogramaAtualizadoEm?: string;
   data: string;
   tipo: 'AGENDADA' | 'REALIZADA' | 'ATRASADA';
   frequencia: 'SEMANAL' | 'QUINZENAL' | 'MENSAL' | 'BIMESTRAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL';
@@ -765,6 +792,15 @@ export type VistoriaProgramadaItem = {
     secretaria: SecretariaOption;
   };
   responsaveis: Array<{ id: string; nome: string }>;
+  /** 304/O6a: vistoria avulsa enviada por conflito com esta programação (ela continua pendente). */
+  conflitoAvulsa?: {
+    fiscalizacaoId: string;
+    motivo: string | null;
+    codigo: string | null;
+    dataProgramada: string | null;
+    enviadaEm: string | null;
+    agente: { id: string; nome: string };
+  } | null;
 };
 
 export type ChamadoStatus =
@@ -1268,6 +1304,12 @@ export type FiscalizacaoResumo = {
   status: FiscalizacaoStatus;
   origem: FiscalizacaoOrigem | string;
   origemLabel?: string | null;
+  /** 304/O6a */
+  avulsaPorConflito?: boolean;
+  avulsaMotivo?: string | null;
+  conflitoCronogramaId?: string | null;
+  conflitoDataProgramada?: string | null;
+  conflitoCodigo?: string | null;
   iniciadaEm: string | null;
   concluidaEm: string | null;
   dentroRaioPermitido: boolean | null;

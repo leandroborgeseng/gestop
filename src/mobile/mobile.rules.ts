@@ -1,4 +1,5 @@
 import { ConformidadeStatus } from '@prisma/client';
+import { precisaoMaxCheckinMetros } from './mobile.config';
 import { evaluateFiscalizacaoCheckin, validateNonConformityEvidence } from '../domain/rules';
 
 export function validateMobileCheckin(input: {
@@ -12,15 +13,21 @@ export function validateMobileCheckin(input: {
     longitude: number;
     precisaoMetros: number;
   };
+  /** G2a: limite de precisão (m); padrão vem da configuração (D2: 50 m). */
+  precisaoMaxMetros?: number;
 }) {
-  const result = evaluateFiscalizacaoCheckin({
-    unidade: input.unidade,
-    agente: input.checkin,
-  });
+  const precisaoMax = input.precisaoMaxMetros ?? precisaoMaxCheckinMetros();
+  const result = evaluateFiscalizacaoCheckin(
+    {
+      unidade: input.unidade,
+      agente: input.checkin,
+    },
+    precisaoMax,
+  );
 
   if (!result.canStart) {
     const reasons = [];
-    if (!result.gpsAccuracyAccepted) reasons.push('Precisao do GPS acima de 50 m');
+    if (!result.gpsAccuracyAccepted) reasons.push(`Precisao do GPS acima de ${precisaoMax} m`);
     if (!result.withinAllowedRadius) reasons.push(`Fora do raio permitido de ${result.radiusMeters} m`);
 
     return {

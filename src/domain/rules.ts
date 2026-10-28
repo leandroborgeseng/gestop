@@ -23,10 +23,10 @@ export type NonConformityEvidenceInput = {
   comentario?: string | null;
 };
 
-export function evaluateFiscalizacaoCheckin(input: FiscalizacaoCheckinInput) {
+export function evaluateFiscalizacaoCheckin(input: FiscalizacaoCheckinInput, maxAccuracyMeters?: number) {
   const radiusMeters = input.unidade.raioValidacaoMetros ?? DEFAULT_RAIO_VALIDACAO_METROS;
   const distanceMeters = haversineDistanceMeters(input.unidade, input.agente);
-  const gpsAccuracyAccepted = isGpsAccuracyAcceptable(input.agente.precisaoMetros);
+  const gpsAccuracyAccepted = isGpsAccuracyAcceptable(input.agente.precisaoMetros, maxAccuracyMeters);
 
   return {
     distanceMeters,
