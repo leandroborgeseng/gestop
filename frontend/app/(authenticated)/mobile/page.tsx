@@ -1,5 +1,6 @@
 'use client';
 
+import { criarAutoSync } from '@/lib/mobile-auto-sync';
 import Link from 'next/link';
 import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, ClipboardPen, CloudUpload, MapPin, Printer, RefreshCcw, Save, Smartphone, Satellite, Wifi, WifiOff, Megaphone } from 'lucide-react';
@@ -86,6 +87,7 @@ export default function MobilePage() {
   const [downloading, setDownloading] = useState(false);
   const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [queueLoaded, setQueueLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [gpsNotice, setGpsNotice] = useState<string | null>(null);
@@ -100,6 +102,8 @@ export default function MobilePage() {
     programacaoAtualizadaEm?: string;
   } | null>(null);
   const queueRef = useRef<MobileQueuedInspection[]>([]);
+  // 309 ajuste 2: trava de requisição em andamento (o estado `syncing` pode estar defasado no closure).
+  const syncEmAndamentoRef = useRef(false);
   // 303/G3: check-in (GPS validado na hora); o Concluir usa estes dados e não chama o GPS de novo.
   const [checkin, setCheckin] = useState<CheckinGps | null>(null);
   const [checkinErro, setCheckinErro] = useState<string | null>(null);
@@ -137,11 +141,13 @@ export default function MobilePage() {
   }, [queue.length]);
 
   const syncQueue = useCallback(async (manual = true) => {
-    if (queueRef.current.length === 0 || syncing) return;
+    if (queueRef.current.length === 0 || syncing || syncEmAndamentoRef.current) return;
     // Automático (ao reconectar): não reenvia o que o servidor já recusou (conflito, escopo, validação);
     // esses itens esperam o usuário agir (botão Sincronizar ou "Enviar como avulsa").
     const pendentesAuto = queueRef.current.filter((item) => !item.sync || item.sync.tipo === 'REDE' || item.sync.tipo === 'ERRO');
     if (!manual && pendentesAuto.length === 0) return;
+    syncEmAndamentoRef.current = true;
+    try {
 
     const initialCount = queueRef.current.length;
     setSyncing(true);
@@ -172,7 +178,10 @@ export default function MobilePage() {
       snackbar.show('Fila sincronizada com sucesso.', 'success');
       showLocalNotification('SIGMA Vistoria', 'Vistorias sincronizadas com sucesso.');
     }
-    setSyncing(false);
+    } finally {
+      syncEmAndamentoRef.current = false;
+      setSyncing(false);
+    }
   }, [syncing, snackbar]);
 
   const downloadFieldPackage = useCallback(async (showToast = false) => {
@@ -211,7 +220,7 @@ export default function MobilePage() {
         setQueue(itens);
       })
       .catch(() => setQueue([]))
-      .finally(() => setFilaCarregada(true));
+      .finally(() => setQueueLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -304,14 +313,18 @@ export default function MobilePage() {
     }
   }, [fieldPackage, unidadeId]);
 
-  // Sync automático só na transição para online (não em loop a cada render do `syncing`).
-  const [filaCarregada, setFilaCarregada] = useState(false);
+  // 309 ajuste 2: 1 tentativa ao abrir (online, com fila) e 1 a cada volta da conexão; sem laço e sem chamadas
+  // duplicadas (strict mode / requisição em andamento). A regra fica em lib/mobile-auto-sync.ts.
+  // Automático = syncQueue(false): não reenvia o que o servidor já recusou (#37).
   const syncQueueRef = useRef(syncQueue);
-  syncQueueRef.current = syncQueue;
   useEffect(() => {
-    if (!online || queueRef.current.length === 0) return;
-    void syncQueueRef.current(false);
-  }, [online, filaCarregada]);
+    syncQueueRef.current = syncQueue;
+  }, [syncQueue]);
+  const autoSyncRef = useRef<ReturnType<typeof criarAutoSync> | null>(null);
+  if (!autoSyncRef.current) autoSyncRef.current = criarAutoSync(() => syncQueueRef.current(false));
+  useEffect(() => {
+    autoSyncRef.current?.avaliar({ online, filaCarregada: queueLoaded, temItens: queueRef.current.length > 0 });
+  }, [online, queueLoaded]);
 
   const selectedChecklist = useMemo(
     () => fieldPackage?.checklists.find((checklist) => checklist.id === checklistId) ?? null,

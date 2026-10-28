@@ -22,6 +22,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { ErrorState, LoadingState } from '@/components/ui-states';
+import { AvisoChecklistInativoCronograma } from '@/components/inativos/inativos';
 import { checklistAppliesToUnidade } from '@/lib/checklist-matching';
 import {
   deactivateCronograma,
@@ -470,6 +471,7 @@ export default function CronogramaPage() {
                           {item.checklist.nome} · {CRONOGRAMA_FREQUENCIA_LABELS[item.frequencia]} ·{' '}
                           {formatUnidadeTipo(item.unidade.tipo)}
                         </p>
+                        {item.checklist.ativo === false ? <AvisoChecklistInativoCronograma className="mt-2" /> : null}
                         <p className="mt-1 text-[13px] text-[var(--ink-3)]">
                           Próxima: {new Date(item.proximaChecagemEm).toLocaleDateString('pt-BR')}
                           {item.ultimaChecagemEm

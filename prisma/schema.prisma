@@ -572,6 +572,8 @@ model Checklist {
   /// Codigo do TipoProprio quando escopo = UNIDADE_TIPO.
   unidadeTipo   String?
   ativo         Boolean             @default(true)
+  /// 309/C4a: quando foi inativado (Inativar grava; Reativar limpa — o histórico fica na auditoria).
+  inativadoEm   DateTime?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 

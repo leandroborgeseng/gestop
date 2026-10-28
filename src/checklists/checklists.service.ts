@@ -2,6 +2,13 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { AuditAction, ChecklistEscopo, ChecklistFinalidade, ChecklistVersaoStatus, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  AcaoStatusAtivo,
+  assertRegistroEditavel,
+  auditoriaStatusAtivo,
+  CHECKLIST_INATIVO,
+  planejarStatusAtivo,
+} from '../common/inativos/registro-inativo';
 import { assertChecklistAcao, assertChecklistNoEscopo } from './checklist-acesso';
 import { prepararItensChecklist } from './checklist-item.rules';
 import { ChecklistDto, ChecklistVersionDto } from './checklists.dto';
@@ -54,6 +61,17 @@ export class ChecklistsService {
         },
       }),
     );
+  }
+
+  /** 309/C1/C6: contadores da sanfona, com o mesmo filtro de escopo da lista. */
+  async resumoChecklists(user: JwtPayload) {
+    assertChecklistAcao(user, 'visualizar');
+    const where = await this.checklistWhere(user);
+    const [ativos, inativos] = await Promise.all([
+      this.prisma.checklist.count({ where: { AND: [where, { ativo: true }] } }),
+      this.prisma.checklist.count({ where: { AND: [where, { ativo: false }] } }),
+    ]);
+    return { ativos, inativos, total: ativos + inativos };
   }
 
   async listSecretariasOpcoes(user: JwtPayload) {
@@ -142,6 +160,7 @@ export class ChecklistsService {
 
   async updateChecklist(id: string, dto: ChecklistDto, user: JwtPayload) {
     assertChecklistAcao(user, 'alterar');
+    await this.assertChecklistEditavel(id, user);
     this.assertChecklistEscopo(dto);
     const binding = normalizeChecklistBinding(dto);
     await this.assertBindingNoEscopo(user, binding);
@@ -166,7 +185,7 @@ export class ChecklistsService {
         secretariaId: binding.secretariaId || null,
         unidadeId: binding.unidadeId || null,
         unidadeTipo: binding.unidadeTipo || null,
-        ativo: binding.ativo ?? true,
+        // 309: o status só muda por Inativar/Reativar (com permissão e auditoria própria).
         ...(linkTiposChamado
           ? {
               tiposChamado: {
@@ -182,22 +201,77 @@ export class ChecklistsService {
     return checklist;
   }
 
-  async deactivateChecklist(id: string, user: JwtPayload) {
+  deactivateChecklist(id: string, user: JwtPayload) {
+    return this.alterarStatusAtivo(id, 'INATIVAR', user);
+  }
+
+  reactivateChecklist(id: string, user: JwtPayload) {
+    return this.alterarStatusAtivo(id, 'REATIVAR', user);
+  }
+
+  /**
+   * 309/C2/C6: Inativar e Reativar usam a mesma permissão (excluir), respeitam a Secretaria ativa e gravam
+   * auditoria STATUS_CHANGE com quem, quando, antes e depois, na mesma transação da troca. Nada é apagado.
+   */
+  private async alterarStatusAtivo(id: string, acao: AcaoStatusAtivo, user: JwtPayload) {
     assertChecklistAcao(user, 'excluir');
     const before = await this.getChecklist(id, user);
     assertChecklistNoEscopo(user, before);
-    const checklist = await this.prisma.checklist.update({
-      where: { id },
-      data: { ativo: false },
+    const ativo = planejarStatusAtivo(before.ativo, acao, CHECKLIST_INATIVO);
+    const quando = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      // inativadoEm: Inativar grava o instante; Reativar limpa (o histórico de cada troca fica na auditoria).
+      const trocou = await tx.checklist.updateMany({
+        where: { id, ativo: before.ativo },
+        data: { ativo, inativadoEm: ativo ? null : quando },
+      });
+      if (trocou.count !== 1) planejarStatusAtivo(!before.ativo, acao, CHECKLIST_INATIVO);
+      const checklist = await tx.checklist.findUniqueOrThrow({ where: { id } });
+      const cronogramasVinculados = await tx.cronogramaChecagem.count({ where: { checklistId: id } });
+      const resumo = (c: { ativo: boolean; nome: string; updatedAt: Date; inativadoEm: Date | null }) => ({
+        id,
+        nome: c.nome,
+        ativo: c.ativo,
+        inativadoEm: c.inativadoEm ? c.inativadoEm.toISOString() : null,
+        atualizadoEm: c.updatedAt.toISOString(),
+        cronogramasVinculados,
+      });
+      const { valorAntigo, valorNovo } = auditoriaStatusAtivo({
+        acao,
+        usuarioId: user.sub,
+        quando,
+        antes: resumo(before),
+        depois: resumo(checklist),
+      });
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.STATUS_CHANGE,
+          entidadeTipo: 'Checklist',
+          entidadeId: id,
+          valorAntigo: toJsonValue(valorAntigo),
+          valorNovo: toJsonValue(valorNovo),
+          tela: 'checklists',
+          funcao: '_tela',
+          descricao: acao === 'INATIVAR' ? 'Checklist inativado' : 'Checklist reativado',
+          secretariaAtivaId: user.secretariaId ?? null,
+          createdAt: quando,
+        },
+      });
+      return checklist;
     });
+  }
 
-    await this.audit(user, AuditAction.DELETE, 'Checklist', id, before, checklist);
+  /** 309/C3: checklist inativo é somente leitura no backend. */
+  private async assertChecklistEditavel(id: string, user: JwtPayload) {
+    const checklist = await this.getChecklist(id, user);
+    assertRegistroEditavel(checklist, CHECKLIST_INATIVO);
     return checklist;
   }
 
   async createVersion(id: string, user: JwtPayload) {
     assertChecklistAcao(user, 'alterar');
-    const checklist = await this.getChecklist(id, user);
+    const checklist = await this.assertChecklistEditavel(id, user);
     assertChecklistNoEscopo(user, checklist);
     const draftExists = checklist.versoes.some((versao) => versao.status === ChecklistVersaoStatus.RASCUNHO);
 
@@ -249,7 +323,7 @@ export class ChecklistsService {
     if (!version) {
       throw new NotFoundException('Versao de checklist nao encontrada');
     }
-    await this.getChecklist(version.checklistId, user);
+    await this.assertChecklistEditavel(version.checklistId, user);
     const alvo = await this.prisma.checklist.findUnique({
       where: { id: version.checklistId },
       include: { unidade: { select: { secretariaId: true } } },
@@ -326,7 +400,7 @@ export class ChecklistsService {
     if (!version) {
       throw new NotFoundException('Versao de checklist nao encontrada');
     }
-    await this.getChecklist(version.checklistId, user);
+    await this.assertChecklistEditavel(version.checklistId, user);
     const alvo = await this.prisma.checklist.findUnique({
       where: { id: version.checklistId },
       include: { unidade: { select: { secretariaId: true } } },

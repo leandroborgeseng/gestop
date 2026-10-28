@@ -733,7 +733,20 @@ export function saveChecklist(payload: Record<string, unknown>, id?: string) {
 }
 
 export function deactivateChecklist(id: string) {
-  return request<ChecklistModel>(`/checklists/${id}`, { method: 'DELETE' });
+  return inativarChecklist(id);
+}
+
+/** 309: inativar/reativar com permissão e auditoria no backend. */
+export function inativarChecklist(id: string) {
+  return request<ChecklistModel>(`/checklists/${id}/inativar`, { method: 'POST' });
+}
+
+export function reativarChecklist(id: string) {
+  return request<ChecklistModel>(`/checklists/${id}/reativar`, { method: 'POST' });
+}
+
+export function getChecklistsResumo() {
+  return request<{ ativos: number; inativos: number; total: number }>('/checklists/resumo');
 }
 
 export function listCronogramas(filters?: { secretariaId?: string; unidadeId?: string }) {
