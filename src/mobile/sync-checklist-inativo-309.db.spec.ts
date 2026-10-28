@@ -76,7 +76,25 @@ describe.skipIf(!URL)('309/C4a — sync offline contra checklist inativo (Postgr
       (await prisma.unidadePublica.create({ data: { secretariaId: sec.id, codigoPatrimonial: 'T309-S', nome: 'Próprio Fictício 309 Sync', tipo: 'ESCOLA', endereco: 'Rua Fictícia, 309', latitude: -20.5, longitude: -47.4 } }));
     unidadeS = uni.id;
     todas = { sub: seed.todas, nome: 'Fictício', email: 'todas.309@aion.local', ...(await auth.resolveActiveSession(seed.todas)) } as JwtPayload;
-    gestor = { sub: seed.gestor, nome: 'Fictício', email: 'gestor.309@aion.local', ...(await auth.resolveActiveSession(seed.gestor)) } as JwtPayload;
+    // 304/O10 (#37): quem sincroniza precisa ter a Secretaria do próprio no escopo. Usuário FICTÍCIO deste arquivo,
+    // com o mesmo perfil do gestor do seed 309 e vínculo só com a T309S (nunca usuário real).
+    const perfilGestor = (await prisma.usuario.findUniqueOrThrow({ where: { id: seed.gestor } })).perfilAtivoId!;
+    const emailGestorS = 'gestor.309s@aion.local';
+    const gestorS =
+      (await prisma.usuario.findUnique({ where: { email: emailGestorS } })) ??
+      (await prisma.usuario.create({
+        data: {
+          nome: 'Gestor Fictício 309 Sync',
+          email: emailGestorS,
+          senhaHash: (await prisma.usuario.findUniqueOrThrow({ where: { id: seed.gestor } })).senhaHash,
+          secretariaId: sec.id,
+          secretariaAtivaId: sec.id,
+          perfilAtivoId: perfilGestor,
+          perfis: { create: [{ perfilId: perfilGestor }] },
+          secretariasVinculos: { create: [{ secretariaId: sec.id, principal: true }] },
+        },
+      }));
+    gestor = { sub: gestorS.id, nome: 'Fictício', email: emailGestorS, ...(await auth.resolveActiveSession(gestorS.id)) } as JwtPayload;
   });
   afterAll(async () => {
     await prisma?.$disconnect();
@@ -104,8 +122,10 @@ describe.skipIf(!URL)('309/C4a — sync offline contra checklist inativo (Postgr
     expect(log.valorNovo).toMatchObject({
       syncContraChecklistInativo: { checklistId: c.id, checklistVersaoId: c.versao, checkinEm: dto.iniciadaEm, inativadoEm: em.toISOString() },
     });
-    // Reenvio não duplica.
-    expect((await mobile.syncFiscalizacao(dto as never, gestor)).status).toBe('duplicado');
+    // Reenvio não duplica: 304/O5b devolve 'sincronizado' com o mesmo id.
+    const reenvio = await mobile.syncFiscalizacao(dto as never, gestor);
+    expect(reenvio.status).toBe('sincronizado');
+    expect(reenvio.fiscalizacaoId).toBe(r.fiscalizacaoId);
     expect(await prisma.fiscalizacao.count({ where: { clientId: dto.clientEventId } })).toBe(1);
   });
 

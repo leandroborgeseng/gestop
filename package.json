@@ -8,6 +8,7 @@
     "dev": "tsx watch src/main.ts",
     "start": "node dist/prisma/startup.js && node dist/src/main.js",
     "test": "prisma generate && vitest run",
+    "test:db": "prisma generate && vitest run --no-file-parallelism db.spec",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
