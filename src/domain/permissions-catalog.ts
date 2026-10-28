@@ -47,6 +47,8 @@ export const PERMISSIONS_CATALOG: PermissionScreenDef[] = [
       { id: '_tela', label: 'Vistorias realizadas', actions: [...PERMISSION_ACTIONS] },
       { id: 'consultar', label: 'Consultar vistorias', actions: ['visualizar'] },
       { id: 'exibir_questionario', label: 'Exibir questionário', actions: ['visualizar'] },
+      /** 305/E4: subfunção nova. Excluir usa a ação Excluir já existente da tela (`_tela.excluir`). */
+      { id: 'excluidas_visualizar', label: 'Visualizar excluídas', actions: ['visualizar'] },
     ],
   },
   {
