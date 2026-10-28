@@ -1,6 +1,6 @@
 import { FiscalizacaoStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class ListFiscalizacoesQueryDto {
   @IsOptional()
@@ -34,6 +34,11 @@ export class ListFiscalizacoesQueryDto {
   @IsOptional()
   @IsString()
   q?: string;
+
+  /** 304/O6a: `true` = só as enviadas como avulsa por conflito de programação; `false` = exclui. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  avulsaPorConflito?: 'true' | 'false';
 
   @IsOptional()
   @Type(() => Number)
