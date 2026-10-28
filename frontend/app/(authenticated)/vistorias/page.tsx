@@ -4,7 +4,7 @@ import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ClipboardList, ClipboardPen, FileDown, FileText, MapPin, Printer, Search, UserRound } from 'lucide-react';
+import { ClipboardList, ClipboardPen, FileDown, FileText, MapPin, Printer, Search, Trash2, UserRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
 import { CabecalhoSecao } from '@/components/checklists/cabecalho-secao';
@@ -19,7 +19,9 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
+import { ExcluirVistoriaDialog } from '@/components/vistorias/excluir-vistoria-dialog';
 import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
+import { canVisualizarVistoriasExcluidas, mostrarBotaoExcluirVistoria } from '@/lib/vistoria-exclusao';
 import { downloadFiscalizacaoPdf, getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
 import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
 import { cn } from '@/lib/cn';
@@ -45,16 +47,19 @@ const STATUS_OPTIONS: Array<{ value: '' | FiscalizacaoStatus; label: string }> =
   { value: 'CANCELADA', label: 'Canceladas' },
 ];
 
+const STATUS_LABEL_EXTRA: Partial<Record<FiscalizacaoStatus, string>> = { EXCLUIDA: 'Excluída' };
+
 const STATUS_BADGE: Record<FiscalizacaoStatus, 'success' | 'warning' | 'info' | 'muted' | 'danger'> = {
   CONCLUIDA: 'success',
   EM_ANDAMENTO: 'warning',
   PLANEJADA: 'info',
   SINCRONIZACAO_PENDENTE: 'warning',
   CANCELADA: 'muted',
+  EXCLUIDA: 'danger',
 };
 
 function statusLabel(status: FiscalizacaoStatus) {
-  return STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
+  return STATUS_LABEL_EXTRA[status] ?? STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -118,6 +123,10 @@ export default function VistoriasPage() {
   const [lancarOpen, setLancarOpen] = useState(false);
 
   const canExecutar = Boolean(sessionUser?.permissoes.includes('fiscalizacoes.executar'));
+  // 305/E4: "Mostrar excluídas" só com a subfunção Visualizar excluídas.
+  const podeVerExcluidas = canVisualizarVistoriasExcluidas(sessionUser);
+  const [mostrarExcluidas, setMostrarExcluidas] = useState(false);
+  const [excluirOpen, setExcluirOpen] = useState(false);
 
   useEffect(() => {
     if (canFilterSecretaria) {
@@ -142,8 +151,9 @@ export default function VistoriasPage() {
       from: from || undefined,
       to: to || undefined,
       avulsaPorConflito: avulsaConflito || undefined,
+      incluirExcluidas: podeVerExcluidas && mostrarExcluidas ? true : undefined,
     }),
-    [search, status, tipo, secretariaId, agenteId, from, to, avulsaConflito],
+    [search, status, tipo, secretariaId, agenteId, from, to, avulsaConflito, podeVerExcluidas, mostrarExcluidas],
   );
 
   const loadList = useCallback(async (offset = 0, append = false) => {
@@ -308,6 +318,18 @@ export default function VistoriasPage() {
                     </Select>
                   </div>
                 ) : null}
+                {podeVerExcluidas ? (
+                  <label className="flex items-center gap-2 self-end pb-2 text-[12px] font-semibold text-[var(--ink-2)]">
+                    <input
+                      type="checkbox"
+                      data-testid="mostrar-excluidas"
+                      checked={mostrarExcluidas}
+                      onChange={(event) => setMostrarExcluidas(event.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Mostrar excluídas
+                  </label>
+                ) : null}
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">De</label>
                   <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
@@ -341,6 +363,7 @@ export default function VistoriasPage() {
                           isSelected
                             ? 'border-[color-mix(in_srgb,var(--brand)_30%,transparent)] bg-[var(--brand-soft)]'
                             : 'hover:bg-[var(--surface-2)]',
+                          item.excluida && 'opacity-80',
                         )}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -450,6 +473,18 @@ export default function VistoriasPage() {
                             <FileText className="h-3.5 w-3.5" />
                             Documentos relacionados
                           </Button>
+                          {mostrarBotaoExcluirVistoria(sessionUser, detail ?? selected) ? (
+                            <Button
+                              type="button"
+                              variant="outlined"
+                              size="sm"
+                              data-testid="botao-excluir-vistoria"
+                              onClick={() => setExcluirOpen(true)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Excluir
+                            </Button>
+                          ) : null}
                           <Badge variant={STATUS_BADGE[selected.status]}>{statusLabel(selected.status)}</Badge>
                         </div>
                         {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
@@ -461,6 +496,22 @@ export default function VistoriasPage() {
 
                   <div className="flex-1 space-y-4 overflow-y-auto p-5">
                     {detailLoading ? <LoadingState label="Carregando detalhe..." /> : null}
+                    {(detail ?? selected).excluida ? (
+                      <div
+                        role="note"
+                        data-testid="aviso-vistoria-excluida"
+                        className="rounded-[var(--r-md)] border border-[#f3c0c0] bg-[#fde8e8] p-3 text-[13px] text-[var(--ink-2)]"
+                      >
+                        <p className="font-semibold text-[var(--ink)]">Vistoria excluída · somente leitura</p>
+                        <p className="mt-1">
+                          Excluída em {formatDateTime((detail ?? selected).excluidoEm)}
+                          {(detail ?? selected).excluidoPor?.nome ? ` por ${(detail ?? selected).excluidoPor?.nome}` : ''}.
+                        </p>
+                        {(detail ?? selected).exclusaoMotivo ? (
+                          <p className="mt-1">Motivo: {(detail ?? selected).exclusaoMotivo}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {docsOpen ? (
                       <DocumentosRelacionadosPanel
                         fiscalizacaoId={selected.id}
@@ -672,6 +723,21 @@ export default function VistoriasPage() {
         </Sheet>
 
         <ImprimirVistoriaManualDialog open={imprimirOpen} onClose={() => setImprimirOpen(false)} />
+        {excluirOpen && selected ? (
+          <ExcluirVistoriaDialog
+            fiscalizacaoId={selected.id}
+            unidadeNome={selected.unidade.nome}
+            onClose={() => setExcluirOpen(false)}
+            onErro={(mensagem) => snackbar.show(mensagem, 'error')}
+            onExcluida={() => {
+              setExcluirOpen(false);
+              snackbar.show('Vistoria excluída.', 'success');
+              if (!(podeVerExcluidas && mostrarExcluidas)) setSelectedId(null);
+              else void getFiscalizacao(selected.id).then(setDetail).catch(() => undefined);
+              void loadList(0, false);
+            }}
+          />
+        ) : null}
         <LancarVistoriaManualDialog
           open={lancarOpen}
           onClose={() => setLancarOpen(false)}

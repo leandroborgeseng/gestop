@@ -1277,11 +1277,14 @@ export function listFiscalizacoes(params?: {
   to?: string;
   q?: string;
   avulsaPorConflito?: 'true' | 'false';
+  /** 305/E4: exige a subfunção Visualizar excluídas. */
+  incluirExcluidas?: boolean;
   limit?: number;
   offset?: number;
 }) {
   const query = new URLSearchParams();
   if (params?.secretariaId) query.set('secretariaId', params.secretariaId);
+  if (params?.incluirExcluidas) query.set('incluirExcluidas', 'true');
   if (params?.avulsaPorConflito) query.set('avulsaPorConflito', params.avulsaPorConflito);
   if (params?.unidadeId) query.set('unidadeId', params.unidadeId);
   if (params?.agenteId) query.set('agenteId', params.agenteId);
@@ -1294,6 +1297,18 @@ export function listFiscalizacoes(params?: {
   if (params?.offset != null) query.set('offset', String(params.offset));
   const suffix = query.toString() ? `?${query.toString()}` : '';
   return request<FiscalizacoesListResponse>(`/fiscalizacoes${suffix}`);
+}
+
+/** 305/E1: exclusão lógica da vistoria realizada, com motivo obrigatório. */
+export function excluirFiscalizacao(id: string, motivo: string) {
+  return request<{ id: string; status: 'EXCLUIDA'; excluida: true; excluidoEm: string; exclusaoMotivo: string }>(
+    `/fiscalizacoes/${id}/exclusao`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ motivo }),
+    },
+  );
 }
 
 export function getFiscalizacao(id: string) {

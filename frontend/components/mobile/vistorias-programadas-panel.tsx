@@ -381,6 +381,14 @@ export function VistoriasProgramadasPanel({
                         {item.checklist.nome} · {CRONOGRAMA_FREQUENCIA_LABELS[item.frequencia]}
                       </p>
                       {item.checklistInativo ? <AvisoChecklistInativoCronograma compacto /> : null}
+                      {item.baixaPorVistoriaExcluida ? (
+                        <div data-testid="programada-baixa-excluida" className="flex flex-wrap items-center gap-1.5 rounded-[var(--r-sm)] bg-[var(--warn-bg)] px-2 py-1">
+                          <Badge variant="warning">Baixa por vistoria excluída</Badge>
+                          <span className="break-words text-[11px] font-semibold text-[var(--warn)]">
+                            A vistoria que baixou esta programação foi excluída. A programação não reabre sozinha.
+                          </span>
+                        </div>
+                      ) : null}
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-[var(--ink-3)]">
                         <span>
                           {new Date(`${item.data}T12:00:00`).toLocaleDateString('pt-BR')} · {item.unidade.secretaria.sigla}

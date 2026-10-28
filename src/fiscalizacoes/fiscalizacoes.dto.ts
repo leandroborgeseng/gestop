@@ -40,6 +40,11 @@ export class ListFiscalizacoesQueryDto {
   @IsIn(['true', 'false'])
   avulsaPorConflito?: 'true' | 'false';
 
+  /** 305/E4: `true` = inclui as excluídas (exige a subfunção Visualizar excluídas). */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  incluirExcluidas?: 'true' | 'false';
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -52,6 +57,13 @@ export class ListFiscalizacoesQueryDto {
   @IsInt()
   @Min(0)
   offset?: number;
+}
+
+/** 305/E1: motivo obrigatório da exclusão lógica (o service valida e responde 400). */
+export class ExcluirFiscalizacaoDto {
+  @IsOptional()
+  @IsString()
+  motivo?: string;
 }
 
 export {

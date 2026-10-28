@@ -30,7 +30,8 @@
     "seed:escopo-306": "tsx scripts/seed-escopo-306.ts",
     "seed:responsaveis-307": "tsx scripts/seed-responsaveis-307.ts",
     "seed:checklists-309": "tsx scripts/seed-checklists-309.ts",
-    "seed:campo-304": "tsx scripts/seed-campo-304.ts"
+    "seed:campo-304": "tsx scripts/seed-campo-304.ts",
+    "seed:exclusao-305": "tsx scripts/seed-exclusao-305.ts"
   },
   "keywords": [],
   "author": "",
