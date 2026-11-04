@@ -22,6 +22,7 @@ import {
   assertChamadoExecucaoAccess,
   assertChamadoGestaoAberturaAccess,
   podeGerirAberturaChamado,
+  MSG_SEM_GESTAO_EXCLUSAO,
   assertChamadoSecretariaAccess,
   resolveChamadoSecretariaFilter,
   resolveEquipeSecretariaFilter,
@@ -190,7 +191,8 @@ export class ChamadosService {
     }
 
     return {
-      items: items.map((item) => this.serializeChamado(item, user.sub)),
+      // 310-excluir: a lista também leva `podeGerirAbertura` (o detalhe abre a partir do item da lista).
+      items: items.map((item) => ({ ...this.serializeChamado(item, user.sub), podeGerirAbertura: podeGerirAberturaChamado(user, item) })),
       total,
       limit,
       offset,
@@ -4070,6 +4072,8 @@ export class ChamadosService {
     const justificativa = this.assertJustificativaExclusao(justificativaInformada);
     const chamado = await this.getChamadoOrThrow(id, { allowExcluido: true });
     assertChamadoSecretariaAccess(user, chamado);
+    // 310-excluir: excluir exige a Secretaria responsável pela execução (próprio/equipe só veem/executam).
+    assertChamadoGestaoAberturaAccess(user, chamado, MSG_SEM_GESTAO_EXCLUSAO);
     if (chamado.excluidoEm) {
       throw new BadRequestException('Este chamado já está excluído logicamente.');
     }

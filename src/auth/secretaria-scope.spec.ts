@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ForbiddenException } from '@nestjs/common';
 import {
   assertChamadoGestaoAberturaAccess,
+  MSG_SEM_ACESSO_CHAMADO,
   MSG_SEM_GESTAO_ABERTURA,
   podeGerirAberturaChamado,
   assertChamadoExecucaoAccess,
@@ -117,6 +118,11 @@ describe('secretaria-scope', () => {
     }
     expect(podeGerirAberturaChamado(gestorSecretaria, { secretariaId: 'sec-educacao' })).toBe(true);
     expect(podeGerirAberturaChamado(adminTodas, { secretariaId: 'sec-servicos' })).toBe(true);
+  });
+
+  it('310-excluir: sem nenhum caminho → 403 com mensagem clara (não a genérica)', () => {
+    expect(() => assertChamadoSecretariaAccess(gestorSecretaria, { secretariaId: 'sec-servicos' })).toThrow(MSG_SEM_ACESSO_CHAMADO);
+    expect(MSG_SEM_ACESSO_CHAMADO).not.toBe('Chamado fora da secretaria autorizada.');
   });
 
   it('bloqueia visualização fora do escopo', () => {

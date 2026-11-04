@@ -41,7 +41,7 @@ import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
-import { ehSemAcessoChamado, SEM_ACESSO_CHAMADO } from '@/lib/chamado-acesso';
+import { ehSemAcessoChamado, podeExcluirChamado, SEM_ACESSO_CHAMADO } from '@/lib/chamado-acesso';
 import { ListPagination } from '@/components/ui/list-pagination';
 import { downloadChamadoPdf, excluirChamadoLogicamente, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTarefasDoChamado, listTiposChamadoOpcoes, notificarChamadoEquipe, restaurarChamadoExcluido, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
 import { buildChamadoAcoes, executarAcaoChamado, type ChamadoAcaoId } from '@/lib/chamado-acoes';
@@ -808,7 +808,8 @@ function ChamadoDetailPanel({
 }) {
   const snackbar = useSnackbar();
   const sessionUser = useSessionUser();
-  const podeExcluir = canExcluirChamadoLogicamente(sessionUser);
+  // 310-excluir: só a Secretaria de execução exclui; via próprio/equipe o botão some.
+  const podeExcluir = podeExcluirChamado(canExcluirChamadoLogicamente(sessionUser), resumo);
   const podeRestaurar = canRestaurarChamadoExcluido(sessionUser);
   const [exclusaoModal, setExclusaoModal] = useState<'excluir' | 'restaurar' | null>(null);
   const [justificativaExclusao, setJustificativaExclusao] = useState('');
