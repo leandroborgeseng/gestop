@@ -1,0 +1,53 @@
+{
+  "alvoReativado": "85cbcd99-8c32-45da-ab2f-68f60dcee261",
+  "alvoInativado": "d51bf25f-c906-4930-aad8-931756439c51",
+  "inicio": {
+    "total": 4,
+    "ativos": 2,
+    "inativos": 2,
+    "cardsVisiveis": [
+      "ZZTESTE Escola Alfa 1 | ZZTESTE Checklist 308 Zeladoria · Semanal · ZZ_ESCOLA",
+      "ZZTESTE Praça Alfa | ZZTESTE Checklist 315 · Mensal · ZZ_PRACA"
+    ],
+    "sanfona": "Mostrar cronogramas inativos (2)"
+  },
+  "sanfonaAberta": {
+    "rotulo": "Ocultar cronogramas inativos (2)",
+    "cardsVisiveis": [
+      "ZZTESTE Escola Alfa 1 | ZZTESTE Checklist 308 Zeladoria · Semanal · ZZ_ESCOLA",
+      "ZZTESTE Praça Alfa | ZZTESTE Checklist 315 · Mensal · ZZ_PRACA",
+      "ZZTESTE Área de lazer AlfaInativo | ZZTESTE Checklist 308 Zeladoria · Semanal · ZZ_AREA",
+      "ZZTESTE Escola Alfa 1Inativo | ZZTESTE Checklist 308 Elétrica · Mensal · ZZ_ESCOLA"
+    ]
+  },
+  "calendarioSemInativos": true,
+  "confirmacaoReativar": "Reativar o cronograma?\n\nO cronograma volta ao calendário e às vistorias programadas. Só a próxima data é recalculada a partir de hoje; o período em que ficou inativo não gera checagens retroativas.\n\nReativar\nCancelar",
+  "reativado": {
+    "antes": "2026-10-01T03:00:00.000Z",
+    "depois": "2026-11-05T03:00:00.000Z",
+    "ativo": true,
+    "mensagem": "Cronograma reativado. A próxima data foi recalculada a partir de hoje.",
+    "eventosNoCalendario": 16,
+    "semEventoRetroativoAntesDeHoje": true
+  },
+  "confirmacaoInativar": "Inativar o cronograma?\n\nO cronograma sai do calendário e das vistorias programadas. Vistorias já realizadas e o histórico ficam intactos.\n\nInativar\nCancelar",
+  "inativado": {
+    "ativo": false,
+    "sanfona": "Mostrar cronogramas inativos (2)"
+  },
+  "repetirInativar": 409,
+  "outraSecretaria": {
+    "reativar": 404,
+    "inativar": 404,
+    "lista": 0
+  },
+  "semPermissao": {
+    "reativar": 403,
+    "inativar": 403
+  },
+  "programacoes": {
+    "status": 200,
+    "contemReativado": true,
+    "contemInativado": false
+  }
+}

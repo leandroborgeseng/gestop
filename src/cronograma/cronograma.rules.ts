@@ -124,3 +124,14 @@ export const CRONOGRAMA_FREQUENCIA_LABELS: Record<CronogramaFrequencia, string> 
   [CronogramaFrequencia.SEMESTRAL]: 'Semestral',
   [CronogramaFrequencia.ANUAL]: 'Anual',
 };
+
+/**
+ * 308: ao reativar, só a PRÓXIMA data é recalculada — avança pela frequência até hoje ou depois.
+ * Datas passadas não viram checagens retroativas (nada é gerado para o período inativo).
+ */
+export function proximaDataAoReativar(proxima: Date, frequencia: CronogramaFrequencia, hoje = startOfDay(new Date())) {
+  let data = startOfDay(proxima);
+  let guarda = 0;
+  while (data < hoje && guarda++ < 5000) data = addFrequency(data, frequencia);
+  return data;
+}

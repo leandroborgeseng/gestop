@@ -22,10 +22,11 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { ErrorState, LoadingState } from '@/components/ui-states';
-import { AvisoChecklistInativoCronograma } from '@/components/inativos/inativos';
+import { CronogramasCadastrados } from '@/components/cronograma/cronogramas-cadastrados';
 import { checklistAppliesToUnidade } from '@/lib/checklist-matching';
 import {
   deactivateCronograma,
+  reactivateCronograma,
   downloadRelatorioPdf,
   downloadRelatorioXlsx,
   getCalendarioChecagens,
@@ -452,71 +453,24 @@ export default function CronogramaPage() {
               <Card elevation={1}>
                 <CardHeader>
                   <CardTitle>Cronogramas cadastrados</CardTitle>
-                  <CardDescription>Uma regra por próprio + checklist. A próxima data avança automaticamente após a vistoria.</CardDescription>
+                  <CardDescription>Uma regra por próprio + checklist. A próxima data avança automaticamente após a vistoria. Inativos ficam fora do calendário e das programações.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 pt-0">
-                  {cronogramas.length === 0 ? (
-                    <p className="py-6 text-center text-[13px] text-[var(--ink-3)]">
-                      Nenhum cronograma cadastrado para os filtros atuais.
-                    </p>
-                  ) : null}
-                  {cronogramas.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex flex-col gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4 sm:flex-row sm:items-start sm:justify-between"
-                    >
-                      <div>
-                        <h3 className="text-[14px] font-semibold text-[var(--ink)]">{item.unidade.nome}</h3>
-                        <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                          {item.checklist.nome} · {CRONOGRAMA_FREQUENCIA_LABELS[item.frequencia]} ·{' '}
-                          {formatUnidadeTipo(item.unidade.tipo)}
-                        </p>
-                        {item.checklist.ativo === false ? <AvisoChecklistInativoCronograma className="mt-2" /> : null}
-                        <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                          Próxima: {new Date(item.proximaChecagemEm).toLocaleDateString('pt-BR')}
-                          {item.ultimaChecagemEm
-                            ? ` · Última: ${new Date(item.ultimaChecagemEm).toLocaleDateString('pt-BR')}`
-                            : ''}
-                        </p>
-                        <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                          Responsável(is):{' '}
-                          {item.responsaveis?.length
-                            ? item.responsaveis.map((r) => r.usuario.nome).join(', ')
-                            : item.responsavel?.nome ?? 'Sem responsável definido'}
-                        </p>
-                      </div>
-                      {canAlterar || canExcluir ? (
-                        <div className="flex flex-wrap gap-2">
-                          {canAlterar ? (
-                            <Button variant="tonal" size="sm" onClick={() => openEdit(item)}>
-                              Editar
-                            </Button>
-                          ) : null}
-                          {canExcluir && item.ativo ? (
-                            <Button
-                              variant="text"
-                              size="sm"
-                              className="text-red-700"
-                              onClick={() =>
-                                void deactivateCronograma(item.id)
-                                  .then(() => {
-                                    setSuccess('Cronograma inativado.');
-                                    return loadData();
-                                  })
-                                  .catch((err) =>
-                                    setError(
-                                      err instanceof Error ? err.message : 'Falha ao inativar cronograma.',
-                                    ),
-                                  )
-                              }
-                            >
-                              Inativar
-                            </Button>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
+                  <CronogramasCadastrados
+                    cronogramas={cronogramas}
+                    canAlterar={canAlterar}
+                    canExcluir={canExcluir}
+                    onEditar={openEdit}
+                    onAlterarStatus={async (item, acao) => {
+                      try {
+                        await (acao === 'INATIVAR' ? deactivateCronograma(item.id) : reactivateCronograma(item.id));
+                        setSuccess(acao === 'INATIVAR' ? 'Cronograma inativado.' : 'Cronograma reativado. A próxima data foi recalculada a partir de hoje.');
+                        await loadData();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : acao === 'INATIVAR' ? 'Falha ao inativar cronograma.' : 'Falha ao reativar cronograma.');
+                      }
+                    }}
+                  />
                 </CardContent>
               </Card>
             </div>

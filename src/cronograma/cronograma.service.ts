@@ -16,6 +16,7 @@ import {
   secretariasDoUsuario,
   whereUsuarioComSecretaria,
 } from './responsaveis-escopo';
+import { AcaoStatusAtivo, auditoriaStatusAtivo, CRONOGRAMA_INATIVO, planejarStatusAtivo } from '../common/inativos/registro-inativo';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 import { PrismaService } from '../prisma/prisma.service';
 import { CalendarioQueryDto, CronogramaDto } from './cronograma.dto';
@@ -23,6 +24,7 @@ import {
   addFrequency,
   CalendarioEventoTipo,
   projectChecagensNoPeriodo,
+  proximaDataAoReativar,
   resolveEventoTipo,
   startOfDay,
   toDateKey,
@@ -183,7 +185,7 @@ export class CronogramaService {
           frequencia: dto.frequencia,
           proximaChecagemEm,
           responsavelId: responsavelIds[0] ?? null,
-          ativo: dto.ativo ?? true,
+          // 308: editar não muda o status; ativar/inativar só por Inativar/Reativar (confirmação, recálculo e auditoria).
           observacoes: dto.observacoes?.trim() || null,
         },
       });
@@ -226,7 +228,7 @@ export class CronogramaService {
           frequencia: dto.frequencia,
           proximaChecagemEm: startOfDay(new Date(dto.proximaChecagemEm)),
           responsavelId: responsavelIds[0] ?? null,
-          ativo: dto.ativo ?? true,
+          // 308: editar não muda o status; ativar/inativar só por Inativar/Reativar (confirmação, recálculo e auditoria).
           observacoes: dto.observacoes?.trim() || null,
         },
       });
@@ -297,22 +299,56 @@ export class CronogramaService {
     });
   }
 
-  async deactivateCronograma(id: string, user: JwtPayload) {
-    const before = await this.getCronogramaOrThrow(id, user);
-    const cronograma = await this.prisma.cronogramaChecagem.update({
-      where: { id },
-      data: { ativo: false },
-      include: cronogramaInclude,
-    });
+  deactivateCronograma(id: string, user: JwtPayload) {
+    return this.alterarStatusAtivo(id, 'INATIVAR', user);
+  }
 
-    await this.audit(
-      user,
-      AuditAction.DELETE,
-      id,
-      this.auditSnapshot(before, user),
-      this.auditSnapshot(cronograma, user),
-    );
-    return cronograma;
+  reactivateCronograma(id: string, user: JwtPayload) {
+    return this.alterarStatusAtivo(id, 'REATIVAR', user);
+  }
+
+  /**
+   * 308: Inativar/Reativar com a permissão de excluir, no escopo da Secretaria (getCronogramaOrThrow) e auditoria
+   * STATUS_CHANGE (quem, quando, antes e depois) na mesma transação. Reativar recalcula só a próxima data.
+   */
+  private async alterarStatusAtivo(id: string, acao: AcaoStatusAtivo, user: JwtPayload) {
+    const before = await this.getCronogramaOrThrow(id, user);
+    const ativo = planejarStatusAtivo(before.ativo, acao, CRONOGRAMA_INATIVO);
+    const quando = new Date();
+    const proxima = ativo ? proximaDataAoReativar(before.proximaChecagemEm, before.frequencia, startOfDay(quando)) : before.proximaChecagemEm;
+    return this.prisma.$transaction(async (tx) => {
+      const trocou = await tx.cronogramaChecagem.updateMany({
+        where: { id, ativo: before.ativo },
+        data: { ativo, proximaChecagemEm: proxima },
+      });
+      if (trocou.count !== 1) planejarStatusAtivo(!before.ativo, acao, CRONOGRAMA_INATIVO);
+      const cronograma = await tx.cronogramaChecagem.findUniqueOrThrow({ where: { id }, include: cronogramaInclude });
+      const resumo = (c: { ativo: boolean; proximaChecagemEm: Date; frequencia: CronogramaFrequencia }) => ({
+        id,
+        unidadeId: before.unidadeId,
+        checklistId: before.checklistId,
+        ativo: c.ativo,
+        frequencia: c.frequencia,
+        proximaChecagemEm: c.proximaChecagemEm.toISOString(),
+      });
+      const { valorAntigo, valorNovo } = auditoriaStatusAtivo({ acao, usuarioId: user.sub, quando, antes: resumo(before), depois: resumo(cronograma) });
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.STATUS_CHANGE,
+          entidadeTipo: 'CronogramaChecagem',
+          entidadeId: id,
+          valorAntigo: valorAntigo as Prisma.InputJsonValue,
+          valorNovo: valorNovo as Prisma.InputJsonValue,
+          tela: 'cronograma',
+          funcao: '_tela',
+          descricao: acao === 'INATIVAR' ? 'Cronograma inativado' : 'Cronograma reativado',
+          secretariaAtivaId: user.secretariaId ?? null,
+          createdAt: quando,
+        },
+      });
+      return cronograma;
+    });
   }
 
   async getCalendario(query: CalendarioQueryDto, user: JwtPayload) {

@@ -23,6 +23,17 @@ export const TEXTOS_CHECKLIST: EntidadeInativavelTextos = {
     'O checklist volta a poder ser editado e a iniciar vistorias, documentos e aplicações novas.',
 };
 
+/** 308 */
+export const TEXTOS_CRONOGRAMA: EntidadeInativavelTextos = {
+  plural: 'cronogramas',
+  singularComArtigo: 'o cronograma',
+  somenteLeitura: 'Este cronograma está inativo. Reative-o para realizar alterações',
+  confirmarInativar:
+    'O cronograma sai do calendário e das vistorias programadas. Vistorias já realizadas e o histórico ficam intactos.',
+  confirmarReativar:
+    'O cronograma volta ao calendário e às vistorias programadas. Só a próxima data é recalculada a partir de hoje; o período em que ficou inativo não gera checagens retroativas.',
+};
+
 export function rotuloSanfonaInativos(textos: Pick<EntidadeInativavelTextos, 'plural'>, aberta: boolean, total: number) {
   return `${aberta ? 'Ocultar' : 'Mostrar'} ${textos.plural} inativos (${total})`;
 }
