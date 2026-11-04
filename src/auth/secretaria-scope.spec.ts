@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { ForbiddenException } from '@nestjs/common';
 import {
+  assertChamadoGestaoAberturaAccess,
+  MSG_SEM_GESTAO_ABERTURA,
+  podeGerirAberturaChamado,
   assertChamadoExecucaoAccess,
   assertChamadoSecretariaAccess,
   assertSecretariaNoEscopo,
@@ -99,6 +103,20 @@ describe('secretaria-scope', () => {
         equipe: { secretariaId: 'sec-educacao' },
       }),
     ).not.toThrow();
+  });
+
+  it('310 (TL #48): gestão da abertura só pela Secretaria de execução; equipe/próprio → 403 com mensagem', () => {
+    const viaEquipe = { secretariaId: 'sec-servicos', equipe: { secretariaId: 'sec-educacao' } };
+    const viaProprio = { secretariaId: 'sec-servicos', unidade: { secretariaId: 'sec-educacao' } };
+    expect(() => assertChamadoSecretariaAccess(gestorSecretaria, viaEquipe)).not.toThrow();
+    expect(() => assertChamadoExecucaoAccess(gestorSecretaria, viaEquipe)).not.toThrow();
+    for (const c of [viaEquipe, viaProprio]) {
+      expect(podeGerirAberturaChamado(gestorSecretaria, c)).toBe(false);
+      expect(() => assertChamadoGestaoAberturaAccess(gestorSecretaria, c)).toThrow(ForbiddenException);
+      expect(() => assertChamadoGestaoAberturaAccess(gestorSecretaria, c)).toThrow(MSG_SEM_GESTAO_ABERTURA);
+    }
+    expect(podeGerirAberturaChamado(gestorSecretaria, { secretariaId: 'sec-educacao' })).toBe(true);
+    expect(podeGerirAberturaChamado(adminTodas, { secretariaId: 'sec-servicos' })).toBe(true);
   });
 
   it('bloqueia visualização fora do escopo', () => {

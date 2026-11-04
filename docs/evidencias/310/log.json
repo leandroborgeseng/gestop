@@ -1,0 +1,106 @@
+{
+  "listas": {
+    "contextoAtivo_operacional": [
+      "ZZTA"
+    ],
+    "destinoExecucao": [
+      "ZZTA",
+      "ZZTB",
+      "ZZTG"
+    ]
+  },
+  "opcoesNaTela": [
+    "ZZTA · ZZTESTE Secretaria Alfa",
+    "ZZTB · ZZTESTE Secretaria Beta",
+    "ZZTG · ZZTESTE Secretaria Gama"
+  ],
+  "depoisDeSalvar": {
+    "resultado": "Execução transferida: ZZTA → ZZTB.\n\nA equipe atual é de outra Secretaria. Revise a equipe do chamado. (ZZTESTE Equipe Alfa · ZZTA)\n\nO responsável atual não pertence à Secretaria de destino. Revise o responsável do chamado. (ZZTESTE Gestor Alfa)",
+    "snackbar": [
+      "Execução transferida: ZZTA → ZZTB.",
+      "Execução transferida: ZZTA → ZZTB."
+    ],
+    "telaSemAcesso": 0
+  },
+  "saiuDoEscopo": {
+    "exibindoAntes": "Exibindo 1-50 de 64",
+    "exibindoDepois": "Exibindo 1-50 de 64",
+    "snackbar": "Execução transferida: ZZTA → ZZTG. O chamado saiu da sua Secretaria ativa e foi fechado; a lista foi atualizada.",
+    "detalheFechado": false,
+    "chamadoNaLista": true,
+    "urlTemId": false,
+    "mensagemSemAcesso": false
+  },
+  "outraSecretaria": {
+    "status": 403,
+    "mensagem": "Sem permissão de tratativa: secretaria de execução diferente da ativa."
+  },
+  "depois": {
+    "secretaria": "ZZTB",
+    "unidadeSecretaria": "ZZTA",
+    "equipe": "ZZTESTE Equipe Alfa",
+    "responsavel": "ZZTESTE Gestor Alfa"
+  },
+  "semPermissao": {
+    "destino": 403,
+    "salvar": 403
+  },
+  "secretariaInexistente": {
+    "status": 400
+  },
+  "tl48": {
+    "chamados": {
+      "viaEquipe": "CH-2026-ZZ310T (próprio ZZTB, equipe ZZTA, ZZTA → ZZTB)",
+      "semCaminho": "CH-2026-ZZ310S (próprio ZZTB, sem equipe, ZZTA → ZZTB)"
+    },
+    "ui": {
+      "viaEquipe": {
+        "snackbar": "Execução transferida: ZZTA → ZZTB. Você continua vendo este chamado (pelo próprio ou pela equipe), mas a abertura agora é da Secretaria de destino: não é possível editar, devolver ou transferir.",
+        "detalheAberto": true,
+        "avisoSomenteExecucao": "Você continua vendo este chamado (pelo próprio ou pela equipe), mas a abertura agora é da Secretaria de destino: não é possível editar, devolver ou transferir.",
+        "lapisExecucao": 0
+      },
+      "semCaminho": {
+        "snackbar": "Execução transferida: ZZTA → ZZTB. O chamado saiu da sua Secretaria ativa e foi fechado; a lista foi atualizada.",
+        "detalheFechado": true,
+        "chamadoNaLista": false,
+        "urlTemId": false,
+        "linkDiretoMensagem": true
+      }
+    },
+    "api": {
+      "viaEquipe": {
+        "ver": {
+          "status": 200,
+          "podeGerirAbertura": false
+        },
+        "executar_planejamento": {
+          "status": 200
+        },
+        "editar": {
+          "status": 403,
+          "message": "Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir."
+        },
+        "devolver": {
+          "status": 403,
+          "message": "Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir."
+        }
+      },
+      "semCaminho": {
+        "ver": {
+          "status": 404,
+          "message": "Chamado não encontrado na sua Secretaria ativa."
+        },
+        "editar": {
+          "status": 403,
+          "message": "Chamado fora da secretaria autorizada."
+        },
+        "devolver": {
+          "status": 403,
+          "message": "Chamado fora da secretaria autorizada."
+        }
+      },
+      "adminDestino_ver": 200
+    }
+  }
+}

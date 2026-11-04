@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, StreamableFile, Header, UseGuards, Delete } from '@nestjs/common';
+import { Body, Controller, Get, Param, ForbiddenException, NotFoundException, Post, Put, Query, StreamableFile, Header, UseGuards, Delete } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -41,6 +41,13 @@ export class ChamadosController {
   @Get('secretarias/execucao')
   listSecretariasExecucao(@CurrentUser() user: JwtPayload) {
     return this.chamadosService.listSecretariasParaAbertura(user);
+  }
+
+  /** 310: Secretarias de destino da execução (todas as ativas), para quem pode alterar a abertura. */
+  @RequireAnyPermissions('chamados.gerenciar', 'chamados.editar_abertura')
+  @Get('secretarias/destino-execucao')
+  listSecretariasDestinoExecucao() {
+    return this.chamadosService.listSecretariasDestinoExecucao();
   }
 
   @RequirePermissions('chamados.gerenciar')
@@ -228,8 +235,14 @@ export class ChamadosController {
 
   @RequirePermissions('chamados.gerenciar')
   @Get(':id')
-  get(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
-    return this.chamadosService.getChamado(id, user);
+  async get(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
+    try {
+      return await this.chamadosService.getChamado(id, user);
+    } catch (e) {
+      // 310 (TL #48): fora da Secretaria do chamado, a visualização responde 404 (não revela o chamado).
+      if (e instanceof ForbiddenException) throw new NotFoundException('Chamado não encontrado na sua Secretaria ativa.');
+      throw e;
+    }
   }
 
   @RequireAnyPermissions(...CHAMADOS_ABRIR_KEYS)

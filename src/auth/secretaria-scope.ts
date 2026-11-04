@@ -141,6 +141,26 @@ export function assertChamadoExecucaoAccess(
   throw new ForbiddenException('Sem permissão de tratativa: secretaria de execução diferente da ativa.');
 }
 
+/**
+ * 310 (TL #48): gestão da abertura (editar, devolver, transferir a execução) — só a Secretaria responsável
+ * pela execução (`chamado.secretariaId`). Próprio e equipe dão só visualização/execução.
+ */
+export const MSG_SEM_GESTAO_ABERTURA =
+  'Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir.';
+
+export function podeGerirAberturaChamado(user: JwtPayload, chamado: { secretariaId: string }) {
+  if (user.permissoes.includes('usuarios.gerenciar') || user.acessoTodasSecretarias) {
+    if (!user.secretariaId?.trim()) return true;
+  }
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return true;
+  return ids.includes(chamado.secretariaId);
+}
+
+export function assertChamadoGestaoAberturaAccess(user: JwtPayload, chamado: { secretariaId: string }) {
+  if (!podeGerirAberturaChamado(user, chamado)) throw new ForbiddenException(MSG_SEM_GESTAO_ABERTURA);
+}
+
 /** Garante que a secretaria alvo está no escopo ativo (abertura / cadastro). */
 export function assertSecretariaNoEscopo(user: JwtPayload, secretariaId: string) {
   const ids = resolveSecretariaScopeIds(user);

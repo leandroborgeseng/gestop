@@ -1,3 +1,9 @@
+import {
+  descricaoTransferencia,
+  equipeIncompativel,
+  responsavelIncompativel,
+  RevisaoExecucao,
+} from './secretaria-execucao-310';
 import { formatSecretariaLabel } from '../common/format-secretaria';
 import { BadRequestException, ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
@@ -14,6 +20,8 @@ import { JwtPayload } from '../auth/jwt';
 import { isPerfilExterno } from '../auth/perfil-natureza';
 import {
   assertChamadoExecucaoAccess,
+  assertChamadoGestaoAberturaAccess,
+  podeGerirAberturaChamado,
   assertChamadoSecretariaAccess,
   resolveChamadoSecretariaFilter,
   resolveEquipeSecretariaFilter,
@@ -675,6 +683,7 @@ export class ChamadosService {
     });
     return {
       ...this.serializeChamado(chamado, user.sub),
+      podeGerirAbertura: podeGerirAberturaChamado(user, chamado),
       historico: await this.enrichHistorico(historico, id),
     };
   }
@@ -1850,7 +1859,9 @@ export class ChamadosService {
     }
 
     const before = await this.getChamadoOrThrow(id);
-    assertChamadoExecucaoAccess(user, before);
+    // 310 (TL #48): editar/devolver/transferir exige a Secretaria de execução; equipe/próprio não bastam.
+    assertChamadoSecretariaAccess(user, before);
+    assertChamadoGestaoAberturaAccess(user, before);
 
     const enderecoBairro = dto.enderecoBairro === undefined ? before.enderecoBairro : dto.enderecoBairro?.trim() || null;
     const solicitanteNome =
@@ -1910,6 +1921,31 @@ export class ChamadosService {
       secretariaNova: secretariaNovaLabel,
     });
 
+    // 310: troca da Secretaria de execução — origem → destino e o que revisar (sem mexer no próprio nem limpar equipe).
+    const trocouSecretaria = secretariaId !== before.secretariaId;
+    let transferencia: {
+      origem: { id: string; nome: string; sigla: string } | null;
+      destino: { id: string; nome: string; sigla: string };
+      revisar: RevisaoExecucao;
+      saiuDoEscopo: boolean;
+      somenteExecucao: boolean;
+    } | null = null;
+    if (trocouSecretaria) {
+      const destino = await this.prisma.secretaria.findUniqueOrThrow({ where: { id: secretariaId }, select: { id: true, nome: true, sigla: true } });
+      const revisar: RevisaoExecucao = {};
+      if (before.equipe && equipeIncompativel(before.equipe, secretariaId)) {
+        revisar.equipe = { id: before.equipe.id, nome: before.equipe.nome, secretaria: before.equipe.secretaria ?? null };
+      }
+      if (before.responsavelId) {
+        const resp = await this.prisma.usuario.findUnique({
+          where: { id: before.responsavelId },
+          select: { id: true, nome: true, acessoTodasSecretarias: true, secretariaId: true, secretariasVinculos: { select: { secretariaId: true } } },
+        });
+        if (resp && responsavelIncompativel(resp, secretariaId)) revisar.responsavel = { id: resp.id, nome: resp.nome };
+      }
+      transferencia = { origem: before.secretaria ?? null, destino, revisar, saiuDoEscopo: false, somenteExecucao: false };
+    }
+
     let chamado = before;
     if (alteracoes.length > 0) {
       chamado = await this.prisma.$transaction(async (tx) => {
@@ -1939,7 +1975,16 @@ export class ChamadosService {
             metadata: {
               tipo: 'abertura_update',
               alteracoes,
-            },
+              ...(transferencia
+                ? {
+                    secretariaExecucao: {
+                      origem: transferencia.origem,
+                      destino: transferencia.destino,
+                      revisar: transferencia.revisar,
+                    },
+                  }
+                : {}),
+            } as Prisma.InputJsonValue,
           },
         });
 
@@ -1954,6 +1999,29 @@ export class ChamadosService {
           },
         });
 
+        if (transferencia) {
+          // 310: registro próprio da transferência, com origem → destino (fácil de filtrar na auditoria).
+          await tx.logAuditoria.create({
+            data: {
+              usuarioId: user.sub,
+              acao: AuditAction.UPDATE,
+              entidadeTipo: 'Chamado',
+              entidadeId: id,
+              tela: 'chamados',
+              funcao: 'secretaria_execucao',
+              descricao: descricaoTransferencia(transferencia.origem, transferencia.destino),
+              secretariaAtivaId: user.secretariaId ?? null,
+              valorAntigo: { secretariaId: before.secretariaId, secretaria: transferencia.origem } as Prisma.InputJsonValue,
+              valorNovo: {
+                secretariaId,
+                secretaria: transferencia.destino,
+                unidadeSecretariaId: before.unidade?.secretariaId ?? null,
+                revisar: transferencia.revisar,
+              } as Prisma.InputJsonValue,
+            },
+          });
+        }
+
         return updated;
       });
     }
@@ -1962,7 +2030,26 @@ export class ChamadosService {
       return this.syncObservadores(id, dto.observadorIds ?? [], user, 'abertura');
     }
 
-    return this.serializeChamado(chamado, user.sub);
+    if (transferencia) {
+      // 310: "saiu do escopo" = depois da troca o usuário perde o acesso (mesma regra da tela; equipe da Secretaria ainda dá acesso).
+      // saiuDoEscopo = perdeu a visualização (sem Secretaria, próprio ou equipe); somenteExecucao = ainda vê/executa, sem gestão.
+      try {
+        assertChamadoSecretariaAccess(user, chamado);
+        transferencia.somenteExecucao = !podeGerirAberturaChamado(user, chamado);
+      } catch {
+        transferencia.saiuDoEscopo = true;
+      }
+    }
+    return { ...this.serializeChamado(chamado, user.sub), podeGerirAbertura: podeGerirAberturaChamado(user, chamado), ...(transferencia ? { transferenciaExecucao: transferencia } : {}) };
+  }
+
+  /** 310: destino da execução — todas as Secretarias ativas, independente da Secretaria ativa da sessão. */
+  listSecretariasDestinoExecucao() {
+    return this.prisma.secretaria.findMany({
+      where: { ativo: true },
+      orderBy: [{ sigla: 'asc' }],
+      select: { id: true, nome: true, sigla: true },
+    });
   }
 
   async registrarExecucaoManual(id: string, dto: ChamadoExecucaoManualDto, user: JwtPayload) {

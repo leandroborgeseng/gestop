@@ -47,7 +47,7 @@ describe('315 · chamado de outra Secretaria aberto pelo id', () => {
     const src = readFileSync(resolve('frontend/app/(authenticated)/chamados/page.tsx'), 'utf8');
     expect(src).toMatch(/if \(detail\?\.id === selectedId\) return detail;/);
     expect(src).toMatch(/current === pedidoUrlRef\.current/);
-    expect(src).toMatch(/pedidoUrlRef\.current = null;\s*setSelectedId\(chamado\.id\)/);
+    expect(src).toMatch(/pedidoUrlRef\.current = null;[^}]*setSelectedId\(chamado\.id\)/);
   });
   it('Execução mostra a mensagem', () => {
     const src = readFileSync(resolve('frontend/components/chamados/chamado-execucao-flow.tsx'), 'utf8');

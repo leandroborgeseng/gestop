@@ -881,6 +881,8 @@ export type ChamadoNaoConformidade = {
 export type ChamadoModoLocalizacao = 'UNIDADE' | 'GEOLOCALIZACAO' | 'ENDERECO';
 
 export type ChamadoResumo = {
+  /** 310 (TL #48): false quando a Secretaria de execução é outra (acesso só pelo próprio ou pela equipe). */
+  podeGerirAbertura?: boolean;
   id: string;
   codigo: string;
   titulo?: string | null;
