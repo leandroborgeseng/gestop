@@ -1,0 +1,157 @@
+{
+  "desktopNovo": {
+    "opcoes": [
+      "ZZTESTE Consulta Alfa",
+      "ZZTESTE Gestor Alfa",
+      "ZZTESTE Responsável Alfa 1",
+      "ZZTESTE Responsável Alfa 2",
+      "ZZTESTE Responsável Alfa 3",
+      "ZZTESTE Responsável Alfa 4",
+      "ZZTESTE Responsável Alfa 5",
+      "ZZTESTE Responsável Alfa 6",
+      "ZZTESTE Responsável Alfa 7",
+      "ZZTESTE Responsável Alfa 8",
+      "ZZTESTE Responsável Alfa 9",
+      "ZZTESTE Responsável Multi (A+B)"
+    ],
+    "lista": {
+      "x": 484,
+      "y": 549.828125,
+      "width": 472,
+      "height": 288
+    },
+    "salvar": {
+      "x": 725,
+      "y": 796,
+      "width": 231,
+      "height": 38
+    },
+    "listaAcimaDoSalvar": false,
+    "position": "static",
+    "overflowY": "auto",
+    "maxHeight": "288px",
+    "scrollH": 576,
+    "clientH": 286,
+    "aposMarcar2": {
+      "listaAberta": true,
+      "chips": 2
+    },
+    "esc": {
+      "listaAberta": false,
+      "modalAberto": true
+    },
+    "cliqueFora": {
+      "listaAberta": false
+    }
+  },
+  "mobileNovo": {
+    "opcoes": [
+      "ZZTESTE Consulta Alfa",
+      "ZZTESTE Gestor Alfa",
+      "ZZTESTE Responsável Alfa 1",
+      "ZZTESTE Responsável Alfa 2",
+      "ZZTESTE Responsável Alfa 3",
+      "ZZTESTE Responsável Alfa 4",
+      "ZZTESTE Responsável Alfa 5",
+      "ZZTESTE Responsável Alfa 6",
+      "ZZTESTE Responsável Alfa 7",
+      "ZZTESTE Responsável Alfa 8",
+      "ZZTESTE Responsável Alfa 9",
+      "ZZTESTE Responsável Multi (A+B)"
+    ],
+    "lista": {
+      "x": 20,
+      "y": 604.859375,
+      "width": 350,
+      "height": 422
+    },
+    "salvar": {
+      "x": 200,
+      "y": 794,
+      "width": 170,
+      "height": 38
+    },
+    "listaAcimaDoSalvar": false,
+    "position": "static",
+    "overflowY": "auto",
+    "maxHeight": "422px",
+    "scrollH": 576,
+    "clientH": 420,
+    "aposMarcar2": {
+      "listaAberta": true,
+      "chips": 2
+    },
+    "esc": {
+      "listaAberta": false,
+      "modalAberto": true
+    },
+    "cliqueFora": {
+      "listaAberta": false
+    }
+  },
+  "edicao": {
+    "chips": [
+      {
+        "texto": "ZZTESTE Responsável Alfa 1",
+        "situacao": "OK"
+      },
+      {
+        "texto": "ZZTESTE Responsável Inativo· Inativo",
+        "situacao": "INATIVO"
+      },
+      {
+        "texto": "ZZTESTE Responsável Beta· Outra Secretaria",
+        "situacao": "OUTRA_SECRETARIA"
+      }
+    ],
+    "aviso": "2 responsáveis precisam ser regularizados.",
+    "opcoesNovas": [
+      "ZZTESTE Consulta Alfa",
+      "ZZTESTE Gestor Alfa",
+      "ZZTESTE Responsável Alfa 1",
+      "ZZTESTE Responsável Alfa 2",
+      "ZZTESTE Responsável Alfa 3",
+      "ZZTESTE Responsável Alfa 4",
+      "ZZTESTE Responsável Alfa 5",
+      "ZZTESTE Responsável Alfa 6",
+      "ZZTESTE Responsável Alfa 7",
+      "ZZTESTE Responsável Alfa 8",
+      "ZZTESTE Responsável Alfa 9",
+      "ZZTESTE Responsável Multi (A+B)"
+    ]
+  },
+  "adminTodas": {
+    "grupos": [
+      "Sem Secretaria",
+      "ZZTA",
+      "ZZTB"
+    ],
+    "opcoes": [
+      "ZZTESTE Admin",
+      "ZZTESTE Consulta Alfa",
+      "ZZTESTE Gestor Alfa",
+      "ZZTESTE Responsável Alfa 1",
+      "ZZTESTE Responsável Alfa 2",
+      "ZZTESTE Responsável Alfa 3",
+      "ZZTESTE Responsável Alfa 4",
+      "ZZTESTE Responsável Alfa 5",
+      "ZZTESTE Responsável Alfa 6",
+      "ZZTESTE Responsável Alfa 7",
+      "ZZTESTE Responsável Alfa 8",
+      "ZZTESTE Responsável Alfa 9",
+      "ZZTESTE Responsável Multi (A+B)",
+      "ZZTESTE Responsável Beta"
+    ],
+    "multiVezes": 1
+  },
+  "desktopRolagemAteOFim": {
+    "fimDaLista": 782.828125,
+    "topoDoRodape": 796,
+    "listaTerminaAcimaDoBotao": true
+  },
+  "mobileRolagemAteOFim": {
+    "fimDaLista": 780.859375,
+    "topoDoRodape": 794,
+    "listaTerminaAcimaDoBotao": true
+  }
+}
