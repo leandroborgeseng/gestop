@@ -23,6 +23,14 @@ export const CHECKLIST_INATIVO: EntidadeInativavel = {
   jaInativo: 'Este checklist já está inativo.',
 };
 
+/** 308 */
+export const CRONOGRAMA_INATIVO: EntidadeInativavel = {
+  mensagemSomenteLeitura: 'Este cronograma está inativo. Reative-o para realizar alterações',
+  mensagemNaoInicia: 'Este cronograma está inativo e não gera vistorias programadas.',
+  jaAtivo: 'Este cronograma já está ativo.',
+  jaInativo: 'Este cronograma já está inativo.',
+};
+
 export class RegistroInativoException extends ConflictException {
   constructor(message: string) {
     super({ statusCode: 409, error: 'Conflict', code: 'REGISTRO_INATIVO', message });

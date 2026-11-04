@@ -22,10 +22,11 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { ErrorState, LoadingState } from '@/components/ui-states';
-import { AvisoChecklistInativoCronograma } from '@/components/inativos/inativos';
+import { AvisoCronogramaInativoExistente, CronogramasCadastrados } from '@/components/cronograma/cronogramas-cadastrados';
 import { checklistAppliesToUnidade } from '@/lib/checklist-matching';
 import {
   deactivateCronograma,
+  reactivateCronograma,
   downloadRelatorioPdf,
   downloadRelatorioXlsx,
   getCalendarioChecagens,
@@ -81,7 +82,10 @@ export default function CronogramaPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CronogramaChecagem | null>(null);
   const [formUnidadeId, setFormUnidadeId] = useState('');
-  const [formResponsavelIds, setFormResponsavelIds] = useState<string[]>([]);
+  const [formChecklistId, setFormChecklistId] = useState('');
+  /** 308: erro do salvar/reativar aparece DENTRO do formulário (o modal cobre o aviso da página). */
+  const [formError, setFormError] = useState<string | null>(null);
+    const [formResponsavelIds, setFormResponsavelIds] = useState<string[]>([]);
   const [formResponsaveis, setFormResponsaveis] = useState<ResponsavelCronogramaOpcao[]>([]);
   // 307: situação dos responsáveis no escopo atual; troca de contexto com o modal aberto (R5).
   const [situacoes, setSituacoes] = useState<Record<string, SituacaoResponsavel | undefined>>({});
@@ -294,13 +298,14 @@ export default function CronogramaPage() {
       ...(escopoTrocado && confirmadoManter && pendentesResp.length ? { confirmarResponsaveisForaEscopo: true } : {}),
     };
 
+    setFormError(null);
     try {
       await saveCronograma(payload, editing?.id);
       setSuccess(editing ? 'Cronograma atualizado.' : 'Cronograma cadastrado.');
       fecharForm();
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível salvar o cronograma.');
+      setFormError(err instanceof Error ? err.message : 'Não foi possível salvar o cronograma.');
     }
   }
 
@@ -315,6 +320,25 @@ export default function CronogramaPage() {
     setCronogramaForaEscopo(null);
   }
 
+  // 308 (TL #47): par próprio + checklist com cronograma inativo → aviso com Reativar no lugar de cadastrar outro.
+  const inativoExistente =
+    !editing && formUnidadeId && formChecklistId
+      ? cronogramas.find(
+          (c) => !c.ativo && ((c.unidadeId === formUnidadeId && c.checklistId === formChecklistId)),
+        ) ?? null
+      : null;
+
+  async function reativarDoFormulario(item: CronogramaChecagem) {
+    try {
+      await reactivateCronograma(item.id);
+      setFormOpen(false);
+      setSuccess('Cronograma reativado. A próxima data foi recalculada a partir de hoje.');
+      await loadData();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Falha ao reativar cronograma.');
+    }
+  }
+
   function openCreate() {
     setEscopoAbertura(chaveEscopo);
     setCronogramaForaEscopo(null);
@@ -322,6 +346,8 @@ export default function CronogramaPage() {
     setConfirmadoManter(false);
     setEditing(null);
     setFormUnidadeId(unidadeId);
+    setFormChecklistId('');
+    setFormError(null);
     setFormResponsavelIds([]);
     setFormResponsaveis([]);
     setFormOpen(true);
@@ -334,6 +360,8 @@ export default function CronogramaPage() {
     setConfirmadoManter(false);
     setEditing(item);
     setFormUnidadeId(item.unidadeId);
+    setFormChecklistId(item.checklistId);
+    setFormError(null);
     const fromJunction = (item.responsaveis ?? []).map((row) => row.usuario);
     const legacy = item.responsavel ? [item.responsavel] : [];
     const users = fromJunction.length ? fromJunction : legacy;
@@ -452,71 +480,24 @@ export default function CronogramaPage() {
               <Card elevation={1}>
                 <CardHeader>
                   <CardTitle>Cronogramas cadastrados</CardTitle>
-                  <CardDescription>Uma regra por próprio + checklist. A próxima data avança automaticamente após a vistoria.</CardDescription>
+                  <CardDescription>Uma regra por próprio + checklist. A próxima data avança automaticamente após a vistoria. Inativos ficam fora do calendário e das programações.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3 pt-0">
-                  {cronogramas.length === 0 ? (
-                    <p className="py-6 text-center text-[13px] text-[var(--ink-3)]">
-                      Nenhum cronograma cadastrado para os filtros atuais.
-                    </p>
-                  ) : null}
-                  {cronogramas.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex flex-col gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-4 sm:flex-row sm:items-start sm:justify-between"
-                    >
-                      <div>
-                        <h3 className="text-[14px] font-semibold text-[var(--ink)]">{item.unidade.nome}</h3>
-                        <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                          {item.checklist.nome} · {CRONOGRAMA_FREQUENCIA_LABELS[item.frequencia]} ·{' '}
-                          {formatUnidadeTipo(item.unidade.tipo)}
-                        </p>
-                        {item.checklist.ativo === false ? <AvisoChecklistInativoCronograma className="mt-2" /> : null}
-                        <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                          Próxima: {new Date(item.proximaChecagemEm).toLocaleDateString('pt-BR')}
-                          {item.ultimaChecagemEm
-                            ? ` · Última: ${new Date(item.ultimaChecagemEm).toLocaleDateString('pt-BR')}`
-                            : ''}
-                        </p>
-                        <p className="mt-1 text-[13px] text-[var(--ink-3)]">
-                          Responsável(is):{' '}
-                          {item.responsaveis?.length
-                            ? item.responsaveis.map((r) => r.usuario.nome).join(', ')
-                            : item.responsavel?.nome ?? 'Sem responsável definido'}
-                        </p>
-                      </div>
-                      {canAlterar || canExcluir ? (
-                        <div className="flex flex-wrap gap-2">
-                          {canAlterar ? (
-                            <Button variant="tonal" size="sm" onClick={() => openEdit(item)}>
-                              Editar
-                            </Button>
-                          ) : null}
-                          {canExcluir && item.ativo ? (
-                            <Button
-                              variant="text"
-                              size="sm"
-                              className="text-red-700"
-                              onClick={() =>
-                                void deactivateCronograma(item.id)
-                                  .then(() => {
-                                    setSuccess('Cronograma inativado.');
-                                    return loadData();
-                                  })
-                                  .catch((err) =>
-                                    setError(
-                                      err instanceof Error ? err.message : 'Falha ao inativar cronograma.',
-                                    ),
-                                  )
-                              }
-                            >
-                              Inativar
-                            </Button>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-                  ))}
+                  <CronogramasCadastrados
+                    cronogramas={cronogramas}
+                    canAlterar={canAlterar}
+                    canExcluir={canExcluir}
+                    onEditar={openEdit}
+                    onAlterarStatus={async (item, acao) => {
+                      try {
+                        await (acao === 'INATIVAR' ? deactivateCronograma(item.id) : reactivateCronograma(item.id));
+                        setSuccess(acao === 'INATIVAR' ? 'Cronograma inativado.' : 'Cronograma reativado. A próxima data foi recalculada a partir de hoje.');
+                        await loadData();
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : acao === 'INATIVAR' ? 'Falha ao inativar cronograma.' : 'Falha ao reativar cronograma.');
+                      }
+                    }}
+                  />
                 </CardContent>
               </Card>
             </div>
@@ -580,7 +561,7 @@ export default function CronogramaPage() {
                       form="form-cronograma"
                       variant="filled"
                       className="flex-1"
-                      disabled={salvarBloqueado}
+                      disabled={salvarBloqueado || Boolean(inativoExistente)}
                       data-testid="salvar-cronograma"
                     >
                       {editing ? 'Salvar alterações' : 'Cadastrar cronograma'}
@@ -590,6 +571,11 @@ export default function CronogramaPage() {
               }
             >
               <form id="form-cronograma" onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
+                {formError ? (
+                  <div data-testid="cronograma-form-erro">
+                    <Alert variant="error">{formError}</Alert>
+                  </div>
+                ) : null}
                 <Field label="Próprio público">
                   <SearchableSelect
                     value={formUnidadeId}
@@ -606,6 +592,7 @@ export default function CronogramaPage() {
                     name="checklistId"
                     required
                     defaultValue={editing?.checklistId ?? ''}
+                    onChange={(event) => setFormChecklistId(event.target.value)}
                     disabled={!formUnidade}
                   >
                     <option value="">{formUnidade ? 'Selecione' : 'Selecione um próprio primeiro'}</option>
@@ -616,6 +603,13 @@ export default function CronogramaPage() {
                     ))}
                   </Select>
                 </Field>
+                {inativoExistente ? (
+                  <AvisoCronogramaInativoExistente
+                    cronograma={inativoExistente}
+                    canReativar={canExcluir}
+                    onReativar={reativarDoFormulario}
+                  />
+                ) : null}
                 <Field label="Frequência">
                   <Select name="frequencia" required defaultValue={editing?.frequencia ?? 'MENSAL'}>
                     {CRONOGRAMA_FREQUENCIAS.map((frequencia) => (

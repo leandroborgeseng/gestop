@@ -23,6 +23,17 @@ export const TEXTOS_CHECKLIST: EntidadeInativavelTextos = {
     'O checklist volta a poder ser editado e a iniciar vistorias, documentos e aplicações novas.',
 };
 
+/** 308 */
+export const TEXTOS_CRONOGRAMA: EntidadeInativavelTextos = {
+  plural: 'cronogramas',
+  singularComArtigo: 'o cronograma',
+  somenteLeitura: 'Este cronograma está inativo. Reative-o para realizar alterações',
+  confirmarInativar:
+    'O cronograma sai do calendário e das vistorias programadas. Vistorias já realizadas e o histórico ficam intactos.',
+  confirmarReativar:
+    'O cronograma volta ao calendário e às vistorias programadas. Só a próxima data é recalculada a partir de hoje; o período em que ficou inativo não gera checagens retroativas.',
+};
+
 export function rotuloSanfonaInativos(textos: Pick<EntidadeInativavelTextos, 'plural'>, aberta: boolean, total: number) {
   return `${aberta ? 'Ocultar' : 'Mostrar'} ${textos.plural} inativos (${total})`;
 }
@@ -52,4 +63,22 @@ export function textoConfirmacaoStatus(textos: EntidadeInativavelTextos, acao: A
     descricao: acao === 'INATIVAR' ? textos.confirmarInativar : textos.confirmarReativar,
     confirmar: rotuloAcaoStatus(acao),
   };
+}
+
+/** 308 (TL #47) */
+export const MSG_CRONOGRAMA_INATIVO_EXISTENTE = 'Já existe um cronograma inativo para este próprio e checklist';
+
+/** O que precisa ser reativado antes do cronograma (mesma regra do backend). */
+export function dependenciasInativasCronograma(c: { unidade: { ativo?: boolean }; checklist: { ativo?: boolean } }) {
+  const out: Array<'PROPRIO' | 'CHECKLIST'> = [];
+  if (c.unidade.ativo === false) out.push('PROPRIO');
+  if (c.checklist.ativo === false) out.push('CHECKLIST');
+  return out;
+}
+
+export function avisoDependenciasCronograma(deps: Array<'PROPRIO' | 'CHECKLIST'>) {
+  if (deps.length > 1) return 'Próprio e checklist inativos: reative os dois antes de reativar este cronograma.';
+  return deps[0] === 'PROPRIO'
+    ? 'Próprio inativo: reative o próprio antes de reativar este cronograma.'
+    : 'Checklist inativo: reative o checklist antes de reativar este cronograma.';
 }

@@ -813,6 +813,11 @@ export function deactivateCronograma(id: string) {
   return request<CronogramaChecagem>(`/cronograma/${id}`, { method: 'DELETE' });
 }
 
+/** 308 */
+export function reactivateCronograma(id: string) {
+  return request<CronogramaChecagem>(`/cronograma/${id}/reativar`, { method: 'POST' });
+}
+
 export function createChecklistVersion(id: string) {
   return request<ChecklistVersao>(`/checklists/${id}/versions`, { method: 'POST' });
 }
