@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
 import { chamadoTitulo } from '@/lib/chamado-geo';
-import { hrefChamado, hrefChamadoDaNc, ncMostraLinkChamado } from '@/lib/nc-chamado-link';
+import { hrefChamado, hrefChamadoDaNc, ncMostraLinkChamado, podeAbrirLinkChamado } from '@/lib/nc-chamado-link';
+import { useSessionUser } from '@/components/auth/session-context';
 import { UnidadeDetalhe, UnidadeOperacional } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { cn } from '@/lib/cn';
@@ -284,6 +285,12 @@ function FiscTab({ unidade }: { unidade: UnidadeDetalhe }) {
 
 function NcTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => void }) {
   const items = unidade.pendenciasDetalhadas.naoConformidades;
+  const sessionUser = useSessionUser();
+  // 315: sem permissão de Chamados/Execução, o número fica só como selo (sem link).
+  const linkDaNc = (chamado: Parameters<typeof hrefChamadoDaNc>[0]) => {
+    const href = hrefChamadoDaNc(chamado);
+    return href && podeAbrirLinkChamado(href, sessionUser?.permissoes ?? [], sessionUser) ? href : null;
+  };
   if (items.length === 0) {
     return <EmptyTab icon={AlertTriangle} message="Nenhuma não conformidade registrada" ok />;
   }
@@ -315,10 +322,10 @@ function NcTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => v
                 {situacao === 'RESOLVIDA_CHAMADO' && hrefChamadoDaNc(item.chamado) ? (
                   <Badge variant="neutral">Resolvida</Badge>
                 ) : null}
-                {ncMostraLinkChamado(situacao) && hrefChamadoDaNc(item.chamado) ? (
+                {ncMostraLinkChamado(situacao) && linkDaNc(item.chamado) ? (
                   // 315: número do chamado abre o chamado na tela de Chamados, já selecionado.
                   <Link
-                    href={hrefChamadoDaNc(item.chamado)!}
+                    href={linkDaNc(item.chamado)!}
                     onClick={onClose}
                     data-testid="nc-chamado-link"
                     aria-label={`Abrir chamado ${item.chamado!.codigo}`}
@@ -326,6 +333,11 @@ function NcTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => v
                   >
                     {item.chamado!.codigo}
                   </Link>
+                ) : ncMostraLinkChamado(situacao) && hrefChamadoDaNc(item.chamado) ? (
+                  // 315: sem permissão de Chamados, só o selo com o número (sem link).
+                  <Badge variant={isPendente ? 'warning' : 'neutral'} data-testid="nc-chamado-selo">
+                    {item.chamado!.codigo}
+                  </Badge>
                 ) : (
                 <Badge variant={isPendente ? 'warning' : 'neutral'}>
                   {situacao === 'ABERTA'

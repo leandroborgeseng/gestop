@@ -39,5 +39,13 @@
     ],
     "execucaoDestino": "/execucao/398a3b0c-1abe-419d-a854-5db6dafeac9d",
     "resolvidaDestino": "/chamados?id=89a11752-ba7c-47d0-b913-176918e2c9fe"
+  },
+  "semPermissaoChamados": {
+    "links": 0,
+    "codigosVisiveis": [
+      "CH-2026-ZZ0315",
+      "CH-2026-ZZ0316",
+      "CH-2026-ZZ0317"
+    ]
   }
 }

@@ -25,7 +25,7 @@ describe('315 · número do chamado na aba Não conformidades', () => {
   });
   it('drawer: aba NC e aba Chamados usam o mesmo helper; resolvida mantém o selo', () => {
     const src = readFileSync(resolve('frontend/components/cco/unidade-drawer.tsx'), 'utf8');
-    expect(src).toMatch(/hrefChamadoDaNc\(item\.chamado\)/);
+    expect(src).toMatch(/hrefChamadoDaNc\(chamado\)/);
     expect(src).toMatch(/hrefChamado\(chamado\)/);
     expect(src).not.toMatch(/`\/execucao\/\$\{chamado\.id\}`/);
     expect(src).toMatch(/RESOLVIDA_CHAMADO' && hrefChamadoDaNc[\s\S]*Resolvida/);

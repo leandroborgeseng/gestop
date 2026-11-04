@@ -27,6 +27,7 @@ import { Field } from '@/components/ui/field';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ErrorState, LoadingState } from '@/components/ui-states';
+import { ehSemAcessoChamado, SEM_ACESSO_CHAMADO } from '@/lib/chamado-acesso';
 import { useCanGerenciarChamados, useCanLancarExecucaoManual } from '@/components/auth/session-context';
 import { MembroExternoPicker } from '@/components/chamados/membro-externo-picker';
 import { DocumentosRelacionadosPanel } from '@/components/documentos/documentos-relacionados-panel';
@@ -260,7 +261,8 @@ export function ChamadoExecucaoFlow({ chamadoId }: { chamadoId: string }) {
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao carregar chamado.');
+      // 315: chamado de outra Secretaria aberto pelo id: mensagem clara, nunca tela vazia.
+      setError(ehSemAcessoChamado(err) ? SEM_ACESSO_CHAMADO : err instanceof Error ? err.message : 'Falha ao carregar chamado.');
     } finally {
       setLoading(false);
     }

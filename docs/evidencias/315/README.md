@@ -19,3 +19,14 @@ Dados adicionais: NC resolvida com o chamado `CH-2026-ZZ0316` CONCLUIDO e NC com
 | log.json (`decisoesTL`) | Código, href e selo de cada link e as URLs de destino |
 
 A aba Não conf. e a aba Chamados do drawer usam o mesmo helper (`hrefChamado` em `frontend/lib/nc-chamado-link.ts`).
+
+## Decisões do TL (rodada 3): permissão e Secretaria
+Dados adicionais: usuário `zzteste.consulta.alfa@aion.local` (ZZTA, só CCO, sem Chamados nem Execução). Chamados da ZZTB: `CH-2026-ZZB001` ABERTO e `CH-2026-ZZB002` EM_EXECUCAO.
+
+| Arquivo | O que mostra |
+|---|---|
+| desktop-6-usuario-sem-permissao-chamados-so-selo.png | Usuário sem permissão de Chamados vê só o selo com o número, sem link (`log.json`: `semPermissaoChamados.links = 0`) |
+| desktop-7-gestor-zzta-chamados-de-outra-secretaria.png | Gestor da ZZTA abrindo `/chamados?id=<chamado da ZZTB>` vê **"Você não tem acesso a este chamado"**. O detalhe fica em "Selecione um chamado" e a tela não cai no primeiro chamado da lista. |
+| desktop-8-gestor-zzta-execucao-de-outra-secretaria.png | Gestor da ZZTA abrindo `/execucao/<chamado da ZZTB>` vê **"Você não tem acesso a este chamado"** |
+
+O backend já respondia 403 nos dois casos. A mudança foi só no frontend: 403 ou 404 vira a mensagem de sem acesso.

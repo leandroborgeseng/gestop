@@ -19,3 +19,14 @@ export function hrefChamadoDaNc(chamado: NcChamadoRef): string | null {
 export function ncMostraLinkChamado(situacao: string): boolean {
   return situacao === 'VINCULADA_EM_ANDAMENTO' || situacao === 'RESOLVIDA_CHAMADO';
 }
+
+import { resolvePreferredHref } from '@/lib/navigation';
+
+/** 315: o link só aparece se o usuário pode abrir a tela de destino (Chamados ou Execução). */
+export function podeAbrirLinkChamado(
+  href: string,
+  permissoes: string[],
+  user?: Parameters<typeof resolvePreferredHref>[2],
+): boolean {
+  return resolvePreferredHref(permissoes, href, user) === href;
+}
