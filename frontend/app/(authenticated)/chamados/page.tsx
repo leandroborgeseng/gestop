@@ -41,6 +41,7 @@ import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
+import { ehSemAcessoChamado, SEM_ACESSO_CHAMADO } from '@/lib/chamado-acesso';
 import { ListPagination } from '@/components/ui/list-pagination';
 import { downloadChamadoPdf, excluirChamadoLogicamente, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTarefasDoChamado, listTiposChamadoOpcoes, notificarChamadoEquipe, restaurarChamadoExcluido, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
 import { buildChamadoAcoes, executarAcaoChamado, type ChamadoAcaoId } from '@/lib/chamado-acoes';
@@ -161,10 +162,18 @@ function ChamadosPageContent() {
 
   const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('id'));
   const [busyId, setBusyId] = useState<string | null>(null);
+  /** 315: id pedido na URL que o usuário não pode ver (outra Secretaria / inexistente). */
+  const [semAcessoId, setSemAcessoId] = useState<string | null>(null);
+  const semAcessoRef = useRef<string | null>(null);
+  /** 315: id pedido pela URL (link direto). A lista não troca essa seleção, mesmo fora da página atual, até o usuário escolher outro. */
+  const pedidoUrlRef = useRef<string | null>(searchParams.get('id'));
 
   useEffect(() => {
     const id = searchParams.get('id');
-    if (id) setSelectedId(id);
+    if (id) {
+      pedidoUrlRef.current = id;
+      setSelectedId(id);
+    }
   }, [searchParams]);
 
   useEffect(() => {
@@ -224,7 +233,7 @@ function ChamadosPageContent() {
           if (response.statusCounts) setStatusCounts(response.statusCounts);
           setHasSemSlaApi(Boolean(response.hasSemSla));
           setSelectedId((current) =>
-            current && response.items.some((item) => item.id === current)
+            current && (response.items.some((item) => item.id === current) || current === semAcessoRef.current || current === pedidoUrlRef.current)
               ? current
               : response.items[0]?.id ?? null,
           );
@@ -248,7 +257,7 @@ function ChamadosPageContent() {
     if (response.statusCounts) setStatusCounts(response.statusCounts);
     setHasSemSlaApi(Boolean(response.hasSemSla));
     setSelectedId((current) =>
-      current && response.items.some((item) => item.id === current)
+      current && (response.items.some((item) => item.id === current) || current === semAcessoRef.current || current === pedidoUrlRef.current)
         ? current
         : response.items[0]?.id ?? null,
     );
@@ -274,7 +283,15 @@ function ChamadosPageContent() {
         setDetail(data);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe do chamado.');
+        if (!active) return;
+        if (ehSemAcessoChamado(err)) {
+          semAcessoRef.current = selectedId;
+          pedidoUrlRef.current = null;
+          setSemAcessoId(selectedId);
+          setDetail(null);
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe do chamado.');
       })
       .finally(() => {
         if (active) setDetailLoading(false);
@@ -301,14 +318,19 @@ function ChamadosPageContent() {
   const filtered = chamados;
 
   const selected = useMemo(() => {
+    // 315: não cai no primeiro da lista quando o chamado pedido é de outra Secretaria.
+    if (selectedId && selectedId === semAcessoId) return null;
     if (selectedId) {
       const match = filtered.find((item) => item.id === selectedId);
       if (match) return match;
       const anyMatch = chamados.find((item) => item.id === selectedId);
       if (anyMatch) return anyMatch;
+      // 315: link direto para chamado fora da página atual: usa o detalhe buscado pelo id.
+      if (detail?.id === selectedId) return detail;
+      if (selectedId === pedidoUrlRef.current) return null;
     }
     return filtered[0] ?? null;
-  }, [filtered, selectedId, chamados]);
+  }, [filtered, selectedId, chamados, semAcessoId, detail]);
 
   async function assignTeam(
     id: string,
@@ -487,6 +509,12 @@ function ChamadosPageContent() {
           </div>
         ) : null}
 
+        {selectedId && selectedId === semAcessoId ? (
+          <div className="mb-4 shrink-0" data-testid="chamado-sem-acesso">
+            <ErrorState message={SEM_ACESSO_CHAMADO} />
+          </div>
+        ) : null}
+
         {view === 'triagem' && error ? (
           <div className="mb-4 shrink-0">
             <ErrorState message={error} onRetry={load} />
@@ -587,7 +615,10 @@ function ChamadosPageContent() {
                       <button
                         key={chamado.id}
                         type="button"
-                        onClick={() => setSelectedId(chamado.id)}
+                        onClick={() => {
+                          pedidoUrlRef.current = null;
+                          setSelectedId(chamado.id);
+                        }}
                         className={cn(
                           'ch-row mb-0.5 flex w-full flex-col gap-1.5 rounded-[var(--r-md)] border border-transparent px-3 py-2.5 text-left transition-colors',
                           chamado.excluidoEm && 'border-[#f3c0c0] bg-[#fde8e8]',

@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
 import { chamadoTitulo } from '@/lib/chamado-geo';
+import { hrefChamado, hrefChamadoDaNc, ncMostraLinkChamado, podeAbrirLinkChamado } from '@/lib/nc-chamado-link';
+import { useSessionUser } from '@/components/auth/session-context';
 import { UnidadeDetalhe, UnidadeOperacional } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { cn } from '@/lib/cn';
@@ -158,7 +160,7 @@ export function UnidadeDrawer({
                 />
               ) : null}
               {tab === 'fisc' ? <FiscTab unidade={detalhe} /> : null}
-              {tab === 'nc' ? <NcTab unidade={detalhe} /> : null}
+              {tab === 'nc' ? <NcTab unidade={detalhe} onClose={onClose} /> : null}
               {tab === 'chamados' ? <ChamadosTab unidade={detalhe} onClose={onClose} /> : null}
             </>
           ) : null}
@@ -281,8 +283,14 @@ function FiscTab({ unidade }: { unidade: UnidadeDetalhe }) {
   );
 }
 
-function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
+function NcTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => void }) {
   const items = unidade.pendenciasDetalhadas.naoConformidades;
+  const sessionUser = useSessionUser();
+  // 315: sem permissão de Chamados/Execução, o número fica só como selo (sem link).
+  const linkDaNc = (chamado: Parameters<typeof hrefChamadoDaNc>[0]) => {
+    const href = hrefChamadoDaNc(chamado);
+    return href && podeAbrirLinkChamado(href, sessionUser?.permissoes ?? [], sessionUser) ? href : null;
+  };
   if (items.length === 0) {
     return <EmptyTab icon={AlertTriangle} message="Nenhuma não conformidade registrada" ok />;
   }
@@ -311,6 +319,26 @@ function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
               <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{item.descricao}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Badge variant="warning">{item.severidade}</Badge>
+                {situacao === 'RESOLVIDA_CHAMADO' && hrefChamadoDaNc(item.chamado) ? (
+                  <Badge variant="neutral">Resolvida</Badge>
+                ) : null}
+                {ncMostraLinkChamado(situacao) && linkDaNc(item.chamado) ? (
+                  // 315: número do chamado abre o chamado na tela de Chamados, já selecionado.
+                  <Link
+                    href={linkDaNc(item.chamado)!}
+                    onClick={onClose}
+                    data-testid="nc-chamado-link"
+                    aria-label={`Abrir chamado ${item.chamado!.codigo}`}
+                    className="mono inline-flex items-center rounded-full border border-[var(--warn-bd)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-semibold text-[var(--brand)] underline underline-offset-2 hover:text-[var(--brand-hover)]"
+                  >
+                    {item.chamado!.codigo}
+                  </Link>
+                ) : ncMostraLinkChamado(situacao) && hrefChamadoDaNc(item.chamado) ? (
+                  // 315: sem permissão de Chamados, só o selo com o número (sem link).
+                  <Badge variant={isPendente ? 'warning' : 'neutral'} data-testid="nc-chamado-selo">
+                    {item.chamado!.codigo}
+                  </Badge>
+                ) : (
                 <Badge variant={isPendente ? 'warning' : 'neutral'}>
                   {situacao === 'ABERTA'
                     ? 'Sem chamado'
@@ -322,6 +350,7 @@ function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
                           ? 'Resolvida'
                           : item.status}
                 </Badge>
+                )}
               </div>
             </div>
           </div>
@@ -333,6 +362,7 @@ function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
 
 function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => void }) {
   const items = unidade.pendenciasDetalhadas.chamados;
+  const sessionUser = useSessionUser();
   if (items.length === 0) {
     return <EmptyTab icon={Megaphone} message="Nenhum chamado aberto" ok />;
   }
@@ -340,18 +370,11 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
   return (
     <div className="space-y-2">
       {items.map((chamado) => {
-        const href =
-          chamado.status === 'EM_EXECUCAO'
-            ? `/execucao/${chamado.id}`
-            : `/chamados?id=${chamado.id}`;
-
-        return (
-        <Link
-          key={chamado.id}
-          href={href}
-          onClick={onClose}
-          className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]"
-        >
+        const href = hrefChamado(chamado);
+        // 315: sem permissão de Chamados/Execução, o card fica só informativo (sem link).
+        const podeAbrir = podeAbrirLinkChamado(href, sessionUser?.permissoes ?? [], sessionUser);
+        const conteudo = (
+          <>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
             <Megaphone className="h-4 w-4" />
           </span>
@@ -365,7 +388,26 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
           <Badge variant={chamado.prioridade.toUpperCase().includes('URG') || chamado.prioridade.toUpperCase().includes('ALTA') ? 'danger' : 'warning'}>
             {chamado.prioridade}
           </Badge>
-        </Link>
+          </>
+        );
+        return podeAbrir ? (
+          <Link
+            key={chamado.id}
+            href={href}
+            onClick={onClose}
+            data-testid="drawer-chamado-link"
+            className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]"
+          >
+            {conteudo}
+          </Link>
+        ) : (
+          <div
+            key={chamado.id}
+            data-testid="drawer-chamado-sem-link"
+            className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3"
+          >
+            {conteudo}
+          </div>
         );
       })}
     </div>

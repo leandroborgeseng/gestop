@@ -1,0 +1,64 @@
+{
+  "desktop": {
+    "links": [
+      "CH-2026-ZZ0315"
+    ],
+    "href": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
+    "semChamado": 3,
+    "urlDestino": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
+    "codigoVisivelNoDestino": 3
+  },
+  "mobile": {
+    "links": [
+      "CH-2026-ZZ0315"
+    ],
+    "href": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
+    "semChamado": 3,
+    "urlDestino": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
+    "codigoVisivelNoDestino": 3
+  },
+  "decisoesTL": {
+    "links": [
+      {
+        "codigo": "CH-2026-ZZ0317",
+        "href": "/execucao/398a3b0c-1abe-419d-a854-5db6dafeac9d",
+        "seloAoLado": []
+      },
+      {
+        "codigo": "CH-2026-ZZ0316",
+        "href": "/chamados?id=89a11752-ba7c-47d0-b913-176918e2c9fe",
+        "seloAoLado": [
+          "Resolvida"
+        ]
+      },
+      {
+        "codigo": "CH-2026-ZZ0315",
+        "href": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
+        "seloAoLado": []
+      }
+    ],
+    "execucaoDestino": "/execucao/398a3b0c-1abe-419d-a854-5db6dafeac9d",
+    "resolvidaDestino": "/chamados?id=89a11752-ba7c-47d0-b913-176918e2c9fe"
+  },
+  "semPermissaoChamados": {
+    "links": 0,
+    "codigosVisiveis": [
+      "CH-2026-ZZ0315",
+      "CH-2026-ZZ0316",
+      "CH-2026-ZZ0317"
+    ]
+  },
+  "rodada4": {
+    "abaChamadosSemPermissao": {
+      "links": 0,
+      "cardsSemLink": 2
+    },
+    "linkDiretoPagina2": {
+      "exibindo": "Exibindo 1-50 de 64",
+      "alvoNoDetalhe": true,
+      "tituloAlvo": true,
+      "semAcesso": false,
+      "observacao": "Alvo é o chamado mais antigo (64º de 64, ordem por abertura desc) — fica na página 2 com 50 por página; a página 1 da lista não o contém e o detalhe mostra CH-2026-ZZP2ALVO."
+    }
+  }
+}
