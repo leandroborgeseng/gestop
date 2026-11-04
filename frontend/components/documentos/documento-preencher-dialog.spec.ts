@@ -6,7 +6,7 @@ vi.mock('@/components/ui/snackbar', () => ({
   useSnackbar: () => ({ show: () => undefined }),
 }));
 
-import { DocumentoPreencherDialog, travarRolagemFundo } from './documento-consulta-dialogs';
+import { DocumentoPreencherDialog, observarAlturaVisivel, travarRolagemFundo } from './documento-consulta-dialogs';
 import { comportamentoRolagem } from './documento-avulso-form';
 import type { DocumentoDetalhe } from '@/lib/types';
 
@@ -103,5 +103,83 @@ describe('284: trava do fundo iOS-safe', () => {
     restaurar();
     expect(style).toEqual({ position: 'relative', top: '', left: '', right: '', width: '' });
     expect(scrollTo).toHaveBeenCalledWith(0, 420);
+  });
+});
+
+describe('284 (A3): altura acompanha o visualViewport (teclado)', () => {
+  function vvFake(height: number) {
+    const ouvintes: Array<() => void> = [];
+    return {
+      height,
+      addEventListener: vi.fn((tipo: string, fn: () => void) => (tipo === 'resize' ? ouvintes.push(fn) : 0)),
+      removeEventListener: vi.fn(),
+      disparar(h: number) { this.height = h; ouvintes.forEach((fn) => fn()); },
+    };
+  }
+  it('no celular segue a altura visível e para de ouvir ao fechar', () => {
+    const vv = vvFake(640);
+    const alturas: Array<number | null> = [];
+    const parar = observarAlturaVisivel({ innerWidth: 360, visualViewport: vv as never }, (a) => alturas.push(a));
+    vv.disparar(340);
+    expect(vv.addEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+    expect(alturas).toEqual([640, 340]);
+    parar();
+    expect(vv.removeEventListener).toHaveBeenCalled();
+  });
+  it('no desktop não força altura (sem mudança visual)', () => {
+    const alturas: Array<number | null> = [];
+    observarAlturaVisivel({ innerWidth: 1280, visualViewport: vvFake(800) as never }, (a) => alturas.push(a));
+    expect(alturas).toEqual([null]);
+  });
+  it('sem visualViewport não faz nada', () => {
+    const fn = vi.fn();
+    observarAlturaVisivel({ innerWidth: 360, visualViewport: null }, fn);
+    expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe('284: modal fora do contexto de empilhamento do <main>', () => {
+  it('renderiza via portal no document.body', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('./documento-consulta-dialogs.tsx', import.meta.url), 'utf8');
+    expect(src).toContain("createPortal(modal, portalAlvo)");
+    expect(src).toContain('setPortalAlvo(document.body)');
+  });
+});
+
+describe('284 (a11y): prenderFocoNoDialogo', () => {
+  function montar() {
+    const el = (nome: string) => ({ nome, focus: vi.fn(function (this: { nome: string }) { doc.activeElement = this; }), getClientRects: () => [1] });
+    const opener = el('opener');
+    const primeiro = el('fechar');
+    const ultimo = el('concluir');
+    let onKey: (e: KeyboardEvent) => void = () => undefined;
+    const dialogo = {
+      focus: vi.fn(() => { doc.activeElement = dialogo; }),
+      contains: (n: unknown) => n === dialogo || n === primeiro || n === ultimo,
+      querySelectorAll: () => [primeiro, ultimo],
+    };
+    const doc = {
+      activeElement: opener as unknown,
+      contains: () => true,
+      addEventListener: vi.fn((_t: string, fn: (e: KeyboardEvent) => void) => { onKey = fn; }),
+      removeEventListener: vi.fn(),
+    };
+    const tecla = (key: string, shiftKey = false) => { const e = { key, shiftKey, preventDefault: vi.fn() }; onKey(e as unknown as KeyboardEvent); return e; };
+    return { opener, primeiro, ultimo, dialogo, doc, tecla };
+  }
+  it('foca o diálogo, circula Tab/Shift+Tab, Esc fecha e devolve o foco a quem abriu', async () => {
+    const { prenderFocoNoDialogo } = await import('./documento-consulta-dialogs');
+    const m = montar();
+    const onEsc = vi.fn();
+    const soltar = prenderFocoNoDialogo(m.dialogo as never, onEsc, m.doc as never);
+    expect(m.doc.activeElement).toBe(m.dialogo);
+    m.tecla('Tab', true); expect(m.doc.activeElement).toBe(m.ultimo);
+    m.tecla('Tab'); expect(m.doc.activeElement).toBe(m.primeiro);
+    m.ultimo.focus(); const e = m.tecla('Tab'); expect(e.preventDefault).toHaveBeenCalled(); expect(m.doc.activeElement).toBe(m.primeiro);
+    m.tecla('Escape'); expect(onEsc).toHaveBeenCalledTimes(1);
+    soltar();
+    expect(m.doc.removeEventListener).toHaveBeenCalled();
+    expect(m.opener.focus).toHaveBeenCalledWith({ preventScroll: true });
   });
 });
