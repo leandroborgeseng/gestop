@@ -27,7 +27,7 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
     const s = await auth.resolveActiveSession(usuarioId);
     return { sub: usuarioId, nome: 'Fictício', email: 'x@teste306.invalid', ...s, permissoes } as JwtPayload;
   };
-  const novoChamado = async (opts: { equipeA?: boolean; equipeSemSecretaria?: boolean; responsavelId?: string; unidadeId?: string } = {}) => {
+  const novoChamado = async (opts: { equipeA?: boolean; equipeSemSecretaria?: boolean; responsavelId?: string; unidadeId?: string; secretariaId?: string } = {}) => {
     const suf = randomBytes(4).toString('hex');
     const equipe = opts.equipeA || opts.equipeSemSecretaria
       ? await prisma.equipe.create({ data: { codigo: `EQ310-${suf}`, nome: `Equipe Fictícia 310 ${suf}`, secretariaId: opts.equipeA ? seed.secretarias.A : null } })
@@ -36,7 +36,7 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
     const ch = await prisma.chamado.create({
       data: {
         codigo: `CH-310-${suf}`,
-        secretariaId: seed.secretarias.A,
+        secretariaId: opts.secretariaId ?? seed.secretarias.A,
         unidadeId: opts.unidadeId ?? seed.unidadeA,
         descricao: 'Chamado fictício 310',
         equipeId: equipe?.id ?? null,
@@ -165,6 +165,28 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
         expect((e as Error).message).toMatch(MSG);
       }
       expect((await prisma.chamado.findUniqueOrThrow({ where: { id: c.id } })).secretariaId).toBe(seed.secretarias.B);
+    });
+
+    it('sem transferência: chamado de B com equipe de A → gestor de A vê (200, na lista), executa (200) e recebe 403 com mensagem ao editar, devolver e transferir', async () => {
+      const c = await novoChamado({ equipeA: true, secretariaId: seed.secretarias.B, unidadeId: seed.unidadeB });
+      const gA = await sessao(seed.usuarios.gestorA);
+      expect(await prisma.historicoStatus.count({ where: { entidadeId: c.id } })).toBe(0); // nenhum histórico de transferência
+      const ver = (await ctrl.get(c.id, gA)) as unknown as { id: string; podeGerirAbertura: boolean };
+      expect(ver).toMatchObject({ id: c.id, podeGerirAbertura: false });
+      const lista = (await svc.listChamados({} as never, gA)) as unknown as { items: Array<{ id: string }> };
+      expect(lista.items.some((i) => i.id === c.id)).toBe(true);
+      await svc.updatePlanejamento(c.id, { previstaExecucaoEm: amanha() } as never, gA);
+      const terceira = await prisma.secretaria.create({ data: { sigla: `T310U${randomBytes(2).toString('hex')}`, nome: 'Secretaria Fictícia 310 Terceira U' } });
+      criados.secretarias.push(terceira.id);
+      for (const dto of [{ solicitanteNome: 'Fictício edição' }, { secretariaId: seed.secretarias.A }, { secretariaId: terceira.id }]) {
+        const e = await erro(svc.updateAbertura(c.id, dto, gA));
+        expect(e).toBeInstanceOf(ForbiddenException);
+        expect((e as ForbiddenException).getStatus()).toBe(403);
+        expect((e as Error).message).toMatch(MSG);
+      }
+      const depois = await prisma.chamado.findUniqueOrThrow({ where: { id: c.id } });
+      expect(depois.secretariaId).toBe(seed.secretarias.B);
+      expect(depois.solicitanteNome).toBe(c.solicitanteNome);
     });
 
     it('sem nenhum caminho (Secretaria, próprio ou equipe): 404 ao ver, some da lista, 403 ao editar/devolver', async () => {
