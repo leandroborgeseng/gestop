@@ -146,3 +146,40 @@ describe('284: modal fora do contexto de empilhamento do <main>', () => {
     expect(src).toContain('setPortalAlvo(document.body)');
   });
 });
+
+describe('284 (a11y): prenderFocoNoDialogo', () => {
+  function montar() {
+    const el = (nome: string) => ({ nome, focus: vi.fn(function (this: { nome: string }) { doc.activeElement = this; }), getClientRects: () => [1] });
+    const opener = el('opener');
+    const primeiro = el('fechar');
+    const ultimo = el('concluir');
+    let onKey: (e: KeyboardEvent) => void = () => undefined;
+    const dialogo = {
+      focus: vi.fn(() => { doc.activeElement = dialogo; }),
+      contains: (n: unknown) => n === dialogo || n === primeiro || n === ultimo,
+      querySelectorAll: () => [primeiro, ultimo],
+    };
+    const doc = {
+      activeElement: opener as unknown,
+      contains: () => true,
+      addEventListener: vi.fn((_t: string, fn: (e: KeyboardEvent) => void) => { onKey = fn; }),
+      removeEventListener: vi.fn(),
+    };
+    const tecla = (key: string, shiftKey = false) => { const e = { key, shiftKey, preventDefault: vi.fn() }; onKey(e as unknown as KeyboardEvent); return e; };
+    return { opener, primeiro, ultimo, dialogo, doc, tecla };
+  }
+  it('foca o diálogo, circula Tab/Shift+Tab, Esc fecha e devolve o foco a quem abriu', async () => {
+    const { prenderFocoNoDialogo } = await import('./documento-consulta-dialogs');
+    const m = montar();
+    const onEsc = vi.fn();
+    const soltar = prenderFocoNoDialogo(m.dialogo as never, onEsc, m.doc as never);
+    expect(m.doc.activeElement).toBe(m.dialogo);
+    m.tecla('Tab', true); expect(m.doc.activeElement).toBe(m.ultimo);
+    m.tecla('Tab'); expect(m.doc.activeElement).toBe(m.primeiro);
+    m.ultimo.focus(); const e = m.tecla('Tab'); expect(e.preventDefault).toHaveBeenCalled(); expect(m.doc.activeElement).toBe(m.primeiro);
+    m.tecla('Escape'); expect(onEsc).toHaveBeenCalledTimes(1);
+    soltar();
+    expect(m.doc.removeEventListener).toHaveBeenCalled();
+    expect(m.opener.focus).toHaveBeenCalledWith({ preventScroll: true });
+  });
+});

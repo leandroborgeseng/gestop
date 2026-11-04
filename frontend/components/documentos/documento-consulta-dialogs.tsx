@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { DocumentoAvulsoForm, DocumentoAvulsoRespostasLeitura } from '@/components/documentos/documento-avulso-form';
@@ -57,6 +57,47 @@ export function observarAlturaVisivel(
   };
 }
 
+const FOCAVEIS =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * 284 (a11y): prende o foco no diálogo (Tab/Shift+Tab circulam), Esc fecha e, ao desmontar,
+ * devolve o foco a quem abriu. Retorna a função de limpeza.
+ */
+export function prenderFocoNoDialogo(dialogo: HTMLElement, onEsc: () => void, doc: Document = document) {
+  const anterior = doc.activeElement as HTMLElement | null;
+  if (!dialogo.contains(doc.activeElement)) dialogo.focus();
+  const onKey = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onEsc();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+    const itens = Array.from(dialogo.querySelectorAll<HTMLElement>(FOCAVEIS)).filter((el) => el.getClientRects().length > 0);
+    if (itens.length === 0) {
+      event.preventDefault();
+      dialogo.focus();
+      return;
+    }
+    const primeiro = itens[0];
+    const ultimo = itens[itens.length - 1];
+    const ativo = doc.activeElement;
+    if (event.shiftKey && (ativo === primeiro || ativo === dialogo || !dialogo.contains(ativo))) {
+      event.preventDefault();
+      ultimo.focus();
+    } else if (!event.shiftKey && (ativo === ultimo || !dialogo.contains(ativo))) {
+      event.preventDefault();
+      primeiro.focus();
+    }
+  };
+  doc.addEventListener('keydown', onKey, true);
+  return () => {
+    doc.removeEventListener('keydown', onKey, true);
+    if (anterior && typeof anterior.focus === 'function' && doc.contains(anterior)) anterior.focus({ preventScroll: true });
+  };
+}
+
 export function DocumentoPreencherDialog({
   documento,
   onClose,
@@ -67,6 +108,9 @@ export function DocumentoPreencherDialog({
   onSaved: (info?: { concluido?: boolean }) => void | Promise<void>;
 }) {
   const aberto = documento != null;
+  const dialogoRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [alturaVisivel, setAlturaVisivel] = useState<number | null>(null);
   const [topoVisivel, setTopoVisivel] = useState(0);
   // 284: o <main> do app-shell é `relative z-0` (cria contexto de empilhamento), então o z-[130]
@@ -88,6 +132,11 @@ export function DocumentoPreencherDialog({
     // 284: trava a rolagem do fundo (seguro no iOS) e restaura posição ao fechar.
     return travarRolagemFundo(window, document);
   }, [aberto]);
+  useEffect(() => {
+    // 284 (a11y): espera o portal montar para prender o foco no nó final.
+    if (!aberto || !portalAlvo || !dialogoRef.current) return;
+    return prenderFocoNoDialogo(dialogoRef.current, () => onCloseRef.current());
+  }, [aberto, portalAlvo]);
   if (!documento) return null;
   const modal = (
     <div
@@ -97,11 +146,13 @@ export function DocumentoPreencherDialog({
       style={alturaVisivel != null ? { top: topoVisivel, bottom: 'auto', height: alturaVisivel } : undefined}
     >
       <div
+        ref={dialogoRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-labelledby="preencher-documento-titulo"
         style={alturaVisivel != null ? { height: `calc(${alturaVisivel}px - env(safe-area-inset-top))` } : undefined}
-        className="flex h-[calc(100dvh-env(safe-area-inset-top))] w-full max-w-3xl flex-col overflow-hidden rounded-t-[16px] bg-[var(--canvas)] shadow-[var(--sh-lg)] sm:h-auto sm:max-h-[min(94dvh,920px)] sm:rounded-[16px]"
+        className="flex h-[calc(100dvh-env(safe-area-inset-top))] outline-none w-full max-w-3xl flex-col overflow-hidden rounded-t-[16px] bg-[var(--canvas)] shadow-[var(--sh-lg)] sm:h-auto sm:max-h-[min(94dvh,920px)] sm:rounded-[16px]"
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">
           <div className="min-w-0">
