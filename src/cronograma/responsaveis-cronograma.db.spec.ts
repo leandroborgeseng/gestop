@@ -96,6 +96,28 @@ describe.skipIf(!URL)('307 — responsáveis do cronograma no escopo (Postgres l
     expect(idsA).not.toContain(seed.usuarios.gestorB);
   });
 
+  it('TL #46: admin global sem Secretaria não é oferecido (nem em "Todas"); novo → 400; já atribuído continua na edição', async () => {
+    const admin = await sessao(seed.usuarios.admin);
+    const rows = await svc.listResponsaveisOpcoes(admin);
+    expect(rows.map((r) => r.id)).not.toContain(seed.usuarios.admin);
+    expect(rows.every((r) => r.secretarias.length > 0)).toBe(true);
+    expect(rows.filter(doSeed).map((r) => r.id)).toEqual(expect.arrayContaining([seed.usuarios.gestorA, seed.usuarios.gestorB, seed.usuarios.multi]));
+
+    const u = await sessao(seed.usuarios.gestorA);
+    await expect(svc.updateCronograma(cronogramaId, dtoA([seed.usuarios.gestorA, seed.usuarios.admin]), u)).rejects.toBeInstanceOf(BadRequestException);
+
+    // Já atribuído antes da regra (gravado direto): segue salvo e aparece na situação.
+    const ck2 = await prisma.checklist.create({ data: { nome: `Checklist Fictício TL46 ${randomBytes(4).toString('hex')}` } });
+    const legado = await prisma.cronogramaChecagem.create({
+      data: { unidadeId: seed.unidadeA, checklistId: ck2.id, frequencia: 'MENSAL', proximaChecagemEm: new Date(Date.UTC(2026, 11, 1)), observacoes: T307.observacao,
+        responsaveis: { create: [seed.usuarios.gestorA, seed.usuarios.admin].map((usuarioId) => ({ usuarioId })) } },
+    });
+    const r = await svc.updateCronograma(legado.id, { ...dtoA([seed.usuarios.gestorA, seed.usuarios.admin]), checklistId: ck2.id }, u);
+    expect(r.responsaveis.map((x) => x.usuarioId).sort()).toEqual([seed.usuarios.gestorA, seed.usuarios.admin].sort());
+    const sit = await svc.situacaoResponsaveis(u, [seed.usuarios.admin]);
+    expect(sit.map((s) => s.id)).toEqual([seed.usuarios.admin]);
+  });
+
   it('R4: situação no escopo de A → gestor A OK, inativo INATIVO, gestor B OUTRA_SECRETARIA (sem expor Secretarias de B)', async () => {
     const u = await sessao(seed.usuarios.gestorA);
     const sit = await svc.situacaoResponsaveis(u, [seed.usuarios.gestorA, seed.inativo, seed.usuarios.gestorB]);

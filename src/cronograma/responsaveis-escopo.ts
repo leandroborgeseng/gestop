@@ -30,6 +30,14 @@ export function whereUsuarioNoEscopo(ids: string[] | undefined): Prisma.UsuarioW
   };
 }
 
+/**
+ * Decisão do TL (PR #46): usuário global sem Secretaria (nem principal nem vínculo) não é oferecido como responsável.
+ * Vale só para NOVAS escolhas; quem já está atribuído continua aparecendo na edição.
+ */
+export const whereUsuarioComSecretaria: Prisma.UsuarioWhereInput = {
+  OR: [{ secretariaId: { not: null } }, { secretariasVinculos: { some: {} } }],
+};
+
 /** Secretarias do usuário (principal + vínculos), sem repetir, ordenadas por sigla. */
 export function secretariasDoUsuario(u: Pick<UsuarioResponsavelRow, 'secretaria' | 'secretariasVinculos'>): SecretariaResumo[] {
   const mapa = new Map<string, SecretariaResumo>();

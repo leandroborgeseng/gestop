@@ -102,9 +102,13 @@
       {
         "texto": "ZZTESTE Responsável Beta· Outra Secretaria",
         "situacao": "OUTRA_SECRETARIA"
+      },
+      {
+        "texto": "ZZTESTE Admin· Outra Secretaria",
+        "situacao": "OUTRA_SECRETARIA"
       }
     ],
-    "aviso": "2 responsáveis precisam ser regularizados.",
+    "aviso": "3 responsáveis precisam ser regularizados.",
     "opcoesNovas": [
       "ZZTESTE Consulta Alfa",
       "ZZTESTE Gestor Alfa",
@@ -122,12 +126,10 @@
   },
   "adminTodas": {
     "grupos": [
-      "Sem Secretaria",
       "ZZTA",
       "ZZTB"
     ],
     "opcoes": [
-      "ZZTESTE Admin",
       "ZZTESTE Consulta Alfa",
       "ZZTESTE Gestor Alfa",
       "ZZTESTE Responsável Alfa 1",

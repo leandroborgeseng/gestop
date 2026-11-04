@@ -120,4 +120,15 @@ describe('Cronograma · Responsáveis (combobox, comportamento real)', () => {
     expect(screen.getAllByRole('option')).toHaveLength(1);
     expect(screen.queryByRole('option', { name: /ZZTESTE Bia/ })).toBeNull();
   });
+  it('TL #46: admin global sem Secretaria não está nas opções nem há grupo "Sem Secretaria"; se já atribuído, o chip continua na edição', async () => {
+    const adminGlobal = { ...u('admg', 'ZZTESTE Admin Global', []), secretaria: null };
+    listMock.mockResolvedValue([ANA, MULTI, BIA]); // backend já exclui o admin global
+    render(createElement(Harness, { todas: true, ids: ['admg'], users: [adminGlobal], situacoes: { admg: 'OK' } }));
+    expect(screen.getAllByTestId('chip-responsavel').map((c) => c.textContent)).toEqual([expect.stringContaining('ZZTESTE Admin Global')]);
+    await abrir();
+    expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(['ZZTA', 'ZZTB']);
+    expect(screen.queryByRole('option', { name: /Admin Global/ })).toBeNull();
+    fireEvent.click(screen.getByRole('option', { name: /ZZTESTE Ana/ }));
+    expect(mudancas.at(-1)).toEqual(['admg', 'ana']);
+  });
 });
