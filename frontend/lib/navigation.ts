@@ -245,9 +245,9 @@ export function hasOperationalNavAccess(permissions: string[], user?: NavUser): 
 /** Usa a rota preferida se o perfil tiver acesso; senão, a primeira tela permitida. */
 export function resolvePreferredHref(permissions: string[], preferredHref: string, user?: NavUser): string {
   const visible = getVisibleNavItems(permissions, user);
-  const allowed = visible.some(
-    (item) => preferredHref === item.href || preferredHref.startsWith(`${item.href}/`),
-  );
+  // 314: compara só o caminho (ex.: "/admin?aba=unidades" vale como "/admin").
+  const path = preferredHref.split(/[?#]/)[0];
+  const allowed = visible.some((item) => path === item.href || path.startsWith(`${item.href}/`));
   if (allowed) return preferredHref;
   return getDefaultAuthenticatedHref(permissions, user);
 }
