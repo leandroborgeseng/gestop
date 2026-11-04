@@ -68,3 +68,13 @@ export function consumirRetornoAdminProprios(s: StorageLike | null = storage()):
     return null;
   }
 }
+
+/** 314: URL atual com `?aba=` (para history.replaceState ao trocar de aba na Administração). */
+export function urlComAba(href: string, aba: string): string {
+  const url = new URL(href);
+  url.searchParams.set('aba', aba);
+  return url.pathname + url.search + url.hash;
+}
+
+/** 314: aviso exibido no topo da página completa do próprio quando ele está inativo. */
+export const AVISO_PROPRIO_INATIVO = 'Este próprio está inativo. As informações são apenas para consulta.';

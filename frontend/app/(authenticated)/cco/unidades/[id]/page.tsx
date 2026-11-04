@@ -5,7 +5,8 @@ import { formatSecretariaLabel } from '@/lib/format-secretaria';
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
-import { voltarSeguro } from '@/lib/proprio-abrir';
+import { AVISO_PROPRIO_INATIVO, voltarSeguro } from '@/lib/proprio-abrir';
+import { Alert } from '@/components/ui/alert';
 import {
   AlertTriangle,
   Building2,
@@ -71,6 +72,11 @@ export default function UnidadeDetalhePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // 314: a página completa sempre abre no topo (não herda a rolagem da lista de origem).
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [params.id]);
+
   useEffect(() => {
     if (!params.id) return;
 
@@ -105,6 +111,13 @@ export default function UnidadeDetalhePage() {
       icon={Building2}
       backHref={backHref}
     >
+      {unidade && !unidade.ativo ? (
+        <div data-testid="aviso-proprio-inativo" className="mb-4">
+          <Alert variant="warning" title="Inativo">
+            {AVISO_PROPRIO_INATIVO}
+          </Alert>
+        </div>
+      ) : null}
       <TipBanner id="unidade-detalhe">
         Visão completa do patrimônio: vistorias, não conformidades e chamados vinculados a este próprio.
       </TipBanner>

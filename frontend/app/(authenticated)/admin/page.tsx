@@ -22,7 +22,7 @@ import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 import { useRouter } from 'next/navigation';
-import { consumirRetornoAdminProprios, hrefAbrirProprio, salvarRetornoAdminProprios } from '@/lib/proprio-abrir';
+import { consumirRetornoAdminProprios, hrefAbrirProprio, urlComAba, salvarRetornoAdminProprios } from '@/lib/proprio-abrir';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -322,7 +322,15 @@ export default function AdminPage() {
 
         {visibleTabs.length > 0 && tab ? (
           <div className="mb-6 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] px-4 shadow-[var(--sh-sm)]">
-            <Tabs value={tab} onChange={(value) => setTab(value as Tab)} items={visibleTabs} />
+            <Tabs
+              value={tab}
+              onChange={(value) => {
+                setTab(value as Tab);
+                // 314: aba na URL, para o Voltar do navegador cair na mesma aba.
+                window.history.replaceState(window.history.state, '', urlComAba(window.location.href, value));
+              }}
+              items={visibleTabs}
+            />
           </div>
         ) : null}
 

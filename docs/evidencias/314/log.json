@@ -24,5 +24,22 @@
   },
   "gestorAlfaAdmin": {
     "linhas": []
+  },
+  "decisoesTL": {
+    "urlAposUsuarios": "/admin?aba=usuarios",
+    "urlAposProprios": "/admin?aba=unidades",
+    "yLista": 2036,
+    "yPaginaCco": 0,
+    "voltarNavegador": {
+      "url": "/admin?aba=unidades",
+      "aba": [
+        "Próprios35"
+      ],
+      "filtro": "Escola extra",
+      "y": 2036
+    },
+    "inativo": {
+      "aviso": "Inativo\n\nEste próprio está inativo. As informações são apenas para consulta."
+    }
   }
 }

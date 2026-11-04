@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { consumirRetornoAdminProprios, hrefAbrirProprio, salvarRetornoAdminProprios, voltarSeguro } from './proprio-abrir';
+import { urlComAba, consumirRetornoAdminProprios, hrefAbrirProprio, salvarRetornoAdminProprios, voltarSeguro } from './proprio-abrir';
 
 function mem() {
   const m = new Map<string, string>();
@@ -29,5 +29,22 @@ describe('314 · Abrir próprio a partir da Administração', () => {
     const s = mem();
     s.setItem('sigma.admin.proprios.retorno', '{quebrado');
     expect(consumirRetornoAdminProprios(s)).toBeNull();
+  });
+  it('troca de aba grava ?aba= preservando outros parâmetros e o hash', () => {
+    expect(urlComAba('http://x.local/admin', 'unidades')).toBe('/admin?aba=unidades');
+    expect(urlComAba('http://x.local/admin?aba=usuarios&k=1#t', 'unidades')).toBe('/admin?aba=unidades&k=1#t');
+  });
+});
+
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+describe('314 · página completa do próprio (fonte)', () => {
+  const src = readFileSync(resolve('frontend/app/(authenticated)/cco/unidades/[id]/page.tsx'), 'utf8');
+  it('mostra aviso Inativo no topo quando o próprio está inativo', () => {
+    expect(src).toMatch(/!unidade\.ativo[\s\S]*aviso-proprio-inativo/);
+    expect(src.indexOf('aviso-proprio-inativo')).toBeLessThan(src.indexOf('<TipBanner'));
+  });
+  it('abre sempre no topo', () => {
+    expect(src).toMatch(/window\.scrollTo\(0, 0\)/);
   });
 });
