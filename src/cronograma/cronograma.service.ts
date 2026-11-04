@@ -13,6 +13,8 @@ import {
   usuarioResponsavelSelect,
   whereUsuarioNoEscopo,
   situacaoResponsavel,
+  secretariasDoUsuario,
+  whereUsuarioComSecretaria,
 } from './responsaveis-escopo';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 import { PrismaService } from '../prisma/prisma.service';
@@ -142,6 +144,7 @@ export class CronogramaService {
         ativo: true,
         AND: [
           whereUsuarioNoEscopo(scopeIds),
+          whereUsuarioComSecretaria,
           ...(q
             ? [{ OR: [{ nome: { contains: q, mode: 'insensitive' as const } }, { email: { contains: q, mode: 'insensitive' as const } }] }]
             : []),
@@ -683,6 +686,9 @@ export class CronogramaService {
     });
     if (users.length !== novos.length || users.some((u) => !u.ativo)) {
       throw new BadRequestException('Um ou mais responsaveis sao invalidos ou inativos.');
+    }
+    if (users.some((u) => secretariasDoUsuario(u).length === 0)) {
+      throw new BadRequestException('Usuario sem Secretaria nao pode ser atribuido como responsavel.');
     }
     if (users.some((u) => situacaoResponsavel(u, scopeIds) === 'OUTRA_SECRETARIA')) {
       throw new ForbiddenException('Responsavel fora da Secretaria ativa. Remova ou substitua os responsaveis destacados para salvar.');
