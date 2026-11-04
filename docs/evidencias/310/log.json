@@ -101,6 +101,30 @@
         }
       },
       "adminDestino_ver": 200
+    },
+    "semTransferenciaViaEquipe": {
+      "chamado": "CH-2026-ZZ310N (sem transferência; execução ZZTB, próprio ZZTB, equipe ZZTA); usuário gestor ZZTA",
+      "historicoTransferencia": 0,
+      "ver": {
+        "status": 200,
+        "podeGerirAbertura": false
+      },
+      "naLista": true,
+      "executar_planejamento": {
+        "status": 200
+      },
+      "editar": {
+        "status": 403,
+        "message": "Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir."
+      },
+      "devolver": {
+        "status": 403,
+        "message": "Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir."
+      },
+      "transferir": {
+        "status": 403,
+        "message": "Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir."
+      }
     }
   }
 }

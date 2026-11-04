@@ -10,6 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { seedResponsaveis307, Seed307 } from '../../scripts/seed-responsaveis-307-core';
 import { AuthService } from '../auth/auth.service';
 import { JwtPayload } from '../auth/jwt';
+import { MSG_SEM_ACESSO_CHAMADO, MSG_SEM_GESTAO_EXCLUSAO } from '../auth/secretaria-scope';
+import { CHAMADO_EXCLUIDOS_VISUALIZAR, CHAMADO_EXCLUIR_LOGICAMENTE } from './chamado-visibilidade';
 import { ChamadosController } from './chamados.controller';
 import { ChamadosService } from './chamados.service';
 import { MSG_REVISAR_EQUIPE } from './secretaria-execucao-310';
@@ -27,7 +29,7 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
     const s = await auth.resolveActiveSession(usuarioId);
     return { sub: usuarioId, nome: 'Fictício', email: 'x@teste306.invalid', ...s, permissoes } as JwtPayload;
   };
-  const novoChamado = async (opts: { equipeA?: boolean; equipeSemSecretaria?: boolean; responsavelId?: string; unidadeId?: string } = {}) => {
+  const novoChamado = async (opts: { equipeA?: boolean; equipeSemSecretaria?: boolean; responsavelId?: string; unidadeId?: string; secretariaId?: string } = {}) => {
     const suf = randomBytes(4).toString('hex');
     const equipe = opts.equipeA || opts.equipeSemSecretaria
       ? await prisma.equipe.create({ data: { codigo: `EQ310-${suf}`, nome: `Equipe Fictícia 310 ${suf}`, secretariaId: opts.equipeA ? seed.secretarias.A : null } })
@@ -36,7 +38,7 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
     const ch = await prisma.chamado.create({
       data: {
         codigo: `CH-310-${suf}`,
-        secretariaId: seed.secretarias.A,
+        secretariaId: opts.secretariaId ?? seed.secretarias.A,
         unidadeId: opts.unidadeId ?? seed.unidadeA,
         descricao: 'Chamado fictício 310',
         equipeId: equipe?.id ?? null,
@@ -167,6 +169,35 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
       expect((await prisma.chamado.findUniqueOrThrow({ where: { id: c.id } })).secretariaId).toBe(seed.secretarias.B);
     });
 
+    it('sem transferência: chamado de B com equipe de A → gestor de A vê (200, na lista), executa (200) e recebe 403 com mensagem ao editar, devolver e transferir', async () => {
+      const c = await novoChamado({ equipeA: true, secretariaId: seed.secretarias.B, unidadeId: seed.unidadeB });
+      const gA = await sessao(seed.usuarios.gestorA);
+      expect(await prisma.historicoStatus.count({ where: { entidadeId: c.id } })).toBe(0); // nenhum histórico de transferência
+      const ver = (await ctrl.get(c.id, gA)) as unknown as { id: string; podeGerirAbertura: boolean };
+      expect(ver).toMatchObject({ id: c.id, podeGerirAbertura: false });
+      const lista = (await svc.listChamados({} as never, gA)) as unknown as { items: Array<{ id: string; podeGerirAbertura?: boolean }> };
+      expect(lista.items.find((i) => i.id === c.id)?.podeGerirAbertura).toBe(false); // item da lista também esconde Excluir/edição
+      await svc.updatePlanejamento(c.id, { previstaExecucaoEm: amanha() } as never, gA);
+      const terceira = await prisma.secretaria.create({ data: { sigla: `T310U${randomBytes(2).toString('hex')}`, nome: 'Secretaria Fictícia 310 Terceira U' } });
+      criados.secretarias.push(terceira.id);
+      for (const dto of [{ solicitanteNome: 'Fictício edição' }, { secretariaId: seed.secretarias.A }, { secretariaId: terceira.id }]) {
+        const e = await erro(svc.updateAbertura(c.id, dto, gA));
+        expect(e).toBeInstanceOf(ForbiddenException);
+        expect((e as ForbiddenException).getStatus()).toBe(403);
+        expect((e as Error).message).toMatch(MSG);
+      }
+      // 310-excluir: excluir também exige a Secretaria de execução
+      const comExcluir = await sessao(seed.usuarios.gestorA, ['chamados.gerenciar', CHAMADO_EXCLUIR_LOGICAMENTE]);
+      const ex = await erro(svc.excluirLogicamente(c.id, 'Justificativa fictícia de exclusão 310', comExcluir));
+      expect(ex).toBeInstanceOf(ForbiddenException);
+      expect((ex as ForbiddenException).getStatus()).toBe(403);
+      expect((ex as Error).message).toBe(MSG_SEM_GESTAO_EXCLUSAO);
+      const depois = await prisma.chamado.findUniqueOrThrow({ where: { id: c.id } });
+      expect(depois.secretariaId).toBe(seed.secretarias.B);
+      expect(depois.solicitanteNome).toBe(c.solicitanteNome);
+      expect(depois.excluidoEm).toBeNull();
+    });
+
     it('sem nenhum caminho (Secretaria, próprio ou equipe): 404 ao ver, some da lista, 403 ao editar/devolver', async () => {
       const c = await novoChamado({ unidadeId: seed.unidadeB }); // próprio B, sem equipe
       const gA = await sessao(seed.usuarios.gestorA);
@@ -179,6 +210,9 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
       expect(lista.items.some((i) => i.id === c.id)).toBe(false);
       const devolver = await erro(svc.updateAbertura(c.id, { secretariaId: seed.secretarias.A }, gA));
       expect(devolver).toBeInstanceOf(ForbiddenException);
+      expect((devolver as Error).message).toBe(MSG_SEM_ACESSO_CHAMADO); // 310-excluir: mensagem clara, não a genérica
+      const ex = await erro(svc.excluirLogicamente(c.id, 'Justificativa fictícia de exclusão 310', await sessao(seed.usuarios.gestorA, [CHAMADO_EXCLUIR_LOGICAMENTE])));
+      expect((ex as Error).message).toBe(MSG_SEM_ACESSO_CHAMADO);
       expect(await erro(svc.updatePlanejamento(c.id, { previstaExecucaoEm: amanha() } as never, gA))).toBeInstanceOf(ForbiddenException);
     });
 
@@ -201,6 +235,12 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
       await svc.updateAbertura(c.id, { solicitanteNome: 'Fictício B' }, gB);
       const r = (await svc.updateAbertura(c.id, { secretariaId: seed.secretarias.A }, gB)) as unknown as { transferenciaExecucao: { destino: { id: string } } };
       expect(r.transferenciaExecucao.destino.id).toBe(seed.secretarias.A);
+    });
+
+    it('310-excluir: Secretaria de execução exclui (200) o chamado que tem equipe de outra Secretaria', async () => {
+      const c = await novoChamado({ equipeA: true, secretariaId: seed.secretarias.B, unidadeId: seed.unidadeB });
+      await svc.excluirLogicamente(c.id, 'Justificativa fictícia de exclusão 310', await sessao(seed.usuarios.gestorB, ['chamados.gerenciar', CHAMADO_EXCLUIR_LOGICAMENTE, CHAMADO_EXCLUIDOS_VISUALIZAR]));
+      expect((await prisma.chamado.findUniqueOrThrow({ where: { id: c.id } })).excluidoEm).not.toBeNull();
     });
 
     it('compatível: responsável com acesso a todas as Secretarias não pede revisão', async () => {
