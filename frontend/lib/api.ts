@@ -303,6 +303,26 @@ export function getUnidades(filters: UnidadeFilters) {
   return request<UnidadeOperacional[]>(`/operacional/unidades${query ? `?${query}` : ''}`);
 }
 
+/** 312: tipos de próprio com próprios ativos acessíveis nos filtros atuais (exceto tipo). */
+export function listTiposProprioDisponiveis(filters: UnidadeFilters, init?: { signal?: AbortSignal }) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (key === 'tipo' || key === 'tipos') return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
+    if (value) params.set(key, String(value));
+  });
+  const query = params.toString();
+  return request<import('./cco-tipos-proprio').TipoProprioDisponivel[]>(
+    `/operacional/tipos-proprio-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
 export function listChamadosMapa(filters: ChamadosMapaFilters = {}) {
   const params = new URLSearchParams();
   // 295: o período vira abertoDe/abertoAte ou diasMinimos (mesma regra da Triagem).

@@ -1,0 +1,76 @@
+{
+  "01_lista_populada_admin": [
+    "Área de lazer ZZTESTE",
+    "Escola ZZTESTE",
+    "Ginásio ZZTESTE",
+    "Praça ZZTESTE",
+    "UBS ZZTESTE"
+  ],
+  "02_opcoes_com_ZZTA": [
+    "Área de lazer ZZTESTE",
+    "Escola ZZTESTE",
+    "Praça ZZTESTE"
+  ],
+  "02_antes_troca": {
+    "secretaria": [
+      "ZZTA ×"
+    ],
+    "tipo": [
+      "Escola ZZTESTE ×"
+    ],
+    "bairro": [
+      "ZZ Centro ×"
+    ]
+  },
+  "03_depois_troca": {
+    "secretaria": [
+      "ZZTB ×"
+    ],
+    "tipo": [],
+    "bairro": [
+      "ZZ Centro ×"
+    ],
+    "opcoes": [],
+    "semOpcoes": [
+      "Sem tipos para os filtros atuais",
+      "Sem regiões para os filtros atuais",
+      "Nenhum tipo disponível",
+      "Sem equipes para os filtros atuais"
+    ]
+  },
+  "04_vazio": {
+    "opcoes": [],
+    "semOpcoes": [
+      "Sem tipos para os filtros atuais",
+      "Sem regiões para os filtros atuais",
+      "Nenhum tipo disponível",
+      "Sem equipes para os filtros atuais"
+    ]
+  },
+  "05_tela_para_painel": {
+    "tela": [
+      "Praça ZZTESTE ×"
+    ],
+    "painel": [
+      "Praça ZZTESTE ×"
+    ],
+    "opcoesPainel": [
+      "Área de lazer ZZTESTE",
+      "Escola ZZTESTE",
+      "Ginásio ZZTESTE",
+      "UBS ZZTESTE"
+    ]
+  },
+  "06_painel_para_tela": {
+    "tela": [
+      "Praça ZZTESTE ×",
+      "UBS ZZTESTE ×"
+    ]
+  },
+  "07_tela_final": {
+    "tela": [
+      "Praça ZZTESTE ×",
+      "UBS ZZTESTE ×"
+    ]
+  }
+}

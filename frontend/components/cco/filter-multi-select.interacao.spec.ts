@@ -38,7 +38,7 @@ describe('299-F3 · todos os filtros do painel da CCO são opt-in', () => {
     const src = readFileSync(fileURLToPath(new URL('./cco-filtros-panel.tsx', import.meta.url)), 'utf8');
     const usos = src.match(/<FilterMultiSelect[\s\S]*?\/>/g) ?? [];
     expect(usos.length).toBeGreaterThanOrEqual(11);
-    for (const u of usos) expect(u).toMatch(/textoSemOpcoes="Sem [^"]+"/);
+    for (const u of usos) expect(u).toMatch(/textoSemOpcoes="(Sem|Nenhum) [^"]+"/);
     for (const r of ['Região', 'Bairro', 'Secretaria']) expect(usos.some((u) => u.includes(`label="${r}"`))).toBe(true);
   });
 });

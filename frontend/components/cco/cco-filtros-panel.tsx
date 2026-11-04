@@ -8,6 +8,13 @@ import { Chip } from '@/components/ui/chip';
 import { cn } from '@/lib/cn';
 import { formatRegiaoUnidade, RegiaoUnidade } from '@/lib/regiao-unidade';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
+import { listTiposProprioDisponiveis } from '@/lib/api';
+import {
+  chaveFiltrosTiposProprio,
+  filtrosParaTiposProprio,
+  podarTiposInvalidos,
+  TipoProprioDisponivel,
+} from '@/lib/cco-tipos-proprio';
 import {
   CHAMADO_STATUS_FINALIZADOS,
   CHAMADO_STATUS_META,
@@ -78,6 +85,7 @@ function summarizeCcoFiltros(opts: {
   tiposChamado: Array<{ id: string; nome: string }>;
   equipes: Array<{ id: string; nome: string }>;
   secretarias: SecretariaOption[];
+  tiposProprio?: TipoProprioDisponivel[];
 }): string {
   const parts: string[] = [];
 
@@ -121,7 +129,7 @@ function summarizeCcoFiltros(opts: {
 
     const tiposProprio = mergeLegacySingular(opts.filters.tipos, opts.filters.tipo);
     if (tiposProprio.length) {
-      parts.push(summarizeList(tiposProprio.map((tipo) => formatUnidadeTipo(tipo as UnidadeTipo))));
+      parts.push(summarizeList(tiposProprio.map((tipo) => formatUnidadeTipo(tipo as UnidadeTipo, opts.tiposProprio))));
     }
 
     const equipeIds = opts.filters.equipeIds ?? [];
@@ -247,9 +255,39 @@ export function CcoFiltrosPanel({
     () => (opcoesFiltro?.regioes ?? []).map((r) => ({ value: r, label: formatRegiaoUnidade(r) })),
     [opcoesFiltro],
   );
+  // 312: opções de Tipo de próprio vêm do backend, calculadas com os filtros deste painel
+  // (aplicados na sanfona, rascunho no painel do mapa), exceto o próprio tipo.
+  const filtrosTipos = useMemo(
+    () => filtrosParaTiposProprio(filters, { kpiFilter, defaultTiposPendencia }),
+    [filters, kpiFilter, defaultTiposPendencia],
+  );
+  const chaveTipos = useMemo(() => chaveFiltrosTiposProprio(filtrosTipos), [filtrosTipos]);
+  const [tiposDisponiveis, setTiposDisponiveis] = useState<{ chave: string; itens: TipoProprioDisponivel[] } | null>(null);
+  const filtrosTiposRef = useRef(filtrosTipos);
+  filtrosTiposRef.current = filtrosTipos;
+  useEffect(() => {
+    if (tab !== 'proprios') return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      listTiposProprioDisponiveis(filtrosTiposRef.current, { signal: controller.signal })
+        .then((itens) => setTiposDisponiveis({ chave: chaveTipos, itens }))
+        .catch(() => {
+          // Falha: mantém a lista anterior e não poda a seleção.
+        });
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [chaveTipos, tab]);
+  const tiposAtuais = tiposDisponiveis?.chave === chaveTipos ? tiposDisponiveis.itens : null;
   const tipoOptions = useMemo(
-    () => (opcoesFiltro?.tipos ?? []).map((t) => ({ value: t, label: formatUnidadeTipo(t) })),
-    [opcoesFiltro],
+    () =>
+      tiposAtuais
+        ? tiposAtuais.map((t) => ({ value: t.codigo, label: t.nome }))
+        : // Enquanto carrega, mostra o que já está selecionado pelo Nome conhecido.
+          (tiposDisponiveis?.itens ?? []).map((t) => ({ value: t.codigo, label: t.nome })),
+    [tiposAtuais, tiposDisponiveis],
   );
   const equipeOptions = useMemo(() => equipes.map((e) => ({ value: e.id, label: e.nome })), [equipes]);
   const tipoChamadoOptions = useMemo(
@@ -269,6 +307,14 @@ export function CcoFiltrosPanel({
   const bairrosSelected = mergeLegacySingular(filters.bairros, filters.bairro);
   const regioesSelected = mergeLegacySingular(filters.regioes, filters.regiao);
   const tiposSelected = mergeLegacySingular(filters.tipos, filters.tipo);
+
+  // B4: se a troca de Secretaria (ou outro filtro) fizer um tipo selecionado sumir, limpa só ele.
+  useEffect(() => {
+    if (!tiposAtuais) return;
+    const podados = podarTiposInvalidos(tiposSelected, tiposAtuais);
+    if (podados) onFiltersChange((prev) => ({ ...prev, tipos: podados.length ? podados : undefined, tipo: undefined }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiposAtuais, tiposSelected.join('|')]);
   const chamadoBairrosSelected = mergeLegacySingular(chamadoFilters.bairros, chamadoFilters.bairro);
 
   const summary = useMemo(
@@ -282,8 +328,9 @@ export function CcoFiltrosPanel({
         tiposChamado,
         equipes,
         secretarias,
+        tiposProprio: tiposDisponiveis?.itens,
       }),
-    [tab, filters, chamadoFilters, kpiFilter, defaultTiposPendencia, tiposChamado, equipes, secretarias],
+    [tab, filters, chamadoFilters, kpiFilter, defaultTiposPendencia, tiposChamado, equipes, secretarias, tiposDisponiveis],
   );
 
   const corpo = (
@@ -405,7 +452,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Tipo de próprio"
-                  textoSemOpcoes="Sem tipos de próprio para os filtros atuais"
+                  textoSemOpcoes="Nenhum tipo disponível"
                   placeholder="Selecionar tipo de próprio…"
                   options={tipoOptions}
                   selected={tiposSelected}
