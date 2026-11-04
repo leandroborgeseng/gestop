@@ -457,7 +457,8 @@ export class OperacionalService {
     return montarTiposProprioDisponiveis(codigos, catalogo);
   }
 
-  async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload, agora: Date = new Date()): Promise<ChamadosMapaResposta> {
+  /** 295/316: where único dos chamados do mapa (escopo de Secretaria + todos os filtros). */
+  private buildChamadosMapaWhere(query: ChamadosMapaQuery, user: JwtPayload, agora: Date): Prisma.ChamadoWhereInput {
     // 295: período de abertura — mesma função da Triagem.
     const abertura = lerFiltroAbertura(query);
     if ('erro' in abertura) throw new BadRequestException(abertura.erro);
@@ -508,7 +509,45 @@ export class OperacionalService {
       });
     }
 
-    const where: Prisma.ChamadoWhereInput = { AND: conditions };
+    return { AND: conditions };
+  }
+
+  /**
+   * 316: tipos de chamado existentes nos chamados do mapa com TODOS os filtros atuais, exceto o próprio tipo.
+   * Conjunto inteiro (não só o corte de LIMITE_CHAMADOS_MAPA nem o zoom), por consulta agregada (groupBy).
+   */
+  async listTiposChamadoDisponiveisMapa(query: ChamadosMapaQuery, user: JwtPayload, agora: Date = new Date()): Promise<TipoChamadoDisponivel[]> {
+    const where = this.buildChamadosMapaWhere({ ...query, tipoChamadoId: undefined }, user, agora);
+    return this.tiposChamadoAgregados({ AND: [where, { tipoChamadoId: { not: null } }] });
+  }
+
+  /**
+   * 316: aba Próprios — tipos dos chamados (abertos, os mesmos contados como pendência) dos próprios filtrados,
+   * com todos os filtros exceto o tipo de chamado. Escopo de Secretaria vem de listUnidades.
+   */
+  async listTiposChamadoDisponiveisUnidades(query: UnidadeListQuery, user: JwtPayload): Promise<TipoChamadoDisponivel[]> {
+    const unidades = await this.listUnidades({ ...query, tiposChamadoId: undefined }, user);
+    if (unidades.length === 0) return [];
+    return this.tiposChamadoAgregados({
+      ...this.buildChamadoPendenciaWhere({ equipeIds: query.equipeIds?.length ? query.equipeIds : undefined }),
+      unidadeId: { in: unidades.map((u) => u.id) },
+      tipoChamadoId: { not: null },
+    });
+  }
+
+  private async tiposChamadoAgregados(where: Prisma.ChamadoWhereInput): Promise<TipoChamadoDisponivel[]> {
+    const grupos = await this.prisma.chamado.groupBy({ by: ['tipoChamadoId'], where, _count: { _all: true } });
+    const ids = grupos.map((g) => g.tipoChamadoId).filter((id): id is string => Boolean(id));
+    if (ids.length === 0) return [];
+    const tipos = await this.prisma.tipoChamado.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true } });
+    const total = new Map(grupos.map((g) => [g.tipoChamadoId, g._count._all]));
+    return tipos
+      .map((t) => ({ id: t.id, nome: t.nome, total: total.get(t.id) ?? 0 }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }
+
+  async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload, agora: Date = new Date()): Promise<ChamadosMapaResposta> {
+    const where = this.buildChamadosMapaWhere(query, user, agora);
 
     const [chamados, total] = await Promise.all([this.prisma.chamado.findMany({
       where,
@@ -1394,6 +1433,9 @@ export class OperacionalService {
 }
 
 export type TipoProprioDisponivel = { codigo: string; nome: string };
+
+/** 316: opção do filtro Tipo de chamado da CCO. */
+export type TipoChamadoDisponivel = { id: string; nome: string; total: number };
 
 /** 312: une códigos com o catálogo (Nome), sem duplicar, em ordem alfabética pt-BR sem diferenciar acento/caixa. */
 export function montarTiposProprioDisponiveis(

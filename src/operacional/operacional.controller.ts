@@ -80,6 +80,52 @@ export class OperacionalController {
     return this.operacionalService.listChamadosMapa(query, user);
   }
 
+  /** 316: opções do filtro Tipo de chamado na aba Chamados (mesmos filtros de /chamados-mapa, exceto o tipo). */
+  @Get('chamados-mapa/tipos-chamado-disponiveis')
+  listTiposChamadoDisponiveisMapa(@CurrentUser() user: JwtPayload, @Query() raw: Record<string, string | string[] | undefined>) {
+    const one = (k: string) => (Array.isArray(raw[k]) ? (raw[k] as string[])[0] : (raw[k] as string | undefined));
+    const comUnidade = one('comUnidade');
+    const query: ChamadosMapaQuery = {
+      search: normalizeText(one('search')),
+      status: normalizeStringArray(raw.status),
+      prioridade: normalizeStringArray(raw.prioridade),
+      equipeIds: normalizeStringArray(raw.equipeIds),
+      sla: normalizeSla(one('sla')),
+      bairro: normalizeText(one('bairro')),
+      bairros: normalizeStringArray(raw.bairros),
+      comUnidade: comUnidade === 'COM' || comUnidade === 'SEM' ? comUnidade : undefined,
+      abertoDe: normalizeText(one('abertoDe')),
+      abertoAte: normalizeText(one('abertoAte')),
+      diasMinimos: normalizeText(one('diasMinimos')),
+    };
+    return this.operacionalService.listTiposChamadoDisponiveisMapa(query, user);
+  }
+
+  /** 316: opções do filtro Tipo de chamado na aba Próprios (mesmos filtros de /unidades, exceto o tipo de chamado). */
+  @Get('tipos-chamado-disponiveis')
+  listTiposChamadoDisponiveisUnidades(@CurrentUser() user: JwtPayload, @Query() raw: Record<string, string | string[] | undefined>) {
+    const one = (k: string) => (Array.isArray(raw[k]) ? (raw[k] as string[])[0] : (raw[k] as string | undefined));
+    const query: UnidadeListQuery = {
+      search: normalizeText(one('search')),
+      secretariaId: normalizeText(one('secretariaId')),
+      secretariaIds: normalizeStringArray(raw.secretariaIds),
+      tipo: normalizeText(one('tipo')),
+      tipos: normalizeStringArray(raw.tipos),
+      situacao: one('situacao') as UnidadeSituacao | undefined,
+      bairro: normalizeText(one('bairro')),
+      bairros: normalizeStringArray(raw.bairros),
+      regiao: one('regiao') as RegiaoUnidade | undefined,
+      regioes: normalizeStringArray(raw.regioes) as RegiaoUnidade[] | undefined,
+      pendencias: parseOptionalBoolean(one('pendencias')),
+      responsavel: normalizeText(one('responsavel')),
+      responsavelEmail: normalizeText(one('responsavelEmail'))?.toLowerCase(),
+      tiposPendencia: normalizeTiposPendencia(raw.tiposPendencia),
+      equipeIds: normalizeStringArray(raw.equipeIds),
+      sla: normalizeSla(one('sla')),
+    };
+    return this.operacionalService.listTiposChamadoDisponiveisUnidades(query, user);
+  }
+
   @Get('unidades')
   listUnidades(
     @CurrentUser() user: JwtPayload,

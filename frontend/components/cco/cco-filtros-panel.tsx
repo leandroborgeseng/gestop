@@ -8,7 +8,14 @@ import { Chip } from '@/components/ui/chip';
 import { cn } from '@/lib/cn';
 import { formatRegiaoUnidade, RegiaoUnidade } from '@/lib/regiao-unidade';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
-import { listTiposProprioDisponiveis } from '@/lib/api';
+import { listTiposChamadoDisponiveisMapa, listTiposChamadoDisponiveisProprios, listTiposProprioDisponiveis } from '@/lib/api';
+import {
+  chaveFiltrosTiposChamado,
+  filtrosParaTiposChamadoMapa,
+  filtrosParaTiposChamadoProprios,
+  podarTiposChamadoInvalidos,
+  type TipoChamadoDisponivel,
+} from '@/lib/cco-tipos-chamado';
 import {
   chaveFiltrosTiposProprio,
   filtrosParaTiposProprio,
@@ -290,9 +297,43 @@ export function CcoFiltrosPanel({
     [tiposAtuais, tiposDisponiveis],
   );
   const equipeOptions = useMemo(() => equipes.map((e) => ({ value: e.id, label: e.nome })), [equipes]);
+  // 316: opções de Tipo de chamado vêm do backend (consulta agregada sobre o conjunto inteiro),
+  // com todos os filtros da aba, exceto o próprio tipo de chamado. Mesmo componente na sanfona e no painel do mapa.
+  const filtrosTiposChamado = useMemo(
+    () =>
+      tab === 'proprios'
+        ? filtrosParaTiposChamadoProprios(filters, { kpiFilter, defaultTiposPendencia })
+        : filtrosParaTiposChamadoMapa(chamadoFilters),
+    [tab, filters, chamadoFilters, kpiFilter, defaultTiposPendencia],
+  );
+  const chaveTiposChamado = useMemo(() => chaveFiltrosTiposChamado(tab, filtrosTiposChamado), [tab, filtrosTiposChamado]);
+  const [tiposChamadoDisp, setTiposChamadoDisp] = useState<{ chave: string; itens: TipoChamadoDisponivel[] } | null>(null);
+  const filtrosTiposChamadoRef = useRef(filtrosTiposChamado);
+  filtrosTiposChamadoRef.current = filtrosTiposChamado;
+  const precisaTiposChamado = tab !== 'proprios' || chamadosPendenciaAtivo;
+  useEffect(() => {
+    if (!precisaTiposChamado) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const pedido =
+        tab === 'proprios'
+          ? listTiposChamadoDisponiveisProprios(filtrosTiposChamadoRef.current as UnidadeFilters, { signal: controller.signal })
+          : listTiposChamadoDisponiveisMapa(filtrosTiposChamadoRef.current as ChamadosMapaFilters, { signal: controller.signal });
+      pedido
+        .then((itens) => setTiposChamadoDisp({ chave: chaveTiposChamado, itens }))
+        .catch(() => {
+          // Falha: mantém a lista anterior e não poda a seleção.
+        });
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [chaveTiposChamado, precisaTiposChamado, tab]);
+  const tiposChamadoAtuais = tiposChamadoDisp?.chave === chaveTiposChamado ? tiposChamadoDisp.itens : null;
   const tipoChamadoOptions = useMemo(
-    () => tiposChamado.map((t) => ({ value: t.id, label: t.nome })),
-    [tiposChamado],
+    () => (tiposChamadoAtuais ?? tiposChamadoDisp?.itens ?? []).map((t) => ({ value: t.id, label: t.nome })),
+    [tiposChamadoAtuais, tiposChamadoDisp],
   );
   const statusOptions = useMemo(
     () => CHAMADO_STATUS_OPTIONS.map((status) => ({ value: status, label: CHAMADO_STATUS_META[status]?.label ?? status })),
@@ -315,6 +356,17 @@ export function CcoFiltrosPanel({
     if (podados) onFiltersChange((prev) => ({ ...prev, tipos: podados.length ? podados : undefined, tipo: undefined }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tiposAtuais, tiposSelected.join('|')]);
+  // 316: se outro filtro fizer um tipo de chamado selecionado sumir, limpa só ele (na aba atual).
+  const tiposChamadoSelAba = tab === 'proprios' ? tiposChamadoSelecionados : chamadoFilters.tipoChamadoId ?? [];
+  useEffect(() => {
+    if (!tiposChamadoAtuais) return;
+    const podados = podarTiposChamadoInvalidos(tiposChamadoSelAba, tiposChamadoAtuais);
+    if (!podados) return;
+    const valor = podados.length ? podados : undefined;
+    if (tab === 'proprios') onFiltersChange((prev) => ({ ...prev, tiposChamadoId: valor }));
+    else onChamadoFiltersChange((prev) => ({ ...prev, tipoChamadoId: valor }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiposChamadoAtuais, tiposChamadoSelAba.join('|'), tab]);
   const chamadoBairrosSelected = mergeLegacySingular(chamadoFilters.bairros, chamadoFilters.bairro);
 
   const summary = useMemo(
@@ -416,7 +468,7 @@ export function CcoFiltrosPanel({
                 <FilterMultiSelect
                   label="Tipo de chamado"
                   placeholder="Selecionar tipo de chamado…"
-                  textoSemOpcoes="Sem tipos para os filtros atuais"
+                  textoSemOpcoes="Nenhum tipo de chamado disponível"
                   options={tipoChamadoOptions}
                   selected={tiposChamadoSelecionados}
                   onChange={(next) => onFiltersChange((prev) => ({ ...prev, tiposChamadoId: next }))}
@@ -546,7 +598,7 @@ export function CcoFiltrosPanel({
               <FilterMultiSelect
                 label="Tipo de chamado"
                 placeholder="Selecionar tipo de chamado…"
-                textoSemOpcoes="Sem tipos para os filtros atuais"
+                textoSemOpcoes="Nenhum tipo de chamado disponível"
                 options={tipoChamadoOptions}
                 selected={chamadoFilters.tipoChamadoId ?? []}
                 onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, tipoChamadoId: next }))}
