@@ -111,7 +111,7 @@ describe('284 (A3): altura acompanha o visualViewport (teclado)', () => {
     const ouvintes: Array<() => void> = [];
     return {
       height,
-      addEventListener: vi.fn((_: string, fn: () => void) => ouvintes.push(fn)),
+      addEventListener: vi.fn((tipo: string, fn: () => void) => (tipo === 'resize' ? ouvintes.push(fn) : 0)),
       removeEventListener: vi.fn(),
       disparar(h: number) { this.height = h; ouvintes.forEach((fn) => fn()); },
     };
@@ -121,6 +121,7 @@ describe('284 (A3): altura acompanha o visualViewport (teclado)', () => {
     const alturas: Array<number | null> = [];
     const parar = observarAlturaVisivel({ innerWidth: 360, visualViewport: vv as never }, (a) => alturas.push(a));
     vv.disparar(340);
+    expect(vv.addEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
     expect(alturas).toEqual([640, 340]);
     parar();
     expect(vv.removeEventListener).toHaveBeenCalled();
@@ -134,5 +135,14 @@ describe('284 (A3): altura acompanha o visualViewport (teclado)', () => {
     const fn = vi.fn();
     observarAlturaVisivel({ innerWidth: 360, visualViewport: null }, fn);
     expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe('284: modal fora do contexto de empilhamento do <main>', () => {
+  it('renderiza via portal no document.body', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('./documento-consulta-dialogs.tsx', import.meta.url), 'utf8');
+    expect(src).toContain("createPortal(modal, portalAlvo)");
+    expect(src).toContain('setPortalAlvo(document.body)');
   });
 });
