@@ -4,7 +4,8 @@ import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
+import { voltarSeguro } from '@/lib/proprio-abrir';
 import {
   AlertTriangle,
   Building2,
@@ -63,7 +64,9 @@ const SITUACAO_CHIP: Record<NonNullable<NcItem['situacaoVisual']>, 'warning' | '
 
 export default function UnidadeDetalhePage() {
   const params = useParams<{ id: string }>();
-  const backHref = useSafeBackHref('/cco');
+  const searchParams = useSearchParams();
+  // 314: aberto pela Administração volta para lá (só caminho interno e com permissão).
+  const backHref = useSafeBackHref(voltarSeguro(searchParams.get('voltar')) ?? '/cco');
   const [unidade, setUnidade] = useState<UnidadeDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

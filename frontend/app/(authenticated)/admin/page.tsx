@@ -21,6 +21,8 @@ import { EmailConfigPanel } from '@/components/admin/email-config-panel';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
+import { useRouter } from 'next/navigation';
+import { consumirRetornoAdminProprios, hrefAbrirProprio, salvarRetornoAdminProprios } from '@/lib/proprio-abrir';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -224,7 +226,10 @@ export default function AdminPage() {
   useEffect(() => {
     if (visibleTabs.length === 0) return;
     if (!tab || !visibleTabs.some((item) => item.id === tab)) {
-      setTab(visibleTabs[0].id);
+      // 314: ?aba=unidades (Voltar da página do próprio) reabre a aba certa.
+      const aba = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('aba') : null;
+      const pedida = visibleTabs.find((item) => item.id === aba);
+      setTab((pedida ?? visibleTabs[0]).id);
     }
   }, [visibleTabs, tab]);
 
@@ -590,6 +595,33 @@ function UnidadesPanel({
   const [filterTipo, setFilterTipo] = useState('');
   const [filterSecretaria, setFilterSecretaria] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  // 314: Abrir (consulta) leva à página completa do CCO; precisa da mesma permissão dela.
+  const router = useRouter();
+  const podeAbrir = caps.isAdminAtivo || (sessionUser?.permissoes ?? []).includes('dashboard.visualizar');
+  const [scrollPendente, setScrollPendente] = useState<number | null>(null);
+  useEffect(() => {
+    const retorno = consumirRetornoAdminProprios();
+    if (!retorno) return;
+    setFilterCodigo(retorno.filtros.codigo);
+    setFilterNome(retorno.filtros.nome);
+    setFilterOrigem(retorno.filtros.origem);
+    setFilterTipo(retorno.filtros.tipo);
+    setFilterSecretaria(retorno.filtros.secretaria);
+    setFilterStatus(retorno.filtros.status);
+    setScrollPendente(retorno.scrollY);
+  }, []);
+  useEffect(() => {
+    if (scrollPendente === null || unidades.length === 0) return;
+    const y = scrollPendente;
+    setScrollPendente(null);
+    window.requestAnimationFrame(() => window.scrollTo(0, y));
+  }, [scrollPendente, unidades.length]);
+  function guardarRetorno() {
+    salvarRetornoAdminProprios({
+      filtros: { codigo: filterCodigo, nome: filterNome, origem: filterOrigem, tipo: filterTipo, secretaria: filterSecretaria, status: filterStatus },
+      scrollY: window.scrollY,
+    });
+  }
 
   const filtersActive = Boolean(filterCodigo || filterNome || filterOrigem || filterTipo || filterSecretaria || filterStatus);
 
@@ -830,6 +862,19 @@ function UnidadesPanel({
                   </DataTableCell>
                   <DataTableCell>
                     <div className="flex flex-wrap gap-1">
+                      {podeAbrir ? (
+                        <Button
+                          variant="text"
+                          size="sm"
+                          aria-label={`Abrir ${unidade.nome}`}
+                          onClick={() => {
+                            guardarRetorno();
+                            router.push(hrefAbrirProprio(unidade.id));
+                          }}
+                        >
+                          Abrir
+                        </Button>
+                      ) : null}
                       {proprioCaps.podeSalvar || proprioCaps.podeVer ? (
                         <Button variant="text" size="sm" onClick={() => setEditing(unidade)}>
                           {proprioCaps.podeSalvar ? 'Editar' : 'Ver'}

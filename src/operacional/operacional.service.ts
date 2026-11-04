@@ -603,9 +603,10 @@ export class OperacionalService {
     return { items, total, truncado: total > items.length };
   }
 
-  async getUnidadeDetalhe(id: string) {
-    const unidade = await this.prisma.unidadePublica.findUnique({
-      where: { id },
+  async getUnidadeDetalhe(id: string, user?: JwtPayload) {
+    // 314: respeita a Secretaria do usuário (fora do escopo = não encontrado, sem vazar existência).
+    const unidade = await this.prisma.unidadePublica.findFirst({
+      where: { id, ...(user ? resolveUnidadeSecretariaFilter(user) : {}) },
       select: {
         id: true,
         codigoPatrimonial: true,
