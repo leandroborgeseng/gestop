@@ -23,10 +23,13 @@
     "telaSemAcesso": 0
   },
   "saiuDoEscopo": {
-    "snackbar": "Execução transferida: ZZTA → ZZTG. O chamado saiu da sua Secretaria ativa e não aparece mais na sua lista.",
-    "mensagemSemAcesso": false,
-    "telaVazia": false,
-    "nota": "Capturado antes do ajuste do texto; texto final: \"O chamado saiu da sua Secretaria ativa: ao atualizar a lista ele não aparece mais e você não poderá alterá-lo.\" (teste de interação)."
+    "exibindoAntes": "Exibindo 1-50 de 64",
+    "exibindoDepois": "Exibindo 1-50 de 64",
+    "snackbar": "Execução transferida: ZZTA → ZZTG. O chamado saiu da sua Secretaria ativa e foi fechado; a lista foi atualizada.",
+    "detalheFechado": false,
+    "chamadoNaLista": true,
+    "urlTemId": false,
+    "mensagemSemAcesso": false
   },
   "outraSecretaria": {
     "status": 403,
@@ -44,5 +47,30 @@
   },
   "secretariaInexistente": {
     "status": 400
+  },
+  "tl48": {
+    "chamado": "CH-2026-ZZ310T (próprio ZZTB, equipe ZZTA, execução ZZTA → ZZTB)",
+    "ui": {
+      "snackbar": "Execução transferida: ZZTA → ZZTB. O chamado saiu da sua Secretaria ativa e foi fechado; a lista foi atualizada.",
+      "detalheFechado": true,
+      "chamadoNaLista": false,
+      "urlTemId": false,
+      "linkDiretoMensagem": true
+    },
+    "api": {
+      "gestorOrigem_ver": {
+        "status": 404,
+        "message": "Chamado não encontrado na sua Secretaria ativa."
+      },
+      "gestorOrigem_editar": {
+        "status": 403,
+        "message": "Sem permissão de tratativa: a Secretaria responsável pela execução deste chamado é outra."
+      },
+      "gestorOrigem_devolver": {
+        "status": 403,
+        "message": "Sem permissão de tratativa: a Secretaria responsável pela execução deste chamado é outra."
+      },
+      "adminDestino_ver": 200
+    }
   }
 }

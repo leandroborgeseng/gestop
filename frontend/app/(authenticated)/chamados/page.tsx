@@ -167,6 +167,7 @@ function ChamadosPageContent() {
   const semAcessoRef = useRef<string | null>(null);
   /** 315: id pedido pela URL (link direto). A lista não troca essa seleção, mesmo fora da página atual, até o usuário escolher outro. */
   const pedidoUrlRef = useRef<string | null>(searchParams.get('id'));
+  const [detalheFechado, setDetalheFechado] = useState(false);
 
   useEffect(() => {
     const id = searchParams.get('id');
@@ -318,6 +319,8 @@ function ChamadosPageContent() {
   const filtered = chamados;
 
   const selected = useMemo(() => {
+    // 310 (TL #48): detalhe fechado após perder o acesso; não cai no primeiro da lista até o usuário escolher outro.
+    if (detalheFechado && !selectedId) return null;
     // 315: não cai no primeiro da lista quando o chamado pedido é de outra Secretaria.
     if (selectedId && selectedId === semAcessoId) return null;
     if (selectedId) {
@@ -330,7 +333,7 @@ function ChamadosPageContent() {
       if (selectedId === pedidoUrlRef.current) return null;
     }
     return filtered[0] ?? null;
-  }, [filtered, selectedId, chamados, semAcessoId, detail]);
+  }, [filtered, selectedId, chamados, semAcessoId, detail, detalheFechado]);
 
   async function assignTeam(
     id: string,
@@ -617,6 +620,7 @@ function ChamadosPageContent() {
                         type="button"
                         onClick={() => {
                           pedidoUrlRef.current = null;
+                          setDetalheFechado(false);
                           setSelectedId(chamado.id);
                         }}
                         className={cn(
@@ -710,6 +714,28 @@ function ChamadosPageContent() {
                     })
                     .catch(() => undefined);
                 }}
+                onPerdeuAcesso={() => {
+                  // 310 (TL #48): o usuário perdeu o acesso após transferir a execução → fecha o detalhe e atualiza a lista.
+                  const removidoId = selected?.id;
+                  pedidoUrlRef.current = null;
+                  setDetalheFechado(true);
+                  setSelectedId(null);
+                  setDetail(null);
+                  setChamados((current) => current.filter((item) => item.id !== removidoId));
+                  setChamadosTotal((total) => Math.max(0, total - 1));
+                  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('id')) {
+                    const url = new URL(window.location.href);
+                    url.searchParams.delete('id');
+                    window.history.replaceState(window.history.state, '', url.toString());
+                  }
+                  void listChamados(triagemQuery())
+                    .then((response) => {
+                      setChamados(response.items);
+                      setChamadosTotal(response.total);
+                      if (response.statusCounts) setStatusCounts(response.statusCounts);
+                    })
+                    .catch(() => undefined);
+                }}
                 onExclusaoAlterada={(acao) => {
                   if (acao === 'excluir' && !exibirExcluidos) {
                     const removidoId = selected?.id;
@@ -752,6 +778,7 @@ function ChamadoDetailPanel({
   onSavePlanejamento,
   onSaveTriagem,
   onRefreshDetail,
+  onPerdeuAcesso,
   onExclusaoAlterada,
 }: {
   resumo: ChamadoResumo | null;
@@ -775,6 +802,8 @@ function ChamadoDetailPanel({
     payload: { tipoChamadoId: string | null; prioridade: (typeof TRIAGEM_PRIORIDADES)[number]; motivoAlteracao?: string },
   ) => void;
   onRefreshDetail: () => void;
+  /** 310: chamado saiu do acesso do usuário (transferência da execução). */
+  onPerdeuAcesso?: () => void;
   onExclusaoAlterada: (acao: 'excluir' | 'restaurar') => void;
 }) {
   const snackbar = useSnackbar();
@@ -1377,7 +1406,7 @@ function ChamadoDetailPanel({
           </>
           )}
 
-          <ChamadoAberturaSection resumo={resumo} busy={busy || Boolean(resumo.excluidoEm)} onSaved={onRefreshDetail} />
+          <ChamadoAberturaSection resumo={resumo} busy={busy || Boolean(resumo.excluidoEm)} onSaved={onRefreshDetail} onPerdeuAcesso={onPerdeuAcesso} />
 
           <ChamadoObservadoresSection
             chamado={resumo}

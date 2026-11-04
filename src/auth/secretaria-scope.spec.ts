@@ -51,19 +51,17 @@ describe('secretaria-scope', () => {
       OR: [
         { secretariaId: 'sec-a' },
         { unidade: { secretariaId: 'sec-a' } },
-        { equipe: { secretariaId: 'sec-a' } },
       ],
     });
   });
 
-  it('aplica filtro para secretaria ativa (execução, próprio ou equipe)', () => {
+  it('aplica filtro para secretaria ativa (execução ou próprio; equipe não — 310 TL #48)', () => {
     expect(isSecretariaScoped(gestorSecretaria)).toBe(true);
     expect(resolveSecretariaScopeId(gestorSecretaria)).toBe('sec-educacao');
     expect(resolveChamadoSecretariaFilter(gestorSecretaria)).toEqual({
       OR: [
         { secretariaId: 'sec-educacao' },
         { unidade: { secretariaId: 'sec-educacao' } },
-        { equipe: { secretariaId: 'sec-educacao' } },
       ],
     });
   });
@@ -77,16 +75,16 @@ describe('secretaria-scope', () => {
     ).not.toThrow();
   });
 
-  it('visualização permite secretaria da equipe atribuída', () => {
+  it('310 (TL #48): equipe atribuída de outra Secretaria NÃO dá visualização', () => {
     expect(() =>
       assertChamadoSecretariaAccess(gestorSecretaria, {
         secretariaId: 'sec-servicos',
         equipe: { secretariaId: 'sec-educacao' },
       }),
-    ).not.toThrow();
+    ).toThrow(/secretaria/i);
   });
 
-  it('tratativa permite execução ou secretaria da equipe atribuída', () => {
+  it('tratativa só pela Secretaria de execução (equipe não dá acesso — 310 TL #48)', () => {
     expect(() =>
       assertChamadoExecucaoAccess(gestorSecretaria, { secretariaId: 'sec-servicos' }),
     ).toThrow(/tratativa|execução/i);
@@ -98,7 +96,7 @@ describe('secretaria-scope', () => {
         secretariaId: 'sec-servicos',
         equipe: { secretariaId: 'sec-educacao' },
       }),
-    ).not.toThrow();
+    ).toThrow(/tratativa|execução/i);
   });
 
   it('bloqueia visualização fora do escopo', () => {

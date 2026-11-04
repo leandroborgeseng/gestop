@@ -19,8 +19,9 @@ const flush = () => act(async () => { await Promise.resolve(); await Promise.res
 function montar(canEdit = true) {
   const onSaved = vi.fn();
   const onTransferido = vi.fn();
-  render(createElement(SecretariaExecucaoField, { chamadoId: 'ch1', secretaria: A, canEdit, onSaved, onTransferido }));
-  return { onSaved, onTransferido };
+  const onPerdeuAcesso = vi.fn();
+  render(createElement(SecretariaExecucaoField, { chamadoId: 'ch1', secretaria: A, canEdit, onSaved, onTransferido, onPerdeuAcesso }));
+  return { onSaved, onTransferido, onPerdeuAcesso };
 }
 const editar = async () => { fireEvent.click(screen.getByRole('button', { name: 'Editar Secretaria responsável pela execução' })); await flush(); };
 const select = () => screen.getByRole('combobox') as HTMLSelectElement;
@@ -55,7 +56,7 @@ describe('310 · Secretaria responsável pela execução (comportamento real)', 
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Salvar' })); });
     await flush();
     expect(saveMock).toHaveBeenCalledWith('ch1', { secretariaId: 'b' });
-    expect(onSaved).toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalled(); // continua com acesso: só recarrega o detalhe
     expect(onTransferido.mock.calls[0][1]).toBe('Execução transferida: ZZTA → ZZTB.');
     const res = screen.getByTestId('secretaria-execucao-resultado');
     expect(within(res).getByText('Execução transferida: ZZTA → ZZTB.')).toBeTruthy();
@@ -66,11 +67,14 @@ describe('310 · Secretaria responsável pela execução (comportamento real)', 
   });
   it('quando sai da Secretaria ativa, avisa que não aparece mais na lista', async () => {
     saveMock.mockResolvedValue({ id: 'ch1', transferenciaExecucao: { origem: A, destino: C, saiuDoEscopo: true, revisar: {} } });
-    const { onTransferido } = montar();
+    const { onTransferido, onPerdeuAcesso, onSaved } = montar();
     await editar();
     fireEvent.change(select(), { target: { value: 'c' } });
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Salvar' })); });
-    expect(onTransferido.mock.calls[0][1]).toBe('Execução transferida: ZZTA → ZZTG. O chamado saiu da sua Secretaria ativa: ao atualizar a lista ele não aparece mais e você não poderá alterá-lo.');
+    // TL #48: fecha o detalhe e atualiza a lista; não recarrega o detalhe (evita tela de sem acesso)
+    expect(onPerdeuAcesso).toHaveBeenCalledTimes(1);
+    expect(onSaved).not.toHaveBeenCalled();
+    expect(onTransferido.mock.calls[0][1]).toBe('Execução transferida: ZZTA → ZZTG. O chamado saiu da sua Secretaria ativa e foi fechado; a lista foi atualizada.');
   });
   it('erro do backend aparece DENTRO do campo e mantém a edição aberta', async () => {
     saveMock.mockRejectedValue(new Error('Secretaria não encontrada ou inativa.'));

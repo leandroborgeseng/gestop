@@ -21,6 +21,7 @@ export function SecretariaExecucaoField({
   busy,
   onSaved,
   onTransferido,
+  onPerdeuAcesso,
 }: {
   chamadoId: string;
   secretaria: SecretariaOption;
@@ -29,6 +30,8 @@ export function SecretariaExecucaoField({
   onSaved: () => void;
   /** Mensagem para fora do campo (ex.: snackbar) quando o chamado sai da Secretaria ativa. */
   onTransferido?: (t: TransferenciaExecucao, mensagem: string) => void;
+  /** 310 (TL #48): sem acesso após a troca → quem usa fecha o detalhe e atualiza a lista (sem recarregar o detalhe). */
+  onPerdeuAcesso?: () => void;
 }) {
   const [editando, setEditando] = useState(false);
   const [opcoes, setOpcoes] = useState<SecretariaOption[]>([]);
@@ -63,7 +66,8 @@ export function SecretariaExecucaoField({
       const t = r.transferenciaExecucao ?? null;
       setResultado(t);
       if (t) onTransferido?.(t, mensagemTransferencia(t));
-      onSaved();
+      if (t?.saiuDoEscopo && onPerdeuAcesso) onPerdeuAcesso();
+      else onSaved();
     } catch (err) {
       setErro(err instanceof Error ? err.message : 'Não foi possível salvar a Secretaria de execução.');
     } finally {

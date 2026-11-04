@@ -46,10 +46,13 @@ export function ChamadoAberturaSection({
   resumo,
   busy,
   onSaved,
+  onPerdeuAcesso,
 }: {
   resumo: ChamadoResumo;
   busy?: boolean;
   onSaved: () => void;
+  /** 310 (TL #48): fecha o detalhe e atualiza a lista quando o usuário perde o acesso. */
+  onPerdeuAcesso?: () => void;
 }) {
   const snackbar = useSnackbar();
   const canEdit =
@@ -124,12 +127,14 @@ export function ChamadoAberturaSection({
 
   const secretariaExecucaoField = (
     <SecretariaExecucaoField
+      key={resumo.id}
       chamadoId={resumo.id}
       secretaria={resumo.secretaria}
       canEdit={Boolean(canEdit)}
       busy={busy}
       onSaved={onSaved}
       onTransferido={(t, mensagem) => snackbar.show(mensagem, t.saiuDoEscopo ? 'info' : 'success')}
+      onPerdeuAcesso={onPerdeuAcesso}
     />
   );
 

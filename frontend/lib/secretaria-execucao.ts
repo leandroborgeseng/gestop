@@ -14,5 +14,5 @@ export function avisosRevisao(t: TransferenciaExecucao): string[] {
 
 export function mensagemTransferencia(t: TransferenciaExecucao) {
   const base = `Execução transferida: ${t.origem?.sigla ?? '—'} → ${t.destino.sigla}.`;
-  return t.saiuDoEscopo ? `${base} O chamado saiu da sua Secretaria ativa: ao atualizar a lista ele não aparece mais e você não poderá alterá-lo.` : base;
+  return t.saiuDoEscopo ? `${base} O chamado saiu da sua Secretaria ativa e foi fechado; a lista foi atualizada.` : base;
 }
