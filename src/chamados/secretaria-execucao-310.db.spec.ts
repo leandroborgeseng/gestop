@@ -20,6 +20,8 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
   let seed: Seed307;
   let svc: ChamadosService;
   let auth: AuthService;
+  // Chamados/equipes/Secretarias criados aqui são removidos no fim: o Dashboard (306) conta chamados das Secretarias do seed.
+  const criados = { chamados: [] as string[], equipes: [] as string[], secretarias: [] as string[] };
   const sessao = async (usuarioId: string, permissoes = ['chamados.gerenciar']): Promise<JwtPayload> => {
     const s = await auth.resolveActiveSession(usuarioId);
     return { sub: usuarioId, nome: 'Fictício', email: 'x@teste306.invalid', ...s, permissoes } as JwtPayload;
@@ -29,7 +31,8 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
     const equipe = opts.equipeA
       ? await prisma.equipe.create({ data: { codigo: `EQ310-${suf}`, nome: `Equipe Fictícia 310 ${suf}`, secretariaId: seed.secretarias.A } })
       : null;
-    return prisma.chamado.create({
+    if (equipe) criados.equipes.push(equipe.id);
+    const ch = await prisma.chamado.create({
       data: {
         codigo: `CH-310-${suf}`,
         secretariaId: seed.secretarias.A,
@@ -39,6 +42,8 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
         responsavelId: opts.responsavelId ?? null,
       },
     });
+    criados.chamados.push(ch.id);
+    return ch;
   };
 
   beforeAll(async () => {
@@ -48,11 +53,19 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
     auth = new AuthService(prisma as never, {} as never, {} as never, {} as never);
   });
   afterAll(async () => {
+    if (prisma) {
+      await prisma.historicoStatus.deleteMany({ where: { entidadeId: { in: criados.chamados } } });
+      await prisma.logAuditoria.deleteMany({ where: { entidadeId: { in: criados.chamados } } });
+      await prisma.chamado.deleteMany({ where: { id: { in: criados.chamados } } });
+      await prisma.equipe.deleteMany({ where: { id: { in: criados.equipes } } });
+      await prisma.secretaria.deleteMany({ where: { id: { in: criados.secretarias } } });
+    }
     await prisma?.$disconnect();
   });
 
   it('lista de destino traz TODAS as Secretarias ativas, mesmo com a sessão na Secretaria A', async () => {
     const inativa = await prisma.secretaria.create({ data: { sigla: `T310X${randomBytes(2).toString('hex')}`, nome: 'Secretaria Fictícia Inativa 310', ativo: false } });
+    criados.secretarias.push(inativa.id);
     const ids = (await svc.listSecretariasDestinoExecucao()).map((s) => s.id);
     expect(ids).toEqual(expect.arrayContaining([seed.secretarias.A, seed.secretarias.B]));
     expect(ids).not.toContain(inativa.id);
@@ -107,6 +120,7 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
     const c = await novoChamado();
     await expect(svc.updateAbertura(c.id, { secretariaId: seed.secretarias.B }, await sessao(seed.usuarios.gestorA, ['chamados.visualizar']))).rejects.toBeInstanceOf(ForbiddenException);
     const inativa = await prisma.secretaria.create({ data: { sigla: `T310Y${randomBytes(2).toString('hex')}`, nome: 'Secretaria Fictícia Inativa 310 B', ativo: false } });
+    criados.secretarias.push(inativa.id);
     await expect(svc.updateAbertura(c.id, { secretariaId: inativa.id }, await sessao(seed.usuarios.gestorA))).rejects.toBeInstanceOf(BadRequestException);
     await expect(svc.updateAbertura(c.id, { secretariaId: seed.secretarias.B }, await sessao(seed.usuarios.gestorB))).rejects.toBeInstanceOf(ForbiddenException);
     expect((await prisma.chamado.findUniqueOrThrow({ where: { id: c.id } })).secretariaId).toBe(seed.secretarias.A);
