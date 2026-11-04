@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
 import { chamadoTitulo } from '@/lib/chamado-geo';
-import { hrefChamadoDaNc } from '@/lib/nc-chamado-link';
+import { hrefChamado, hrefChamadoDaNc, ncMostraLinkChamado } from '@/lib/nc-chamado-link';
 import { UnidadeDetalhe, UnidadeOperacional } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { cn } from '@/lib/cn';
@@ -312,7 +312,10 @@ function NcTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => v
               <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{item.descricao}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Badge variant="warning">{item.severidade}</Badge>
-                {situacao === 'VINCULADA_EM_ANDAMENTO' && hrefChamadoDaNc(item.chamado) ? (
+                {situacao === 'RESOLVIDA_CHAMADO' && hrefChamadoDaNc(item.chamado) ? (
+                  <Badge variant="neutral">Resolvida</Badge>
+                ) : null}
+                {ncMostraLinkChamado(situacao) && hrefChamadoDaNc(item.chamado) ? (
                   // 315: número do chamado abre o chamado na tela de Chamados, já selecionado.
                   <Link
                     href={hrefChamadoDaNc(item.chamado)!}
@@ -354,10 +357,7 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
   return (
     <div className="space-y-2">
       {items.map((chamado) => {
-        const href =
-          chamado.status === 'EM_EXECUCAO'
-            ? `/execucao/${chamado.id}`
-            : `/chamados?id=${chamado.id}`;
+        const href = hrefChamado(chamado);
 
         return (
         <Link

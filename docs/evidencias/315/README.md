@@ -7,3 +7,15 @@ Ambiente local: banco `gestop_315_test`, API em :3301 e web em :3300 (build de p
 | desktop-1 / mobile-1 `-aba-nc-numero-do-chamado-link.png` | Na barra lateral do CCO, aba Não conf., o número `CH-2026-ZZ0315` aparece como link sublinhado. A NC sem chamado continua com "Sem chamado", sem link. |
 | desktop-2 / mobile-2 `-tela-chamados-com-chamado-selecionado.png` | O clique abre `/chamados?id=<id>` com o chamado selecionado e o detalhe aberto (print de página inteira) |
 | log.json | Texto e href do link e URL de destino |
+
+## Decisões do TL (rodada 2)
+Dados adicionais: NC resolvida com o chamado `CH-2026-ZZ0316` CONCLUIDO e NC com o chamado `CH-2026-ZZ0317` EM_EXECUCAO.
+
+| Arquivo | O que mostra |
+|---|---|
+| desktop-3-aba-nc-resolvida-e-execucao-com-link.png | A NC resolvida mostra o selo **Resolvida** e, ao lado, o número como link. A NC em execução e a vinculada também mostram o link. A NC sem chamado continua sem link. |
+| desktop-4-link-em-execucao-abre-execucao.png | `CH-2026-ZZ0317`, que está em execução, abre `/execucao/:id`, igual à aba Chamados do drawer |
+| desktop-5-link-resolvida-abre-chamados-selecionado.png | `CH-2026-ZZ0316`, que está resolvido, abre `/chamados?id=` com o chamado selecionado |
+| log.json (`decisoesTL`) | Código, href e selo de cada link e as URLs de destino |
+
+A aba Não conf. e a aba Chamados do drawer usam o mesmo helper (`hrefChamado` em `frontend/lib/nc-chamado-link.ts`).

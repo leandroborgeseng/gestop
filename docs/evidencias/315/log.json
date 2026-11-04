@@ -16,5 +16,28 @@
     "semChamado": 3,
     "urlDestino": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
     "codigoVisivelNoDestino": 3
+  },
+  "decisoesTL": {
+    "links": [
+      {
+        "codigo": "CH-2026-ZZ0317",
+        "href": "/execucao/398a3b0c-1abe-419d-a854-5db6dafeac9d",
+        "seloAoLado": []
+      },
+      {
+        "codigo": "CH-2026-ZZ0316",
+        "href": "/chamados?id=89a11752-ba7c-47d0-b913-176918e2c9fe",
+        "seloAoLado": [
+          "Resolvida"
+        ]
+      },
+      {
+        "codigo": "CH-2026-ZZ0315",
+        "href": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
+        "seloAoLado": []
+      }
+    ],
+    "execucaoDestino": "/execucao/398a3b0c-1abe-419d-a854-5db6dafeac9d",
+    "resolvidaDestino": "/chamados?id=89a11752-ba7c-47d0-b913-176918e2c9fe"
   }
 }
