@@ -170,8 +170,8 @@ export class OperacionalController {
   }
 
   @Get('unidades/:id')
-  getUnidadeDetalhe(@Param('id', ParseUuidPipe) id: string) {
-    return this.operacionalService.getUnidadeDetalhe(id);
+  getUnidadeDetalhe(@Param('id', ParseUuidPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.operacionalService.getUnidadeDetalhe(id, user);
   }
 
   @Get('unidades/:id/chamados-para-vincular')

@@ -1,0 +1,45 @@
+{
+  "desktop": {
+    "yAntes": 2036,
+    "urlDetalhe": "/cco/unidades/f4ff9f45-d730-423d-9fe0-61f42335bc78?voltar=%2Fadmin%3Faba%3Dunidades",
+    "urlVolta": "/admin?aba=unidades",
+    "yDepois": 2036,
+    "filtroUnidade": "Escola extra",
+    "abaSelecionada": [
+      "Próprios35"
+    ]
+  },
+  "mobile": {
+    "yAntes": 3329,
+    "urlDetalhe": "/cco/unidades/f4ff9f45-d730-423d-9fe0-61f42335bc78?voltar=%2Fadmin%3Faba%3Dunidades",
+    "urlVolta": "/admin?aba=unidades",
+    "yDepois": 3329,
+    "filtroUnidade": "Escola extra",
+    "abaSelecionada": [
+      "Próprios35"
+    ]
+  },
+  "gestorAlfaAbrindoProprioDaZZTB": {
+    "texto": "Voltar\nPRÓPRIO PÚBLICO\nDetalhe do próprio\n\nCarregando informações da unidade\n\nVisão completa do patrimônio: vistorias, não conformidades e chamados vinculados a este próprio.\n\nEntendi\n\nNão foi possível carregar\n\nProprio publico nao encontrado"
+  },
+  "gestorAlfaAdmin": {
+    "linhas": []
+  },
+  "decisoesTL": {
+    "urlAposUsuarios": "/admin?aba=usuarios",
+    "urlAposProprios": "/admin?aba=unidades",
+    "yLista": 2036,
+    "yPaginaCco": 0,
+    "voltarNavegador": {
+      "url": "/admin?aba=unidades",
+      "aba": [
+        "Próprios35"
+      ],
+      "filtro": "Escola extra",
+      "y": 2036
+    },
+    "inativo": {
+      "aviso": "Inativo\n\nEste próprio está inativo. As informações são apenas para consulta."
+    }
+  }
+}
