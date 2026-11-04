@@ -1,0 +1,20 @@
+{
+  "desktop": {
+    "links": [
+      "CH-2026-ZZ0315"
+    ],
+    "href": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
+    "semChamado": 3,
+    "urlDestino": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
+    "codigoVisivelNoDestino": 3
+  },
+  "mobile": {
+    "links": [
+      "CH-2026-ZZ0315"
+    ],
+    "href": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
+    "semChamado": 3,
+    "urlDestino": "/chamados?id=6db2217c-7921-4ed0-b591-f8d8ce595e1d",
+    "codigoVisivelNoDestino": 3
+  }
+}

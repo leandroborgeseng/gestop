@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
 import { chamadoTitulo } from '@/lib/chamado-geo';
+import { hrefChamadoDaNc } from '@/lib/nc-chamado-link';
 import { UnidadeDetalhe, UnidadeOperacional } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { cn } from '@/lib/cn';
@@ -158,7 +159,7 @@ export function UnidadeDrawer({
                 />
               ) : null}
               {tab === 'fisc' ? <FiscTab unidade={detalhe} /> : null}
-              {tab === 'nc' ? <NcTab unidade={detalhe} /> : null}
+              {tab === 'nc' ? <NcTab unidade={detalhe} onClose={onClose} /> : null}
               {tab === 'chamados' ? <ChamadosTab unidade={detalhe} onClose={onClose} /> : null}
             </>
           ) : null}
@@ -281,7 +282,7 @@ function FiscTab({ unidade }: { unidade: UnidadeDetalhe }) {
   );
 }
 
-function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
+function NcTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => void }) {
   const items = unidade.pendenciasDetalhadas.naoConformidades;
   if (items.length === 0) {
     return <EmptyTab icon={AlertTriangle} message="Nenhuma não conformidade registrada" ok />;
@@ -311,6 +312,18 @@ function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
               <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{item.descricao}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Badge variant="warning">{item.severidade}</Badge>
+                {situacao === 'VINCULADA_EM_ANDAMENTO' && hrefChamadoDaNc(item.chamado) ? (
+                  // 315: número do chamado abre o chamado na tela de Chamados, já selecionado.
+                  <Link
+                    href={hrefChamadoDaNc(item.chamado)!}
+                    onClick={onClose}
+                    data-testid="nc-chamado-link"
+                    aria-label={`Abrir chamado ${item.chamado!.codigo}`}
+                    className="mono inline-flex items-center rounded-full border border-[var(--warn-bd)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-semibold text-[var(--brand)] underline underline-offset-2 hover:text-[var(--brand-hover)]"
+                  >
+                    {item.chamado!.codigo}
+                  </Link>
+                ) : (
                 <Badge variant={isPendente ? 'warning' : 'neutral'}>
                   {situacao === 'ABERTA'
                     ? 'Sem chamado'
@@ -322,6 +335,7 @@ function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
                           ? 'Resolvida'
                           : item.status}
                 </Badge>
+                )}
               </div>
             </div>
           </div>
