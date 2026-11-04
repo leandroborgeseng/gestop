@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { DocumentoAvulsoForm, DocumentoAvulsoRespostasLeitura } from '@/components/documentos/documento-avulso-form';
 import type { DocumentoDetalhe } from '@/lib/types';
@@ -33,6 +33,24 @@ export function travarRolagemFundo(win: JanelaRolavel, doc: Pick<Document, 'body
   };
 }
 
+type ViewportVisual = Pick<VisualViewport, 'height' | 'addEventListener' | 'removeEventListener'>;
+
+/**
+ * 284 (A3): no celular, com o teclado aberto, o iOS não encolhe `100dvh`. Acompanha o
+ * `visualViewport` e devolve a altura visível (px) só abaixo de 640px; no desktop devolve null.
+ */
+export function observarAlturaVisivel(
+  win: Pick<Window, 'innerWidth'> & { visualViewport?: ViewportVisual | null },
+  onAltura: (altura: number | null) => void,
+) {
+  const vv = win.visualViewport;
+  if (!vv) return () => undefined;
+  const atualizar = () => onAltura(win.innerWidth < 640 ? Math.round(vv.height) : null);
+  atualizar();
+  vv.addEventListener('resize', atualizar);
+  return () => vv.removeEventListener('resize', atualizar);
+}
+
 export function DocumentoPreencherDialog({
   documento,
   onClose,
@@ -43,6 +61,11 @@ export function DocumentoPreencherDialog({
   onSaved: (info?: { concluido?: boolean }) => void | Promise<void>;
 }) {
   const aberto = documento != null;
+  const [alturaVisivel, setAlturaVisivel] = useState<number | null>(null);
+  useEffect(() => {
+    if (!aberto || typeof window === 'undefined') return;
+    return observarAlturaVisivel(window, setAlturaVisivel);
+  }, [aberto]);
   useEffect(() => {
     if (!aberto || typeof document === 'undefined') return;
     // 284: trava a rolagem do fundo (seguro no iOS) e restaura posição ao fechar.
@@ -58,6 +81,7 @@ export function DocumentoPreencherDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby="preencher-documento-titulo"
+        style={alturaVisivel != null ? { height: `calc(${alturaVisivel}px - env(safe-area-inset-top))` } : undefined}
         className="flex h-[calc(100dvh-env(safe-area-inset-top))] w-full max-w-3xl flex-col overflow-hidden rounded-t-[16px] bg-[var(--canvas)] shadow-[var(--sh-lg)] sm:h-auto sm:max-h-[min(94dvh,920px)] sm:rounded-[16px]"
       >
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--line)] px-4 py-3">

@@ -6,7 +6,7 @@ vi.mock('@/components/ui/snackbar', () => ({
   useSnackbar: () => ({ show: () => undefined }),
 }));
 
-import { DocumentoPreencherDialog, travarRolagemFundo } from './documento-consulta-dialogs';
+import { DocumentoPreencherDialog, observarAlturaVisivel, travarRolagemFundo } from './documento-consulta-dialogs';
 import { comportamentoRolagem } from './documento-avulso-form';
 import type { DocumentoDetalhe } from '@/lib/types';
 
@@ -103,5 +103,36 @@ describe('284: trava do fundo iOS-safe', () => {
     restaurar();
     expect(style).toEqual({ position: 'relative', top: '', left: '', right: '', width: '' });
     expect(scrollTo).toHaveBeenCalledWith(0, 420);
+  });
+});
+
+describe('284 (A3): altura acompanha o visualViewport (teclado)', () => {
+  function vvFake(height: number) {
+    const ouvintes: Array<() => void> = [];
+    return {
+      height,
+      addEventListener: vi.fn((_: string, fn: () => void) => ouvintes.push(fn)),
+      removeEventListener: vi.fn(),
+      disparar(h: number) { this.height = h; ouvintes.forEach((fn) => fn()); },
+    };
+  }
+  it('no celular segue a altura visível e para de ouvir ao fechar', () => {
+    const vv = vvFake(640);
+    const alturas: Array<number | null> = [];
+    const parar = observarAlturaVisivel({ innerWidth: 360, visualViewport: vv as never }, (a) => alturas.push(a));
+    vv.disparar(340);
+    expect(alturas).toEqual([640, 340]);
+    parar();
+    expect(vv.removeEventListener).toHaveBeenCalled();
+  });
+  it('no desktop não força altura (sem mudança visual)', () => {
+    const alturas: Array<number | null> = [];
+    observarAlturaVisivel({ innerWidth: 1280, visualViewport: vvFake(800) as never }, (a) => alturas.push(a));
+    expect(alturas).toEqual([null]);
+  });
+  it('sem visualViewport não faz nada', () => {
+    const fn = vi.fn();
+    observarAlturaVisivel({ innerWidth: 360, visualViewport: null }, fn);
+    expect(fn).not.toHaveBeenCalled();
   });
 });
