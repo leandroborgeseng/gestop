@@ -49,26 +49,56 @@
     "status": 400
   },
   "tl48": {
-    "chamado": "CH-2026-ZZ310T (próprio ZZTB, equipe ZZTA, execução ZZTA → ZZTB)",
+    "chamados": {
+      "viaEquipe": "CH-2026-ZZ310T (próprio ZZTB, equipe ZZTA, ZZTA → ZZTB)",
+      "semCaminho": "CH-2026-ZZ310S (próprio ZZTB, sem equipe, ZZTA → ZZTB)"
+    },
     "ui": {
-      "snackbar": "Execução transferida: ZZTA → ZZTB. O chamado saiu da sua Secretaria ativa e foi fechado; a lista foi atualizada.",
-      "detalheFechado": true,
-      "chamadoNaLista": false,
-      "urlTemId": false,
-      "linkDiretoMensagem": true
+      "viaEquipe": {
+        "snackbar": "Execução transferida: ZZTA → ZZTB. Você continua vendo este chamado (pelo próprio ou pela equipe), mas a abertura agora é da Secretaria de destino: não é possível editar, devolver ou transferir.",
+        "detalheAberto": true,
+        "avisoSomenteExecucao": "Você continua vendo este chamado (pelo próprio ou pela equipe), mas a abertura agora é da Secretaria de destino: não é possível editar, devolver ou transferir.",
+        "lapisExecucao": 0
+      },
+      "semCaminho": {
+        "snackbar": "Execução transferida: ZZTA → ZZTB. O chamado saiu da sua Secretaria ativa e foi fechado; a lista foi atualizada.",
+        "detalheFechado": true,
+        "chamadoNaLista": false,
+        "urlTemId": false,
+        "linkDiretoMensagem": true
+      }
     },
     "api": {
-      "gestorOrigem_ver": {
-        "status": 404,
-        "message": "Chamado não encontrado na sua Secretaria ativa."
+      "viaEquipe": {
+        "ver": {
+          "status": 200,
+          "podeGerirAbertura": false
+        },
+        "executar_planejamento": {
+          "status": 200
+        },
+        "editar": {
+          "status": 403,
+          "message": "Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir."
+        },
+        "devolver": {
+          "status": 403,
+          "message": "Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir."
+        }
       },
-      "gestorOrigem_editar": {
-        "status": 403,
-        "message": "Sem permissão de tratativa: a Secretaria responsável pela execução deste chamado é outra."
-      },
-      "gestorOrigem_devolver": {
-        "status": 403,
-        "message": "Sem permissão de tratativa: a Secretaria responsável pela execução deste chamado é outra."
+      "semCaminho": {
+        "ver": {
+          "status": 404,
+          "message": "Chamado não encontrado na sua Secretaria ativa."
+        },
+        "editar": {
+          "status": 403,
+          "message": "Chamado fora da secretaria autorizada."
+        },
+        "devolver": {
+          "status": 403,
+          "message": "Chamado fora da secretaria autorizada."
+        }
       },
       "adminDestino_ver": 200
     }

@@ -65,6 +65,16 @@ describe('310 · Secretaria responsável pela execução (comportamento real)', 
       'O responsável atual não pertence à Secretaria de destino. Revise o responsável do chamado. (ZZTESTE Gestor Alfa)',
     ]);
   });
+  it('TL #48: continua vendo pela equipe/próprio → NÃO fecha; recarrega em modo só leitura/execução com aviso', async () => {
+    saveMock.mockResolvedValue({ id: 'ch1', podeGerirAbertura: false, transferenciaExecucao: { origem: A, destino: B, saiuDoEscopo: false, somenteExecucao: true, revisar: {} } });
+    const { onTransferido, onPerdeuAcesso, onSaved } = montar();
+    await editar();
+    fireEvent.change(select(), { target: { value: 'b' } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Salvar' })); });
+    expect(onPerdeuAcesso).not.toHaveBeenCalled();
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(onTransferido.mock.calls[0][1]).toMatch(/^Execução transferida: ZZTA → ZZTB\. Você continua vendo este chamado .*não é possível editar, devolver ou transferir\.$/);
+  });
   it('quando sai da Secretaria ativa, avisa que não aparece mais na lista', async () => {
     saveMock.mockResolvedValue({ id: 'ch1', transferenciaExecucao: { origem: A, destino: C, saiuDoEscopo: true, revisar: {} } });
     const { onTransferido, onPerdeuAcesso, onSaved } = montar();

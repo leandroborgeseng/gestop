@@ -14,6 +14,7 @@ import { composeEnderecoTexto, parseEnderecoTexto } from '@/lib/geocoding';
 import { openMapsRoute } from '@/lib/maps-route';
 import { ChamadoResumo } from '@/lib/types';
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
+import { AVISO_SOMENTE_EXECUCAO } from '@/lib/secretaria-execucao';
 
 function EditableLabel({
   label,
@@ -55,9 +56,12 @@ export function ChamadoAberturaSection({
   onPerdeuAcesso?: () => void;
 }) {
   const snackbar = useSnackbar();
-  const canEdit =
+  const temPermissao =
     getStoredAuth()?.user.permissoes.includes('chamados.gerenciar') ||
     getStoredAuth()?.user.permissoes.includes('chamados.editar_abertura');
+  // 310 (TL #48): só a Secretaria de execução edita/devolve/transfere; próprio/equipe ficam só leitura/execução.
+  const somenteExecucao = resumo.podeGerirAbertura === false;
+  const canEdit = Boolean(temPermissao) && !somenteExecucao;
 
   const coords = resolveChamadoCoordinates(resumo);
   const [editingField, setEditingField] = useState<'solicitante' | 'endereco' | 'coords' | null>(null);
@@ -141,6 +145,11 @@ export function ChamadoAberturaSection({
   return (
     <div className="space-y-4 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] p-4">
       <DetailField label="Aberto em">{new Date(resumo.createdAt).toLocaleString('pt-BR')}</DetailField>
+      {somenteExecucao && temPermissao ? (
+        <p data-testid="abertura-somente-execucao" role="status" className="rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--surface-2,var(--surface))] p-2 text-xs text-[var(--ink-2,inherit)]">
+          {AVISO_SOMENTE_EXECUCAO}
+        </p>
+      ) : null}
 
       {resumo.unidade ? (
         <div className="grid gap-3 sm:grid-cols-2">

@@ -20,6 +20,8 @@ import { JwtPayload } from '../auth/jwt';
 import { isPerfilExterno } from '../auth/perfil-natureza';
 import {
   assertChamadoExecucaoAccess,
+  assertChamadoGestaoAberturaAccess,
+  podeGerirAberturaChamado,
   assertChamadoSecretariaAccess,
   resolveChamadoSecretariaFilter,
   resolveEquipeSecretariaFilter,
@@ -681,6 +683,7 @@ export class ChamadosService {
     });
     return {
       ...this.serializeChamado(chamado, user.sub),
+      podeGerirAbertura: podeGerirAberturaChamado(user, chamado),
       historico: await this.enrichHistorico(historico, id),
     };
   }
@@ -1856,7 +1859,9 @@ export class ChamadosService {
     }
 
     const before = await this.getChamadoOrThrow(id);
-    assertChamadoExecucaoAccess(user, before);
+    // 310 (TL #48): editar/devolver/transferir exige a Secretaria de execução; equipe/próprio não bastam.
+    assertChamadoSecretariaAccess(user, before);
+    assertChamadoGestaoAberturaAccess(user, before);
 
     const enderecoBairro = dto.enderecoBairro === undefined ? before.enderecoBairro : dto.enderecoBairro?.trim() || null;
     const solicitanteNome =
@@ -1923,6 +1928,7 @@ export class ChamadosService {
       destino: { id: string; nome: string; sigla: string };
       revisar: RevisaoExecucao;
       saiuDoEscopo: boolean;
+      somenteExecucao: boolean;
     } | null = null;
     if (trocouSecretaria) {
       const destino = await this.prisma.secretaria.findUniqueOrThrow({ where: { id: secretariaId }, select: { id: true, nome: true, sigla: true } });
@@ -1937,7 +1943,7 @@ export class ChamadosService {
         });
         if (resp && responsavelIncompativel(resp, secretariaId)) revisar.responsavel = { id: resp.id, nome: resp.nome };
       }
-      transferencia = { origem: before.secretaria ?? null, destino, revisar, saiuDoEscopo: false };
+      transferencia = { origem: before.secretaria ?? null, destino, revisar, saiuDoEscopo: false, somenteExecucao: false };
     }
 
     let chamado = before;
@@ -2026,13 +2032,15 @@ export class ChamadosService {
 
     if (transferencia) {
       // 310: "saiu do escopo" = depois da troca o usuário perde o acesso (mesma regra da tela; equipe da Secretaria ainda dá acesso).
+      // saiuDoEscopo = perdeu a visualização (sem Secretaria, próprio ou equipe); somenteExecucao = ainda vê/executa, sem gestão.
       try {
-        assertChamadoExecucaoAccess(user, chamado);
+        assertChamadoSecretariaAccess(user, chamado);
+        transferencia.somenteExecucao = !podeGerirAberturaChamado(user, chamado);
       } catch {
         transferencia.saiuDoEscopo = true;
       }
     }
-    return { ...this.serializeChamado(chamado, user.sub), ...(transferencia ? { transferenciaExecucao: transferencia } : {}) };
+    return { ...this.serializeChamado(chamado, user.sub), podeGerirAbertura: podeGerirAberturaChamado(user, chamado), ...(transferencia ? { transferenciaExecucao: transferencia } : {}) };
   }
 
   /** 310: destino da execução — todas as Secretarias ativas, independente da Secretaria ativa da sessão. */

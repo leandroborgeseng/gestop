@@ -12,7 +12,13 @@ export function avisosRevisao(t: TransferenciaExecucao): string[] {
   return out;
 }
 
+/** 310 (TL #48): acesso só pelo próprio ou pela equipe. */
+export const AVISO_SOMENTE_EXECUCAO =
+  'Você continua vendo este chamado (pelo próprio ou pela equipe), mas a abertura agora é da Secretaria de destino: não é possível editar, devolver ou transferir.';
+
 export function mensagemTransferencia(t: TransferenciaExecucao) {
   const base = `Execução transferida: ${t.origem?.sigla ?? '—'} → ${t.destino.sigla}.`;
-  return t.saiuDoEscopo ? `${base} O chamado saiu da sua Secretaria ativa e foi fechado; a lista foi atualizada.` : base;
+  if (t.saiuDoEscopo) return `${base} O chamado saiu da sua Secretaria ativa e foi fechado; a lista foi atualizada.`;
+  if (t.somenteExecucao) return `${base} ${AVISO_SOMENTE_EXECUCAO}`;
+  return base;
 }

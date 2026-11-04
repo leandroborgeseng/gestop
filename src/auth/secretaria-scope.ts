@@ -44,8 +44,7 @@ export function resolveSecretariaScopeIds(user: JwtPayload): string[] | undefine
  * Acesso ao chamado por:
  * - Secretaria responsável pela execução (`chamado.secretariaId`)
  * - Secretaria do próprio (`unidade.secretariaId`)
- * 310 (TL #48): a equipe atribuída NÃO dá acesso — o acesso segue a Secretaria do chamado; equipe de outra
- * Secretaria fica só como dado, com aviso para revisar.
+ * - Secretaria da equipe atualmente atribuída (`equipe.secretariaId`) — encaminhamento operacional
  */
 export function resolveChamadoSecretariaFilter(user: JwtPayload): Prisma.ChamadoWhereInput {
   const ids = resolveSecretariaScopeIds(user);
@@ -57,6 +56,7 @@ export function resolveChamadoSecretariaFilter(user: JwtPayload): Prisma.Chamado
       OR: [
         { secretariaId },
         { unidade: { secretariaId } },
+        { equipe: { secretariaId } },
       ],
     };
   }
@@ -64,6 +64,7 @@ export function resolveChamadoSecretariaFilter(user: JwtPayload): Prisma.Chamado
     OR: [
       { secretariaId: { in: ids } },
       { unidade: { secretariaId: { in: ids } } },
+      { equipe: { secretariaId: { in: ids } } },
     ],
   };
 }
@@ -82,7 +83,7 @@ export function resolveUnidadeSecretariaFilter(user: JwtPayload): Prisma.Unidade
   return ids.length === 1 ? { secretariaId: ids[0] } : { secretariaId: { in: ids } };
 }
 
-/** Visualização: Secretaria de execução OU do próprio. Fora disso → 403 (o detalhe GET converte em 404; 310, TL #48). */
+/** Visualização: execução, próprio OU secretaria da equipe atribuída. */
 export function assertChamadoSecretariaAccess(
   user: JwtPayload,
   chamado: {
@@ -107,11 +108,16 @@ export function assertChamadoSecretariaAccess(
   if (ids.includes(chamado.secretariaId)) return;
   const unidadeSec = chamado.unidade?.secretariaId ?? chamado.unidade?.secretaria?.id;
   if (unidadeSec && ids.includes(unidadeSec)) return;
+  const equipeSec = chamado.equipe?.secretariaId ?? chamado.equipe?.secretaria?.id;
+  if (equipeSec && ids.includes(equipeSec)) return;
 
   throw new ForbiddenException('Chamado fora da secretaria autorizada.');
 }
 
-/** Tratativa operacional: só a Secretaria responsável pela execução (310, TL #48: equipe não dá acesso). */
+/**
+ * Tratativa operacional: secretaria de execução OU secretaria da equipe atribuída
+ * (encaminhamento operacional sem alterar a secretaria responsável original).
+ */
 export function assertChamadoExecucaoAccess(
   user: JwtPayload,
   chamado: {
@@ -129,8 +135,30 @@ export function assertChamadoExecucaoAccess(
   const ids = resolveSecretariaScopeIds(user);
   if (!ids) return;
   if (ids.includes(chamado.secretariaId)) return;
+  const equipeSec = chamado.equipe?.secretariaId ?? chamado.equipe?.secretaria?.id;
+  if (equipeSec && ids.includes(equipeSec)) return;
 
-  throw new ForbiddenException('Sem permissão de tratativa: a Secretaria responsável pela execução deste chamado é outra.');
+  throw new ForbiddenException('Sem permissão de tratativa: secretaria de execução diferente da ativa.');
+}
+
+/**
+ * 310 (TL #48): gestão da abertura (editar, devolver, transferir a execução) — só a Secretaria responsável
+ * pela execução (`chamado.secretariaId`). Próprio e equipe dão só visualização/execução.
+ */
+export const MSG_SEM_GESTAO_ABERTURA =
+  'Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir.';
+
+export function podeGerirAberturaChamado(user: JwtPayload, chamado: { secretariaId: string }) {
+  if (user.permissoes.includes('usuarios.gerenciar') || user.acessoTodasSecretarias) {
+    if (!user.secretariaId?.trim()) return true;
+  }
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return true;
+  return ids.includes(chamado.secretariaId);
+}
+
+export function assertChamadoGestaoAberturaAccess(user: JwtPayload, chamado: { secretariaId: string }) {
+  if (!podeGerirAberturaChamado(user, chamado)) throw new ForbiddenException(MSG_SEM_GESTAO_ABERTURA);
 }
 
 /** Garante que a secretaria alvo está no escopo ativo (abertura / cadastro). */

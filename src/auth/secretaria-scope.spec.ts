@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { ForbiddenException } from '@nestjs/common';
 import {
+  assertChamadoGestaoAberturaAccess,
+  MSG_SEM_GESTAO_ABERTURA,
+  podeGerirAberturaChamado,
   assertChamadoExecucaoAccess,
   assertChamadoSecretariaAccess,
   assertSecretariaNoEscopo,
@@ -51,17 +55,19 @@ describe('secretaria-scope', () => {
       OR: [
         { secretariaId: 'sec-a' },
         { unidade: { secretariaId: 'sec-a' } },
+        { equipe: { secretariaId: 'sec-a' } },
       ],
     });
   });
 
-  it('aplica filtro para secretaria ativa (execução ou próprio; equipe não — 310 TL #48)', () => {
+  it('aplica filtro para secretaria ativa (execução, próprio ou equipe)', () => {
     expect(isSecretariaScoped(gestorSecretaria)).toBe(true);
     expect(resolveSecretariaScopeId(gestorSecretaria)).toBe('sec-educacao');
     expect(resolveChamadoSecretariaFilter(gestorSecretaria)).toEqual({
       OR: [
         { secretariaId: 'sec-educacao' },
         { unidade: { secretariaId: 'sec-educacao' } },
+        { equipe: { secretariaId: 'sec-educacao' } },
       ],
     });
   });
@@ -75,16 +81,16 @@ describe('secretaria-scope', () => {
     ).not.toThrow();
   });
 
-  it('310 (TL #48): equipe atribuída de outra Secretaria NÃO dá visualização', () => {
+  it('visualização permite secretaria da equipe atribuída', () => {
     expect(() =>
       assertChamadoSecretariaAccess(gestorSecretaria, {
         secretariaId: 'sec-servicos',
         equipe: { secretariaId: 'sec-educacao' },
       }),
-    ).toThrow(/secretaria/i);
+    ).not.toThrow();
   });
 
-  it('tratativa só pela Secretaria de execução (equipe não dá acesso — 310 TL #48)', () => {
+  it('tratativa permite execução ou secretaria da equipe atribuída', () => {
     expect(() =>
       assertChamadoExecucaoAccess(gestorSecretaria, { secretariaId: 'sec-servicos' }),
     ).toThrow(/tratativa|execução/i);
@@ -96,7 +102,21 @@ describe('secretaria-scope', () => {
         secretariaId: 'sec-servicos',
         equipe: { secretariaId: 'sec-educacao' },
       }),
-    ).toThrow(/tratativa|execução/i);
+    ).not.toThrow();
+  });
+
+  it('310 (TL #48): gestão da abertura só pela Secretaria de execução; equipe/próprio → 403 com mensagem', () => {
+    const viaEquipe = { secretariaId: 'sec-servicos', equipe: { secretariaId: 'sec-educacao' } };
+    const viaProprio = { secretariaId: 'sec-servicos', unidade: { secretariaId: 'sec-educacao' } };
+    expect(() => assertChamadoSecretariaAccess(gestorSecretaria, viaEquipe)).not.toThrow();
+    expect(() => assertChamadoExecucaoAccess(gestorSecretaria, viaEquipe)).not.toThrow();
+    for (const c of [viaEquipe, viaProprio]) {
+      expect(podeGerirAberturaChamado(gestorSecretaria, c)).toBe(false);
+      expect(() => assertChamadoGestaoAberturaAccess(gestorSecretaria, c)).toThrow(ForbiddenException);
+      expect(() => assertChamadoGestaoAberturaAccess(gestorSecretaria, c)).toThrow(MSG_SEM_GESTAO_ABERTURA);
+    }
+    expect(podeGerirAberturaChamado(gestorSecretaria, { secretariaId: 'sec-educacao' })).toBe(true);
+    expect(podeGerirAberturaChamado(adminTodas, { secretariaId: 'sec-servicos' })).toBe(true);
   });
 
   it('bloqueia visualização fora do escopo', () => {

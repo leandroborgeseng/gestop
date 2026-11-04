@@ -86,7 +86,8 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
     expect(r.transferenciaExecucao.destino.id).toBe(seed.secretarias.B);
     expect(r.transferenciaExecucao.revisar.equipe).toBeTruthy();
     expect(r.transferenciaExecucao.revisar.responsavel?.id).toBe(seed.usuarios.gestorA);
-    expect(r.transferenciaExecucao.saiuDoEscopo).toBe(true); // TL #48: a equipe de A não dá acesso; gestor de A perde a tratativa
+    expect(r.transferenciaExecucao.saiuDoEscopo).toBe(false); // TL #48: próprio/equipe de A mantêm a visualização
+    expect((r.transferenciaExecucao as unknown as { somenteExecucao: boolean }).somenteExecucao).toBe(true); // mas sem gestão da abertura
 
     const depois = await prisma.chamado.findUniqueOrThrow({ where: { id: c.id } });
     expect(depois.secretariaId).toBe(seed.secretarias.B);
@@ -114,7 +115,7 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
       transferenciaExecucao: { revisar: Record<string, unknown> };
     };
     expect(r.transferenciaExecucao.revisar).toEqual({});
-    expect((r.transferenciaExecucao as unknown as { saiuDoEscopo: boolean }).saiuDoEscopo).toBe(true); // sem equipe de A: gestor de A perde acesso
+    expect((r.transferenciaExecucao as unknown as { saiuDoEscopo: boolean }).saiuDoEscopo).toBe(false); // próprio de A: continua vendo (só leitura)
   });
 
   it('sem permissão de alterar → 403; Secretaria inativa → 400; outra Secretaria sem acesso ao chamado → 403', async () => {
@@ -133,57 +134,73 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
     expect(r.transferenciaExecucao).toBeUndefined();
     expect(await prisma.logAuditoria.count({ where: { entidadeId: c.id, funcao: 'secretaria_execucao' } })).toBe(0);
   });
-  describe('TL #48 — o acesso segue a Secretaria do chamado, não a equipe', () => {
+  describe('TL #48 — visualização/execução por Secretaria, próprio ou equipe; gestão da abertura só pela Secretaria de execução', () => {
     let ctrl: ChamadosController;
     beforeAll(() => { ctrl = new ChamadosController(svc); });
+    const MSG = /Secretaria responsável pela execução deste chamado é outra/;
+    const erro = async (p: Promise<unknown>) => p.then(() => null, (e: unknown) => e);
+    const amanha = () => new Date(Date.now() + 86_400_000).toISOString();
 
-    it('gestor de origem (sem acesso ao destino): 404 ao ver, 403 com mensagem ao editar e ao devolver; equipe de A fica só como dado', async () => {
-      // próprio de B, execução em A, equipe de A → transferido para B
-      const c = await novoChamado({ equipeA: true, unidadeId: seed.unidadeB });
+    it('gestor de origem presente só pela equipe: vê e executa; 403 com mensagem ao editar, devolver e transferir', async () => {
+      const c = await novoChamado({ equipeA: true, unidadeId: seed.unidadeB }); // próprio B, equipe A, execução A
       const gA = await sessao(seed.usuarios.gestorA);
-      const r = (await svc.updateAbertura(c.id, { secretariaId: seed.secretarias.B }, gA)) as unknown as { transferenciaExecucao: { saiuDoEscopo: boolean; revisar: { equipe?: unknown } } };
-      expect(r.transferenciaExecucao.saiuDoEscopo).toBe(true);
+      const r = (await svc.updateAbertura(c.id, { secretariaId: seed.secretarias.B }, gA)) as unknown as { transferenciaExecucao: { saiuDoEscopo: boolean; somenteExecucao: boolean; revisar: { equipe?: unknown } } };
+      expect(r.transferenciaExecucao).toMatchObject({ saiuDoEscopo: false, somenteExecucao: true });
       expect(r.transferenciaExecucao.revisar.equipe).toBeTruthy();
 
-      const ver = await ctrl.get(c.id, gA).catch((e: unknown) => e);
+      const ver = (await ctrl.get(c.id, gA)) as unknown as { id: string; podeGerirAbertura: boolean };
+      expect(ver.id).toBe(c.id);
+      expect(ver.podeGerirAbertura).toBe(false);
+      const lista = (await svc.listChamados({} as never, gA)) as unknown as { items: Array<{ id: string }> };
+      expect(lista.items.some((i) => i.id === c.id)).toBe(true);
+      await svc.updatePlanejamento(c.id, { previstaExecucaoEm: amanha() } as never, gA); // execução permitida pela equipe
+
+      const terceira = await prisma.secretaria.create({ data: { sigla: `T310T${randomBytes(2).toString('hex')}`, nome: 'Secretaria Fictícia 310 Terceira' } });
+      criados.secretarias.push(terceira.id);
+      // editar, devolver (→ A) e transferir (→ terceira)
+      for (const dto of [{ solicitanteNome: 'Fictício edição' }, { secretariaId: seed.secretarias.A }, { secretariaId: terceira.id }]) {
+        const e = await erro(svc.updateAbertura(c.id, dto, gA));
+        expect(e).toBeInstanceOf(ForbiddenException);
+        expect((e as ForbiddenException).getStatus()).toBe(403);
+        expect((e as Error).message).toMatch(MSG);
+      }
+      expect((await prisma.chamado.findUniqueOrThrow({ where: { id: c.id } })).secretariaId).toBe(seed.secretarias.B);
+    });
+
+    it('sem nenhum caminho (Secretaria, próprio ou equipe): 404 ao ver, some da lista, 403 ao editar/devolver', async () => {
+      const c = await novoChamado({ unidadeId: seed.unidadeB }); // próprio B, sem equipe
+      const gA = await sessao(seed.usuarios.gestorA);
+      const r = (await svc.updateAbertura(c.id, { secretariaId: seed.secretarias.B }, gA)) as unknown as { transferenciaExecucao: { saiuDoEscopo: boolean } };
+      expect(r.transferenciaExecucao.saiuDoEscopo).toBe(true);
+      const ver = await erro(ctrl.get(c.id, gA));
       expect(ver).toBeInstanceOf(NotFoundException);
-      expect((ver as NotFoundException).getStatus()).toBe(404);
       expect((ver as Error).message).toBe('Chamado não encontrado na sua Secretaria ativa.');
-
-      const editar = await svc.updateAbertura(c.id, { solicitanteNome: 'Fictício edição' }, gA).catch((e: unknown) => e);
-      expect(editar).toBeInstanceOf(ForbiddenException);
-      expect((editar as ForbiddenException).getStatus()).toBe(403);
-      expect((editar as Error).message).toMatch(/Secretaria responsável pela execução/);
-
-      const devolver = await svc.updateAbertura(c.id, { secretariaId: seed.secretarias.A }, gA).catch((e: unknown) => e);
-      expect(devolver).toBeInstanceOf(ForbiddenException);
-      expect((devolver as Error).message).toMatch(/Secretaria responsável pela execução/);
-
       const lista = (await svc.listChamados({} as never, gA)) as unknown as { items: Array<{ id: string }> };
       expect(lista.items.some((i) => i.id === c.id)).toBe(false);
+      const devolver = await erro(svc.updateAbertura(c.id, { secretariaId: seed.secretarias.A }, gA));
+      expect(devolver).toBeInstanceOf(ForbiddenException);
+      expect(await erro(svc.updatePlanejamento(c.id, { previstaExecucaoEm: amanha() } as never, gA))).toBeInstanceOf(ForbiddenException);
+    });
 
-      const depois = await prisma.chamado.findUniqueOrThrow({ where: { id: c.id } });
-      expect(depois.secretariaId).toBe(seed.secretarias.B);
-      expect(depois.equipeId).toBe(c.equipeId);
+    it('próprio de A transferido para B: gestor de A vê só leitura (sem executar), 403 ao editar/devolver', async () => {
+      const c = await novoChamado();
+      const gA = await sessao(seed.usuarios.gestorA);
+      await svc.updateAbertura(c.id, { secretariaId: seed.secretarias.B }, gA);
+      const ver = (await ctrl.get(c.id, gA)) as unknown as { id: string; podeGerirAbertura: boolean };
+      expect(ver).toMatchObject({ id: c.id, podeGerirAbertura: false });
+      const e = await erro(svc.updateAbertura(c.id, { secretariaId: seed.secretarias.A }, gA));
+      expect((e as Error).message).toMatch(MSG);
+      expect(await erro(svc.updatePlanejamento(c.id, { previstaExecucaoEm: amanha() } as never, gA))).toBeInstanceOf(ForbiddenException);
     });
 
     it('usuário com acesso ao destino vê, edita e pode devolver', async () => {
       const c = await novoChamado({ equipeA: true, unidadeId: seed.unidadeB });
       await svc.updateAbertura(c.id, { secretariaId: seed.secretarias.B }, await sessao(seed.usuarios.gestorA));
       const gB = await sessao(seed.usuarios.gestorB);
-      const ver = (await ctrl.get(c.id, gB)) as unknown as { id: string };
-      expect(ver.id).toBe(c.id);
+      expect(((await ctrl.get(c.id, gB)) as unknown as { podeGerirAbertura: boolean }).podeGerirAbertura).toBe(true);
       await svc.updateAbertura(c.id, { solicitanteNome: 'Fictício B' }, gB);
       const r = (await svc.updateAbertura(c.id, { secretariaId: seed.secretarias.A }, gB)) as unknown as { transferenciaExecucao: { destino: { id: string } } };
       expect(r.transferenciaExecucao.destino.id).toBe(seed.secretarias.A);
-    });
-
-    it('próprio de A transferido para B: gestor de A ainda vê pelo próprio, mas não edita (403)', async () => {
-      const c = await novoChamado();
-      const gA = await sessao(seed.usuarios.gestorA);
-      await svc.updateAbertura(c.id, { secretariaId: seed.secretarias.B }, gA);
-      expect(((await ctrl.get(c.id, gA)) as unknown as { id: string }).id).toBe(c.id);
-      await expect(svc.updateAbertura(c.id, { secretariaId: seed.secretarias.A }, gA)).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('compatível: responsável com acesso a todas as Secretarias não pede revisão', async () => {
@@ -195,7 +212,6 @@ describe.skipIf(!URL)('310 — Secretaria responsável pela execução (Postgres
     it('compatível: equipe sem Secretaria não pede revisão', async () => {
       const c = await novoChamado({ equipeSemSecretaria: true });
       const r = (await svc.updateAbertura(c.id, { secretariaId: seed.secretarias.B }, await sessao(seed.usuarios.gestorA))) as unknown as { transferenciaExecucao: { revisar: Record<string, unknown> } };
-      expect(r.transferenciaExecucao.revisar.equipe).toBeUndefined();
       expect(r.transferenciaExecucao.revisar).toEqual({});
     });
   });

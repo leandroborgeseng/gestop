@@ -283,6 +283,8 @@ export type TransferenciaExecucao = {
   destino: SecretariaOption;
   revisar: { equipe?: { id: string; nome: string; secretaria: SecretariaOption | null }; responsavel?: { id: string; nome: string } };
   saiuDoEscopo: boolean;
+  /** Ainda vê/executa (próprio ou equipe), mas perdeu a gestão da abertura. */
+  somenteExecucao?: boolean;
 };
 
 export function getSecretariasExecucao() {
