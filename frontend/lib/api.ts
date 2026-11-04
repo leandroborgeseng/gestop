@@ -272,6 +272,19 @@ export function getSecretarias() {
   return request<SecretariaOption[]>('/operacional/secretarias');
 }
 
+/** 310: todas as Secretarias ativas como destino da execução (independe da Secretaria ativa). */
+export function getSecretariasDestinoExecucao() {
+  return request<SecretariaOption[]>('/chamados/secretarias/destino-execucao');
+}
+
+/** 310: retorno da troca de Secretaria de execução. */
+export type TransferenciaExecucao = {
+  origem: SecretariaOption | null;
+  destino: SecretariaOption;
+  revisar: { equipe?: { id: string; nome: string; secretaria: SecretariaOption | null }; responsavel?: { id: string; nome: string } };
+  saiuDoEscopo: boolean;
+};
+
 export function getSecretariasExecucao() {
   return request<SecretariaOption[]>('/chamados/secretarias/execucao');
 }
@@ -1285,7 +1298,7 @@ export function updateChamadoAbertura(
     observadorIds?: string[];
   },
 ) {
-  return request<ChamadoResumo>(`/chamados/${id}/abertura`, {
+  return request<ChamadoResumo & { transferenciaExecucao?: TransferenciaExecucao }>(`/chamados/${id}/abertura`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),

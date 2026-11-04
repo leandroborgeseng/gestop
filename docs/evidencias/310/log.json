@@ -1,0 +1,48 @@
+{
+  "listas": {
+    "contextoAtivo_operacional": [
+      "ZZTA"
+    ],
+    "destinoExecucao": [
+      "ZZTA",
+      "ZZTB",
+      "ZZTG"
+    ]
+  },
+  "opcoesNaTela": [
+    "ZZTA · ZZTESTE Secretaria Alfa",
+    "ZZTB · ZZTESTE Secretaria Beta",
+    "ZZTG · ZZTESTE Secretaria Gama"
+  ],
+  "depoisDeSalvar": {
+    "resultado": "Execução transferida: ZZTA → ZZTB.\n\nA equipe atual é de outra Secretaria. Revise a equipe do chamado. (ZZTESTE Equipe Alfa · ZZTA)\n\nO responsável atual não pertence à Secretaria de destino. Revise o responsável do chamado. (ZZTESTE Gestor Alfa)",
+    "snackbar": [
+      "Execução transferida: ZZTA → ZZTB.",
+      "Execução transferida: ZZTA → ZZTB."
+    ],
+    "telaSemAcesso": 0
+  },
+  "saiuDoEscopo": {
+    "snackbar": "Execução transferida: ZZTA → ZZTG. O chamado saiu da sua Secretaria ativa e não aparece mais na sua lista.",
+    "mensagemSemAcesso": false,
+    "telaVazia": false,
+    "nota": "Capturado antes do ajuste do texto; texto final: \"O chamado saiu da sua Secretaria ativa: ao atualizar a lista ele não aparece mais e você não poderá alterá-lo.\" (teste de interação)."
+  },
+  "outraSecretaria": {
+    "status": 403,
+    "mensagem": "Sem permissão de tratativa: secretaria de execução diferente da ativa."
+  },
+  "depois": {
+    "secretaria": "ZZTB",
+    "unidadeSecretaria": "ZZTA",
+    "equipe": "ZZTESTE Equipe Alfa",
+    "responsavel": "ZZTESTE Gestor Alfa"
+  },
+  "semPermissao": {
+    "destino": 403,
+    "salvar": 403
+  },
+  "secretariaInexistente": {
+    "status": 400
+  }
+}

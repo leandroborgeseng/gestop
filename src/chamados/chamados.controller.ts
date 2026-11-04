@@ -43,6 +43,13 @@ export class ChamadosController {
     return this.chamadosService.listSecretariasParaAbertura(user);
   }
 
+  /** 310: Secretarias de destino da execução (todas as ativas), para quem pode alterar a abertura. */
+  @RequireAnyPermissions('chamados.gerenciar', 'chamados.editar_abertura')
+  @Get('secretarias/destino-execucao')
+  listSecretariasDestinoExecucao() {
+    return this.chamadosService.listSecretariasDestinoExecucao();
+  }
+
   @RequirePermissions('chamados.gerenciar')
   @Post('ordens-servico/lote.pdf')
   @Header('Content-Type', 'application/pdf')
