@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditAction, CronogramaFrequencia, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import {
@@ -16,7 +16,18 @@ import {
   secretariasDoUsuario,
   whereUsuarioComSecretaria,
 } from './responsaveis-escopo';
-import { AcaoStatusAtivo, auditoriaStatusAtivo, CRONOGRAMA_INATIVO, planejarStatusAtivo } from '../common/inativos/registro-inativo';
+import {
+  AcaoStatusAtivo,
+  assertRegistroEditavel,
+  auditoriaStatusAtivo,
+  CRONOGRAMA_INATIVO,
+  planejarStatusAtivo,
+} from '../common/inativos/registro-inativo';
+import {
+  assertDependenciasAtivas,
+  MSG_CRONOGRAMA_EXISTENTE,
+  MSG_CRONOGRAMA_INATIVO_EXISTENTE,
+} from './cronograma-inativo';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 import { PrismaService } from '../prisma/prisma.service';
 import { CalendarioQueryDto, CronogramaDto } from './cronograma.dto';
@@ -58,6 +69,7 @@ const cronogramaInclude = {
     select: {
       id: true,
       nome: true,
+      ativo: true,
       tipo: true,
       secretariaId: true,
       secretaria: { select: { id: true, nome: true, sigla: true } },
@@ -174,6 +186,7 @@ export class CronogramaService {
 
   async createCronograma(dto: CronogramaDto, user: JwtPayload) {
     await this.assertVinculoValido(dto.unidadeId, dto.checklistId, user);
+    await this.assertParSemCronograma(dto.unidadeId, dto.checklistId);
     const responsavelIds = await this.resolveResponsavelIds(dto, user, []);
 
     const proximaChecagemEm = startOfDay(new Date(dto.proximaChecagemEm));
@@ -185,7 +198,7 @@ export class CronogramaService {
           frequencia: dto.frequencia,
           proximaChecagemEm,
           responsavelId: responsavelIds[0] ?? null,
-          // 308: editar não muda o status; ativar/inativar só por Inativar/Reativar (confirmação, recálculo e auditoria).
+          ativo: true, // 308: nasce ativo; o status só muda por Inativar/Reativar.
           observacoes: dto.observacoes?.trim() || null,
         },
       });
@@ -212,6 +225,7 @@ export class CronogramaService {
 
   async updateCronograma(id: string, dto: CronogramaDto, user: JwtPayload) {
     const before = await this.getCronogramaOrThrow(id, user);
+    assertRegistroEditavel(before, CRONOGRAMA_INATIVO); // 308 (TL): inativo é somente leitura → 409
     await this.assertVinculoValido(dto.unidadeId, dto.checklistId, user);
     const responsavelIds = await this.resolveResponsavelIds(
       dto,
@@ -311,9 +325,24 @@ export class CronogramaService {
    * 308: Inativar/Reativar com a permissão de excluir, no escopo da Secretaria (getCronogramaOrThrow) e auditoria
    * STATUS_CHANGE (quem, quando, antes e depois) na mesma transação. Reativar recalcula só a próxima data.
    */
+  /** 308 (TL): um par próprio + checklist tem um só cronograma; se o existente está inativo, a saída é Reativar. */
+  private async assertParSemCronograma(unidadeId: string, checklistId: string) {
+    const existente = await this.prisma.cronogramaChecagem.findUnique({
+      where: { unidadeId_checklistId: { unidadeId, checklistId } },
+      select: { id: true, ativo: true },
+    });
+    if (!existente) return;
+    throw new ConflictException(
+      existente.ativo
+        ? { statusCode: 409, error: 'Conflict', codigo: 'CRONOGRAMA_EXISTENTE', cronogramaId: existente.id, message: MSG_CRONOGRAMA_EXISTENTE }
+        : { statusCode: 409, error: 'Conflict', codigo: 'CRONOGRAMA_INATIVO_EXISTENTE', cronogramaId: existente.id, message: MSG_CRONOGRAMA_INATIVO_EXISTENTE },
+    );
+  }
+
   private async alterarStatusAtivo(id: string, acao: AcaoStatusAtivo, user: JwtPayload) {
     const before = await this.getCronogramaOrThrow(id, user);
     const ativo = planejarStatusAtivo(before.ativo, acao, CRONOGRAMA_INATIVO);
+    if (acao === 'REATIVAR') assertDependenciasAtivas(before);
     const quando = new Date();
     const proxima = ativo ? proximaDataAoReativar(before.proximaChecagemEm, before.frequencia, startOfDay(quando)) : before.proximaChecagemEm;
     return this.prisma.$transaction(async (tx) => {
@@ -370,6 +399,7 @@ export class CronogramaService {
         ...(query.unidadeId ? { unidadeId: query.unidadeId } : {}),
         unidade: {
           ...unidadeScope,
+          ativo: true, // 308: próprio inativo não gera checagem no calendário
           ...(secretariaId ? { secretariaId } : {}),
         },
       },
@@ -504,7 +534,8 @@ export class CronogramaService {
       where: {
         ativo: true,
         ...(query.unidadeId ? { unidadeId: query.unidadeId } : {}),
-        ...(query.tipo ? { unidade: { ...unidadeScope, tipo: query.tipo } } : { unidade: unidadeScope }),
+        // 308: próprio inativo não gera programação
+        ...(query.tipo ? { unidade: { ...unidadeScope, ativo: true, tipo: query.tipo } } : { unidade: { ...unidadeScope, ativo: true } }),
         ...(query.atribuidoAMim
           ? {
               OR: [{ responsavelId: user.sub }, { responsaveis: { some: { usuarioId: user.sub } } }],

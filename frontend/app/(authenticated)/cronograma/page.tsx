@@ -22,7 +22,7 @@ import { SearchableSelect } from '@/components/ui/searchable-select';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { ErrorState, LoadingState } from '@/components/ui-states';
-import { CronogramasCadastrados } from '@/components/cronograma/cronogramas-cadastrados';
+import { AvisoCronogramaInativoExistente, CronogramasCadastrados } from '@/components/cronograma/cronogramas-cadastrados';
 import { checklistAppliesToUnidade } from '@/lib/checklist-matching';
 import {
   deactivateCronograma,
@@ -82,7 +82,10 @@ export default function CronogramaPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CronogramaChecagem | null>(null);
   const [formUnidadeId, setFormUnidadeId] = useState('');
-  const [formResponsavelIds, setFormResponsavelIds] = useState<string[]>([]);
+  const [formChecklistId, setFormChecklistId] = useState('');
+  /** 308: erro do salvar/reativar aparece DENTRO do formulário (o modal cobre o aviso da página). */
+  const [formError, setFormError] = useState<string | null>(null);
+    const [formResponsavelIds, setFormResponsavelIds] = useState<string[]>([]);
   const [formResponsaveis, setFormResponsaveis] = useState<ResponsavelCronogramaOpcao[]>([]);
   // 307: situação dos responsáveis no escopo atual; troca de contexto com o modal aberto (R5).
   const [situacoes, setSituacoes] = useState<Record<string, SituacaoResponsavel | undefined>>({});
@@ -295,13 +298,14 @@ export default function CronogramaPage() {
       ...(escopoTrocado && confirmadoManter && pendentesResp.length ? { confirmarResponsaveisForaEscopo: true } : {}),
     };
 
+    setFormError(null);
     try {
       await saveCronograma(payload, editing?.id);
       setSuccess(editing ? 'Cronograma atualizado.' : 'Cronograma cadastrado.');
       fecharForm();
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Não foi possível salvar o cronograma.');
+      setFormError(err instanceof Error ? err.message : 'Não foi possível salvar o cronograma.');
     }
   }
 
@@ -316,6 +320,25 @@ export default function CronogramaPage() {
     setCronogramaForaEscopo(null);
   }
 
+  // 308 (TL #47): par próprio + checklist com cronograma inativo → aviso com Reativar no lugar de cadastrar outro.
+  const inativoExistente =
+    !editing && formUnidadeId && formChecklistId
+      ? cronogramas.find(
+          (c) => !c.ativo && ((c.unidadeId === formUnidadeId && c.checklistId === formChecklistId)),
+        ) ?? null
+      : null;
+
+  async function reativarDoFormulario(item: CronogramaChecagem) {
+    try {
+      await reactivateCronograma(item.id);
+      setFormOpen(false);
+      setSuccess('Cronograma reativado. A próxima data foi recalculada a partir de hoje.');
+      await loadData();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Falha ao reativar cronograma.');
+    }
+  }
+
   function openCreate() {
     setEscopoAbertura(chaveEscopo);
     setCronogramaForaEscopo(null);
@@ -323,6 +346,8 @@ export default function CronogramaPage() {
     setConfirmadoManter(false);
     setEditing(null);
     setFormUnidadeId(unidadeId);
+    setFormChecklistId('');
+    setFormError(null);
     setFormResponsavelIds([]);
     setFormResponsaveis([]);
     setFormOpen(true);
@@ -335,6 +360,8 @@ export default function CronogramaPage() {
     setConfirmadoManter(false);
     setEditing(item);
     setFormUnidadeId(item.unidadeId);
+    setFormChecklistId(item.checklistId);
+    setFormError(null);
     const fromJunction = (item.responsaveis ?? []).map((row) => row.usuario);
     const legacy = item.responsavel ? [item.responsavel] : [];
     const users = fromJunction.length ? fromJunction : legacy;
@@ -534,7 +561,7 @@ export default function CronogramaPage() {
                       form="form-cronograma"
                       variant="filled"
                       className="flex-1"
-                      disabled={salvarBloqueado}
+                      disabled={salvarBloqueado || Boolean(inativoExistente)}
                       data-testid="salvar-cronograma"
                     >
                       {editing ? 'Salvar alterações' : 'Cadastrar cronograma'}
@@ -544,6 +571,11 @@ export default function CronogramaPage() {
               }
             >
               <form id="form-cronograma" onSubmit={(event) => void handleSubmit(event)} className="space-y-4">
+                {formError ? (
+                  <div data-testid="cronograma-form-erro">
+                    <Alert variant="error">{formError}</Alert>
+                  </div>
+                ) : null}
                 <Field label="Próprio público">
                   <SearchableSelect
                     value={formUnidadeId}
@@ -560,6 +592,7 @@ export default function CronogramaPage() {
                     name="checklistId"
                     required
                     defaultValue={editing?.checklistId ?? ''}
+                    onChange={(event) => setFormChecklistId(event.target.value)}
                     disabled={!formUnidade}
                   >
                     <option value="">{formUnidade ? 'Selecione' : 'Selecione um próprio primeiro'}</option>
@@ -570,6 +603,13 @@ export default function CronogramaPage() {
                     ))}
                   </Select>
                 </Field>
+                {inativoExistente ? (
+                  <AvisoCronogramaInativoExistente
+                    cronograma={inativoExistente}
+                    canReativar={canExcluir}
+                    onReativar={reativarDoFormulario}
+                  />
+                ) : null}
                 <Field label="Frequência">
                   <Select name="frequencia" required defaultValue={editing?.frequencia ?? 'MENSAL'}>
                     {CRONOGRAMA_FREQUENCIAS.map((frequencia) => (

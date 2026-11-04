@@ -214,7 +214,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Programar cronograma de checagem',
     ator: 'Administrador do Sistema, gestor',
     tela: '/cronograma',
-    api: 'CronogramaController: GET /cronograma, GET /calendario, POST, PUT /:id, DELETE /:id',
+    api: 'CronogramaController: GET /cronograma, GET /calendario, POST, PUT /:id, DELETE /:id (inativar), POST /:id/reativar',
     tabelas: 'CronogramaChecagem, CronogramaChecagemResponsavel, Checklist, UnidadePublica, Usuario',
     permissao: 'cronograma.visualizar/inserir/alterar/excluir, legado dashboard.visualizar e checklists.gerenciar, ou matriz.cronograma.',
   },

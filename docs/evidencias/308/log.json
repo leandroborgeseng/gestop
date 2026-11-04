@@ -49,5 +49,45 @@
     "status": 200,
     "contemReativado": true,
     "contemInativado": false
+  },
+  "decisoesTL47": {
+    "editarInativo": {
+      "status": 409,
+      "mensagem": "Este cronograma está inativo. Reative-o para realizar alterações"
+    },
+    "reativarChecklistInativo": {
+      "avisoNoCard": "Checklist inativo: reative o checklist antes de reativar este cronograma.",
+      "mensagemTela": "Não é possível reativar: o checklist \"ZZTESTE Checklist 308 Elétrica\" está inativo. Reative o checklist primeiro.",
+      "api": {
+        "status": 409,
+        "codigo": "DEPENDENCIA_INATIVA",
+        "mensagem": "Não é possível reativar: o checklist \"ZZTESTE Checklist 308 Elétrica\" está inativo. Reative o checklist primeiro."
+      }
+    },
+    "parInativo": {
+      "aviso": "Já existe um cronograma inativo para este próprio e checklist\n\nReativar",
+      "cadastrarDesabilitado": true,
+      "api": {
+        "status": 409,
+        "codigo": "CRONOGRAMA_INATIVO_EXISTENTE",
+        "mensagem": "Já existe um cronograma inativo para este próprio e checklist"
+      }
+    },
+    "parAtivo": {
+      "erroNoFormulario": "Já existe um cronograma para este próprio e checklist",
+      "api": {
+        "status": 409,
+        "codigo": "CRONOGRAMA_EXISTENTE",
+        "mensagem": "Já existe um cronograma para este próprio e checklist"
+      }
+    },
+    "reativarPeloFormulario": {
+      "ativo": true,
+      "mensagem": "Cronograma reativado. A próxima data foi recalculada a partir de hoje."
+    },
+    "proprioInativoSemProgramacao": {
+      "calendario": true,
+      "programacoes": true
+    }
   }
 }

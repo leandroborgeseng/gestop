@@ -1232,6 +1232,8 @@ export type CronogramaChecagem = {
     id: string;
     nome: string;
     tipo: UnidadeTipo;
+    /** 308 */
+    ativo?: boolean;
     secretaria: SecretariaOption;
   };
   checklist: {

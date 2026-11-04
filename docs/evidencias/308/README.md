@@ -15,3 +15,14 @@ Ambiente local `_test` (Postgres embarcado, banco `gestop_308_test`), dados sint
 | Secretaria | gestor ZZTB → 404 ao inativar/reativar cronograma de ZZTA e lista vazia |
 
 Testes: `frontend/components/cronograma/cronogramas-cadastrados.interacao.spec.ts` (6 casos, jsdom + Testing Library), `src/cronograma/cronogramas-inativos-308.db.spec.ts` (5 casos, Postgres local), `src/cronograma/cronograma.rules.spec.ts` (recálculo).
+
+## Decisões do TL no PR #47 + pedidos do Tester (`log.json → decisoesTL47`)
+
+| Item | Resultado |
+|---|---|
+| 1. Editar cronograma inativo | PUT → **409** "Este cronograma está inativo. Reative-o para realizar alterações" |
+| 2. Reativar com próprio/checklist inativo | **409** `DEPENDENCIA_INATIVA` com o motivo, ex.: "Não é possível reativar: o checklist "ZZTESTE Checklist 308 Elétrica" está inativo. Reative o checklist primeiro."; o card inativo já avisa qual reativar antes (`desktop-6`) |
+| 3. Par próprio + checklist com cronograma inativo | formulário mostra "Já existe um cronograma inativo para este próprio e checklist" + Reativar (com confirmação) e desabilita Cadastrar (`desktop-7`); reativar pelo formulário funcionou |
+| Tester (b): par duplicado nunca 500 | API → **409** `CRONOGRAMA_INATIVO_EXISTENTE` / `CRONOGRAMA_EXISTENTE` com mensagem; na tela a mensagem aparece dentro do formulário (`desktop-8`) |
+| Tester (a): próprio inativo não gera programação | cronograma ativo em ZZT-A-004 (próprio inativo) fora do calendário e de `/mobile/vistorias-programadas`; checklist inativo segue sinalizado e sem iniciar (309/C5) |
+| 4. Auditoria `DELETE` | nenhum relatório ou consulta filtra `DELETE` de cronograma; mantido `STATUS_CHANGE` |

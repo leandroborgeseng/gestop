@@ -7,7 +7,14 @@
 import { Button } from '@/components/ui/button';
 import { AvisoChecklistInativoCronograma, BotaoStatusAtivo, SanfonaInativos, TagInativo } from '@/components/inativos/inativos';
 import { CRONOGRAMA_FREQUENCIA_LABELS } from '@/lib/cronograma';
-import { separarAtivosInativos, TEXTOS_CRONOGRAMA, type AcaoStatusAtivo } from '@/lib/inativos';
+import {
+  avisoDependenciasCronograma,
+  dependenciasInativasCronograma,
+  MSG_CRONOGRAMA_INATIVO_EXISTENTE,
+  separarAtivosInativos,
+  TEXTOS_CRONOGRAMA,
+  type AcaoStatusAtivo,
+} from '@/lib/inativos';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import type { CronogramaChecagem } from '@/lib/types';
 import { cn } from '@/lib/cn';
@@ -45,6 +52,11 @@ export function CronogramasCadastrados({
           {item.checklist.nome} · {CRONOGRAMA_FREQUENCIA_LABELS[item.frequencia]} · {formatUnidadeTipo(item.unidade.tipo)}
         </p>
         {item.ativo && item.checklist.ativo === false ? <AvisoChecklistInativoCronograma className="mt-2" /> : null}
+        {!item.ativo && dependenciasInativasCronograma(item).length ? (
+          <p data-testid="cronograma-dependencia-inativa" className="mt-2 rounded-[var(--r-md)] bg-[var(--warn-bg)] px-2 py-1 text-[12.5px] font-semibold text-[var(--warn)]">
+            {avisoDependenciasCronograma(dependenciasInativasCronograma(item))}
+          </p>
+        ) : null}
         <p className="mt-1 text-[13px] text-[var(--ink-3)]">
           {item.ativo ? 'Próxima' : 'Próxima (antes de inativar)'}: {new Date(item.proximaChecagemEm).toLocaleDateString('pt-BR')}
           {item.ultimaChecagemEm ? ` · Última: ${new Date(item.ultimaChecagemEm).toLocaleDateString('pt-BR')}` : ''}
@@ -81,6 +93,30 @@ export function CronogramasCadastrados({
       <SanfonaInativos textos={TEXTOS_CRONOGRAMA} total={inativos.length}>
         <div className="space-y-3 pt-2">{inativos.map(card)}</div>
       </SanfonaInativos>
+    </div>
+  );
+}
+
+/** 308 (TL #47): no formulário de novo cronograma, o par próprio + checklist já tem um cronograma inativo. */
+export function AvisoCronogramaInativoExistente({
+  cronograma,
+  canReativar,
+  onReativar,
+}: {
+  cronograma: CronogramaChecagem;
+  canReativar: boolean;
+  onReativar: (item: CronogramaChecagem) => Promise<unknown>;
+}) {
+  const deps = dependenciasInativasCronograma(cronograma);
+  return (
+    <div role="status" data-testid="cronograma-inativo-existente" className="space-y-2 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--warn-bg)] px-3 py-2">
+      <p className="text-[13px] font-semibold text-[var(--warn)]">{MSG_CRONOGRAMA_INATIVO_EXISTENTE}</p>
+      {deps.length ? <p className="text-[12.5px] text-[var(--ink-2)]">{avisoDependenciasCronograma(deps)}</p> : null}
+      {canReativar ? (
+        <BotaoStatusAtivo registro={cronograma} textos={TEXTOS_CRONOGRAMA} onConfirmar={() => onReativar(cronograma)} />
+      ) : (
+        <p className="text-[12.5px] text-[var(--ink-2)]">Peça a quem tem permissão para reativá-lo.</p>
+      )}
     </div>
   );
 }

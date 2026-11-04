@@ -2,7 +2,7 @@ import '@/test-utils/jsdom-global';
 import { createElement } from 'react';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { CronogramasCadastrados } from './cronogramas-cadastrados';
+import { AvisoCronogramaInativoExistente, CronogramasCadastrados } from './cronogramas-cadastrados';
 import type { CronogramaChecagem } from '@/lib/types';
 
 const sec = { id: 's', nome: 'ZZTESTE Sec A', sigla: 'ZZTA' };
@@ -83,5 +83,31 @@ describe('308 · Cronogramas cadastrados (comportamento real)', () => {
     montar({ cronogramas: [LISTA[1]] });
     expect(screen.getByText('Nenhum cronograma ativo para os filtros atuais.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Mostrar cronogramas inativos (1)' })).toBeTruthy();
+  });
+});
+
+describe('308 · decisões do TL no PR #47 (comportamento real)', () => {
+  it('inativo com checklist ou próprio inativo diz qual reativar antes', () => {
+    const ckInativo = { ...c('x1', 'ZZTESTE Escola X', false), checklist: { id: 'ck', nome: 'ZZTESTE Ck', escopo: 'GLOBAL', ativo: false } } as CronogramaChecagem;
+    const unInativa = { ...c('x2', 'ZZTESTE Escola Y', false), unidade: { ...c('x2', 'ZZTESTE Escola Y', false).unidade, ativo: false } } as CronogramaChecagem;
+    montar({ cronogramas: [ckInativo, unInativa] });
+    fireEvent.click(screen.getByRole('button', { name: /Mostrar cronogramas inativos/ }));
+    expect(within(card('ZZTESTE Escola X')).getByTestId('cronograma-dependencia-inativa').textContent).toBe('Checklist inativo: reative o checklist antes de reativar este cronograma.');
+    expect(within(card('ZZTESTE Escola Y')).getByTestId('cronograma-dependencia-inativa').textContent).toBe('Próprio inativo: reative o próprio antes de reativar este cronograma.');
+  });
+  it('formulário: par com cronograma inativo mostra a mensagem e Reativar com confirmação', async () => {
+    const onReativar = vi.fn().mockResolvedValue(undefined);
+    render(createElement(AvisoCronogramaInativoExistente, { cronograma: LISTA[1], canReativar: true, onReativar }));
+    const aviso = screen.getByTestId('cronograma-inativo-existente');
+    expect(aviso.textContent).toContain('Já existe um cronograma inativo para este próprio e checklist');
+    fireEvent.click(within(aviso).getByRole('button', { name: 'Reativar' }));
+    expect(onReativar).not.toHaveBeenCalled();
+    await act(async () => { fireEvent.click(screen.getByTestId('confirmar-status-ativo')); });
+    expect(onReativar).toHaveBeenCalledWith(LISTA[1]);
+  });
+  it('formulário sem permissão de reativar: mensagem sem botão', () => {
+    render(createElement(AvisoCronogramaInativoExistente, { cronograma: LISTA[1], canReativar: false, onReativar: vi.fn() }));
+    expect(screen.queryByRole('button', { name: 'Reativar' })).toBeNull();
+    expect(screen.getByText('Peça a quem tem permissão para reativá-lo.')).toBeTruthy();
   });
 });
