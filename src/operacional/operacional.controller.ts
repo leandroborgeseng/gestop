@@ -124,6 +124,51 @@ export class OperacionalController {
     return this.operacionalService.listUnidades(query, user);
   }
 
+  /** 312: opções do filtro Tipo de próprio (mesmos filtros de /unidades, exceto tipo). */
+  @Get('tipos-proprio-disponiveis')
+  listTiposProprioDisponiveis(
+    @CurrentUser() user: JwtPayload,
+    @Query('search') search?: string,
+    @Query('secretariaId') secretariaId?: string,
+    @Query('secretariaIds') secretariaIds?: string | string[],
+    @Query('tipo') tipo?: string,
+    @Query('tipos') tipos?: string | string[],
+    @Query('situacao') situacao?: UnidadeSituacao,
+    @Query('pendencias') pendencias?: string,
+    @Query('bairro') bairro?: string,
+    @Query('bairros') bairros?: string | string[],
+    @Query('regiao') regiao?: RegiaoUnidade,
+    @Query('regioes') regioes?: string | string[],
+    @Query('responsavel') responsavel?: string,
+    @Query('responsavelEmail') responsavelEmail?: string,
+    @Query('tiposPendencia') tiposPendencia?: string | string[],
+    @Query('tiposChamadoId') tiposChamadoId?: string | string[],
+    @Query('equipeIds') equipeIds?: string | string[],
+    @Query('sla') sla?: SlaFiltro,
+  ) {
+    const query: UnidadeListQuery = {
+      search: normalizeText(search),
+      secretariaId: normalizeText(secretariaId),
+      secretariaIds: normalizeStringArray(secretariaIds),
+      tipo: normalizeText(tipo),
+      tipos: normalizeStringArray(tipos),
+      situacao,
+      bairro: normalizeText(bairro),
+      bairros: normalizeStringArray(bairros),
+      regiao,
+      regioes: normalizeStringArray(regioes) as RegiaoUnidade[] | undefined,
+      pendencias: parseOptionalBoolean(pendencias),
+      responsavel: normalizeText(responsavel),
+      responsavelEmail: normalizeText(responsavelEmail)?.toLowerCase(),
+      tiposPendencia: normalizeTiposPendencia(tiposPendencia),
+      tiposChamadoId: normalizeStringArray(tiposChamadoId),
+      equipeIds: normalizeStringArray(equipeIds),
+      sla: normalizeSla(sla),
+    };
+
+    return this.operacionalService.listTiposProprioDisponiveis(query, user);
+  }
+
   @Get('unidades/:id')
   getUnidadeDetalhe(@Param('id', ParseUuidPipe) id: string) {
     return this.operacionalService.getUnidadeDetalhe(id);

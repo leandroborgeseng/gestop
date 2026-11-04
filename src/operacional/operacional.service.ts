@@ -434,6 +434,29 @@ export class OperacionalService {
     return filtered;
   }
 
+  /**
+   * 312: tipos de próprio disponíveis no filtro da CCO.
+   * Considera só próprios ATIVOS acessíveis ao usuário (escopo de Secretaria aplicado em
+   * listUnidades) e todos os demais filtros, exceto o próprio filtro de tipo.
+   */
+  async listTiposProprioDisponiveis(query: UnidadeListQuery, user: JwtPayload): Promise<TipoProprioDisponivel[]> {
+    const semTipo: UnidadeListQuery = {
+      ...query,
+      tipo: undefined,
+      tipos: undefined,
+      // Inativos nunca geram opção (B2).
+      situacao: query.situacao === 'INATIVA' ? undefined : query.situacao,
+    };
+    const unidades = await this.listUnidades(semTipo, user);
+    const codigos = [...new Set(unidades.filter((u) => u.ativo !== false).map((u) => u.tipo).filter(Boolean))];
+    if (codigos.length === 0) return [];
+    const catalogo = await this.prisma.tipoProprio.findMany({
+      where: { codigo: { in: codigos } },
+      select: { codigo: true, nome: true },
+    });
+    return montarTiposProprioDisponiveis(codigos, catalogo);
+  }
+
   async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload, agora: Date = new Date()): Promise<ChamadosMapaResposta> {
     // 295: período de abertura — mesma função da Triagem.
     const abertura = lerFiltroAbertura(query);
@@ -1367,4 +1390,19 @@ export class OperacionalService {
 
     return map;
   }
+}
+
+export type TipoProprioDisponivel = { codigo: string; nome: string };
+
+/** 312: une códigos com o catálogo (Nome), sem duplicar, em ordem alfabética pt-BR sem diferenciar acento/caixa. */
+export function montarTiposProprioDisponiveis(
+  codigos: string[],
+  catalogo: Array<{ codigo: string; nome: string | null }>,
+): TipoProprioDisponivel[] {
+  const nomes = new Map(catalogo.map((t) => [t.codigo, t.nome?.trim() || '']));
+  const unicos = [...new Set(codigos.filter(Boolean))];
+  const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+  return unicos
+    .map((codigo) => ({ codigo, nome: nomes.get(codigo) || codigo }))
+    .sort((a, b) => collator.compare(a.nome, b.nome) || a.codigo.localeCompare(b.codigo));
 }
