@@ -338,6 +338,42 @@ export function listTiposProprioDisponiveis(filters: UnidadeFilters, init?: { si
   );
 }
 
+function paramsDe(filters: object, ignorar: string[] = []) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (ignorar.includes(key)) return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
+    if (value && value !== 'TODOS') params.set(key, String(value));
+  });
+  return params;
+}
+
+/** 316: tipos de chamado dos chamados abertos dos próprios filtrados (todos os filtros, exceto o tipo de chamado). */
+export function listTiposChamadoDisponiveisProprios(filters: UnidadeFilters, init?: { signal?: AbortSignal }) {
+  const query = paramsDe(filters, ['tiposChamadoId']).toString();
+  return request<import('./cco-tipos-chamado').TipoChamadoDisponivel[]>(
+    `/operacional/tipos-chamado-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
+/** 316: tipos de chamado dos chamados do mapa (todos os filtros, rápidos e datas inclusive, exceto o tipo). */
+export function listTiposChamadoDisponiveisMapa(filters: ChamadosMapaFilters, init?: { signal?: AbortSignal }) {
+  const { abertura, ...resto } = filters;
+  const params = paramsDe(resto, ['tipoChamadoId']);
+  Object.entries(aberturaParaQuery(abertura)).forEach(([key, value]) => params.set(key, value));
+  const query = params.toString();
+  return request<import('./cco-tipos-chamado').TipoChamadoDisponivel[]>(
+    `/operacional/chamados-mapa/tipos-chamado-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
 export function listChamadosMapa(filters: ChamadosMapaFilters = {}) {
   const params = new URLSearchParams();
   // 295: o período vira abertoDe/abertoAte ou diasMinimos (mesma regra da Triagem).

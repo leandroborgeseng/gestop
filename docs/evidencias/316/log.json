@@ -1,0 +1,83 @@
+{
+  "chamados": {
+    "gestorZZTA_naoFinalizados": {
+      "status": 200,
+      "ms": 12,
+      "tipos": [
+        "ZZTESTE Buraco (3)",
+        "ZZTESTE Iluminação (40)",
+        "ZZTESTE Poda (1)"
+      ]
+    },
+    "gestorZZTA_concluidos": {
+      "status": 200,
+      "ms": 11,
+      "tipos": [
+        "ZZTESTE Poda (1)"
+      ]
+    },
+    "gestorZZTA_todos_comFiltroTipoIgnorado": {
+      "status": 200,
+      "ms": 10,
+      "tipos": [
+        "ZZTESTE Buraco (3)",
+        "ZZTESTE Iluminação (40)",
+        "ZZTESTE Poda (2)"
+      ]
+    },
+    "gestorZZTA_abertosHaMaisDe30dias": {
+      "status": 200,
+      "ms": 8,
+      "tipos": []
+    },
+    "adminTodas_naoFinalizados": {
+      "status": 200,
+      "ms": 9,
+      "tipos": [
+        "ZZTESTE Buraco (6)",
+        "ZZTESTE Iluminação (40)",
+        "ZZTESTE Poda (1)"
+      ]
+    }
+  },
+  "proprios": {
+    "gestorZZTA": {
+      "status": 200,
+      "ms": 14,
+      "tipos": [
+        "ZZTESTE Buraco (1)",
+        "ZZTESTE Iluminação (40)",
+        "ZZTESTE Poda (1)"
+      ]
+    },
+    "adminTodas": {
+      "status": 200,
+      "ms": 18,
+      "tipos": [
+        "ZZTESTE Buraco (6)",
+        "ZZTESTE Iluminação (40)",
+        "ZZTESTE Poda (1)"
+      ]
+    }
+  },
+  "erroData": {
+    "status": 400,
+    "message": "Data inicial inválida."
+  },
+  "ui": {
+    "chamados_opcoes": [
+      "ZZTESTE Buraco",
+      "ZZTESTE Iluminação",
+      "ZZTESTE Poda"
+    ],
+    "chamados_comRapido30dias": {
+      "disabled": true,
+      "texto": "Nenhum tipo de chamado disponível"
+    },
+    "proprios_opcoes": [
+      "ZZTESTE Buraco",
+      "ZZTESTE Iluminação",
+      "ZZTESTE Poda"
+    ]
+  }
+}
