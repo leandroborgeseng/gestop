@@ -47,5 +47,18 @@
       "CH-2026-ZZ0316",
       "CH-2026-ZZ0317"
     ]
+  },
+  "rodada4": {
+    "abaChamadosSemPermissao": {
+      "links": 0,
+      "cardsSemLink": 2
+    },
+    "linkDiretoPagina2": {
+      "exibindo": "Exibindo 1-50 de 64",
+      "alvoNoDetalhe": true,
+      "tituloAlvo": true,
+      "semAcesso": false,
+      "observacao": "Alvo é o chamado mais antigo (64º de 64, ordem por abertura desc) — fica na página 2 com 50 por página; a página 1 da lista não o contém e o detalhe mostra CH-2026-ZZP2ALVO."
+    }
   }
 }

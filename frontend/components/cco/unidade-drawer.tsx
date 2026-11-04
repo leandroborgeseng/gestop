@@ -362,6 +362,7 @@ function NcTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => v
 
 function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => void }) {
   const items = unidade.pendenciasDetalhadas.chamados;
+  const sessionUser = useSessionUser();
   if (items.length === 0) {
     return <EmptyTab icon={Megaphone} message="Nenhum chamado aberto" ok />;
   }
@@ -370,14 +371,10 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
     <div className="space-y-2">
       {items.map((chamado) => {
         const href = hrefChamado(chamado);
-
-        return (
-        <Link
-          key={chamado.id}
-          href={href}
-          onClick={onClose}
-          className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]"
-        >
+        // 315: sem permissão de Chamados/Execução, o card fica só informativo (sem link).
+        const podeAbrir = podeAbrirLinkChamado(href, sessionUser?.permissoes ?? [], sessionUser);
+        const conteudo = (
+          <>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
             <Megaphone className="h-4 w-4" />
           </span>
@@ -391,7 +388,26 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
           <Badge variant={chamado.prioridade.toUpperCase().includes('URG') || chamado.prioridade.toUpperCase().includes('ALTA') ? 'danger' : 'warning'}>
             {chamado.prioridade}
           </Badge>
-        </Link>
+          </>
+        );
+        return podeAbrir ? (
+          <Link
+            key={chamado.id}
+            href={href}
+            onClick={onClose}
+            data-testid="drawer-chamado-link"
+            className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]"
+          >
+            {conteudo}
+          </Link>
+        ) : (
+          <div
+            key={chamado.id}
+            data-testid="drawer-chamado-sem-link"
+            className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3"
+          >
+            {conteudo}
+          </div>
         );
       })}
     </div>

@@ -20,6 +20,13 @@ describe('315 · permissões do link do chamado', () => {
     expect(src).toMatch(/href=\{linkDaNc\(item\.chamado\)!\}/);
     expect(src).toMatch(/data-testid="nc-chamado-selo"/);
   });
+  it('aba Chamados do drawer: sem permissão o card não é link', () => {
+    const src = readFileSync(resolve('frontend/components/cco/unidade-drawer.tsx'), 'utf8');
+    const aba = src.slice(src.indexOf('function ChamadosTab'));
+    expect(aba).toMatch(/podeAbrirLinkChamado\(href, sessionUser\?\.permissoes/);
+    expect(aba).toMatch(/podeAbir|podeAbrir \? \(\s*<Link/);
+    expect(aba).toMatch(/data-testid="drawer-chamado-sem-link"/);
+  });
 });
 
 describe('315 · chamado de outra Secretaria aberto pelo id', () => {
@@ -35,6 +42,12 @@ describe('315 · chamado de outra Secretaria aberto pelo id', () => {
     expect(src).toMatch(/ehSemAcessoChamado\(err\)[\s\S]*setSemAcessoId\(selectedId\)/);
     expect(src).toMatch(/selectedId === semAcessoId\) return null/);
     expect(src).toMatch(/data-testid="chamado-sem-acesso"[\s\S]*SEM_ACESSO_CHAMADO/);
+  });
+  it('link direto para chamado fora da página atual usa o detalhe buscado pelo id', () => {
+    const src = readFileSync(resolve('frontend/app/(authenticated)/chamados/page.tsx'), 'utf8');
+    expect(src).toMatch(/if \(detail\?\.id === selectedId\) return detail;/);
+    expect(src).toMatch(/current === pedidoUrlRef\.current/);
+    expect(src).toMatch(/pedidoUrlRef\.current = null;\s*setSelectedId\(chamado\.id\)/);
   });
   it('Execução mostra a mensagem', () => {
     const src = readFileSync(resolve('frontend/components/chamados/chamado-execucao-flow.tsx'), 'utf8');

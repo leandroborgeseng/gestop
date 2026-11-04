@@ -165,8 +165,7 @@ function ChamadosPageContent() {
   /** 315: id pedido na URL que o usuário não pode ver (outra Secretaria / inexistente). */
   const [semAcessoId, setSemAcessoId] = useState<string | null>(null);
   const semAcessoRef = useRef<string | null>(null);
-  const chamadosRef = useRef<typeof chamados>([]);
-  /** Id pedido pela URL: a lista não troca a seleção antes de o detalhe responder. */
+  /** 315: id pedido pela URL (link direto). A lista não troca essa seleção, mesmo fora da página atual, até o usuário escolher outro. */
   const pedidoUrlRef = useRef<string | null>(searchParams.get('id'));
 
   useEffect(() => {
@@ -258,7 +257,7 @@ function ChamadosPageContent() {
     if (response.statusCounts) setStatusCounts(response.statusCounts);
     setHasSemSlaApi(Boolean(response.hasSemSla));
     setSelectedId((current) =>
-      current && (response.items.some((item) => item.id === current) || current === semAcessoRef.current)
+      current && (response.items.some((item) => item.id === current) || current === semAcessoRef.current || current === pedidoUrlRef.current)
         ? current
         : response.items[0]?.id ?? null,
     );
@@ -276,15 +275,6 @@ function ChamadosPageContent() {
     getChamado(selectedId)
       .then((data) => {
         if (!active) return;
-        if (pedidoUrlRef.current === data.id) {
-          // Acesso ok: volta à regra de sempre (fora da página atual, a lista escolhe o primeiro).
-          pedidoUrlRef.current = null;
-          const lista = chamadosRef.current;
-          if (lista.length > 0 && !lista.some((item) => item.id === data.id)) {
-            setSelectedId(lista[0].id);
-            return;
-          }
-        }
         if (data.excluidoEm && !(podeVerExcluidos && exibirExcluidos)) {
           setDetail((current) => (current?.id === data.id ? null : current));
           setSelectedId((current) => (current === data.id ? null : current));
@@ -326,7 +316,6 @@ function ChamadosPageContent() {
   const counts = statusCounts;
 
   const filtered = chamados;
-  chamadosRef.current = chamados;
 
   const selected = useMemo(() => {
     // 315: não cai no primeiro da lista quando o chamado pedido é de outra Secretaria.
@@ -336,9 +325,12 @@ function ChamadosPageContent() {
       if (match) return match;
       const anyMatch = chamados.find((item) => item.id === selectedId);
       if (anyMatch) return anyMatch;
+      // 315: link direto para chamado fora da página atual: usa o detalhe buscado pelo id.
+      if (detail?.id === selectedId) return detail;
+      if (selectedId === pedidoUrlRef.current) return null;
     }
     return filtered[0] ?? null;
-  }, [filtered, selectedId, chamados, semAcessoId]);
+  }, [filtered, selectedId, chamados, semAcessoId, detail]);
 
   async function assignTeam(
     id: string,
@@ -623,7 +615,10 @@ function ChamadosPageContent() {
                       <button
                         key={chamado.id}
                         type="button"
-                        onClick={() => setSelectedId(chamado.id)}
+                        onClick={() => {
+                          pedidoUrlRef.current = null;
+                          setSelectedId(chamado.id);
+                        }}
                         className={cn(
                           'ch-row mb-0.5 flex w-full flex-col gap-1.5 rounded-[var(--r-md)] border border-transparent px-3 py-2.5 text-left transition-colors',
                           chamado.excluidoEm && 'border-[#f3c0c0] bg-[#fde8e8]',

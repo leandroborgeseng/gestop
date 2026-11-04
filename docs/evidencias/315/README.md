@@ -30,3 +30,10 @@ Dados adicionais: usuário `zzteste.consulta.alfa@aion.local` (ZZTA, só CCO, se
 | desktop-8-gestor-zzta-execucao-de-outra-secretaria.png | Gestor da ZZTA abrindo `/execucao/<chamado da ZZTB>` vê **"Você não tem acesso a este chamado"** |
 
 O backend já respondia 403 nos dois casos. A mudança foi só no frontend: 403 ou 404 vira a mensagem de sem acesso.
+
+## Rodada 4 (decisões do TL no PR #45)
+
+- `desktop-9-aba-chamados-sem-permissao-sem-link.png` — zzteste.consulta.alfa (sem permissão de Chamados): aba Chamados do drawer mostra os cards só como selo, sem link (0 links, 2 cards `drawer-chamado-sem-link`).
+- `desktop-10-link-direto-chamado-fora-da-pagina-1-selecionado.png` — gestor ZZTA com 64 chamados (50 por página); `/chamados?id=<CH-2026-ZZP2ALVO>` (item da página 2) abre o detalhe do chamado certo, buscado pelo id, em vez de selecionar o primeiro da lista.
+- Regressão: chamado de outra Secretaria continua exibindo "Você não tem acesso a este chamado" (probe315 reexecutado).
+- Dados sintéticos: 60 chamados `CH-2026-ZZL001..060` + `CH-2026-ZZP2ALVO` inseridos no banco `gestop_315_test`.
