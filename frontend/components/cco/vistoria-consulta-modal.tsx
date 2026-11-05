@@ -83,7 +83,7 @@ export function VistoriaConsultaModal({
   const podeAbrirTela = podeAbrirLinkChamado(href, sessionUser?.permissoes ?? [], sessionUser);
 
   return createPortal(
-    <div data-cco-vistoria-modal className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-4">
+    <div data-cco-vistoria-modal className="fixed inset-0 z-[120] flex items-end justify-center pb-[calc(var(--bottom-nav-h)+env(safe-area-inset-bottom))] sm:items-center sm:p-4 sm:pb-4 lg:pb-4">
       <button
         type="button"
         aria-label="Fechar"
@@ -97,7 +97,7 @@ export function VistoriaConsultaModal({
         aria-labelledby={titleId}
         data-testid="cco-vistoria-modal"
         data-fiscalizacao-id={fiscalizacaoId}
-        className="relative flex max-h-[calc(100dvh-env(safe-area-inset-bottom)-4.5rem)] w-full flex-col overflow-hidden rounded-t-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-lg)] sm:max-h-[90dvh] sm:w-[90vw] sm:max-w-[880px] sm:rounded-[var(--r-lg)] lg:mb-0"
+        className="relative flex max-h-[calc(100dvh-var(--bottom-nav-h)-env(safe-area-inset-bottom)-0.5rem)] w-full flex-col overflow-hidden rounded-t-[var(--r-lg)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-lg)] sm:max-h-[min(90dvh,calc(100dvh-2rem))] sm:w-[90vw] sm:max-w-[880px] sm:rounded-[var(--r-lg)] lg:max-h-[90dvh]"
       >
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--line-2)] p-4">
           <div className="min-w-0">
@@ -124,7 +124,7 @@ export function VistoriaConsultaModal({
           ) : null}
         </div>
 
-        <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[var(--line-2)] p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <footer data-testid="cco-vistoria-modal-footer" className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-[var(--line-2)] bg-[var(--surface)] p-3">
           <Button type="button" variant="text" size="sm" onClick={onClose}>
             Fechar
           </Button>
