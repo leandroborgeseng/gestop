@@ -37,7 +37,10 @@ describe.skipIf(!URL)('319 — categorias com nota válida no Mapa: Notas (Postg
     // nomes fora de ordem e com acento para provar a ordenação pt-BR
     const cat = async (n: string) => (await prisma.categoriaVistoria.create({ data: { nome: `${pre} ${n}` } })).id;
     const C = { agua: await cat('Água'), banheiro: await cat('banheiro'), eletrica: await cat('Elétrica'), telhado: await cat('Telhado'), zinco: await cat('Zinco'), pintura: await cat('Pintura') };
-    ids.cat.push(...Object.values(C));
+    // inativas no catálogo, mas com nota válida (Alambrado viria antes de Água no alfabeto)
+    const catInativa = async (n: string) => (await prisma.categoriaVistoria.create({ data: { nome: `${pre} ${n}`, ativo: false } })).id;
+    const CI = { muro: await catInativa('Muro'), alambrado: await catInativa('Alambrado'), semNota: await catInativa('Calçada') };
+    ids.cat.push(...Object.values(C), ...Object.values(CI));
     const agente = (await prisma.usuario.create({ data: { nome: `${pre} Agente`, email: `zzteste.319.${suf.toLowerCase()}@aion.local`, senhaHash: 'x' } })).id;
     ids.usr.push(agente);
     const chk = await prisma.checklist.create({ data: { nome: `${pre} Checklist` } });
@@ -47,6 +50,7 @@ describe.skipIf(!URL)('319 — categorias com nota válida no Mapa: Notas (Postg
     const item = async (categoriaVistoriaId: string) =>
       (await prisma.checklistItem.create({ data: { checklistVersaoId: versao.id, ordem: ++ordem, codigo: `I${ordem}`, titulo: `Item ${ordem}`, tipo: ChecklistItemTipo.ESCALA_LIKERT, categoriaVistoriaId } })).id;
     const I = { agua: await item(C.agua), banheiro: await item(C.banheiro), eletrica: await item(C.eletrica), telhado: await item(C.telhado), zinco: await item(C.zinco), pintura: await item(C.pintura) };
+    const II = { muro: await item(CI.muro), alambrado: await item(CI.alambrado), semNota: await item(CI.semNota) };
     const dia = (d: number) => new Date(Date.UTC(2026, 9, d, 12));
     const vistoria = async (unidadeId: string, secretariaId: string, status: FiscalizacaoStatus, concluidaEm: Date | null, respostas: Array<[string, string]>) => {
       const f = await prisma.fiscalizacao.create({ data: { secretariaId, unidadeId, checklistVersaoId: versao.id, agenteId: agente, status, concluidaEm,
@@ -60,7 +64,7 @@ describe.skipIf(!URL)('319 — categorias com nota válida no Mapa: Notas (Postg
     // U1: cancelada e em andamento (mais novas) com Zinco — ficam de fora
     await vistoria(U1, X, FiscalizacaoStatus.CANCELADA, dia(25), [[I.zinco, 'BOM']]);
     await vistoria(U1, X, FiscalizacaoStatus.EM_ANDAMENTO, null, [[I.zinco, 'BOM']]);
-    await vistoria(U2, X, FiscalizacaoStatus.CONCLUIDA, dia(15), [[I.banheiro, 'RUIM'], [I.agua, 'REGULAR']]);
+    await vistoria(U2, X, FiscalizacaoStatus.CONCLUIDA, dia(15), [[I.banheiro, 'RUIM'], [I.agua, 'REGULAR'], [II.muro, 'BOM'], [II.alambrado, 'RUIM'], [II.semNota, 'inválido']]);
     await vistoria(U3, Y, FiscalizacaoStatus.CONCLUIDA, dia(15), [[I.pintura, 'PESSIMO']]);
   }, 60_000);
 
@@ -79,18 +83,20 @@ describe.skipIf(!URL)('319 — categorias com nota válida no Mapa: Notas (Postg
 
   it('só categorias com nota válida na vistoria mostrada (última concluída); sem cancelada/em andamento/antiga; ordem alfabética pt-BR', async () => {
     const r = await svc.listCategoriasNotaDisponiveis({ search: pre }, global);
-    expect(nomes(r)).toEqual(['Água', 'banheiro', 'Pintura']);
+    expect(nomes(r)).toEqual(['Água', 'banheiro', 'Pintura', 'Alambrado', 'Muro']);
+    expect(r.map((c) => c.ativa)).toEqual([true, true, true, false, false]);
     expect(r.find((c) => c.nome.endsWith('Água'))?.total).toBe(2); // U1 e U2
   });
 
   it('considera os filtros dos próprios (busca / Secretaria)', async () => {
-    expect(nomes(await svc.listCategoriasNotaDisponiveis({ search: `${pre} Creche` }, global))).toEqual(['Água', 'banheiro']);
+    expect(nomes(await svc.listCategoriasNotaDisponiveis({ search: `${pre} Creche` }, global))).toEqual(['Água', 'banheiro', 'Alambrado', 'Muro']);
+    expect(nomes(await svc.listCategoriasNotaDisponiveis({ search: `${pre} Escola` }, global))).toEqual(['Água']);
     expect(nomes(await svc.listCategoriasNotaDisponiveis({ search: pre, secretariaIds: [Y] }, global))).toEqual(['Pintura']);
     expect(await svc.listCategoriasNotaDisponiveis({ search: `${pre} SemVistoria` }, global)).toEqual([]);
   });
 
   it('escopo de Secretaria: X não vê categoria só avaliada na Y; pedido forçado da Y → vazio; sem Secretaria → vazio', async () => {
-    expect(nomes(await svc.listCategoriasNotaDisponiveis({ search: pre }, soX()))).toEqual(['Água', 'banheiro']);
+    expect(nomes(await svc.listCategoriasNotaDisponiveis({ search: pre }, soX()))).toEqual(['Água', 'banheiro', 'Alambrado', 'Muro']);
     expect(await svc.listCategoriasNotaDisponiveis({ search: pre, secretariaIds: [Y] }, soX())).toEqual([]);
     const semSec = { sub: 'z', nome: 'Z', email: 'z@aion.local', permissoes: [] } as unknown as JwtPayload;
     expect(await svc.listCategoriasNotaDisponiveis({ search: pre }, semSec)).toEqual([]);
@@ -106,6 +112,15 @@ describe.skipIf(!URL)('319 — categorias com nota válida no Mapa: Notas (Postg
       { notasPorCategoria: [{ categoriaId: 'a', categoriaNome: 'Água', nota: 5 }, { categoriaId: 'n', categoriaNome: 'Nula', nota: null }] },
       { notasPorCategoria: [{ categoriaId: 'a', categoriaNome: 'Água', nota: 0 }, { categoriaId: 'x', categoriaNome: 'NaN', nota: Number.NaN }] },
       null,
-    ])).toEqual([{ id: 'a', nome: 'Água', total: 2 }]);
+    ])).toEqual([{ id: 'a', nome: 'Água', total: 2, ativa: true }]);
+  });
+
+  it('montarCategoriasNotaDisponiveis: inativas no fim, alfabética pt-BR em cada grupo', () => {
+    const n = (categoriaId: string, categoriaNome: string) => ({ categoriaId, categoriaNome, nota: 3 });
+    const r = montarCategoriasNotaDisponiveis(
+      [{ notasPorCategoria: [n('z', 'Zinco'), n('al', 'Alambrado'), n('e', 'Elétrica'), n('ag', 'água'), n('m', 'Muro')] }],
+      new Set(['al', 'm']),
+    );
+    expect(r.map((c) => [c.nome, c.ativa])).toEqual([['água', true], ['Elétrica', true], ['Zinco', true], ['Alambrado', false], ['Muro', false]]);
   });
 });

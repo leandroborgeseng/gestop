@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UnidadeFilters } from '@/lib/types';
 import { formatNotaMapa, TEXTO_SEM_AVALIACAO } from '@/lib/vistoria-nota';
 
-const api = vi.hoisted(() => ({ chamadas: [] as Array<Record<string, unknown>>, resp: [] as Array<{ id: string; nome: string; total: number }> }));
+const api = vi.hoisted(() => ({ chamadas: [] as Array<Record<string, unknown>>, resp: [] as Array<{ id: string; nome: string; total: number; ativa?: boolean }> }));
 vi.mock('@/lib/api', () => ({
   listTiposProprioDisponiveis: () => Promise.resolve([]),
   listTiposChamadoDisponiveisMapa: () => Promise.resolve([]),
@@ -57,6 +57,14 @@ describe('319 · categorias do Mapa: Notas', () => {
     await tick(300);
     expect(estado.categoria).toBe('');
     expect(sel().value).toBe('');
+  });
+  it('inativa com nota válida aparece no fim com " (inativa)" e pode ser selecionada', async () => {
+    api.resp = [{ id: 'a', nome: 'Água', total: 2, ativa: true }, { id: 'p', nome: 'Pintura', total: 1, ativa: true }, { id: 'al', nome: 'Alambrado', total: 1, ativa: false }];
+    render(createElement(Harness, { categoria: 'al' }));
+    await tick(300);
+    expect(opcoes()).toEqual(['Nota geral (Likert)', 'Categoria: Água', 'Categoria: Pintura', 'Categoria: Alambrado (inativa)']);
+    expect(estado.categoria).toBe('al');
+    expect(sel().value).toBe('al');
   });
   it('sem nenhuma categoria avaliada: só a Nota geral', async () => {
     api.resp = [];

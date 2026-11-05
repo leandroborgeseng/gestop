@@ -553,7 +553,12 @@ export class OperacionalService {
    */
   async listCategoriasNotaDisponiveis(query: UnidadeListQuery, user: JwtPayload): Promise<CategoriaNotaDisponivel[]> {
     const unidades = await this.listUnidades(query, user);
-    return montarCategoriasNotaDisponiveis(unidades.map((u) => u.ultimaVistoriaNota ?? null));
+    const notas = unidades.map((u) => u.ultimaVistoriaNota ?? null);
+    const idsComNota = [...new Set(notas.flatMap((n) => (n?.notasPorCategoria ?? []).map((c) => c.categoriaId)))];
+    const inativas = idsComNota.length
+      ? await this.prisma.categoriaVistoria.findMany({ where: { id: { in: idsComNota }, ativo: false }, select: { id: true } })
+      : [];
+    return montarCategoriasNotaDisponiveis(notas, new Set(inativas.map((c) => c.id)));
   }
 
   async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload, agora: Date = new Date()): Promise<ChamadosMapaResposta> {
@@ -1444,11 +1449,12 @@ export class OperacionalService {
 
 export type TipoProprioDisponivel = { codigo: string; nome: string };
 
-/** 319: opção de categoria do "Mapa: Notas" (`total` = próprios com nota nessa categoria). */
-export type CategoriaNotaDisponivel = { id: string; nome: string; total: number };
+/** 319: opção de categoria do "Mapa: Notas" (`total` = próprios com nota nessa categoria; `ativa` = categoria ativa no catálogo). */
+export type CategoriaNotaDisponivel = { id: string; nome: string; total: number; ativa: boolean };
 
 export function montarCategoriasNotaDisponiveis(
   notas: Array<{ notasPorCategoria: Array<{ categoriaId: string; categoriaNome: string; nota: number | null }> } | null>,
+  inativas: ReadonlySet<string> = new Set(),
 ): CategoriaNotaDisponivel[] {
   const porId = new Map<string, CategoriaNotaDisponivel>();
   for (const resumo of notas) {
@@ -1456,11 +1462,14 @@ export function montarCategoriasNotaDisponiveis(
       if (typeof c.nota !== 'number' || !Number.isFinite(c.nota)) continue;
       const atual = porId.get(c.categoriaId);
       if (atual) atual.total += 1;
-      else porId.set(c.categoriaId, { id: c.categoriaId, nome: c.categoriaNome, total: 1 });
+      else porId.set(c.categoriaId, { id: c.categoriaId, nome: c.categoriaNome, total: 1, ativa: !inativas.has(c.categoriaId) });
     }
   }
   const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
-  return [...porId.values()].sort((a, b) => collator.compare(a.nome, b.nome) || a.id.localeCompare(b.id));
+  // Ativas primeiro; inativas (com nota válida) no fim. Em cada grupo, ordem alfabética pt-BR.
+  return [...porId.values()].sort(
+    (a, b) => Number(b.ativa) - Number(a.ativa) || collator.compare(a.nome, b.nome) || a.id.localeCompare(b.id),
+  );
 }
 
 /** 316: opção do filtro Tipo de chamado da CCO. */
