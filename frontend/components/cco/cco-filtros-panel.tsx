@@ -8,7 +8,13 @@ import { Chip } from '@/components/ui/chip';
 import { cn } from '@/lib/cn';
 import { formatRegiaoUnidade, RegiaoUnidade } from '@/lib/regiao-unidade';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
-import { listTiposChamadoDisponiveisMapa, listTiposChamadoDisponiveisProprios, listTiposProprioDisponiveis } from '@/lib/api';
+import { listCategoriasNotaDisponiveis, listTiposChamadoDisponiveisMapa, listTiposChamadoDisponiveisProprios, listTiposProprioDisponiveis } from '@/lib/api';
+import {
+  categoriaAindaValida,
+  filtrosParaCategoriasNota,
+  ROTULO_NOTA_GERAL,
+  type CategoriaNotaDisponivel,
+} from '@/lib/cco-categorias-nota';
 import {
   chaveFiltrosTiposChamado,
   filtrosParaTiposChamadoMapa,
@@ -335,6 +341,38 @@ export function CcoFiltrosPanel({
     () => (tiposChamadoAtuais ?? tiposChamadoDisp?.itens ?? []).map((t) => ({ value: t.id, label: t.nome })),
     [tiposChamadoAtuais, tiposChamadoDisp],
   );
+  // 319: categorias do "Mapa: Notas" vêm do backend (todos os filtros dos próprios, conjunto inteiro),
+  // só as que têm nota válida; "Nota geral (Likert)" sempre primeiro.
+  const filtrosCategoriasNota = useMemo(
+    () => filtrosParaCategoriasNota(filters, { kpiFilter, defaultTiposPendencia }),
+    [filters, kpiFilter, defaultTiposPendencia],
+  );
+  const chaveCategoriasNota = useMemo(() => chaveFiltrosTiposChamado('notas', filtrosCategoriasNota), [filtrosCategoriasNota]);
+  const [categoriasNota, setCategoriasNota] = useState<{ chave: string; itens: CategoriaNotaDisponivel[] } | null>(null);
+  const filtrosCategoriasNotaRef = useRef(filtrosCategoriasNota);
+  filtrosCategoriasNotaRef.current = filtrosCategoriasNota;
+  const precisaCategoriasNota = tab === 'proprios' && mapMode === 'notas';
+  useEffect(() => {
+    if (!precisaCategoriasNota) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      listCategoriasNotaDisponiveis(filtrosCategoriasNotaRef.current, { signal: controller.signal })
+        .then((itens) => setCategoriasNota({ chave: chaveCategoriasNota, itens }))
+        .catch(() => {
+          // Falha: mantém a lista anterior e não troca a categoria.
+        });
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [chaveCategoriasNota, precisaCategoriasNota]);
+  // Categoria que sumiu dos resultados → volta para a Nota geral.
+  useEffect(() => {
+    if (!precisaCategoriasNota || !categoriasNota || categoriasNota.chave !== chaveCategoriasNota) return;
+    if (!categoriaAindaValida(categoriaFiltroId, categoriasNota.itens)) onCategoriaFiltroChange('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoriasNota, chaveCategoriasNota, categoriaFiltroId, precisaCategoriasNota]);
   const statusOptions = useMemo(
     () => CHAMADO_STATUS_OPTIONS.map((status) => ({ value: status, label: CHAMADO_STATUS_META[status]?.label ?? status })),
     [],
@@ -531,11 +569,12 @@ export function CcoFiltrosPanel({
               {mapMode === 'notas' ? (
                 <select
                   value={categoriaFiltroId}
+                  aria-label="Categoria da nota"
                   onChange={(event) => onCategoriaFiltroChange(event.target.value)}
                   className={cn(SELECT_CLASS, 'max-w-md')}
                 >
-                  <option value="">Nota geral (Likert)</option>
-                  {(opcoesFiltro?.categoriasVistoria ?? []).map((categoria) => (
+                  <option value="">{ROTULO_NOTA_GERAL}</option>
+                  {(categoriasNota?.itens ?? []).map((categoria) => (
                     <option key={categoria.id} value={categoria.id}>
                       Categoria: {categoria.nome}
                     </option>

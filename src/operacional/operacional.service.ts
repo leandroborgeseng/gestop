@@ -546,6 +546,16 @@ export class OperacionalService {
       .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   }
 
+  /**
+   * 319: categorias do filtro "Mapa: Notas" — só as que têm avaliação válida (nota numérica) na vistoria
+   * que o mapa mostra de cada próprio filtrado (última CONCLUÍDA; canceladas/planejadas/em andamento ficam de fora).
+   * Todos os filtros da lista de próprios; conjunto inteiro; ordem alfabética pt-BR.
+   */
+  async listCategoriasNotaDisponiveis(query: UnidadeListQuery, user: JwtPayload): Promise<CategoriaNotaDisponivel[]> {
+    const unidades = await this.listUnidades(query, user);
+    return montarCategoriasNotaDisponiveis(unidades.map((u) => u.ultimaVistoriaNota ?? null));
+  }
+
   async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload, agora: Date = new Date()): Promise<ChamadosMapaResposta> {
     const where = this.buildChamadosMapaWhere(query, user, agora);
 
@@ -1433,6 +1443,25 @@ export class OperacionalService {
 }
 
 export type TipoProprioDisponivel = { codigo: string; nome: string };
+
+/** 319: opção de categoria do "Mapa: Notas" (`total` = próprios com nota nessa categoria). */
+export type CategoriaNotaDisponivel = { id: string; nome: string; total: number };
+
+export function montarCategoriasNotaDisponiveis(
+  notas: Array<{ notasPorCategoria: Array<{ categoriaId: string; categoriaNome: string; nota: number | null }> } | null>,
+): CategoriaNotaDisponivel[] {
+  const porId = new Map<string, CategoriaNotaDisponivel>();
+  for (const resumo of notas) {
+    for (const c of resumo?.notasPorCategoria ?? []) {
+      if (typeof c.nota !== 'number' || !Number.isFinite(c.nota)) continue;
+      const atual = porId.get(c.categoriaId);
+      if (atual) atual.total += 1;
+      else porId.set(c.categoriaId, { id: c.categoriaId, nome: c.categoriaNome, total: 1 });
+    }
+  }
+  const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+  return [...porId.values()].sort((a, b) => collator.compare(a.nome, b.nome) || a.id.localeCompare(b.id));
+}
 
 /** 316: opção do filtro Tipo de chamado da CCO. */
 export type TipoChamadoDisponivel = { id: string; nome: string; total: number };
