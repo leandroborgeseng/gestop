@@ -21,7 +21,7 @@ import { heatCellCounts, heatCountAt, heatLegend, paintHeat } from '@/lib/map-he
 import { escapeHtml } from '@/lib/security';
 import { ChamadoMapaItem, UnidadeOperacional, UnidadeSituacao, UnidadeSlaMapa } from '@/lib/types';
 import { chamadoTitulo } from '@/lib/chamado-geo';
-import { formatNotaBr, notaCorHex, resolveNotaExibicao } from '@/lib/vistoria-nota';
+import { formatNotaBr, formatNotaMapa, notaCorHex, resolveNotaExibicao, TEXTO_SEM_AVALIACAO } from '@/lib/vistoria-nota';
 import { MapViewControls } from '@/components/map/map-view-controls';
 import {
   bindMapPinSelectionCleanup,
@@ -68,7 +68,8 @@ function createNotaIcon(nota: number | null, emphasis: 'normal' | 'hover' | 'sel
 
   return L.divIcon({
     className: 'sigma-map-marker-nota',
-    html: `<span style="
+    // 319: sem nota → "Sem avaliação" (cinza, "—"), nunca 0.
+    html: `<span title="${nota == null ? TEXTO_SEM_AVALIACAO : `Nota ${label}`}" aria-label="${nota == null ? TEXTO_SEM_AVALIACAO : `Nota ${label}`}" style="
       display:grid;place-items:center;width:34px;height:34px;
       background:${color};border:2px solid #fff;border-radius:9999px;
       transform:scale(${scale});
@@ -134,7 +135,7 @@ function buildUnidadePopupHtml(unidade: UnidadeOperacional, mapMode: CcoMapMode,
       : null;
   const notaLine =
     mapMode === 'notas'
-      ? `<span style="display:block;margin-top:6px;font-size:12px;font-weight:700;color:#0f1b2d;">Nota: ${escapeHtml(formatNotaBr(nota))}</span>`
+      ? `<span style="display:block;margin-top:6px;font-size:12px;font-weight:700;color:#0f1b2d;">Nota: ${escapeHtml(formatNotaMapa(nota))}</span>`
       : '';
   const slaLine =
     unidade.slaMapa
@@ -958,7 +959,7 @@ export function OperationalMapClient({
               ))}
               <div className="mt-1 flex items-center gap-2 py-0.5 text-xs text-[var(--ink-3)]">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#8a97a8]" />
-                <span>Sem vistoria</span>
+                <span>{TEXTO_SEM_AVALIACAO}</span>
               </div>
             </>
           )}

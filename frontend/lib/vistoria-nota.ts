@@ -16,6 +16,13 @@ export function formatNotaBr(nota: number | null | undefined) {
   return clampNota(nota).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
+/** 319: sem nota na vistoria (ou na categoria) é "Sem avaliação" — nunca zero. */
+export const TEXTO_SEM_AVALIACAO = 'Sem avaliação';
+
+export function formatNotaMapa(nota: number | null | undefined) {
+  return nota == null || Number.isNaN(nota) ? TEXTO_SEM_AVALIACAO : formatNotaBr(nota);
+}
+
 export function resolveNotaExibicao(
   resumo: VistoriaNotaResumo | null | undefined,
   categoriaId?: string | null,

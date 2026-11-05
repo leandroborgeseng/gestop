@@ -318,6 +318,25 @@ export function getUnidades(filters: UnidadeFilters) {
   return request<UnidadeOperacional[]>(`/operacional/unidades${query ? `?${query}` : ''}`);
 }
 
+/** 319: categorias com nota válida nos próprios filtrados (todos os filtros da lista de próprios). */
+export function listCategoriasNotaDisponiveis(filters: UnidadeFilters, init?: { signal?: AbortSignal }) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
+    if (value) params.set(key, String(value));
+  });
+  const query = params.toString();
+  return request<import('./cco-categorias-nota').CategoriaNotaDisponivel[]>(
+    `/operacional/categorias-nota-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
 /** 312: tipos de próprio com próprios ativos acessíveis nos filtros atuais (exceto tipo). */
 export function listTiposProprioDisponiveis(filters: UnidadeFilters, init?: { signal?: AbortSignal }) {
   const params = new URLSearchParams();

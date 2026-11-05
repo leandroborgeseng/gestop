@@ -126,6 +126,12 @@ export class OperacionalController {
     return this.operacionalService.listTiposChamadoDisponiveisUnidades(query, user);
   }
 
+  /** 319: categorias com nota válida nos próprios filtrados (mesmos filtros de /unidades). */
+  @Get('categorias-nota-disponiveis')
+  listCategoriasNotaDisponiveis(@CurrentUser() user: JwtPayload, @Query() raw: Record<string, string | string[] | undefined>) {
+    return this.operacionalService.listCategoriasNotaDisponiveis(parseUnidadeQueryRaw(raw), user);
+  }
+
   @Get('unidades')
   listUnidades(
     @CurrentUser() user: JwtPayload,
@@ -290,4 +296,28 @@ function normalizeTiposPendencia(value?: string | string[]): TipoPendencia[] | u
 function normalizeSla(value?: string): SlaFiltro | undefined {
   if (value === 'DENTRO' || value === 'FORA') return value;
   return undefined;
+}
+
+/** 316/319: lê a query de /unidades a partir do objeto bruto (valor único ou lista). */
+function parseUnidadeQueryRaw(raw: Record<string, string | string[] | undefined>): UnidadeListQuery {
+  const one = (k: string) => (Array.isArray(raw[k]) ? (raw[k] as string[])[0] : (raw[k] as string | undefined));
+  return {
+    search: normalizeText(one('search')),
+    secretariaId: normalizeText(one('secretariaId')),
+    secretariaIds: normalizeStringArray(raw.secretariaIds),
+    tipo: normalizeText(one('tipo')),
+    tipos: normalizeStringArray(raw.tipos),
+    situacao: one('situacao') as UnidadeSituacao | undefined,
+    bairro: normalizeText(one('bairro')),
+    bairros: normalizeStringArray(raw.bairros),
+    regiao: one('regiao') as RegiaoUnidade | undefined,
+    regioes: normalizeStringArray(raw.regioes) as RegiaoUnidade[] | undefined,
+    pendencias: parseOptionalBoolean(one('pendencias')),
+    responsavel: normalizeText(one('responsavel')),
+    responsavelEmail: normalizeText(one('responsavelEmail'))?.toLowerCase(),
+    tiposPendencia: normalizeTiposPendencia(raw.tiposPendencia),
+    tiposChamadoId: normalizeStringArray(raw.tiposChamadoId),
+    equipeIds: normalizeStringArray(raw.equipeIds),
+    sla: normalizeSla(one('sla')),
+  };
 }
