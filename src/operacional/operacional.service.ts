@@ -684,8 +684,13 @@ export class OperacionalService {
           },
         },
         fiscalizacoes: {
-          orderBy: { createdAt: 'desc' },
-          take: 5,
+          // #311: mais recente → mais antiga (conclusão; senão início; senão criação). Lista rola no drawer.
+          orderBy: [
+            { concluidaEm: { sort: 'desc', nulls: 'last' } },
+            { iniciadaEm: { sort: 'desc', nulls: 'last' } },
+            { createdAt: 'desc' },
+          ],
+          take: 50,
           select: {
             id: true,
             status: true,

@@ -16,10 +16,19 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
-import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
 import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
+import {
+  formatDateTime,
+  NotaVistoriaDestaque,
+  RespostaEvidencias,
+  STATUS_BADGE,
+  STATUS_OPTIONS,
+  statusLabel,
+  VistoriaDetalheCorpo,
+} from '@/components/vistorias/vistoria-detalhe-consulta';
+import { lerIdVistoriaDaUrl } from '@/lib/vistoria-deep-link';
 import { downloadFiscalizacaoPdf, getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
 import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
 import { cn } from '@/lib/cn';
@@ -35,50 +44,6 @@ import type {
 } from '@/lib/types';
 
 const PAGE_SIZE = 50;
-
-const STATUS_OPTIONS: Array<{ value: '' | FiscalizacaoStatus; label: string }> = [
-  { value: '', label: 'Todas' },
-  { value: 'CONCLUIDA', label: 'Concluídas' },
-  { value: 'EM_ANDAMENTO', label: 'Em andamento' },
-  { value: 'PLANEJADA', label: 'Planejadas' },
-  { value: 'SINCRONIZACAO_PENDENTE', label: 'Sincronização pendente' },
-  { value: 'CANCELADA', label: 'Canceladas' },
-];
-
-const STATUS_BADGE: Record<FiscalizacaoStatus, 'success' | 'warning' | 'info' | 'muted' | 'danger'> = {
-  CONCLUIDA: 'success',
-  EM_ANDAMENTO: 'warning',
-  PLANEJADA: 'info',
-  SINCRONIZACAO_PENDENTE: 'warning',
-  CANCELADA: 'muted',
-};
-
-function statusLabel(status: FiscalizacaoStatus) {
-  return STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
-}
-
-function formatDateTime(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleString('pt-BR') : '—';
-}
-
-function NotaVistoriaDestaque({ notaGeral }: { notaGeral: number }) {
-  const color = notaCorHex(notaGeral);
-  return (
-    <div
-      className="flex min-w-[92px] flex-col items-center rounded-[var(--r-md)] border px-3 py-2 text-center"
-      style={{
-        borderColor: `${color}55`,
-        backgroundColor: `${color}14`,
-      }}
-      title="Nota média dos itens Likert nesta vistoria (0 a 10)"
-    >
-      <span className="text-[10px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Nota do próprio</span>
-      <span className="text-[26px] font-bold leading-tight" style={{ color }}>
-        {formatNotaBr(notaGeral)}
-      </span>
-    </div>
-  );
-}
 
 export default function VistoriasPage() {
   const sessionUser = useSessionUser();
@@ -146,6 +111,12 @@ export default function VistoriasPage() {
     [search, status, tipo, secretariaId, agenteId, from, to, avulsaConflito],
   );
 
+  // #311: deep-link `/vistorias?id=<uuid>` abre a vistoria por id único (sem depender dos filtros da lista).
+  useEffect(() => {
+    const id = lerIdVistoriaDaUrl(window.location.search);
+    if (id) setSelectedId(id);
+  }, []);
+
   const loadList = useCallback(async (offset = 0, append = false) => {
     if (offset === 0) setLoading(true);
     else setLoadingMore(true);
@@ -196,8 +167,10 @@ export default function VistoriasPage() {
   }, [selectedId]);
 
   const selected = useMemo(
-    () => items.find((item) => item.id === selectedId) ?? null,
-    [items, selectedId],
+    () =>
+      items.find((item) => item.id === selectedId) ??
+      (detail && detail.id === selectedId ? detail : null),
+    [items, selectedId, detail],
   );
 
   return (
@@ -467,166 +440,12 @@ export default function VistoriasPage() {
                         onClose={() => setDocsOpen(false)}
                       />
                     ) : null}
-                    <dl className="grid gap-3 sm:grid-cols-2">
-                      <DetailField label="Checklist">{selected.checklistVersao.checklist.nome} (v{selected.checklistVersao.versao})</DetailField>
-                      <DetailField label="Origem">{(detail ?? selected).origemLabel ?? selected.origem}</DetailField>
-                      {selected.avulsaPorConflito ? (
-                        <DetailField label="Enviada como avulsa por conflito">
-                          <span data-testid="detalhe-avulsa-motivo">
-                            {selected.conflitoCodigo ? `${selected.conflitoCodigo} · ` : ''}
-                            Programação de {selected.conflitoDataProgramada ? formatDateTime(selected.conflitoDataProgramada).slice(0, 10) : '—'}
-                            {' · '}Motivo: {selected.avulsaMotivo ?? '—'}
-                          </span>
-                        </DetailField>
-                      ) : null}
-                      <DetailField label="Vistoria realizada por">
-                        {(detail ?? selected).realizadaPorLabel ?? selected.agente.nome}
-                      </DetailField>
-                      {(detail ?? selected).responsaveisPrevistosLabel ? (
-                        <DetailField label="Responsável previsto no cronograma">
-                          {(detail ?? selected).responsaveisPrevistosLabel}
-                        </DetailField>
-                      ) : null}
-                      {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
-                        <DetailField label="Lançada no sistema por">
-                          {(detail ?? selected).lancadoPorLabel ?? '—'}
-                        </DetailField>
-                      ) : null}
-                      <DetailField label="Lançamento manual">
-                        {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? 'Sim' : 'Não'}
-                      </DetailField>
-                      {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
-                        <>
-                          <DetailField label="Data da vistoria">
-                            {formatDateTime((detail ?? selected).dataVistoriaInformada ?? selected.iniciadaEm)}
-                          </DetailField>
-                          <DetailField label="Data do lançamento">
-                            {formatDateTime((detail ?? selected).dataLancamento ?? selected.createdAt)}
-                          </DetailField>
-                        </>
-                      ) : (
-                        <>
-                          <DetailField label="Iniciada em">{formatDateTime(selected.iniciadaEm)}</DetailField>
-                          <DetailField label="Concluída em">{formatDateTime(selected.concluidaEm)}</DetailField>
-                        </>
-                      )}
-                      <DetailField label="Dentro do raio">
-                        {selected.dentroRaioPermitido == null ? '—' : selected.dentroRaioPermitido ? 'Sim' : 'Não'}
-                      </DetailField>
-                      <DetailField label="Distância check-in">
-                        {selected.distanciaCheckinMetros != null ? `${Math.round(selected.distanciaCheckinMetros)} m` : '—'}
-                      </DetailField>
-                    </dl>
-
-                    {!detailLoading && detail?.nota?.notasPorCategoria?.length ? (
-                      <div>
-                        <p className="mb-2 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Notas por categoria</p>
-                        <div className="flex flex-wrap gap-2">
-                          {detail.nota.notasPorCategoria.map((item) => (
-                            <div
-                              key={item.categoriaId}
-                              className="rounded-[var(--r-md)] border px-3 py-2 text-center"
-                              style={{
-                                borderColor: `${notaCorHex(item.nota)}44`,
-                                backgroundColor: `${notaCorHex(item.nota)}10`,
-                              }}
-                            >
-                              <p className="text-[11px] font-semibold text-[var(--ink-3)]">{item.categoriaNome}</p>
-                              <p className="text-[16px] font-bold" style={{ color: notaCorHex(item.nota) }}>
-                                {formatNotaBr(item.nota)}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {detail?.respostas?.length ? (
-                      <Button variant="outlined" size="sm" onClick={() => setQuestionarioOpen(true)}>
-                        <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
-                        Exibir questionário
-                      </Button>
-                    ) : null}
-
-                    {detail?.observacoes ? (
-                      <div>
-                        <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Observações</p>
-                        <p className="mt-1 text-[13px] text-[var(--ink-2)]">{detail.observacoes}</p>
-                      </div>
-                    ) : null}
-
-                    {detail?.naoConformidades?.length ? (
-                      <div>
-                        <p className="mb-2 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Não conformidades</p>
-                        <div className="space-y-2">
-                          {detail.naoConformidades.map((nc) => (
-                            <div key={nc.id} className="rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[13px]">
-                              <p className="font-semibold text-[var(--warn)]">{nc.item.titulo}</p>
-                              <p className="mt-1 text-[var(--ink-2)]">{nc.descricao}</p>
-                              {nc.chamado ? (
-                                <p className="mt-2 text-[12px]">
-                                  Chamado gerado:{' '}
-                                  <Link href={`/chamados?search=${encodeURIComponent(nc.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
-                                    {nc.chamado.codigo}
-                                  </Link>
-                                  {nc.chamado.status ? ` · ${nc.chamado.status}` : ''}
-                                </p>
-                              ) : nc.status === 'BAIXADA_MANUAL' ? (
-                                <p className="mt-2 text-[12px] text-[var(--ink-3)]">
-                                  Baixada manualmente{nc.motivoBaixa ? `: ${nc.motivoBaixa}` : ''}
-                                </p>
-                              ) : (
-                                <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
-                                  Pendente sem chamado
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {detail?.respostas?.length ? (
-                      <div>
-                        <p className="mb-2 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Respostas do checklist</p>
-                        <div className="space-y-2">
-                          {detail.respostas.map((resposta, index) => (
-                            <div key={resposta.id}>
-                              <CabecalhoSecao
-                                atual={resposta.item.secao}
-                                anterior={index > 0 ? detail.respostas?.[index - 1]?.item.secao : undefined}
-                              />
-                              <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
-                                <p className="text-[12px] font-semibold text-[var(--ink)]">
-                                  {resposta.item.titulo}
-                                </p>
-                                <p className="mt-1 text-[13px] text-[var(--ink-2)]">
-                                  {formatRespostaValor(resposta)}
-                                </p>
-                                {resposta.comentario ? (
-                                  <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p>
-                                ) : null}
-                                <RespostaEvidencias evidencias={resposta.evidencias} altPrefix={resposta.item.titulo} />
-                                {resposta.naoConformidade?.chamado ? (
-                                  <p className="mt-2 text-[12px]">
-                                    Chamado gerado:{' '}
-                                    <Link href={`/chamados?search=${encodeURIComponent(resposta.naoConformidade.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
-                                      {resposta.naoConformidade.chamado.codigo}
-                                    </Link>
-                                  </p>
-                                ) : resposta.naoConformidade ? (
-                                  <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
-                                    {resposta.naoConformidade.status === 'BAIXADA_MANUAL'
-                                      ? 'NC baixada manualmente (sem chamado)'
-                                      : 'NC pendente sem chamado'}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
+                    <VistoriaDetalheCorpo
+                      resumo={selected}
+                      detail={detail}
+                      detailLoading={detailLoading}
+                      onExibirQuestionario={() => setQuestionarioOpen(true)}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -679,42 +498,5 @@ export default function VistoriasPage() {
         />
       </PageShell>
     </RequirePermissions>
-  );
-}
-
-function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{label}</dt>
-      <dd className="mt-0.5 text-[13px] font-medium text-[var(--ink-2)]">{children}</dd>
-    </div>
-  );
-}
-
-function RespostaEvidencias({
-  evidencias,
-  altPrefix,
-}: {
-  evidencias?: Array<{ id: string; url: string }>;
-  altPrefix: string;
-}) {
-  if (!evidencias?.length) return null;
-
-  return (
-    <div className="mt-2">
-      <p className="mb-1.5 text-[11px] font-semibold text-[var(--ink-3)]">
-        Evidências ({evidencias.length})
-      </p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {evidencias.map((evidencia, index) => (
-          <ZoomableAuthenticatedImage
-            key={evidencia.id}
-            src={evidencia.url}
-            alt={`${altPrefix} — evidência ${index + 1}`}
-            className="aspect-[4/3] w-full object-cover"
-          />
-        ))}
-      </div>
-    </div>
   );
 }

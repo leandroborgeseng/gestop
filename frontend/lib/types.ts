@@ -1321,6 +1321,8 @@ export type FiscalizacaoResumo = {
   iniciadaEm: string | null;
   concluidaEm: string | null;
   dentroRaioPermitido: boolean | null;
+  checkinLatitude?: number | null;
+  checkinLongitude?: number | null;
   distanciaCheckinMetros: number | null;
   observacoes?: string | null;
   metadata?: Record<string, unknown> | null;
