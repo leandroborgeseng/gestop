@@ -81,6 +81,7 @@
     "@types/pg": "^8.20.0",
     "@types/web-push": "^3.6.4",
     "pdf-parse": "^2.4.5",
+    "playwright": "^1.48.0",
     "ts-node": "^10.9.2",
     "tsx": "^4.22.2",
     "vitest": "^4.1.6"
