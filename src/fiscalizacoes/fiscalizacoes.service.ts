@@ -156,7 +156,8 @@ export class FiscalizacoesService {
       include: {
         ...listInclude,
         respostas: {
-          orderBy: { respondidoEm: 'asc' },
+          // #311/CCO-V3: ordem da versão do checklist gravada na vistoria (item pertence à versão usada), não a do checklist atual.
+          orderBy: [{ item: { ordem: 'asc' } }, { respondidoEm: 'asc' }],
           include: {
             item: {
               select: {

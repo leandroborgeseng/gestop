@@ -10,6 +10,7 @@ import {
   ArrowUpRight,
   Calendar,
   ClipboardList,
+  Eye,
   LocateFixed,
   UserRound,
   Megaphone,
@@ -29,6 +30,9 @@ import { IconButton } from '@/components/ui/icon-button';
 import { Tabs } from '@/components/ui/tabs';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
+import { VistoriaConsultaModal } from '@/components/cco/vistoria-consulta-modal';
+import { ordenarVistoriasRecentes, rotuloCardVistoria } from '@/lib/cco-vistorias';
+import { useOverlayPortalHost } from '@/lib/overlay-portal-host';
 
 type DrawerTab = 'geral' | 'fisc' | 'nc' | 'chamados';
 
@@ -45,11 +49,7 @@ export function UnidadeDrawer({
   const [detalhe, setDetalhe] = useState<UnidadeDetalhe | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const host = useOverlayPortalHost();
 
   useEffect(() => {
     if (!open || !unidade) {
@@ -83,7 +83,10 @@ export function UnidadeDrawer({
     if (!open) return;
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
+      // #311: com o modal de consulta (ou lightbox) aberto, Esc é dele — o drawer fica.
+      if (event.key !== 'Escape') return;
+      if (document.querySelector('[data-cco-vistoria-modal], [data-zoom-lightbox]')) return;
+      onClose();
     }
 
     const previousOverflow = document.body.style.overflow;
@@ -95,7 +98,7 @@ export function UnidadeDrawer({
     };
   }, [open, onClose]);
 
-  if (!open || !unidade || !mounted) return null;
+  if (!open || !unidade || !host) return null;
 
   const ncCount =
     detalhe?.pendenciasDetalhadas.naoConformidades.filter((nc) => nc.pendenteAtiva).length ??
@@ -147,8 +150,8 @@ export function UnidadeDrawer({
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          {loading ? <LoadingState label="Carregando detalhe..." /> : null}
-          {error ? <ErrorState message={error} onRetry={() => void getUnidadeDetalhe(unidade.id).then(setDetalhe)} /> : null}
+          {loading ? <LoadingState label={tab === 'fisc' ? 'Carregando vistorias…' : 'Carregando detalhe...'} /> : null}
+          {error ? <ErrorState message={tab === 'fisc' ? 'Não foi possível carregar as vistorias. Tentar de novo' : error} onRetry={() => void getUnidadeDetalhe(unidade.id).then(setDetalhe)} /> : null}
 
           {!loading && !error && detalhe ? (
             <>
@@ -167,7 +170,7 @@ export function UnidadeDrawer({
         </div>
       </aside>
     </>,
-    document.body,
+    host,
   );
 }
 
@@ -248,38 +251,59 @@ function GeralTab({
 }
 
 function FiscTab({ unidade }: { unidade: UnidadeDetalhe }) {
+  // #311: card clicável → modal de consulta só-leitura; estado local, então o CCO (mapa/filtros/aba) não muda.
+  const [abertaId, setAbertaId] = useState<string | null>(null);
   if (unidade.ultimasFiscalizacoes.length === 0) {
     return <EmptyTab icon={ClipboardList} message="Nenhuma vistoria registrada" />;
   }
+  const lista = ordenarVistoriasRecentes(unidade.ultimasFiscalizacoes);
 
   return (
-    <div className="space-y-2">
-      {unidade.ultimasFiscalizacoes.map((fisc) => (
-        <div key={fisc.id} className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--ok-bg)] text-[var(--ok)]">
-            <ClipboardList className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-semibold text-[var(--ink)]">
-              {fisc.checklistVersao.checklist.nome} v{fisc.checklistVersao.versao}
-            </p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--ink-3)]">
-              <span className="inline-flex items-center gap-1">
-                <UserRound className="h-3 w-3" />
-                {fisc.agente.nome}
+    <>
+      <ul className="space-y-2" data-testid="drawer-vistorias-lista">
+        {lista.map((fisc) => (
+          <li key={fisc.id}>
+            <button
+              type="button"
+              data-testid="drawer-vistoria-card"
+              data-fiscalizacao-id={fisc.id}
+              aria-label={rotuloCardVistoria(fisc)}
+              onClick={() => setAbertaId(fisc.id)}
+              className="flex w-full cursor-pointer gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-left transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] focus-visible:border-[var(--brand)] focus-visible:bg-[var(--brand-soft)] focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:outline-none"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--ok-bg)] text-[var(--ok)]">
+                <ClipboardList className="h-4 w-4" />
               </span>
-              {fisc.concluidaEm ? (
-                <span className="inline-flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {new Date(fisc.concluidaEm).toLocaleDateString('pt-BR')}
+              <span className="block min-w-0 flex-1">
+                <span className="block text-[13px] font-semibold text-[var(--ink)]">
+                  {fisc.checklistVersao.checklist.nome} v{fisc.checklistVersao.versao}
                 </span>
-              ) : null}
-            </p>
-            <p className="mt-1 text-[11px] text-[var(--ink-3)]">{fisc.status} · {fisc.origem}</p>
-          </div>
-        </div>
-      ))}
-    </div>
+                <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--ink-3)]">
+                  <span className="inline-flex items-center gap-1">
+                    <UserRound className="h-3 w-3" />
+                    {fisc.agente.nome}
+                  </span>
+                  {fisc.concluidaEm ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(fisc.concluidaEm).toLocaleDateString('pt-BR')}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-1 block text-[11px] text-[var(--ink-3)]">{fisc.status} · {fisc.origem}</span>
+              </span>
+              <span aria-hidden className="inline-flex shrink-0 items-center gap-1 self-center text-[11px] font-semibold text-[var(--brand)]">
+                <Eye className="h-4 w-4" />
+                Abrir
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {abertaId ? (
+        <VistoriaConsultaModal fiscalizacaoId={abertaId} unidadeNome={unidade.nome} onClose={() => setAbertaId(null)} />
+      ) : null}
+    </>
   );
 }
 
