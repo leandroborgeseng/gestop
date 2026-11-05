@@ -14,6 +14,7 @@ import {
   filtrosParaCategoriasNota,
   ROTULO_NOTA_GERAL,
   type CategoriaNotaDisponivel,
+  rotuloCategoriaNota,
 } from '@/lib/cco-categorias-nota';
 import {
   chaveFiltrosTiposChamado,
@@ -576,7 +577,7 @@ export function CcoFiltrosPanel({
                   <option value="">{ROTULO_NOTA_GERAL}</option>
                   {(categoriasNota?.itens ?? []).map((categoria) => (
                     <option key={categoria.id} value={categoria.id}>
-                      Categoria: {categoria.nome}
+                      {rotuloCategoriaNota(categoria)}
                     </option>
                   ))}
                 </select>

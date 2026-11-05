@@ -1,7 +1,14 @@
 import type { TipoPendencia, UnidadeFilters, UnidadeSituacao } from '@/lib/types';
 
 /** 319: opção de categoria do "Mapa: Notas" (`total` = próprios com nota nessa categoria). */
-export type CategoriaNotaDisponivel = { id: string; nome: string; total: number };
+export type CategoriaNotaDisponivel = { id: string; nome: string; total: number; ativa?: boolean };
+
+export const SUFIXO_INATIVA = ' (inativa)';
+
+/** Rótulo da opção no seletor: categorias inativas (com nota válida) ganham o sufixo " (inativa)". */
+export function rotuloCategoriaNota(c: Pick<CategoriaNotaDisponivel, 'nome' | 'ativa'>): string {
+  return `Categoria: ${c.nome}${c.ativa === false ? SUFIXO_INATIVA : ''}`;
+}
 
 export const ROTULO_NOTA_GERAL = 'Nota geral (Likert)';
 
