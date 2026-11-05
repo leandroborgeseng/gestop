@@ -18,6 +18,7 @@ import { getFiscalizacao } from '@/lib/api';
 import { podeAbrirLinkChamado } from '@/lib/nc-chamado-link';
 import type { FiscalizacaoDetalhe } from '@/lib/types';
 import { hrefVistoriaRealizada } from '@/lib/vistoria-deep-link';
+import { useOverlayPortalHost } from '@/lib/overlay-portal-host';
 
 export const MSG_VISTORIA_403 = 'Você não tem permissão para consultar esta vistoria.';
 export const MSG_VISTORIA_ERRO = 'Não foi possível abrir a vistoria. Tente de novo.';
@@ -36,12 +37,10 @@ export function VistoriaConsultaModal({
   const [detail, setDetail] = useState<FiscalizacaoDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const host = useOverlayPortalHost();
   const closeRef = useRef<HTMLButtonElement>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-
-  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     let active = true;
@@ -78,7 +77,7 @@ export function VistoriaConsultaModal({
     return () => window.removeEventListener('keydown', onKeyDown, true);
   }, []);
 
-  if (!mounted) return null;
+  if (!host) return null;
 
   const href = hrefVistoriaRealizada(fiscalizacaoId);
   const podeAbrirTela = podeAbrirLinkChamado(href, sessionUser?.permissoes ?? [], sessionUser);
@@ -140,6 +139,6 @@ export function VistoriaConsultaModal({
         </footer>
       </div>
     </div>,
-    document.body,
+    host,
   );
 }

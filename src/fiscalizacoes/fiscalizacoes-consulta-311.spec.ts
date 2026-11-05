@@ -1,6 +1,8 @@
 import 'reflect-metadata';
 import { ExecutionContext, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { JwtPayload } from '../auth/jwt';
 import { PermissionsGuard } from '../auth/permissions.guard';
@@ -140,7 +142,7 @@ describe('#311 CCO-V14 — GET /fiscalizacoes/:id (consulta do modal)', () => {
     });
   });
 
-  it('CCO-V3: respostas ordenadas pela ordem do item na versão gravada', async () => {
+it('CCO-V3: orderBy pede item.ordem da versão gravada (não respondidoEm sozinho)', async () => {
     let orderBy: unknown;
     const prisma = {
       fiscalizacao: {
@@ -154,4 +156,119 @@ describe('#311 CCO-V14 — GET /fiscalizacoes/:id (consulta do modal)', () => {
     await service.getById(ID_A, user({ acessoTodasSecretarias: true })).catch(() => undefined);
     expect(orderBy).toEqual([{ item: { ordem: 'asc' } }, { respondidoEm: 'asc' }]);
   });
+
+  it('CCO-V3: vistoria na versão A mantém ordem A depois que a versão B reordena os itens', async () => {
+    // ChecklistItem é por versão (checklistVersaoId) — itens de A e B são registros distintos.
+    // Versão A (gravada na vistoria): X=1, Y=2, Z=3
+    // Versão B (checklist atual): Z=1, X=2, Y=3 — não deve afetar a consulta histórica.
+    const itemA = (codigo: string, ordem: number, titulo: string) => ({
+      id: `item-A-${codigo}`,
+      codigo,
+      ordem,
+      secao: null,
+      titulo,
+      tipo: 'TEXTO',
+      opcoes: null,
+      categoriaVistoriaId: null,
+      categoriaVistoria: null,
+    });
+    // Respostas chegam "fora de ordem" no banco; o mock aplica o orderBy do service.
+    const respostasBrutas = [
+      {
+        id: 'r-Z',
+        conformidade: null,
+        valorTexto: 'z',
+        valorNumero: null,
+        valorBooleano: null,
+        comentario: null,
+        respondidoEm: new Date('2026-01-03T12:00:00Z'),
+        item: itemA('Z', 3, 'Pergunta Z'),
+        naoConformidade: null,
+        evidencias: [],
+      },
+      {
+        id: 'r-X',
+        conformidade: null,
+        valorTexto: 'x',
+        valorNumero: null,
+        valorBooleano: null,
+        comentario: null,
+        respondidoEm: new Date('2026-01-01T12:00:00Z'),
+        item: itemA('X', 1, 'Pergunta X'),
+        naoConformidade: null,
+        evidencias: [],
+      },
+      {
+        id: 'r-Y',
+        conformidade: null,
+        valorTexto: 'y',
+        valorNumero: null,
+        valorBooleano: null,
+        comentario: null,
+        respondidoEm: new Date('2026-01-02T12:00:00Z'),
+        item: itemA('Y', 2, 'Pergunta Y'),
+        naoConformidade: null,
+        evidencias: [],
+      },
+    ];
+
+    function applyOrderBy(rows: typeof respostasBrutas, orderBy: unknown) {
+      const list = Array.isArray(orderBy) ? orderBy : [orderBy];
+      return [...rows].sort((a, b) => {
+        for (const rule of list) {
+          const r = rule as { item?: { ordem?: string }; respondidoEm?: string };
+          if (r?.item?.ordem === 'asc') {
+            const d = a.item.ordem - b.item.ordem;
+            if (d) return d;
+          }
+          if (r?.respondidoEm === 'asc') {
+            const d = a.respondidoEm.getTime() - b.respondidoEm.getTime();
+            if (d) return d;
+          }
+        }
+        return 0;
+      });
+    }
+
+    const base = vistoria(ID_A, SEC_A);
+    const prisma = {
+      fiscalizacao: {
+        findFirst: async (args: { include: { respostas: { orderBy: unknown } } }) => ({
+          ...base,
+          checklistVersao: {
+            id: 'versao-A',
+            versao: 1,
+            checklist: { id: 'ck1', nome: 'ZZTESTE Checklist' },
+          },
+          respostas: applyOrderBy(respostasBrutas, args.include.respostas.orderBy),
+        }),
+      },
+      cronogramaChecagem: { findMany: async () => [] },
+    };
+    const service = new FiscalizacoesService(prisma as never, {} as never, {} as never, {} as never, {} as never);
+    const out = await service.getById(ID_A, user({ acessoTodasSecretarias: true }));
+    // Ordem histórica da versão A — NÃO a de B (Z,X,Y).
+    expect(out.respostas?.map((r: { item: { codigo: string } }) => r.item.codigo)).toEqual(['X', 'Y', 'Z']);
+    expect(out.respostas?.map((r: { item: { id: string } }) => r.item.id)).toEqual([
+      'item-A-X',
+      'item-A-Y',
+      'item-A-Z',
+    ]);
+  });
 });
+
+describe('#311 CCO-V3 — modelo: ChecklistItem não é compartilhado entre versões', () => {
+  it('schema amarra item à checklistVersaoId (fidelidade histórica)', () => {
+    const schema = readFileSync(resolve('prisma/schema.prisma'), 'utf8');
+    const start = schema.indexOf('model ChecklistItem {');
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = schema.indexOf('\nmodel ', start + 1);
+    const block = schema.slice(start, end > start ? end : undefined);
+    expect(block).toContain('checklistVersaoId');
+    expect(block).toContain('@@unique([checklistVersaoId, codigo])');
+    expect(block).toContain('@@index([checklistVersaoId, ordem])');
+    // Itens de versões distintas são linhas distintas — não há FK "checklistId" no item.
+    expect(block).not.toMatch(/^\s*checklistId\s+/m);
+  });
+});
+

@@ -5,10 +5,14 @@
  * Só leitura: não dispara escrita. Fonte única da UI do detalhe (sem segunda implementação).
  */
 import Link from 'next/link';
-import { ClipboardList } from 'lucide-react';
 import { CabecalhoSecao } from '@/components/checklists/cabecalho-secao';
 import { Button } from '@/components/ui/button';
-import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
+import { AuthenticatedImage } from '@/components/ui/authenticated-image';
+import { ImageGalleryLightbox } from '@/components/ui/image-gallery-lightbox';
+import { ClipboardList, Download, ExternalLink, FileText, ZoomIn } from 'lucide-react';
+import { useState } from 'react';
+import { abrirStorageAutenticado, baixarStorageAutenticado } from '@/lib/storage-url';
+import { isEvidenciaImagem, particionarEvidencias, rotuloAnexo } from '@/lib/evidencia-midia';
 import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
 import { formatNotaBr, notaCorHex } from '@/lib/vistoria-nota';
 import type { FiscalizacaoDetalhe, FiscalizacaoResumo, FiscalizacaoStatus } from '@/lib/types';
@@ -252,26 +256,98 @@ export function RespostaEvidencias({
   evidencias,
   altPrefix,
 }: {
-  evidencias?: Array<{ id: string; url: string }>;
+  evidencias?: Array<{ id: string; url: string; tipo?: string | null; mimeType?: string | null }>;
   altPrefix: string;
 }) {
+  const [fotoIndex, setFotoIndex] = useState<number | null>(null);
   if (!evidencias?.length) return null;
 
+  const { fotos, anexos } = particionarEvidencias(evidencias);
+  // Microcopy UX: omitir bloco "0 evidências"; só listamos o que existe.
+  const gallery = fotos.map((foto, index) => ({
+    id: foto.id,
+    src: foto.url,
+    alt: `${altPrefix} — evidência ${index + 1}`,
+  }));
+
   return (
-    <div className="mt-2">
-      <p className="mb-1.5 text-[11px] font-semibold text-[var(--ink-3)]">
-        Evidências ({evidencias.length})
-      </p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {evidencias.map((evidencia, index) => (
-          <ZoomableAuthenticatedImage
-            key={evidencia.id}
-            src={evidencia.url}
-            alt={`${altPrefix} — evidência ${index + 1}`}
-            className="aspect-[4/3] w-full object-cover"
-          />
-        ))}
-      </div>
+    <div className="mt-2 space-y-2">
+      {fotos.length ? (
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold text-[var(--ink-3)]">
+            Evidências ({fotos.length})
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {fotos.map((foto, index) => (
+              <button
+                key={foto.id}
+                type="button"
+                data-testid="evidencia-foto-thumb"
+                onClick={() => setFotoIndex(index)}
+                className="group relative block w-full overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand)]"
+                aria-label={`Ampliar ${gallery[index].alt}`}
+              >
+                <AuthenticatedImage src={foto.url} alt={gallery[index].alt} className="aspect-[4/3] w-full object-cover" />
+                <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/25">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-semibold text-white opacity-0 transition group-hover:opacity-100">
+                    <ZoomIn className="h-3.5 w-3.5" />
+                    Ampliar
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {anexos.length ? (
+        <div>
+          <p className="mb-1.5 text-[11px] font-semibold text-[var(--ink-3)]">Anexos</p>
+          <ul className="space-y-1.5">
+            {anexos.map((anexo, index) => {
+              const nome = rotuloAnexo(anexo, index);
+              return (
+                <li
+                  key={anexo.id}
+                  data-testid="evidencia-anexo"
+                  className="flex flex-wrap items-center gap-2 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 py-2"
+                >
+                  <FileText className="h-4 w-4 shrink-0 text-[var(--ink-3)]" />
+                  <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-[var(--ink-2)]">{nome}</span>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--brand)] hover:underline"
+                    onClick={() => void abrirStorageAutenticado(anexo.url)}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Abrir anexo
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-[12px] font-semibold text-[var(--brand)] hover:underline"
+                    onClick={() => void baixarStorageAutenticado(anexo.url, nome)}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Baixar
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
+      {fotoIndex != null ? (
+        <ImageGalleryLightbox
+          fotos={gallery}
+          index={fotoIndex}
+          onIndexChange={setFotoIndex}
+          onClose={() => setFotoIndex(null)}
+        />
+      ) : null}
     </div>
   );
 }
+
+// Re-export helpers used by testes/documentação
+export { isEvidenciaImagem, particionarEvidencias };

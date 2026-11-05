@@ -32,6 +32,7 @@ import { ErrorState, LoadingState } from '@/components/ui-states';
 import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 import { VistoriaConsultaModal } from '@/components/cco/vistoria-consulta-modal';
 import { ordenarVistoriasRecentes, rotuloCardVistoria } from '@/lib/cco-vistorias';
+import { useOverlayPortalHost } from '@/lib/overlay-portal-host';
 
 type DrawerTab = 'geral' | 'fisc' | 'nc' | 'chamados';
 
@@ -48,11 +49,7 @@ export function UnidadeDrawer({
   const [detalhe, setDetalhe] = useState<UnidadeDetalhe | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const host = useOverlayPortalHost();
 
   useEffect(() => {
     if (!open || !unidade) {
@@ -101,7 +98,7 @@ export function UnidadeDrawer({
     };
   }, [open, onClose]);
 
-  if (!open || !unidade || !mounted) return null;
+  if (!open || !unidade || !host) return null;
 
   const ncCount =
     detalhe?.pendenciasDetalhadas.naoConformidades.filter((nc) => nc.pendenteAtiva).length ??
@@ -154,7 +151,7 @@ export function UnidadeDrawer({
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {loading ? <LoadingState label={tab === 'fisc' ? 'Carregando vistorias…' : 'Carregando detalhe...'} /> : null}
-          {error ? <ErrorState message={tab === 'fisc' ? 'Não foi possível carregar as vistorias.' : error} onRetry={() => void getUnidadeDetalhe(unidade.id).then(setDetalhe)} /> : null}
+          {error ? <ErrorState message={tab === 'fisc' ? 'Não foi possível carregar as vistorias. Tentar de novo' : error} onRetry={() => void getUnidadeDetalhe(unidade.id).then(setDetalhe)} /> : null}
 
           {!loading && !error && detalhe ? (
             <>
@@ -173,7 +170,7 @@ export function UnidadeDrawer({
         </div>
       </aside>
     </>,
-    document.body,
+    host,
   );
 }
 
