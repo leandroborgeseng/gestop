@@ -7,6 +7,11 @@ describe('EmailService', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv, EMAIL_DRIVER: 'log' };
+    delete process.env.EMAIL_PROVIDER;
+    delete process.env.M365_TENANT_ID;
+    delete process.env.M365_CLIENT_ID;
+    delete process.env.M365_CLIENT_SECRET;
+    delete process.env.M365_SENDER;
   });
 
   afterEach(() => {

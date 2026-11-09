@@ -451,7 +451,8 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
       },
       {
         nome: 'ConfiguracaoEmail',
-        resumo: 'SMTP único do SIGMA. A senha fica cifrada em senhaEnc e não é devolvida pela API.',
+        resumo:
+          'SMTP da tela de Administração. A senha fica cifrada em senhaEnc e não é devolvida pela API. O envio por Microsoft 365 não grava segredo nesta tabela: usa só variáveis de ambiente.',
         campos: ['ativo', 'remetenteEmail', 'smtpHost', 'smtpPort', 'seguranca', 'assuntoEquipe'],
         relacoes: ['Registro único (id fixo). Sem chave estrangeira.'],
       },

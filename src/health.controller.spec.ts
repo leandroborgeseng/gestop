@@ -63,6 +63,26 @@ describe('HealthController.getHealth', () => {
     expect(Object.keys(body).sort()).toEqual([...HEALTH_LIVENESS_KEYS].sort());
   });
 
+  it('marca e-mail configurado só pela presença do Microsoft 365, sem valores', () => {
+    delete process.env.SMTP_HOST;
+    delete process.env.EMAIL_WEBHOOK_URL;
+    delete process.env.INTEGRACOES_WEBHOOK_URL;
+    delete process.env.EMAIL_DRIVER;
+    process.env.EMAIL_PROVIDER = 'm365';
+    process.env.M365_TENANT_ID = '11111111-1111-1111-1111-111111111111';
+    process.env.M365_CLIENT_ID = '22222222-2222-2222-2222-222222222222';
+    process.env.M365_CLIENT_SECRET = 'segredo-falso-m365-NAO-REAL';
+    process.env.M365_SENDER = 'remetente.falso@exemplo.invalid';
+
+    const body = controller.getHealth();
+    const serialized = JSON.stringify(body);
+    expect(body.observability.emailConfigured).toBe(true);
+    expect(serialized).not.toContain('segredo-falso-m365-NAO-REAL');
+    expect(serialized).not.toContain('remetente.falso@exemplo.invalid');
+    expect(serialized).not.toContain('11111111-1111-1111-1111-111111111111');
+    expect(Object.keys(body.observability).sort()).toEqual([...HEALTH_OBSERVABILITY_KEYS].sort());
+  });
+
   it('commit e commitShort sao null ou o par derivado do SHA de 40 hex', () => {
     const body = controller.getHealth();
     if (body.commit === null) {
