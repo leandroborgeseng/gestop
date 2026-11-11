@@ -387,7 +387,7 @@ test.describe('322 tela inicial', () => {
     );
   });
 
-  test('nova abertura com sessão persistida em / vai para o CCO', async ({ browser }) => {
+  test('nova abertura com sessão persistida em / vai para o CCO', async ({ browser }, testInfo) => {
     const origem = await browser.newContext();
     const page = await origem.newPage();
     await mockApi(page);
@@ -407,6 +407,23 @@ test.describe('322 tela inicial', () => {
     const depois = await contextoSessao(reaberto);
     expect(depois?.perfilId).toBe(antes?.perfilId);
     expect(depois?.secretariaId).toBe(antes?.secretariaId);
+    const engine = engineDe(testInfo.project.name);
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-a3.json`),
+      JSON.stringify(
+        {
+          criterio: '322-A3',
+          engine,
+          url: reaberto.url(),
+          perfilId: depois?.perfilId,
+          secretariaId: depois?.secretariaId,
+          manteveContexto: depois?.perfilId === antes?.perfilId && depois?.secretariaId === antes?.secretariaId,
+          naoAbriuVistoria: !reaberto.url().includes('/mobile'),
+        },
+        null,
+        2,
+      ),
+    );
     await novo.close();
   });
 
