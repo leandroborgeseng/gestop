@@ -164,6 +164,28 @@ async function mockApi(page: Page, usuarioInicial?: Usuario) {
     if (method === 'GET' && /\/chamados$/.test(path)) {
       return json({ items: [], total: 0, limit: 20, offset: 0, hasMore: false, statusCounts: { TODOS: 0 } });
     }
+    if (method === 'GET' && path.includes('/chamado-tarefas/execucao')) {
+      return json({ total: 0, contadores: { novas: 0, emAndamento: 0, atrasadas: 0 }, items: [] });
+    }
+    if (method === 'GET' && path.includes('/cronograma/calendario')) {
+      return json({
+        from: '',
+        to: '',
+        resumo: { total: 0, agendadas: 0, realizadas: 0, atrasadas: 0 },
+        eventos: [],
+      });
+    }
+    if (method === 'GET' && path.includes('/mobile/field-package')) {
+      return json({
+        unidades: [],
+        checklists: [],
+        programacoes: [],
+        contadores: { unidades: 0, checklists: 0, programacoes: 0 },
+      });
+    }
+    if (method === 'GET' && /\/documentos\/[^/]+$/.test(path)) {
+      return json({ message: 'não encontrado' }, 404);
+    }
     if (method === 'GET' && path.includes('/documentos') && !path.includes('/pendencias')) {
       return json({ items: [], total: 0, limit: 20, offset: 0, hasMore: false });
     }
@@ -286,7 +308,7 @@ test.describe('322 tela inicial', () => {
     await page.goto('/chamados?aba=programacao&search=ZZ322');
     await expect(page).toHaveURL(/\/chamados\?/);
     await expect(page.getByRole('heading', { name: 'Chamados' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Programação' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Programação', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page).toHaveURL(/search=ZZ322/);
 
     await page.reload();
@@ -294,17 +316,17 @@ test.describe('322 tela inicial', () => {
     await expect(page).toHaveURL(/search=ZZ322/);
     await expect(page).not.toHaveURL(/\/cco/);
     await expect(page.getByRole('heading', { name: 'Chamados' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Programação' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Programação', exact: true })).toHaveAttribute('aria-pressed', 'true');
 
-    await page.getByRole('button', { name: 'Triagem' }).click();
+    await page.getByRole('button', { name: 'Triagem', exact: true }).click();
     await expect(page).not.toHaveURL(/aba=programacao/);
     await expect(page).toHaveURL(/search=ZZ322/);
-    await expect(page.getByRole('button', { name: 'Triagem' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Triagem', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByPlaceholder('Buscar por código, descrição ou unidade…')).toHaveValue('ZZ322');
     await page.reload();
     await expect(page).toHaveURL(/search=ZZ322/);
     await expect(page).not.toHaveURL(/aba=programacao/);
-    await expect(page.getByRole('button', { name: 'Triagem' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: 'Triagem', exact: true })).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByPlaceholder('Buscar por código, descrição ou unidade…')).toHaveValue('ZZ322');
 
     await page.goto('/execucao?aba=tarefas');
