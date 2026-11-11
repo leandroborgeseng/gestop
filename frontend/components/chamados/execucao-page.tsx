@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { CirclePlay, Map as MapIcon, MapPinned, Search } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useCanGerenciarChamados } from '@/components/auth/session-context';
@@ -22,6 +22,7 @@ import { useSessionUser } from '@/components/auth/session-context';
 import { downloadOrdensServicoLote, listChamadosEmExecucao } from '@/lib/api';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ChamadosEmExecucaoGrupo } from '@/lib/types';
+import { useEstadoExecucao } from '@/lib/use-estado-execucao';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
 
 export function ExecucaoPage() {
@@ -34,27 +35,40 @@ export function ExecucaoPage() {
 
 function ExecucaoPageContent() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const aba = searchParams.get('aba') === 'tarefas' ? 'tarefas' : 'chamados';
+  const { estado, definir } = useEstadoExecucao();
+  const aba = estado.aba;
   const snackbar = useSnackbar();
   const canGerenciar = useCanGerenciarChamados();
   const backHref = useSafeBackHref(canGerenciar ? '/chamados' : '/cco');
   const sessionUser = useSessionUser();
   const [grupos, setGrupos] = useState<ChamadosEmExecucaoGrupo[]>([]);
   const [minhasEquipeIds, setMinhasEquipeIds] = useState<string[]>([]);
-  const [equipeIds, setEquipeIds] = useState<string[]>([]);
-  const [responsavelIds, setResponsavelIds] = useState<string[]>([]);
+  const equipeIds = estado.equipes;
+  const responsavelIds = estado.responsaveis;
   const [avisoFiltro, setAvisoFiltro] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [searchDraft, setSearchDraft] = useState(estado.search);
+  const search = estado.search;
+  const selectedId = estado.sel;
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [mobilePanel, setMobilePanel] = useState<'mapa' | 'lista'>('mapa');
-  const [filtroHoje, setFiltroHoje] = useState(false);
-  const [filtroInicio, setFiltroInicio] = useState('');
-  const [filtroFim, setFiltroFim] = useState('');
+  const mobilePanel = estado.painelChamados;
+  const filtroHoje = estado.hoje;
+  const filtroInicio = estado.de;
+  const filtroFim = estado.ate;
   const [exportando, setExportando] = useState(false);
+
+  useEffect(() => {
+    setSearchDraft(estado.search);
+  }, [estado.search]);
+
+  useEffect(() => {
+    if (aba !== 'chamados') return;
+    const timer = window.setTimeout(() => {
+      if (searchDraft !== estado.search) definir({ search: searchDraft });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchDraft, estado.search, aba, definir]);
 
   function load() {
     setLoading(true);
@@ -134,7 +148,7 @@ function ExecucaoPageContent() {
       return;
     }
     setAvisoFiltro(null);
-    setResponsavelIds([id]);
+    definir({ responsaveis: [id] });
   }
 
   function aplicarMinhasEquipes() {
@@ -144,17 +158,13 @@ function ExecucaoPageContent() {
       return;
     }
     setAvisoFiltro(null);
-    setEquipeIds(ids);
+    definir({ equipes: ids });
   }
 
   function limparFiltros() {
-    setFiltroHoje(false);
-    setFiltroInicio('');
-    setFiltroFim('');
-    setEquipeIds([]);
-    setResponsavelIds([]);
-    setSearch('');
+    setSearchDraft('');
     setAvisoFiltro(null);
+    definir({ hoje: false, de: '', ate: '', equipes: [], responsaveis: [], search: '' });
   }
 
   const openExecucao = useCallback(
@@ -171,7 +181,7 @@ function ExecucaoPageContent() {
         );
         return;
       }
-      setSelectedId(id);
+      definir({ sel: id });
       router.push(`/execucao/${id}`);
     },
     [chamados, router, snackbar],
@@ -206,14 +216,14 @@ function ExecucaoPageContent() {
         }
       >
         <div className="mb-3 flex shrink-0 gap-2">
-          <Chip active={aba === 'chamados'} onClick={() => router.replace('/execucao')}>
+          <Chip active={aba === 'chamados'} onClick={() => definir({ aba: 'chamados' })}>
             Chamados
           </Chip>
-          <Chip active={aba === 'tarefas'} onClick={() => router.replace('/execucao?aba=tarefas')}>
+          <Chip active={aba === 'tarefas'} onClick={() => definir({ aba: 'tarefas' })}>
             Tarefas
           </Chip>
         </div>
-        {aba === 'tarefas' ? <ExecucaoTarefasPanel /> : null}
+        {aba === 'tarefas' ? <ExecucaoTarefasPanel estado={estado} definir={definir} /> : null}
         {aba === 'chamados' ? (
         <>
         <TipBanner id="chamados-em-execucao-mapa">
@@ -248,13 +258,13 @@ function ExecucaoPageContent() {
             </div>
 
             <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2 xl:hidden">
-              <Chip active={mobilePanel === 'mapa'} onClick={() => setMobilePanel('mapa')}>
+              <Chip active={mobilePanel === 'mapa'} onClick={() => definir({ painelChamados: 'mapa' })}>
                 <span className="inline-flex items-center gap-1.5">
                   <MapIcon className="h-3.5 w-3.5" />
                   Mapa
                 </span>
               </Chip>
-              <Chip active={mobilePanel === 'lista'} onClick={() => setMobilePanel('lista')}>
+              <Chip active={mobilePanel === 'lista'} onClick={() => definir({ painelChamados: 'lista' })}>
                 <span className="inline-flex items-center gap-1.5">
                   <MapPinned className="h-3.5 w-3.5" />
                   Lista
@@ -263,25 +273,19 @@ function ExecucaoPageContent() {
             </div>
 
             <div className="mb-3 flex shrink-0 flex-wrap items-end gap-2">
-              <Chip active={filtroHoje} onClick={() => setFiltroHoje((value) => !value)}>
+              <Chip active={filtroHoje} onClick={() => definir({ hoje: !filtroHoje })}>
                 Hoje
               </Chip>
               <input
                 type="date"
                 value={filtroInicio}
-                onChange={(event) => {
-                  setFiltroInicio(event.target.value);
-                  setFiltroHoje(false);
-                }}
+                onChange={(event) => definir({ de: event.target.value, hoje: false })}
                 className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[12px]"
               />
               <input
                 type="date"
                 value={filtroFim}
-                onChange={(event) => {
-                  setFiltroFim(event.target.value);
-                  setFiltroHoje(false);
-                }}
+                onChange={(event) => definir({ ate: event.target.value, hoje: false })}
                 className="h-9 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-3 text-[12px]"
               />
               {canGerenciar ? (
@@ -315,7 +319,7 @@ function ExecucaoPageContent() {
                   selected={responsavelIds}
                   onChange={(next) => {
                     setAvisoFiltro(null);
-                    setResponsavelIds(next ?? []);
+                    definir({ responsaveis: next ?? [] });
                   }}
                 />
                 <Button type="button" variant="text" size="sm" className="mt-1 h-auto px-0 text-left text-[12px]" onClick={aplicarResponsavelEu}>
@@ -330,7 +334,7 @@ function ExecucaoPageContent() {
                   selected={equipeIds}
                   onChange={(next) => {
                     setAvisoFiltro(null);
-                    setEquipeIds(next ?? []);
+                    definir({ equipes: next ?? [] });
                   }}
                 />
                 <Button type="button" variant="text" size="sm" className="mt-1 h-auto px-0 text-left text-[12px]" onClick={aplicarMinhasEquipes}>
@@ -360,8 +364,8 @@ function ExecucaoPageContent() {
                   <div className="relative">
                     <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
                     <input
-                      value={search}
-                      onChange={(event) => setSearch(event.target.value)}
+                      value={searchDraft}
+                      onChange={(event) => setSearchDraft(event.target.value)}
                       placeholder="Buscar chamado, unidade ou equipe…"
                       className="h-[38px] w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
                     />
@@ -389,8 +393,8 @@ function ExecucaoPageContent() {
                     pontos={mapPoints}
                     selectedId={selectedId}
                     hoveredId={hoveredId}
-                    onSelect={setSelectedId}
-                    onClearSelection={() => setSelectedId(null)}
+                    onSelect={(id) => definir({ sel: id })}
+                    onClearSelection={() => definir({ sel: null })}
                     onPopupAction={openExecucao}
                     onHover={setHoveredId}
                   />

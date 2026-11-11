@@ -118,7 +118,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/execucao, /execucao/[id], /chamados/em-execucao',
     api: 'ChamadosController: GET /chamados/em-execucao, GET /:id/execucao, POST checkin, evidencias, concluir',
     tabelas: 'Chamado, Evidencia, HistoricoStatus, Equipe, Usuario',
-    permissao: 'chamados.gerenciar ou chamados.executar. Menu Execução usa as duas.',
+    permissao: 'chamados.gerenciar ou chamados.executar. Menu Execução usa as duas. Aba, busca, filtros, painel e a tarefa aberta ficam na query; a URL não troca Secretaria nem perfil.',
   },
   {
     id: 'manual',

@@ -102,7 +102,7 @@ export function hrefDe(path: string, params: URLSearchParams) {
 
 /** Detalhe cobre a lista no celular (abaixo de `md`). Abrir o registro entra no histórico. */
 export function detalheCobreLista() {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
   return window.matchMedia('(max-width: 767px)').matches;
 }
 

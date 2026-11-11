@@ -52,10 +52,12 @@ export function ChamadoTarefaSheet({
   tarefaId,
   onClose,
   onChanged,
+  onSemAcesso,
 }: {
   tarefaId: string | null;
   onClose: () => void;
   onChanged?: () => void;
+  onSemAcesso?: () => void;
 }) {
   const snackbar = useSnackbar();
   const [tarefa, setTarefa] = useState<ChamadoTarefaDetalhe | null>(null);
@@ -96,7 +98,14 @@ export function ChamadoTarefaSheet({
           setChamadoLeitura(null);
         }
       })
-      .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao abrir a tarefa.', 'error'));
+      .catch((err) => {
+        const status = (err as { status?: number } | null)?.status;
+        if (status === 403 || status === 404) {
+          onSemAcesso?.();
+          return;
+        }
+        snackbar.show(err instanceof Error ? err.message : 'Falha ao abrir a tarefa.', 'error');
+      });
     return () => {
       ativo = false;
     };

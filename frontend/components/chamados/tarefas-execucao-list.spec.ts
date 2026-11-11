@@ -161,7 +161,7 @@ describe('UX-03 — teclado e anúncio', () => {
 describe('286 §8.5 — abrir pelo card, Esc e foco', () => {
   it('o card é <button> (Enter/Espaço nativos) que chama onOpen; o painel seleciona e abre o sheet', () => {
     expect(listSrc).toContain('onClick={() => onOpen(item.id)}');
-    expect(panelSrc).toMatch(/function abrirTarefa\(id: string\) \{\s*setSelecionada\(id\);[\s\S]*?setAberta\(id\);/);
+    expect(panelSrc).toMatch(/function abrirTarefa\(id: string\) \{\s*setSelecionada\(id\);[\s\S]*?definir\(\{ tarefa: id \}/);
     expect(panelSrc).toContain('onOpen={abrirTarefa}');
   });
   it('Esc fecha e o foco volta ao card', () => {
@@ -237,8 +237,9 @@ describe('286 §8.8 e §8.9 — textos', () => {
 
 describe('286 §8.10 — celular', () => {
   it('abre em Lista, chips de 44px, sem min-w fixo e respiro acima do menu inferior', () => {
-    expect(panelSrc).toContain("useState<'lista' | 'mapa'>('lista')");
-    expect(panelSrc).toMatch(/onClick=\{\(\) => setMobile\('lista'\)\} className="min-h-11"/);
+    expect(readFileSync(join(__dirname, '../../lib/estado-url-execucao.ts'), 'utf8')).toContain("painelTarefas: 'lista'");
+    expect(panelSrc).toContain('estado.painelTarefas');
+    expect(panelSrc).toMatch(/onClick=\{\(\) => definir\(\{ painelTarefas: 'lista' \}\)\} className="min-h-11"/);
     expect(panelSrc).not.toMatch(/min-w-\[\d+px\]/);
     expect(panelSrc).toContain('pb-[calc(var(--bottom-nav-h)+env(safe-area-inset-bottom))]');
     expect(lista([tarefa()])).toContain('min-h-11');

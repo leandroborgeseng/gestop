@@ -131,7 +131,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'executar',
         nome: 'Executar chamado',
         atores: ['equipe', 'gestor'],
-        descricao: 'Check-in, evidências e conclusão da ordem em execução.',
+        descricao: 'Check-in, evidências e conclusão da ordem em execução. Aba, busca, filtros, painel do celular, chamado selecionado e tarefa aberta ficam na URL; no celular a tarefa entra no histórico para o Voltar fechar o detalhe.',
         rotas: ['/execucao', '/execucao/[id]', 'POST /chamados/:id/execucao/checkin', 'POST /chamados/:id/execucao/evidencias', 'POST /chamados/:id/execucao/concluir'],
       },
       {
