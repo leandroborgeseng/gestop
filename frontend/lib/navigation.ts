@@ -256,8 +256,7 @@ export function getMobileNav(permissions: string[], user?: NavUser) {
 export function hrefDaListaDoMenu(
   itens: readonly Pick<NavItem, 'href' | 'atalhoCriacao' | 'listaDeChamados' | 'cedeParaListaDeChamados'>[],
 ): string {
-  const criacao = new Set(rotasDeCriacao());
-  const semCriacao = itens.filter((item) => !criacao.has(item.href));
+  const semCriacao = itens.filter((item) => !item.atalhoCriacao);
   const temListaDeChamados = semCriacao.some((item) => item.listaDeChamados);
   const destino = semCriacao.find((item) => !(temListaDeChamados && item.cedeParaListaDeChamados));
   return destino?.href ?? '/conta';

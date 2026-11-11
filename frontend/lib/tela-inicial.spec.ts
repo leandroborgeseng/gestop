@@ -127,6 +127,22 @@ describe('BK-322-B1 — precedência por flag, sem id fixo', () => {
   });
 });
 
+describe('BK-322-B2 — atalho de criação vem do próprio item', () => {
+  it('hrefDaListaDoMenu usa item.atalhoCriacao e mantém os destinos do QA 322 ciclo 2', () => {
+    const src = readFileSync(resolve('frontend/lib/navigation.ts'), 'utf8');
+    const corpo = src.slice(src.indexOf('export function hrefDaListaDoMenu'), src.indexOf('export function rotasDeCriacao'));
+    expect(corpo).toContain('item.atalhoCriacao');
+    expect(corpo).not.toContain('rotasDeCriacao');
+    expect(hrefDaListaDoMenu([{ href: '/chamados/novo', atalhoCriacao: true }, { href: '/vistorias' }])).toBe('/vistorias');
+    expect(hrefDaListaDoMenu([{ href: '/chamados/novo' }, { href: '/conta-custom' }])).toBe('/chamados/novo');
+    expect(primeiraTelaPermitida([CCO, 'dashboard.visualizar'])).toBe('/cco');
+    expect(primeiraTelaPermitida([CHAMADOS, 'chamados.gerenciar'])).toBe('/chamados');
+    expect(primeiraTelaPermitida(['chamados.abrir'])).toBe('/meus-chamados');
+    expect(primeiraTelaPermitida([buildMatrixKey('vistorias', '_tela', 'visualizar')])).toBe('/vistorias');
+    expect(primeiraTelaPermitida([])).toBe('/conta');
+  });
+});
+
 describe('entrada e login', () => {
   it('login sem returnTo usa a tela padrão; com returnTo respeita o destino permitido', () => {
     expect(hrefDepoisDoLogin([CCO, CHAMADOS, 'dashboard.visualizar'], undefined, null)).toBe('/cco');
