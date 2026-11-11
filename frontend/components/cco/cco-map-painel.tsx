@@ -416,6 +416,7 @@ export function CcoMapPainel({
       data-layout={celular ? 'sheet' : 'lateral'}
       data-sheet-viewport={sheetViewport ? 'true' : undefined}
       data-sheet-altura={celular ? alturaSheet : undefined}
+      data-map-chrome=""
       className={cn(
         'cco-map-painel pointer-events-auto flex flex-col overflow-hidden border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-md)]',
         celular

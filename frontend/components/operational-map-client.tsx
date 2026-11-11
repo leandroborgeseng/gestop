@@ -306,6 +306,7 @@ export function OperationalMapClient({
   manterVista = false,
   ocultarPinos = false,
   onMapaPronto,
+  detalhe = null,
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -332,6 +333,8 @@ export function OperationalMapClient({
   ocultarPinos?: boolean;
   /** 298: instância do mapa (camadas do Webmap desenhadas por fora). null ao desmontar. */
   onMapaPronto?: (map: import('leaflet').Map | null) => void;
+  /** 321: barra de detalhes renderizada dentro do shell (tela cheia nativa e fallback CSS). */
+  detalhe?: ReactNode;
 }) {
   const onMapaProntoRef = useRef(onMapaPronto);
   onMapaProntoRef.current = onMapaPronto;
@@ -408,12 +411,17 @@ export function OperationalMapClient({
       window.clearTimeout(refitTimerRef.current);
     }
 
+    const zoomAoAgendar = map.getZoom();
     refitTimerRef.current = window.setTimeout(() => {
       refreshMapSize(map);
+      // A7: um reflow (painel, barra, rotação) depois que o usuário aproximou
+      // não pode desfazer o zoom. O enquadramento da tela cheia, agendado no
+      // zoom automático, continua.
+      if (reason === 'layout' && map.getZoom() > zoomAoAgendar + 0.01) return;
       fitMapToPoints(map, locatedRef.current);
-      if (reason === 'data') {
-        lastFitKeyRef.current = locatedKey;
-      }
+      // O timer de layout cancela o de dados. Sem gravar a chave, Aplicar
+      // acha que o mapa nunca foi enquadrado e chama fitBounds de novo.
+      lastFitKeyRef.current = locatedKey;
     }, reason === 'layout' ? 420 : 80);
   }, [locatedKey]);
 
@@ -638,6 +646,25 @@ export function OperationalMapClient({
 
   useEffect(() => {
     const map = mapRef.current;
+    const shell = shellRef.current;
+    if (!mapReady || !map || !shell) return;
+    const sync = () => {
+      const centro = map.getCenter();
+      shell.dataset.mapLat = centro.lat.toFixed(5);
+      shell.dataset.mapLng = centro.lng.toFixed(5);
+      shell.dataset.mapZoom = String(map.getZoom());
+    };
+    sync();
+    map.on('moveend', sync);
+    map.on('zoomend', sync);
+    return () => {
+      map.off('moveend', sync);
+      map.off('zoomend', sync);
+    };
+  }, [mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     const street = streetLayerRef.current;
     const satellite = satelliteLayerRef.current;
     const labels = labelsLayerRef.current;
@@ -773,8 +800,11 @@ export function OperationalMapClient({
     }
 
     const shouldRefit = lastFitKeyRef.current !== locatedKey;
-    if (shouldRefit && manterVistaRef.current && lastFitKeyRef.current !== '') {
-      // 299: Aplicar/Atualizar mantêm centro e zoom; só registra os dados como já enquadrados.
+    // 299 / A7: Aplicar mantém centro e zoom. Zoom acima do inicial também conta
+    // como vista já definida — a chave pode ter ficado vazia se o timer de
+    // layout cancelou o de dados.
+    const vistaDefinida = lastFitKeyRef.current !== '' || map.getZoom() > FRANCA_DEFAULT_ZOOM;
+    if (shouldRefit && manterVistaRef.current && vistaDefinida) {
       lastFitKeyRef.current = locatedKey;
       refreshMapSize(map);
     } else if (shouldRefit) {
@@ -874,11 +904,15 @@ export function OperationalMapClient({
 
   return (
     <div className="cco-map-panel flex h-full min-h-0 w-full flex-col">
+      {/* 321: no iPhone o Safari não coloca div em fullscreen. O fallback
+          .sigma-map-fullscreen (position:fixed; height:100dvh) é este mesmo shell,
+          e a barra de detalhes é filha dele — não um portal no body. */}
       <div
         ref={shellRef}
+        data-fullscreen-mode={fullscreenMode}
         className={[
-          'sigma-map-shell relative min-h-0 w-full flex-1 overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
-          fullscreenMode === 'fallback' ? 'sigma-map-fullscreen fixed inset-0 z-[70]' : '',
+          'sigma-map-shell min-h-0 w-full flex-1 overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
+          fullscreenMode === 'fallback' ? 'sigma-map-fullscreen' : 'relative',
         ].join(' ')}
       >
         <div ref={containerRef} className="sigma-map-canvas" />
@@ -894,14 +928,14 @@ export function OperationalMapClient({
         </MapViewControls>
 
         {alertaMapa ? (
-          <div className="pointer-events-none absolute top-14 left-3.5 z-[520] flex max-w-[min(420px,calc(100%-5.5rem))] flex-col gap-2">
+          <div data-map-chrome="" className="pointer-events-none absolute top-14 left-3.5 z-[520] flex max-w-[min(420px,calc(100%-5.5rem))] flex-col gap-2">
             {alertaMapa}
           </div>
         ) : null}
 
         {renderPainel ? renderPainel({ isFullscreen, fullscreenMode }) : null}
 
-        <div className="pointer-events-none absolute top-3.5 left-3.5 z-[500]">
+        <div data-map-chrome="" className="pointer-events-none absolute top-3.5 left-3.5 z-[500]">
           <span className="inline-flex items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-3 py-1.5 text-xs font-semibold text-[var(--ink-2)] shadow-[var(--sh-sm)] backdrop-blur-md">
             <span className="mono text-[var(--brand)]">{located.length}</span> no mapa
             {totalItems !== located.length ? (
@@ -910,7 +944,7 @@ export function OperationalMapClient({
           </span>
         </div>
 
-        <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-[500] max-w-[280px] min-w-[168px] rounded-[var(--r-md)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-3 shadow-[var(--sh-md)] backdrop-blur-md">
+        <div data-map-chrome="" className="pointer-events-none absolute bottom-3.5 left-3.5 z-[500] max-w-[280px] min-w-[168px] rounded-[var(--r-md)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-3 shadow-[var(--sh-md)] backdrop-blur-md">
           <div className="mb-1.5 text-[10.5px] font-bold tracking-[0.05em] uppercase text-[var(--ink-3)]">Legenda</div>
           {view === 'chamados' && notaCorte ? (
             <p data-testid="nota-mapa-cortado" className="mb-1.5 text-[12px] text-[var(--ink-3)]">
@@ -974,6 +1008,8 @@ export function OperationalMapClient({
             </div>
           </div>
         ) : null}
+
+        {detalhe}
       </div>
     </div>
   );
