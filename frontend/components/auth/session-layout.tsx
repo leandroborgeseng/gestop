@@ -12,6 +12,7 @@ import { PageContainer } from '@/components/layout/page-shell';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { registerServiceWorker } from '@/lib/pwa';
 import { emitirTrocaEscopo, SESSAO_ESCOPO_EVENT, SessaoEscopoDetail } from '@/lib/session-events';
+import { sanitizeReturnTo } from '@/lib/tela-inicial';
 
 export function SessionLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -53,7 +54,10 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     function redirectToLogin() {
-      router.replace('/login?reason=expired');
+      const params = new URLSearchParams({ reason: 'expired' });
+      const returnTo = sanitizeReturnTo(`${window.location.pathname}${window.location.search}`);
+      if (returnTo) params.set('returnTo', returnTo);
+      router.replace(`/login?${params.toString()}`);
     }
 
     function onAuthExpired() {
@@ -69,6 +73,7 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
       return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
     }
 
+    // 322: renovar o usuário (foco, visibilitychange ou refresh) não troca a rota atual.
     getMe()
       .then((user) => {
         const refreshed: StoredAuth = { ...stored, user };

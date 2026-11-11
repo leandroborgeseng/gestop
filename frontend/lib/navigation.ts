@@ -185,7 +185,7 @@ export const NAV_GROUPS: NavGroup[] = [
 /** Atalhos fixos na barra inferior mobile — Execução sempre incluído quando permitido. */
 const MOBILE_BAR_CORE = ['cco', 'mobile', 'novo_chamado', 'meus_chamados', 'chamados', 'execucao'] as const;
 
-type NavUser = { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null | undefined;
+export type NavUser = { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null | undefined;
 
 export function getVisibleNavItems(permissions: string[], user?: NavUser) {
   if (isAdministradorSistemaAtivo(user)) {

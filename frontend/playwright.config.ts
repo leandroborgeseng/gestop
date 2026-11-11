@@ -14,7 +14,7 @@ export default defineConfig({
       // 321: WebKit com UA de iPhone. O Safari do iPhone não põe div em fullscreen;
       // o teste recusa requestFullscreen para exercer o fallback CSS.
       name: 'webkit',
-      testMatch: /321-cco-barra-lateral/,
+      testMatch: /321-cco-barra-lateral|322-/,
       use: {
         ...devices['Desktop Safari'],
         userAgent:

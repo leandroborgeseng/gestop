@@ -18,7 +18,8 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/login',
     api: 'AuthController: POST /auth/login, GET /auth/me, POST /auth/logout',
     tabelas: 'Usuario, Perfil, UsuarioPerfil, Permissao, PerfilPermissao, UsuarioPermissao, UsuarioSecretaria, Secretaria',
-    permissao: 'Login é público. As demais rotas exigem sessão (AuthGuard).',
+    permissao:
+      'Login é público. As demais rotas exigem sessão (AuthGuard). Depois do login, ou ao abrir `/`, a primeira tela usa as permissões efetivas do perfil ativo somadas às individuais (UsuarioPermissao). A escolha não altera perfilAtivoId nem secretariaAtivaId.',
   },
   {
     id: 'contexto',

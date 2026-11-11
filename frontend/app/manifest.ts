@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     short_name: 'SIGMA',
     description:
       'SIGMA - Sistema Integrado de Gestão de Manutenção e Ativos · Prefeitura de Franca',
-    start_url: '/mobile',
+    start_url: '/',
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
