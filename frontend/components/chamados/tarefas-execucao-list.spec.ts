@@ -107,7 +107,7 @@ describe('286 §8.1 — layout fila + mapa, sem <table>', () => {
 describe('286 §8.2 — anatomia do card', () => {
   it('ordem: código, "Tarefa do chamado", título, resumo/tipo, tags, prazo, meta; ul/li/button', () => {
     const html = lista([tarefa()]);
-    const ordem = ['CH-2026-0001', 'Tarefa do chamado', 'Fazer laudo', 'Elétrica - Troca de Lâmpada', 'tarefa-tags', 'tarefa-prazo', 'unit-meta'].map((t) =>
+    const ordem = ['CH-2026-0001', 'Tarefa do chamado', 'Fazer laudo', 'Resumo do chamado', 'Troca de lâmpada', 'tarefa-tags', 'tarefa-prazo', 'unit-meta'].map((t) =>
       html.indexOf(t, html.indexOf('>', html.indexOf('<button'))),
     );
     ordem.forEach((pos) => expect(pos).toBeGreaterThan(-1));
@@ -144,6 +144,17 @@ describe('286 §8.4 — histórico', () => {
     expect(html).toContain('>Cancelada<');
     expect(html).toContain('line-through');
     expect(html).not.toContain('⚠ Atrasada');
+  });
+});
+
+describe('UX-03 — teclado e anúncio', () => {
+  it('cada tarefa é um botão com foco de 2px e o nome acessível traz código e título', () => {
+    const html = lista([tarefa(), tarefa({ id: 't2', titulo: 'Segunda tarefa' })]);
+    expect(html.match(/<button type="button"/g)).toHaveLength(2);
+    expect(html).toContain('focus-visible:outline-2');
+    expect(html).not.toContain('tabindex="-1"');
+    expect(html).toContain('Tarefa Fazer laudo, do chamado CH-2026-0001');
+    expect(html).toContain('Tarefa Segunda tarefa, do chamado CH-2026-0001');
   });
 });
 
@@ -213,7 +224,8 @@ describe('286 §8.8 e §8.9 — textos', () => {
     const longo = 'Título muito longo '.repeat(10).trim();
     const html = lista([tarefa({ titulo: longo })]);
     expect(html).toMatch(new RegExp(`title="${longo}" class="tarefa-titulo[^"]*line-clamp-2`));
-    expect(html).toMatch(/title="Elétrica - Troca de Lâmpada" class="tarefa-resumo[^"]*truncate/);
+    expect(html).toMatch(/title="Troca de lâmpada"/);
+    expect(html).toContain('Resumo do chamado');
   });
   it('"Sem responsável" e "Sem equipe", nunca "—" solto', () => {
     const html = lista([tarefa({ responsavel: null, equipe: null })]);
@@ -243,8 +255,9 @@ describe('286 §8.11 — regressão de filtros e contadores', () => {
       minhasEquipes: minhasEquipes ? '1' : undefined,
       atrasadas: atrasadas ? '1' : undefined,
       historico: historico ? '1' : undefined,
-      prazoFrom: prazoFrom ? new Date(prazoFrom).toISOString() : undefined,
-      prazoTo: prazoTo ? new Date(prazoTo).toISOString() : undefined,
+      // UX-02: o dia civil vai cru; o servidor inclui o fim do dia em America/Sao_Paulo.
+      prazoFrom: prazoFrom || undefined,
+      prazoTo: prazoTo || undefined,
       secretariaId: secretariaId || undefined,
       equipeId: equipeId || undefined,
       responsavelId: responsavelId || undefined,
@@ -285,7 +298,8 @@ describe('286 §8.11 — regressão de filtros e contadores', () => {
   });
   it('a sanfona e o resumo dos filtros permanecem', () => {
     expect(panelSrc).toContain('onClick={() => setFiltrosAbertos((current) => !current)}');
-    expect(panelSrc).toContain('{!filtrosAbertos ? <p className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{resumoFiltros}</p> : null}');
+    expect(panelSrc).toContain('title={resumoFiltros}');
+    expect(panelSrc).toContain('line-clamp-2');
   });
 });
 
@@ -353,6 +367,18 @@ describe('286 §8.13 — estados da fila dentro do painel', () => {
     expect(r('erro')).toContain('Tentar novamente');
     expect(r('lista')).toBe('<p>LISTA</p>');
   });
+  it('UX-11: abaixo de 600px some a coluna secundária e ficam código, tarefa, Status e Prazo', () => {
+    const html = lista([tarefa()]);
+    expect(html).toContain('data-col="codigo"');
+    expect(html).toContain('data-col="tarefa"');
+    expect(html).toContain('data-col="status"');
+    expect(html).toContain('data-col="prazo"');
+    expect(html).toContain('data-col="secundaria"');
+    expect(css).toContain("@media (max-width: 599px)");
+    expect(css).toContain(".tarefas-lista [data-col='secundaria']");
+    expect(css).toContain('display: none');
+  });
+
   it('o painel começa no estado carregando dentro da fila, com busca visível', () => {
     const html = renderToStaticMarkup(createElement(ExecucaoTarefasPanel));
     const fila = html.slice(html.indexOf('aria-label="Fila de tarefas"'));

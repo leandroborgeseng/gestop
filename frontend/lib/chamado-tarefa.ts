@@ -147,7 +147,27 @@ export type GrupoIndicadoresTarefas = {
   atrasadas: number;
 };
 
+/** UX-01: o mesmo teto da grade, do modal formal e do export PDF/CSV/XLSX. */
+export const TETO_LINHAS_RELATORIO_TAREFAS = 500;
+
+/**
+ * Aviso quando o filtro passa do teto. Com total ≤ teto, não há aviso.
+ * O número mostrado é o que a consulta devolveu, no máximo o teto.
+ */
+export function avisoCorteRelatorioTarefas(
+  total: number,
+  exibidas: number,
+  teto = TETO_LINHAS_RELATORIO_TAREFAS,
+): string | null {
+  if (!Number.isFinite(total) || total <= teto) return null;
+  const mostradas = Math.min(Math.max(0, exibidas), teto);
+  return `Mostrando ${mostradas} de ${total} tarefas`;
+}
+
 export type RelatorioTarefasResponse = {
+  /** Quantidade no filtro, sem o teto de linhas. */
+  total: number;
+  limite: number;
   indicadores: {
     abertas: number;
     novas: number;
@@ -165,13 +185,17 @@ export type RelatorioTarefasResponse = {
 
 const RESUMO_CHAMADO_MAX = 60;
 
+export function textoCompletoDoChamado(chamado: { titulo?: string | null; descricao?: string | null }) {
+  const titulo = chamado.titulo?.replace(/\s+/g, ' ').trim();
+  const descricao = (chamado.descricao ?? '').replace(/\s+/g, ' ').trim();
+  return titulo || descricao || '';
+}
+
 export function resumoDoChamado(
   chamado: { titulo?: string | null; descricao?: string | null },
   maxLen = RESUMO_CHAMADO_MAX,
 ) {
-  const titulo = chamado.titulo?.replace(/\s+/g, ' ').trim();
-  const descricao = (chamado.descricao ?? '').replace(/\s+/g, ' ').trim();
-  const fonte = titulo || descricao;
+  const fonte = textoCompletoDoChamado(chamado);
   if (!fonte) return '—';
   if (fonte.length <= maxLen) return fonte;
   return `${fonte.slice(0, maxLen).trimEnd()}…`;
@@ -190,6 +214,7 @@ export function tarefaExecucaoToMapPoint(item: ChamadoTarefaResumo): ChamadoMapP
     equipeNome: item.equipe?.nome,
     prazoEm: item.prazo,
     responsavelNome: item.responsavel?.nome ?? null,
+    resumoChamado: resumoDoChamado(item.chamado),
   };
 }
 
@@ -208,6 +233,28 @@ export type FiltrosTarefasExecucaoResumo = {
   prazoTo?: string;
 };
 
+/** UX-12: não conta o padrão "não finalizados" (status vazio). Prazo conta como um filtro. */
+export function contarFiltrosAtivosTarefas(opts: FiltrosTarefasExecucaoResumo) {
+  let total = 0;
+  if (opts.status) total += 1;
+  if (opts.historico) total += 1;
+  if (opts.secretariaSigla) total += 1;
+  if (opts.equipeNome) total += 1;
+  if (opts.responsavelNome) total += 1;
+  if (opts.tipoNome) total += 1;
+  if (opts.prioridade) total += 1;
+  if (opts.atribuidaAMim) total += 1;
+  if (opts.minhasEquipes) total += 1;
+  if (opts.atrasadas) total += 1;
+  if (opts.prazoFrom || opts.prazoTo) total += 1;
+  return total;
+}
+
+export function rotuloContagemFiltros(total: number) {
+  if (total <= 0) return null;
+  return total === 1 ? '(1 filtro)' : `(${total} filtros)`;
+}
+
 export function resumoFiltrosTarefasExecucao(opts: FiltrosTarefasExecucaoResumo) {
   const partes: string[] = [];
   if (opts.status === 'IMPEDIDA') partes.push('Status: Impedida (histórico)');
@@ -222,8 +269,27 @@ export function resumoFiltrosTarefasExecucao(opts: FiltrosTarefasExecucaoResumo)
   if (opts.atribuidaAMim) partes.push('Atribuídas a mim');
   if (opts.minhasEquipes) partes.push('Minhas equipes');
   if (opts.atrasadas) partes.push('Atrasadas');
-  if (opts.prazoFrom || opts.prazoTo) partes.push('Prazo');
+  const prazo = textoPrazoFiltro(opts.prazoFrom, opts.prazoTo);
+  if (prazo) partes.push(prazo);
   return partes.length ? partes.join(' · ') : 'Nenhum filtro ativo';
+}
+
+/** UX-02: resumo da sanfona com as datas do prazo (dd/mm). */
+export function textoPrazoFiltro(from?: string, to?: string): string | null {
+  const de = dataCivilCurta(from);
+  const ate = dataCivilCurta(to);
+  if (de && ate) return `Prazo: ${de} a ${ate}`;
+  if (de) return `Prazo: a partir de ${de}`;
+  if (ate) return `Prazo: até ${ate}`;
+  return null;
+}
+
+function dataCivilCurta(valor?: string) {
+  const texto = valor?.trim();
+  if (!texto) return '';
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(texto);
+  if (!match) return texto;
+  return `${match[3]}/${match[2]}`;
 }
 
 export type FiltrosRelatorioTarefasInput = {
@@ -254,6 +320,28 @@ export function montarFiltrosRelatorioTarefas(input: FiltrosRelatorioTarefasInpu
   };
 }
 
+export function rotuloContagem(n: number, um: string, varios: string) {
+  return `${n} ${n === 1 ? um : varios}`;
+}
+
 export function formatarGrupoIndicadoresTarefas(item: Pick<GrupoIndicadoresTarefas, 'nome' | 'pendentes' | 'atrasadas'>) {
-  return `${item.nome}: ${item.pendentes} pendentes · ${item.atrasadas} atrasadas`;
+  return `${item.nome} — ${rotuloContagem(item.pendentes, 'pendente', 'pendentes')}, ${rotuloContagem(item.atrasadas, 'atrasada', 'atrasadas')}`;
+}
+
+/** UX-04: pendências primeiro — atrasadas, depois pendentes, depois o nome. */
+export const LIMITE_GRUPOS_VISIVEIS = 6;
+
+export function ordenarGruposPendencias<T extends Pick<GrupoIndicadoresTarefas, 'nome' | 'pendentes' | 'atrasadas'>>(
+  itens: readonly T[],
+): T[] {
+  return [...itens].sort(
+    (a, b) => b.atrasadas - a.atrasadas || b.pendentes - a.pendentes || a.nome.localeCompare(b.nome, 'pt-BR'),
+  );
+}
+
+/** Rodapé quando a lista corta. Null se tudo já está visível. */
+export function textoCorteGrupos(total: number, visiveis = LIMITE_GRUPOS_VISIVEIS): string | null {
+  const outras = total - visiveis;
+  if (outras <= 0) return null;
+  return `+${outras} outras`;
 }

@@ -39,7 +39,7 @@ function createChamadoIcon(point: ChamadoMapPoint, emphasis: 'normal' | 'hover' 
 
   return L.divIcon({
     className: 'sigma-map-marker',
-    html: `<span style="
+    html: `<span data-pin="${point.id}" style="
       display:grid;place-items:center;width:26px;height:26px;
       background:${color};border:2px solid #fff;border-radius:50% 50% 50% 0;
       transform:rotate(-45deg) scale(${scale});

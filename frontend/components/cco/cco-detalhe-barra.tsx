@@ -2,6 +2,7 @@
 
 import { type ReactNode, useEffect, useId, useLayoutEffect, useRef } from 'react';
 import { X } from 'lucide-react';
+import { CONSULTA_BARRA_ESTREITA } from '@/lib/cco-detalhe-barra';
 
 /**
  * 321 — barra de detalhes dentro do `.sigma-map-shell` (o elemento que entra em
@@ -168,7 +169,7 @@ export function CcoDetalheBarra({
     document.body.dataset.ccoScrollTop = String(origem.top);
     const ajustar = () => {
       const fullscreen = Boolean(document.fullscreenElement) || Boolean(shell?.classList.contains('sigma-map-fullscreen'));
-      const estreita = window.matchMedia('(max-width: 1279px)').matches;
+      const estreita = window.matchMedia(CONSULTA_BARRA_ESTREITA).matches;
       document.body.classList.toggle('cco-detalhe-trava', !fullscreen && estreita);
       if (fullscreen || estreita || !(shell instanceof HTMLElement)) {
         barra.style.removeProperty('--cco-barra-topo');

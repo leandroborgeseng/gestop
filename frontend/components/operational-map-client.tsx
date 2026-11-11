@@ -17,6 +17,7 @@ import {
   MapBasemap,
 } from '@/lib/franca-geo';
 import { hasPlottableCoordinates, toLatLngTuple } from '@/lib/geo-coordinates';
+import { devePreservarVistaNoLayout } from '@/lib/mapa-vista';
 import { heatCellCounts, heatCountAt, heatLegend, paintHeat } from '@/lib/map-heat';
 import { escapeHtml } from '@/lib/security';
 import { ChamadoMapaItem, UnidadeOperacional, UnidadeSituacao, UnidadeSlaMapa } from '@/lib/types';
@@ -188,11 +189,15 @@ function buildChamadoPopupHtml(chamado: ChamadoMapaItem) {
   `;
 }
 
-function refreshMapSize(map: L.Map) {
-  map.invalidateSize({ animate: false });
-  requestAnimationFrame(() => map.invalidateSize({ animate: false }));
-  window.setTimeout(() => map.invalidateSize({ animate: false }), 120);
-  window.setTimeout(() => map.invalidateSize({ animate: false }), 400);
+function refreshMapSize(map: L.Map, restaurar?: { lat: number; lng: number; zoom: number }) {
+  const aplicar = () => {
+    map.invalidateSize({ animate: false });
+    if (restaurar) map.setView([restaurar.lat, restaurar.lng], restaurar.zoom, { animate: false });
+  };
+  aplicar();
+  requestAnimationFrame(aplicar);
+  window.setTimeout(aplicar, 120);
+  window.setTimeout(aplicar, 400);
 }
 
 function fitMapToPoints(map: L.Map, points: Array<{ latLng: L.LatLngTuple }>) {
@@ -340,6 +345,8 @@ export function OperationalMapClient({
   onMapaProntoRef.current = onMapaPronto;
   const manterVistaRef = useRef(manterVista);
   manterVistaRef.current = manterVista;
+  const vistaManualRef = useRef(false);
+  const ajustandoVistaRef = useRef(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -413,12 +420,24 @@ export function OperationalMapClient({
 
     const zoomAoAgendar = map.getZoom();
     refitTimerRef.current = window.setTimeout(() => {
+      const preservar = devePreservarVistaNoLayout({
+        motivo: reason,
+        vistaManual: vistaManualRef.current,
+        zoomAtual: map.getZoom(),
+        zoomAoAgendar,
+      });
+      if (preservar) {
+        const centro = map.getCenter();
+        refreshMapSize(map, { lat: centro.lat, lng: centro.lng, zoom: map.getZoom() });
+        lastFitKeyRef.current = locatedKey;
+        return;
+      }
+      ajustandoVistaRef.current = true;
       refreshMapSize(map);
-      // A7: um reflow (painel, barra, rotação) depois que o usuário aproximou
-      // não pode desfazer o zoom. O enquadramento da tela cheia, agendado no
-      // zoom automático, continua.
-      if (reason === 'layout' && map.getZoom() > zoomAoAgendar + 0.01) return;
       fitMapToPoints(map, locatedRef.current);
+      window.setTimeout(() => {
+        ajustandoVistaRef.current = false;
+      }, 500);
       // O timer de layout cancela o de dados. Sem gravar a chave, Aplicar
       // acha que o mapa nunca foi enquadrado e chama fitBounds de novo.
       lastFitKeyRef.current = locatedKey;
@@ -572,6 +591,11 @@ export function OperationalMapClient({
       FRANCA_DEFAULT_ZOOM,
     );
     map.zoomControl.setPosition('bottomright');
+    const marcarVistaManual = () => {
+      if (!ajustandoVistaRef.current) vistaManualRef.current = true;
+    };
+    map.on('zoomend', marcarVistaManual);
+    map.on('dragend', marcarVistaManual);
 
     streetLayerRef.current = L.tileLayer(CARTO_VOYAGER_NO_LABELS, {
       attribution: CARTO_ATTRIBUTION,

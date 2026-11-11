@@ -68,7 +68,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         nome: 'Autenticar',
         atores: ['administrador', 'gestor', 'equipe', 'solicitante', 'externo'],
         descricao:
-          'Entrar com e-mail e senha. Sem returnTo, a sessão percorre o menu visível, na mesma ordem do lateral e da barra inferior, pula formulários de criação e, se a lista de Chamados está no menu, não para em Meus chamados. Começa pelo CCO quando o perfil ativo e as permissões individuais liberam. Se só houver atalho de criação, abre `/conta`. A raiz `/` é o start_url do PWA e usa a mesma escolha, sem trocar Secretaria nem perfil. Rota específica, F5 e volta do segundo plano permanecem na tela atual. Encerrar a sessão sai do sistema.',
+          'Entrar com e-mail e senha. Sem returnTo, a sessão percorre o menu visível, na mesma ordem do lateral e da barra inferior, pula formulários de criação e, se o item listaDeChamados está no menu, não para no item cedeParaListaDeChamados. Começa pelo CCO quando o perfil ativo e as permissões individuais liberam. Se só houver atalho de criação, abre `/conta`. A raiz `/` é o start_url do PWA e usa a mesma escolha, sem trocar Secretaria nem perfil. Rota específica, F5 e volta do segundo plano permanecem na tela atual. Encerrar a sessão sai do sistema.',
         rotas: ['/', '/login', 'POST /auth/login', 'GET /auth/me', 'POST /auth/logout'],
       },
       {
@@ -159,7 +159,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'tratar-tarefa',
         nome: 'Tratar tarefa atribuída',
         atores: ['equipe', 'gestor'],
-        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Cancelar exige a permissão Cancelar tarefa (ou a chave antiga tarefas.excluir); alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige Alterar dados da tarefa. O histórico da tarefa só sai com tarefas_historico.visualizar. Os anexos da tarefa saem para o designado (responsável ou membro da equipe) mesmo sem essa chave. Impedida não é mais atribuída; registros antigos continuam consultáveis. Troca de responsável e de equipe geram eventos distintos na trilha, com valor anterior e novo. A lista da aba Tarefas mostra a coluna Resumo do chamado (título ou início da descrição). O pin do mapa inclui o responsável. Fechar a sanfona Filtros de tarefas não limpa os filtros; o resumo padrão é Status: não finalizados (o mesmo recorte do backend) e, sem filtro nenhum no helper, Nenhum filtro ativo.',
+        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Cancelar exige a permissão Cancelar tarefa (ou a chave antiga tarefas.excluir); alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige Alterar dados da tarefa. O histórico da tarefa só sai com tarefas_historico.visualizar. Os anexos da tarefa saem para o designado (responsável ou membro da equipe) mesmo sem essa chave. Impedida não é mais atribuída; registros antigos continuam consultáveis. Troca de responsável e de equipe geram eventos distintos na trilha, com valor anterior e novo. Tab percorre cada tarefa da lista; Enter abre a tarefa anunciada, com código do chamado e título no nome acessível e foco visível de 2px. A lista da aba Tarefas e a grade do Dashboard usam o cabeçalho Resumo do chamado e o mesmo texto (resumoDoChamado). O texto completo aparece no mouse ou no foco. Abaixo de 600px ficam só código, tarefa, Status e Prazo. O pin do mapa mostra Tarefa, o resumo do chamado e o responsável (ou Sem responsável). Fechar a sanfona Filtros de tarefas não limpa os filtros; o resumo padrão é Status: não finalizados (o mesmo recorte do backend) e, sem filtro nenhum no helper, Nenhum filtro ativo. Os campos de prazo se chamam Prazo de e Prazo até; o dia final é inclusivo em America/Sao_Paulo e a sanfona fechada mostra Prazo: dd/mm a dd/mm (ou a partir de / até).',
         rotas: ['/execucao', 'GET /chamado-tarefas/execucao', 'PATCH /chamado-tarefas/:id'],
       },
       {
@@ -174,7 +174,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'relatorio-tarefas',
         nome: 'Relatório de tarefas',
         atores: ['administrador', 'gestor'],
-        descricao: 'A grade filtrável fica no dashboard, com exportação simples dos dados exibidos (os mesmos filtros da grade). O período do box usa a data de abertura (createdAt), o mesmo campo do modal formal. Os agrupamentos por secretaria e equipe mostram pendentes e atrasadas. Tarefas não entram na contagem de chamados. O relatório formal (PDF, CSV ou XLSX) sai do card Tarefas de chamados, no padrão dos demais relatórios.',
+        descricao: 'A grade filtrável fica no dashboard, com exportação simples dos dados exibidos (os mesmos filtros da grade). O período do box usa a data de abertura (createdAt), o mesmo campo do modal formal. Cartões e agrupamentos são agregados no banco (count/groupBy) sobre o filtro inteiro, com o mesmo where e o mesmo escopo da listagem. A soma de pendentes por secretaria é a do banco, e os grupos somam o total do filtro. O PDF formal mostra esses mesmos totais. Secretaria e equipe aparecem na ordem atrasadas, pendentes e nome, com singular e plural e a legenda de que atrasadas estão incluídas nas pendentes. Atrasadas acima de zero saem em vermelho. Grupos sem pendência nem atraso ficam esmaecidos. Acima de seis grupos o rodapé mostra +N outras e Ver todas. Tarefas não entram na contagem de chamados. O relatório formal (PDF, CSV ou XLSX) sai do card Tarefas de chamados, no padrão dos demais relatórios. A lista, o modal e os arquivos trazem no máximo 500 linhas. Grade e modal formal avisam "Mostrando 500 de N tarefas" quando o filtro passa de 500; PDF, CSV e XLSX repetem o aviso. Com 500 linhas não há aviso.',
         rotas: ['/dashboard', '/relatorios', 'GET /chamado-tarefas/relatorio', 'GET /chamado-tarefas/relatorio.csv', 'GET /chamado-tarefas/relatorio.pdf', 'GET /chamado-tarefas/relatorio.xlsx'],
       },
     ],
@@ -283,7 +283,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'cco',
         nome: 'Acompanhar o CCO',
         atores: ['administrador', 'gestor', 'equipe'],
-        descricao: 'Mapa operacional, próprios, filtros e chamados georreferenciados.',
+        descricao: 'Mapa operacional, próprios, filtros e chamados georreferenciados. Zoom ou arraste manual permanece ao abrir a barra, cruzar o corte da grade ou girar a tela. Aplicar filtros continua sem mover a vista. A barra e a grade empilham no mesmo corte de 80rem, então 125% e 150% de fonte mudam as duas juntas.',
         rotas: ['/cco', '/cco/unidades/[id]', 'GET /operacional/resumo', 'GET /operacional/unidades', 'GET /operacional/chamados-mapa'],
       },
       {
