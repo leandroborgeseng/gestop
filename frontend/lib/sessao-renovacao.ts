@@ -5,6 +5,9 @@ import type { LoginResponse } from '@/lib/types';
 /** Renova na abertura e na retomada quando falta menos de 7 dias para o token vencer. */
 export const LIMIAR_RENOVACAO_MS = 7 * 24 * 60 * 60 * 1000;
 
+/** visibilitychange, focus e pageshow da mesma retomada viram uma única revalidação. */
+export const ESPERA_RETORNO_MS = 400;
+
 export type AcaoRetomada = 'ignorada' | 'revalidar' | 'refresh' | 'refresh-falhou' | 'revalidar-falhou' | 'expirada';
 
 export type RetomadaResultado = {
@@ -149,4 +152,19 @@ export function revalidarSessaoNaRetomada(): Promise<RetomadaResultado> {
   });
   emCurso = promessa;
   return promessa;
+}
+
+let retornoAgendado: Promise<RetomadaResultado> | null = null;
+
+/** Debounce compartilhado: vários eventos no mesmo instante esperam a mesma execução. */
+export function agendarRevalidacaoNaRetomada(): Promise<RetomadaResultado> {
+  if (retornoAgendado) return retornoAgendado;
+  retornoAgendado = new Promise((resolve) => {
+    setTimeout(() => {
+      const execucao = revalidarSessaoNaRetomada();
+      retornoAgendado = null;
+      resolve(execucao);
+    }, ESPERA_RETORNO_MS);
+  });
+  return retornoAgendado;
 }

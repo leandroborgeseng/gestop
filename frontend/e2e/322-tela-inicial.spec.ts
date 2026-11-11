@@ -555,7 +555,8 @@ test.describe('322 tela inicial', () => {
     await expect(page).not.toHaveURL(/\/login/);
     await expect(page).not.toHaveURL(/\/mobile/);
     expect(api.trocas()).toEqual([]);
-    expect(api.renovacoes().length).toBeGreaterThan(0);
+    await page.waitForTimeout(500);
+    expect(api.renovacoes()).toHaveLength(1);
     expect(await contextoSessao(page)).toEqual(contextoAntes);
 
     await page.goto('/');

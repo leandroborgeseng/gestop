@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REMEMBER_STORAGE_KEY } from './api';
-import { deveRenovarToken, LIMIAR_RENOVACAO_MS, prepararSessaoAoAbrir, revalidarSessaoNaRetomada, tokenPertoDeExpirar } from './sessao-renovacao';
+import { agendarRevalidacaoNaRetomada, deveRenovarToken, ESPERA_RETORNO_MS, LIMIAR_RENOVACAO_MS, prepararSessaoAoAbrir, revalidarSessaoNaRetomada, tokenPertoDeExpirar } from './sessao-renovacao';
 
 const AGORA = 1_700_000_000_000;
 
@@ -27,6 +27,7 @@ function instalarJanela(auth: unknown, remember: '0' | '1') {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
@@ -180,6 +181,34 @@ describe('revalidarSessaoNaRetomada', () => {
     expect(store.has('sigma.auth')).toBe(false);
     expect(vi.mocked(window.dispatchEvent)).toHaveBeenCalled();
     expect(vi.mocked(fetch)).not.toHaveBeenCalled();
+  });
+
+  it('três eventos da mesma retomada disparam um único refresh', async () => {
+    instalarJanela(
+      { accessToken: 'velho', user: { id: 'u', permissoes: [], perfis: [] }, expiresAt: Date.now() + 20_000 },
+      '1',
+    );
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({ accessToken: 'um-so', tokenType: 'Bearer', expiresInSeconds: 30 * 24 * 3600, user: { id: 'u', permissoes: [], perfis: [] } }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.useFakeTimers();
+
+    const primeira = agendarRevalidacaoNaRetomada();
+    const segunda = agendarRevalidacaoNaRetomada();
+    const terceira = agendarRevalidacaoNaRetomada();
+    expect(primeira).toBe(segunda);
+    expect(segunda).toBe(terceira);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(ESPERA_RETORNO_MS);
+    await Promise.all([primeira, segunda, terceira]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api-gestop/auth/refresh');
   });
 
   it('sessão folgada só revalida /auth/me e não chama o refresh', async () => {

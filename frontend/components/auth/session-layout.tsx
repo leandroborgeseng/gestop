@@ -12,7 +12,7 @@ import { PageContainer } from '@/components/layout/page-shell';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { registerServiceWorker } from '@/lib/pwa';
 import { emitirTrocaEscopo, SESSAO_ESCOPO_EVENT, SessaoEscopoDetail } from '@/lib/session-events';
-import { prepararSessaoAoAbrir, revalidarSessaoNaRetomada } from '@/lib/sessao-renovacao';
+import { agendarRevalidacaoNaRetomada, prepararSessaoAoAbrir } from '@/lib/sessao-renovacao';
 import { sanitizeReturnTo } from '@/lib/tela-inicial';
 
 export function SessionLayout({ children }: { children: React.ReactNode }) {
@@ -128,7 +128,7 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
     }
 
     const aoRetomar = () => {
-      void revalidarSessaoNaRetomada().then((resultado) => {
+      void agendarRevalidacaoNaRetomada().then((resultado) => {
         if (cancelado) return;
         const stored = getStoredAuth();
         if (resultado.redirecionou || !stored) {
