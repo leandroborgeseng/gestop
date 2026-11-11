@@ -1,16 +1,39 @@
 {
-  "fonte": 16,
-  "corte": 1280,
-  "abaixo": {
-    "barra": "fixed",
-    "colunas": "none",
-    "estreita": true
-  },
-  "acima": {
-    "barra": "sticky",
-    "colunas": "340px 612px",
-    "estreita": false
-  },
-  "fonte125": 1600,
-  "fonte150": 1920
+  "mecanismo": "Chromium lançado com user-data-dir e Preferences webkit.webprefs.default_font_size 20 (125%) e 24 (150%). A página em branco já mede essa fonte, antes de qualquer CSS da aplicação.",
+  "medicoes": [
+    {
+      "fonte": 20,
+      "corte": 1600,
+      "emBranco": 20,
+      "abaixo": {
+        "fonte": 20,
+        "barra": "fixed",
+        "colunas": "none",
+        "estreita": true
+      },
+      "acima": {
+        "fonte": 20,
+        "barra": "sticky",
+        "colunas": "340px 914px",
+        "estreita": false
+      }
+    },
+    {
+      "fonte": 24,
+      "corte": 1920,
+      "emBranco": 24,
+      "abaixo": {
+        "fonte": 24,
+        "barra": "fixed",
+        "colunas": "none",
+        "estreita": true
+      },
+      "acima": {
+        "fonte": 24,
+        "barra": "sticky",
+        "colunas": "340px 1231px",
+        "estreita": false
+      }
+    }
+  ]
 }
