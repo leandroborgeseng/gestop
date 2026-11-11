@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { downloadRelatorioTarefas, getRelatorioTarefas, getSecretarias, listEquipesExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
 import {
+  avisoCorteRelatorioTarefas,
   formatarGrupoIndicadoresTarefas,
   montarFiltrosRelatorioTarefas,
   TAREFA_PRIORIDADE_LABEL,
@@ -82,6 +83,7 @@ export function RelatorioTarefasPanel() {
   }
 
   const indicadores = data?.indicadores;
+  const avisoCorte = data ? avisoCorteRelatorioTarefas(data.total, data.items.length, data.limite) : null;
 
   return (
     <div className="space-y-3">
@@ -140,6 +142,11 @@ export function RelatorioTarefasPanel() {
         </Button>
       </div>
       {erro ? <p className="text-[13px] text-[var(--danger)]">{erro}</p> : null}
+      {avisoCorte ? (
+        <p data-testid="aviso-corte-tarefas" className="text-[13px] font-medium text-[var(--ink-2)]">
+          {avisoCorte}
+        </p>
+      ) : null}
       {indicadores ? (
         <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <Indicador label="Abertas" value={indicadores.abertas} />

@@ -84,7 +84,7 @@ function tarefaLoaded(overrides: Record<string, unknown> = {}) {
 
 describe('ChamadoTarefasService — relatório P3', () => {
   const prisma = {
-    chamadoTarefa: { findMany: vi.fn() },
+    chamadoTarefa: { findMany: vi.fn(), count: vi.fn() },
     equipeUsuario: { findMany: vi.fn() },
   };
   const storage = { persistBuffer: vi.fn() };
@@ -95,6 +95,7 @@ describe('ChamadoTarefasService — relatório P3', () => {
     vi.clearAllMocks();
     service = new ChamadoTarefasService(prisma as never, storage as never, audit as never);
     prisma.equipeUsuario.findMany.mockResolvedValue([]);
+    prisma.chamadoTarefa.count.mockResolvedValue(0);
   });
 
   it('agrupa secretaria e equipe com pendentes e atrasadas, não só o total', async () => {
@@ -158,5 +159,26 @@ describe('ChamadoTarefasService — relatório P3', () => {
       ]),
     });
     expect(JSON.stringify(where)).not.toContain('prazoFrom');
+  });
+
+  it('UX-01: capa formal exporta no máximo 500 e informa o corte quando o filtro passa do teto', async () => {
+    prisma.chamadoTarefa.count.mockResolvedValue(600);
+    prisma.chamadoTarefa.findMany.mockResolvedValue([tarefaLoaded()]);
+
+    const csv = await service.exportarCsv({ capa: 'formal' }, adminGlobal());
+
+    expect(prisma.chamadoTarefa.findMany.mock.calls[0][0].take).toBe(500);
+    expect(csv).toContain('Mostrando 1 de 600 tarefas');
+    expect(csv.split('\n').filter((linha) => linha.startsWith('CH-')).length).toBe(1);
+  });
+
+  it('UX-01: com 500 ou menos o CSV não traz aviso de corte', async () => {
+    prisma.chamadoTarefa.count.mockResolvedValue(1);
+    prisma.chamadoTarefa.findMany.mockResolvedValue([tarefaLoaded()]);
+
+    const csv = await service.exportarCsv({ capa: 'simples' }, adminGlobal());
+
+    expect(csv).not.toContain('Mostrando');
+    expect(prisma.chamadoTarefa.findMany.mock.calls[0][0].take).toBe(500);
   });
 });
