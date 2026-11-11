@@ -680,6 +680,7 @@ body:has(.sigma-map-shell.sigma-map-fullscreen) .sigma-main {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   overflow: hidden;
+  overscroll-behavior: contain;
   pointer-events: auto;
   border-left: 1px solid var(--line);
   background: var(--surface);
@@ -755,10 +756,9 @@ body:has(.sigma-map-shell.sigma-map-fullscreen) .sigma-main {
 }
 
 .cco-detalhe-abas {
+  position: relative;
   flex: 0 0 auto;
   min-width: 0;
-  overflow-x: auto;
-  overscroll-behavior: contain;
   padding: 0 12px;
   border-bottom: 1px solid var(--line-2);
   background: var(--surface);
@@ -766,6 +766,28 @@ body:has(.sigma-map-shell.sigma-map-fullscreen) .sigma-main {
 
 .cco-detalhe-abas [role='tablist'] {
   border-bottom: 0;
+}
+
+/* Indica que a fileira continua além da borda, sem cortar o clique na aba. */
+.cco-detalhe-abas[data-overflow='1']::after,
+.cco-detalhe-abas[data-rolou='1']::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 28px;
+  pointer-events: none;
+}
+
+.cco-detalhe-abas[data-overflow='1']::after {
+  right: 0;
+  background: linear-gradient(to left, var(--surface), transparent);
+}
+
+.cco-detalhe-abas[data-rolou='1']::before {
+  left: 0;
+  background: linear-gradient(to right, var(--surface), transparent);
 }
 
 .cco-detalhe-corpo {
@@ -820,6 +842,60 @@ body:has(.sigma-map-shell.sigma-map-fullscreen) .sigma-main {
 
   .cco-detalhe-corpo {
     padding-top: 8px;
+  }
+}
+
+/* 321 janela — fora da tela cheia. A tela cheia (nativa ou .sigma-map-fullscreen) não entra aqui. */
+@media (max-width: 1023px) {
+  .sigma-map-shell:not(:fullscreen):not(.sigma-map-fullscreen):has(.cco-detalhe-barra) {
+    overflow: visible;
+  }
+
+  .sigma-map-shell:not(:fullscreen):not(.sigma-map-fullscreen) .cco-detalhe-barra {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto;
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+}
+
+body.cco-detalhe-trava {
+  overflow: hidden;
+}
+
+html:has(body.cco-detalhe-trava) {
+  overflow: hidden;
+}
+
+@media (max-width: 1023px) {
+  body.cco-detalhe-trava .sigma-main {
+    z-index: 80;
+  }
+
+  /* A rolagem da página do CCO está neste filho do main, não no body. */
+  body.cco-detalhe-trava .sigma-main > .overflow-y-auto {
+    overflow: hidden;
+  }
+}
+
+@media (min-width: 1024px) {
+  .sigma-map-shell:not(:fullscreen):not(.sigma-map-fullscreen):has(.cco-detalhe-barra) .sigma-map-canvas {
+    /* Leaflet grava position:relative inline. Sem isto a barra sticky fica depois do mapa. */
+    position: absolute !important;
+    inset: 0;
+  }
+
+  .sigma-map-shell:not(:fullscreen):not(.sigma-map-fullscreen) .cco-detalhe-barra {
+    position: sticky;
+    top: 0;
+    right: auto;
+    bottom: auto;
+    margin-left: auto;
+    height: min(100%, calc(100dvh - var(--cco-barra-topo, 0px) - 4px));
+    max-height: calc(100dvh - var(--cco-barra-topo, 0px) - 4px);
   }
 }
 

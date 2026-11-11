@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useEffect, useId, useRef } from 'react';
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 /**
@@ -53,6 +53,13 @@ export function CcoDetalheBarra({
       retornoRef.current = atual;
     }
     tituloRef.current?.focus({ preventScroll: true });
+    if (document.body.classList.contains('cco-detalhe-trava')) {
+      const pagina = document.querySelector('main.sigma-main > .overflow-y-auto') as HTMLElement | null;
+      const y = Number(document.body.dataset.ccoScrollY ?? window.scrollY);
+      const top = Number(document.body.dataset.ccoScrollTop ?? pagina?.scrollTop ?? 0);
+      if (window.scrollY !== y) window.scrollTo(0, y);
+      if (pagina && pagina.scrollTop !== top) pagina.scrollTop = top;
+    }
     return () => {
       const retorno = retornoRef.current;
       if (fecharPeloUsuario.current && retorno && document.contains(retorno)) {
@@ -64,13 +71,28 @@ export function CcoDetalheBarra({
   useEffect(() => {
     const raiz = raizRef.current;
     if (!raiz) return;
-    const abas = raiz.querySelector<HTMLElement>('.cco-detalhe-abas');
+    const faixa = raiz.querySelector<HTMLElement>('.cco-detalhe-abas');
+    const lista = raiz.querySelector<HTMLElement>('.cco-detalhe-abas [role="tablist"]');
     const ativo = raiz.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-    if (!abas || !ativo) return;
-    const esquerda = ativo.offsetLeft;
-    const direita = esquerda + ativo.offsetWidth;
-    if (esquerda < abas.scrollLeft) abas.scrollLeft = Math.max(0, esquerda - 8);
-    else if (direita > abas.scrollLeft + abas.clientWidth) abas.scrollLeft = direita - abas.clientWidth + 8;
+    if (lista && ativo) {
+      const esquerda = ativo.offsetLeft;
+      const direita = esquerda + ativo.offsetWidth;
+      if (esquerda < lista.scrollLeft) lista.scrollLeft = Math.max(0, esquerda - 8);
+      else if (direita > lista.scrollLeft + lista.clientWidth) lista.scrollLeft = direita - lista.clientWidth + 8;
+    }
+    if (!lista || !faixa) return;
+    const marcar = () => {
+      faixa.dataset.overflow = lista.scrollWidth > lista.clientWidth + 1 ? '1' : '0';
+      faixa.dataset.rolou = lista.scrollLeft > 1 ? '1' : '0';
+    };
+    marcar();
+    lista.addEventListener('scroll', marcar);
+    const obs = new ResizeObserver(marcar);
+    obs.observe(lista);
+    return () => {
+      lista.removeEventListener('scroll', marcar);
+      obs.disconnect();
+    };
   }, [abaKey]);
 
   useEffect(() => {
@@ -113,14 +135,79 @@ export function CcoDetalheBarra({
     const obs = new ResizeObserver(sync);
     obs.observe(barra);
     obs.observe(shell);
+    const mutacao = new MutationObserver(sync);
+    mutacao.observe(shell, { childList: true, attributes: true, attributeFilter: ['class', 'data-fullscreen-mode'] });
     window.addEventListener('resize', sync);
+    window.addEventListener('orientationchange', sync);
+    document.addEventListener('fullscreenchange', sync);
     return () => {
       obs.disconnect();
+      mutacao.disconnect();
       window.removeEventListener('resize', sync);
+      window.removeEventListener('orientationchange', sync);
+      document.removeEventListener('fullscreenchange', sync);
       marcados.forEach((el) => {
         el.removeAttribute('inert');
         el.removeAttribute('data-coberto-pela-barra');
       });
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    const barra = raizRef.current;
+    const shell = barra?.closest('.sigma-map-shell');
+    if (!barra) return;
+    const pagina = document.querySelector('main.sigma-main > .overflow-y-auto') as HTMLElement | null;
+    const guardar = () => ({ y: window.scrollY, top: pagina?.scrollTop ?? 0 });
+    const restaurar = (pos: { y: number; top: number }) => {
+      if (window.scrollY !== pos.y) window.scrollTo(0, pos.y);
+      if (pagina && pagina.scrollTop !== pos.top) pagina.scrollTop = pos.top;
+    };
+    const origem = guardar();
+    document.body.dataset.ccoScrollY = String(origem.y);
+    document.body.dataset.ccoScrollTop = String(origem.top);
+    const ajustar = () => {
+      const fullscreen = Boolean(document.fullscreenElement) || Boolean(shell?.classList.contains('sigma-map-fullscreen'));
+      const estreita = window.matchMedia('(max-width: 1023px)').matches;
+      document.body.classList.toggle('cco-detalhe-trava', !fullscreen && estreita);
+      if (fullscreen || estreita || !(shell instanceof HTMLElement)) {
+        barra.style.removeProperty('--cco-barra-topo');
+        barra.style.removeProperty('height');
+        barra.style.removeProperty('max-height');
+      } else {
+        const header = document.querySelector('header');
+        const headerFim = header ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
+        const inicio = Math.max(shell.getBoundingClientRect().top, headerFim, 0);
+        const topo = Math.ceil(inicio);
+        barra.style.setProperty('--cco-barra-topo', `${topo}px`);
+        // 100dvh pode passar de innerHeight. A altura visível é a da janela.
+        const altura = Math.max(160, window.innerHeight - topo - 4);
+        barra.style.height = `${altura}px`;
+        barra.style.maxHeight = `${altura}px`;
+      }
+      if (!fullscreen && estreita) restaurar(origem);
+    };
+    ajustar();
+    const shellEl = shell instanceof HTMLElement ? shell : null;
+    shellEl?.querySelector<HTMLElement>('.leaflet-popup-close-button')?.click();
+    const mutacao = shellEl ? new MutationObserver(ajustar) : null;
+    if (shellEl && mutacao) mutacao.observe(shellEl, { attributes: true, attributeFilter: ['class', 'data-fullscreen-mode'] });
+    window.addEventListener('resize', ajustar);
+    window.addEventListener('orientationchange', ajustar);
+    window.addEventListener('scroll', ajustar, true);
+    document.addEventListener('fullscreenchange', ajustar);
+    return () => {
+      document.body.classList.remove('cco-detalhe-trava');
+      delete document.body.dataset.ccoScrollY;
+      delete document.body.dataset.ccoScrollTop;
+      barra.style.removeProperty('--cco-barra-topo');
+      barra.style.removeProperty('height');
+      barra.style.removeProperty('max-height');
+      mutacao?.disconnect();
+      window.removeEventListener('resize', ajustar);
+      window.removeEventListener('orientationchange', ajustar);
+      window.removeEventListener('scroll', ajustar, true);
+      document.removeEventListener('fullscreenchange', ajustar);
     };
   }, []);
 
@@ -145,8 +232,8 @@ export function CcoDetalheBarra({
     function onKey(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
       if (document.querySelector('[data-cco-vistoria-modal], [data-zoom-lightbox]')) return;
-      if (!window.matchMedia('(min-width: 1024px)').matches) return;
-      // Fullscreen nativo: o navegador consome Esc. No fallback CSS (Safari/iPhone) a barra fecha e a tela cheia fica.
+      // Fullscreen nativo: o navegador consome Esc. Em qualquer largura, fora dele, a barra fecha.
+      // No fallback CSS o stopPropagation impede que o mesmo Esc tire o mapa da tela cheia.
       if (document.fullscreenElement) return;
       event.preventDefault();
       event.stopPropagation();

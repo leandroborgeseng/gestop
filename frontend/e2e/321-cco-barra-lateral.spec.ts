@@ -172,7 +172,27 @@ async function mockApi(page: Page) {
       });
     }
     if (pathName === '/documentos/pendencias-resumo') return send({ total: 0, grupos: [] });
-    if (pathName === '/mapa/camadas') return send([]);
+    if (pathName === '/mapa/camadas') {
+      return send([
+        {
+          id: 'g-zz',
+          titulo: 'ZZ Grupo',
+          camadas: [
+            {
+              id: 'webmap:zz',
+              camadaId: 'zz',
+              nomeOriginal: 'ZZ Camada 321',
+              geometriaTipo: 'Point',
+              estilo: null,
+              totalElementos: 1,
+              versaoAtual: 'v1',
+              ligadaPorPadrao: false,
+              pesada: false,
+            },
+          ],
+        },
+      ]);
+    }
     if (pathName.includes('disponiveis')) return send([]);
     return send([]);
   });
@@ -293,6 +313,58 @@ async function pilhaDoFechar(page: Page) {
   expect(info.hitTitulo).toBe(true);
   expect(info.filhaDoShell).toBe(true);
   return info;
+}
+
+async function scrollPagina(page: Page) {
+  return page.evaluate(() => {
+    const el = document.querySelector('main.sigma-main > .overflow-y-auto') as HTMLElement | null;
+    return { janela: window.scrollY, pagina: el?.scrollTop ?? 0 };
+  });
+}
+
+/** Fora da tela cheia: o X está no viewport e recebe o hit. Abaixo de 1024 fica acima da nav e a página não rola. */
+async function assertJanela(page: Page, w: number) {
+  await expect.poll(async () => {
+    return page.evaluate((estreita) => {
+      const btn = document.querySelector('[data-testid="cco-detalhe-fechar"]') as HTMLElement | null;
+      const barra = document.querySelector('[data-testid="cco-detalhe-barra"]') as HTMLElement | null;
+      if (!btn || !barra) return 'ausente';
+      const r = btn.getBoundingClientRect();
+      const box = barra.getBoundingClientRect();
+      const dentro = (b: DOMRect) =>
+        b.width > 0 && b.height > 0 && b.top >= -1 && b.left >= -1 && b.right <= window.innerWidth + 1 && b.bottom <= window.innerHeight + 1;
+      if (!dentro(r) || r.width < 44 || r.height < 44) return `fechar ${Math.round(r.top)}..${Math.round(r.bottom)}`;
+      if (!dentro(box)) return `barra ${Math.round(box.top)}..${Math.round(box.bottom)}`;
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      if (!hit || (hit !== btn && !btn.contains(hit))) return 'hit';
+      if (!estreita) return 'ok';
+      const nav = document.querySelector('nav[aria-label="Navegação mobile"]');
+      if (!nav) return 'sem nav';
+      const navTop = nav.getBoundingClientRect().top;
+      if (r.bottom > navTop - 8) return `nav ${Math.round(navTop)} x ${Math.round(r.bottom)}`;
+      const pagina = document.querySelector('main.sigma-main > .overflow-y-auto') as HTMLElement | null;
+      if (!document.body.classList.contains('cco-detalhe-trava')) return 'sem trava';
+      if (!pagina || getComputedStyle(pagina).overflowY !== 'hidden') return 'pagina rola';
+      return 'ok';
+    }, w < 1024);
+  }, { timeout: 4_000 }).toBe('ok');
+}
+
+async function assertRodapeNoViewport(page: Page) {
+  await expect.poll(async () => {
+    return page.evaluate(() => {
+      const btn = document.querySelector('[data-testid="cco-detalhe-fechar"]') as HTMLElement | null;
+      const link = [...document.querySelectorAll('a')].find((a) => (a.textContent ?? '').includes('Abrir em Chamados')) as HTMLElement | undefined;
+      if (!btn || !link) return false;
+      const dentro = (el: HTMLElement) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && r.top >= -1 && r.left >= -1 && r.bottom <= window.innerHeight + 1 && r.right <= window.innerWidth + 1;
+      };
+      const r = btn.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return dentro(btn) && dentro(link) && Boolean(hit && (hit === btn || btn.contains(hit))) && window.scrollY === 0;
+    });
+  }, { timeout: 4_000 }).toBe(true);
 }
 
 function esperaLargura(w: number, h: number, shellW: number) {
@@ -417,12 +489,44 @@ test.describe('321 barra lateral do mapa', () => {
       });
       await expect(page.locator('.sigma-map-shell[data-map-zoom]')).toBeAttached({ timeout: 20_000 });
 
-      await abrirProprio(page);
-      await page.getByTestId('cco-detalhe-fechar').scrollIntoViewIfNeeded();
+      const botaoLista = page.locator('.cco-list-panel').getByRole('button', { name: /EMEB ZZ Barra 321/ });
+      if (vp.w >= 1024) await page.locator('.sigma-map-shell').scrollIntoViewIfNeeded();
+      else await botaoLista.scrollIntoViewIfNeeded();
+      const scrollAntes = await scrollPagina(page);
+      if (vp.w >= 1024) {
+        await botaoLista.evaluate((el) => {
+          if (!(el instanceof HTMLElement)) return;
+          el.focus({ preventScroll: true });
+          el.click();
+        });
+        await expect(page.getByTestId('cco-detalhe-barra')).toBeVisible();
+        await expect(page.getByTestId('cco-detalhe-titulo')).toBeFocused();
+      } else {
+        await abrirProprio(page);
+      }
+      await assertJanela(page, vp.w);
+      expect(await scrollPagina(page)).toEqual(scrollAntes);
+      if (vp.w < 1024) {
+        const fora = await page.evaluate(() => {
+          const barra = document.querySelector('[data-testid="cco-detalhe-barra"]')!.getBoundingClientRect();
+          return { x: Math.max(8, barra.left - 12), y: 180 };
+        });
+        await page.mouse.move(fora.x, fora.y);
+        await page.mouse.wheel(0, 700);
+        expect(await scrollPagina(page)).toEqual(scrollAntes);
+      }
       await page.screenshot({ path: path.join(OUT, `${tag}-topo-janela.png`), animations: 'disabled' });
       await rolarFim(page, 'ZZ-FIM-ROLAGEM');
       await page.screenshot({ path: path.join(OUT, `${tag}-fim-janela.png`), animations: 'disabled' });
       await page.getByTestId('cco-detalhe-fechar').click();
+      await expect(page.getByTestId('cco-detalhe-barra')).toHaveCount(0);
+      await expect(page.locator('.cco-list-panel').getByRole('button', { name: /EMEB ZZ Barra 321/ })).toBeFocused();
+      if (vp.w < 1024) {
+        await expect.poll(() => page.evaluate(() => document.body.classList.contains('cco-detalhe-trava'))).toBe(false);
+      }
+
+      await abrirProprio(page);
+      await page.keyboard.press('Escape');
       await expect(page.getByTestId('cco-detalhe-barra')).toHaveCount(0);
       await expect(page.locator('.cco-list-panel').getByRole('button', { name: /EMEB ZZ Barra 321/ })).toBeFocused();
 
@@ -503,33 +607,49 @@ test.describe('321 barra lateral do mapa', () => {
       );
       await page.locator('.sigma-map-controls').getByRole('button', { name: 'Mapa', exact: true }).click();
 
-      if (vp.w >= 1024 && modo === 'fallback-css') {
+      if (modo === 'fallback-css') {
         await abrirPeloMarcador(page);
         await page.keyboard.press('Escape');
         await expect(page.getByTestId('cco-detalhe-barra')).toHaveCount(0);
         expect(await modoTelaCheia(page)).toBe('fallback-css');
       }
 
+      const painel = page.getByTestId('cco-map-painel');
       await page.locator('.sigma-map-controls').getByRole('button', { name: 'Filtros' }).click();
-      await expect(page.getByTestId('cco-map-painel')).toBeVisible();
-      await abrirPeloMarcador(page);
-      await expect(page.getByTestId('cco-map-painel')).toHaveCount(0);
-      await expect(page.locator('.sigma-map-shell')).toContainText('1 no mapa');
+      await expect(painel).toBeVisible();
+      await painel.getByRole('button', { name: 'Pendências', exact: true }).click();
+      await painel.getByRole('button', { name: 'Aplicar filtros' }).click();
+      await expect(painel.getByTestId('cco-painel-status')).not.toContainText('Alterações não aplicadas');
+      await expect(painel).toBeVisible();
       await page.screenshot({ path: path.join(OUT, `${tag}-topo-filtros.png`), animations: 'disabled' });
+      await abrirPeloMarcador(page);
+      await expect(painel).toHaveCount(0);
+      await expect(page.locator('.sigma-map-shell')).toContainText('1 no mapa');
       await page.getByTestId('cco-detalhe-fechar').click();
+      await expect(page.getByTestId('cco-filtros-resumo')).toContainText('Pendências');
 
       await page.locator('.sigma-map-controls').getByRole('button', { name: 'Camadas' }).click();
-      await expect(page.getByTestId('cco-map-painel')).toBeVisible();
-      await abrirPeloMarcador(page);
-      await expect(page.getByTestId('cco-map-painel')).toHaveCount(0);
+      await expect(painel).toBeVisible();
+      await painel.getByRole('button', { name: /Webmap QGIS/ }).click();
+      await painel.getByRole('button', { name: /ZZ Grupo/ }).click();
+      const camada = painel.getByRole('checkbox', { name: /ZZ Camada 321/ });
+      await camada.check();
+      await expect(camada).toBeChecked();
+      await expect(painel).toBeVisible();
       await page.screenshot({ path: path.join(OUT, `${tag}-topo-camadas.png`), animations: 'disabled' });
+      await abrirPeloMarcador(page);
+      await expect(painel).toHaveCount(0);
+      await page.getByTestId('cco-detalhe-fechar').click();
+      await page.locator('.sigma-map-controls').getByRole('button', { name: 'Camadas' }).click();
+      await expect(painel.getByRole('checkbox', { name: /ZZ Camada 321/ })).toBeChecked();
+      await painel.getByRole('button', { name: 'Fechar painel' }).click();
       expect(await modoTelaCheia(page)).toBe(modo);
-      expect(await vista(page)).toEqual(vistaAntes);
     });
   }
 
   for (const vp of [
     { w: 1440, h: 900 },
+    { w: 1280, h: 800 },
     { w: 360, h: 640 },
     { w: 640, h: 360 },
   ] as const) {
@@ -541,6 +661,21 @@ test.describe('321 barra lateral do mapa', () => {
       await expect(page.locator('.cco-list-panel').getByRole('button', { name: /ZZ Chamado Barra 321/ })).toBeVisible({
         timeout: 30_000,
       });
+      const botao = page.locator('.cco-list-panel').getByRole('button', { name: /ZZ Chamado Barra 321/ });
+      await botao.scrollIntoViewIfNeeded();
+      const scrollAntes = await scrollPagina(page);
+      await botao.evaluate((el) => {
+        if (!(el instanceof HTMLElement)) return;
+        el.focus({ preventScroll: true });
+        el.click();
+      });
+      await expect(page.getByTestId('cco-detalhe-barra')).toBeVisible();
+      await assertJanela(page, vp.w);
+      expect(await scrollPagina(page)).toEqual(scrollAntes);
+      if (vp.w >= 1024) await assertRodapeNoViewport(page);
+      await page.getByTestId('cco-detalhe-fechar').click();
+      await expect(page.getByTestId('cco-detalhe-barra')).toHaveCount(0);
+
       await page.getByRole('button', { name: 'Maximizar mapa' }).click();
       await expect.poll(() => modoTelaCheia(page), { timeout: 8_000 }).not.toBe('off');
       const modo = await modoTelaCheia(page);
