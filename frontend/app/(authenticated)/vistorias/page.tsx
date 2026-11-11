@@ -418,9 +418,9 @@ function VistoriasPageContent() {
 
           <section className="min-h-[320px]">
             {selectedId && semAcesso ? (
-              <div role="status" data-testid="aviso-registro-url" className="rounded-[var(--r-md)] border border-amber-200 bg-amber-50 px-4 py-3">
+              <div role="status" data-testid="aviso-registro-url" className="flex items-center justify-between gap-3 rounded-[var(--r-md)] border border-amber-200 bg-amber-50 px-4 py-3">
                 <p className="text-[13px] text-amber-950">{AVISO_REGISTRO_URL}</p>
-                <button type="button" className="mt-2 text-[13px] font-semibold text-amber-950" onClick={() => definir({ id: null })}>
+                <button type="button" className="text-[13px] font-semibold text-amber-950" onClick={() => definir({ id: null })}>
                   Fechar
                 </button>
               </div>
