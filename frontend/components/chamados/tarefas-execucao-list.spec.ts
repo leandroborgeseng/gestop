@@ -107,7 +107,7 @@ describe('286 §8.1 — layout fila + mapa, sem <table>', () => {
 describe('286 §8.2 — anatomia do card', () => {
   it('ordem: código, "Tarefa do chamado", título, resumo/tipo, tags, prazo, meta; ul/li/button', () => {
     const html = lista([tarefa()]);
-    const ordem = ['CH-2026-0001', 'Tarefa do chamado', 'Fazer laudo', 'Elétrica - Troca de Lâmpada', 'tarefa-tags', 'tarefa-prazo', 'unit-meta'].map((t) =>
+    const ordem = ['CH-2026-0001', 'Tarefa do chamado', 'Fazer laudo', 'Resumo do chamado', 'Troca de lâmpada', 'tarefa-tags', 'tarefa-prazo', 'unit-meta'].map((t) =>
       html.indexOf(t, html.indexOf('>', html.indexOf('<button'))),
     );
     ordem.forEach((pos) => expect(pos).toBeGreaterThan(-1));
@@ -213,7 +213,8 @@ describe('286 §8.8 e §8.9 — textos', () => {
     const longo = 'Título muito longo '.repeat(10).trim();
     const html = lista([tarefa({ titulo: longo })]);
     expect(html).toMatch(new RegExp(`title="${longo}" class="tarefa-titulo[^"]*line-clamp-2`));
-    expect(html).toMatch(/title="Elétrica - Troca de Lâmpada" class="tarefa-resumo[^"]*truncate/);
+    expect(html).toMatch(/title="Troca de lâmpada"/);
+    expect(html).toContain('Resumo do chamado');
   });
   it('"Sem responsável" e "Sem equipe", nunca "—" solto', () => {
     const html = lista([tarefa({ responsavel: null, equipe: null })]);

@@ -4,10 +4,10 @@ import { useEffect, useRef } from 'react';
 import { Clock, MapPin, MapPinOff, User, UsersRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/cn';
-import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL, type ChamadoTarefaResumo } from '@/lib/chamado-tarefa';
+import { resumoDoChamado, TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL, textoCompletoDoChamado, type ChamadoTarefaResumo } from '@/lib/chamado-tarefa';
 import { prioridadeVariant } from '@/lib/chamado-status';
 import { comportamentoRolagem } from '@/components/documentos/documento-avulso-form';
-import { TAREFA_STATUS_BADGE, coordenadaTarefa, prazoTarefaInfo, resumoTipoTarefa, tarefaAriaLabel } from '@/lib/tarefa-card';
+import { TAREFA_STATUS_BADGE, coordenadaTarefa, prazoTarefaInfo, tarefaAriaLabel } from '@/lib/tarefa-card';
 
 /**
  * 286: badges do card com texto em tokens *-ink (≥ 4,5:1 sobre o fundo do badge e sobre --brand-soft).
@@ -79,7 +79,7 @@ export function TarefasExecucaoList({
               onMouseEnter={() => onHover?.(item.id)}
               onMouseLeave={() => onHover?.(null)}
               className={cn(
-                'ch-row block min-h-11 w-full bg-[var(--surface)] px-3.5 py-3 text-left transition-colors hover:bg-[var(--surface-2)]',
+                'group ch-row block min-h-11 w-full bg-[var(--surface)] px-3.5 py-3 text-left transition-colors hover:bg-[var(--surface-2)]',
                 'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[var(--brand)]',
                 ativa && 'bg-[var(--brand-soft)] hover:bg-[var(--brand-soft)]',
                 selecionada && 'is-selected shadow-[inset_3px_0_0_var(--brand)]',
@@ -101,8 +101,16 @@ export function TarefasExecucaoList({
               >
                 {item.titulo}
               </span>
-              <span data-col="secundaria" title={resumoTipoTarefa(item)} className="tarefa-resumo mt-0.5 block truncate text-[12.5px] text-[var(--ink-2)]">
-                {resumoTipoTarefa(item)}
+              <span data-col="secundaria" className="tarefa-resumo group/resumo relative mt-0.5 block text-[12.5px] text-[var(--ink-2)]">
+                <span className="block text-[10px] font-semibold tracking-[.04em] text-[var(--ink-2)] uppercase">Resumo do chamado</span>
+                <span title={textoCompletoDoChamado(item.chamado) || undefined} className="block truncate">
+                  {resumoDoChamado(item.chamado)}
+                </span>
+                {textoCompletoDoChamado(item.chamado) ? (
+                  <span role="tooltip" className="pointer-events-none absolute top-full left-0 z-10 mt-1 hidden max-w-xs rounded bg-[var(--ink)] px-2 py-1 text-[11px] text-white group-focus-visible:block group-hover/resumo:block">
+                    {textoCompletoDoChamado(item.chamado)}
+                  </span>
+                ) : null}
               </span>
               <span data-col="status" className="tarefa-tags mt-2 flex flex-wrap items-center gap-1.5">
                 <Badge variant={statusVariant} className={BADGE_INK[statusVariant]}>

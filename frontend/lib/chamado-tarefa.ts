@@ -185,13 +185,17 @@ export type RelatorioTarefasResponse = {
 
 const RESUMO_CHAMADO_MAX = 60;
 
+export function textoCompletoDoChamado(chamado: { titulo?: string | null; descricao?: string | null }) {
+  const titulo = chamado.titulo?.replace(/\s+/g, ' ').trim();
+  const descricao = (chamado.descricao ?? '').replace(/\s+/g, ' ').trim();
+  return titulo || descricao || '';
+}
+
 export function resumoDoChamado(
   chamado: { titulo?: string | null; descricao?: string | null },
   maxLen = RESUMO_CHAMADO_MAX,
 ) {
-  const titulo = chamado.titulo?.replace(/\s+/g, ' ').trim();
-  const descricao = (chamado.descricao ?? '').replace(/\s+/g, ' ').trim();
-  const fonte = titulo || descricao;
+  const fonte = textoCompletoDoChamado(chamado);
   if (!fonte) return '—';
   if (fonte.length <= maxLen) return fonte;
   return `${fonte.slice(0, maxLen).trimEnd()}…`;

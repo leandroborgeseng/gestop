@@ -9,6 +9,8 @@ import {
   LIMITE_GRUPOS_VISIVEIS,
   rotuloContagem,
   montarFiltrosRelatorioTarefas,
+  resumoDoChamado,
+  textoCompletoDoChamado,
   ordenarGruposPendencias,
   TAREFA_PRIORIDADE_LABEL,
   TAREFA_STATUS_LABEL,
@@ -191,7 +193,7 @@ export function RelatorioTarefasPanel() {
             <thead className="text-[var(--ink-3)]">
               <tr>
                 <th className="p-2">Chamado</th>
-                <th className="p-2">Título do chamado</th>
+                <th className="p-2">Resumo do chamado</th>
                 <th className="p-2">Tarefa</th>
                 <th className="p-2">Status</th>
                 <th className="p-2">Prazo</th>
@@ -207,7 +209,18 @@ export function RelatorioTarefasPanel() {
               {data.items.map((item) => (
                 <tr key={item.id} className="border-t border-[var(--line)]">
                   <td className="p-2 mono">{item.chamado.codigo}</td>
-                  <td className="p-2">{item.chamado.titulo || item.chamado.descricao.slice(0, 60)}</td>
+                  <td
+                    className="group relative p-2 focus-visible:outline-2 focus-visible:outline-[var(--brand)]"
+                    tabIndex={0}
+                    title={textoCompletoDoChamado(item.chamado) || undefined}
+                  >
+                    {resumoDoChamado(item.chamado)}
+                    {textoCompletoDoChamado(item.chamado) ? (
+                      <span role="tooltip" className="pointer-events-none absolute top-full left-0 z-10 hidden max-w-xs rounded bg-[var(--ink)] px-2 py-1 text-[11px] text-white group-focus:block group-hover:block">
+                        {textoCompletoDoChamado(item.chamado)}
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="p-2">{item.titulo}</td>
                   <td className="p-2">{TAREFA_STATUS_LABEL[item.status]}</td>
                   <td className="p-2">{item.prazo ? new Date(item.prazo).toLocaleDateString('pt-BR') : '—'}</td>

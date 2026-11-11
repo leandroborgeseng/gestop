@@ -72,7 +72,9 @@ describe('251 — coluna Resumo do chamado', () => {
 
   it('286: o card da aba Tarefas mostra o resumo do chamado pelo helper (substitui a coluna da tabela)', () => {
     expect(panelSrc).not.toContain('<table');
-    expect(cardSrc).toContain('resumoTipoTarefa(item)');
+    expect(cardSrc).toContain('resumoDoChamado(item.chamado)');
+    expect(cardSrc).toContain('Resumo do chamado');
+    expect(cardSrc).toContain('textoCompletoDoChamado(item.chamado)');
     expect(cardHelperSrc).toContain('resumoDoChamado(item.chamado)');
   });
 });
