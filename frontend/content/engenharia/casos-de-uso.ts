@@ -283,7 +283,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'cco',
         nome: 'Acompanhar o CCO',
         atores: ['administrador', 'gestor', 'equipe'],
-        descricao: 'Mapa operacional, próprios, filtros e chamados georreferenciados.',
+        descricao: 'Mapa operacional, próprios, filtros e chamados georreferenciados. Zoom ou arraste manual permanece ao abrir a barra, cruzar o corte da grade ou girar a tela. Aplicar filtros continua sem mover a vista.',
         rotas: ['/cco', '/cco/unidades/[id]', 'GET /operacional/resumo', 'GET /operacional/unidades', 'GET /operacional/chamados-mapa'],
       },
       {

@@ -46,7 +46,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/cco, /cco/unidades/[id]',
     api: 'OperacionalController: GET /operacional/resumo, /secretarias, /bairros, /opcoes-filtro, /unidades, /chamados-mapa',
     tabelas: 'UnidadePublica, Secretaria, Chamado, NaoConformidade, Fiscalizacao',
-    permissao: 'OPERACIONAL_READ_KEYS (dashboard.visualizar, chamados.*, fiscalizacoes.executar e matriz.cco._tela.visualizar, entre outras).',
+    permissao: 'OPERACIONAL_READ_KEYS (dashboard.visualizar, chamados.*, fiscalizacoes.executar e matriz.cco._tela.visualizar, entre outras). Zoom ou arraste manual não muda no reflow da barra.',
   },
   {
     id: 'dashboard',
