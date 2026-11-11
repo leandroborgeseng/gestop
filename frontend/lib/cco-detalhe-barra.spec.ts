@@ -1,7 +1,24 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { fecharDetalheAoAbrirPainel, fecharPainelAoAbrirDetalhe, LARGURA_UM_PAINEL_PX } from './cco-detalhe-barra';
+import {
+  barraEmpilhada,
+  CONSULTA_BARRA_ESTREITA,
+  fecharDetalheAoAbrirPainel,
+  fecharPainelAoAbrirDetalhe,
+  LARGURA_UM_PAINEL_PX,
+} from './cco-detalhe-barra';
+
+describe('BK-321-O2 — corte da barra acompanha a fonte', () => {
+  it('125% (20px) e 150% (24px) empilham no mesmo 80rem da grade', () => {
+    expect(barraEmpilhada(1599, 20)).toBe(true);
+    expect(barraEmpilhada(1600, 20)).toBe(false);
+    expect(barraEmpilhada(1919, 24)).toBe(true);
+    expect(barraEmpilhada(1920, 24)).toBe(false);
+    expect(barraEmpilhada(1279, 16)).toBe(true);
+    expect(barraEmpilhada(1280, 16)).toBe(false);
+  });
+});
 
 describe('321 · convivência da barra de detalhes', () => {
   it('abaixo de 1024 px abrir Filtros/Camadas fecha a barra', () => {
@@ -30,7 +47,9 @@ describe('321 · convivência da barra de detalhes', () => {
     expect(css).toContain('max-height: 48px');
     expect(css).toContain('body.cco-detalhe-trava');
     expect(css).toContain('position: sticky');
-    expect(css).toContain('@media (max-width: 1279px)');
+    expect(css).toContain('@media (max-width: 79.999rem)');
+    expect(css).toContain('@media (min-width: 80rem)');
+    expect(css).not.toContain('@media (max-width: 1279px)');
     expect(css).toContain('linear-gradient(to left, var(--surface), transparent)');
     expect(css).toContain('right: 12px');
     expect(css).toContain('width: 24px');
@@ -55,7 +74,8 @@ describe('321 · convivência da barra de detalhes', () => {
     expect(mapa).toContain('data-fullscreen-mode');
     const barra = readFileSync(resolve('frontend/components/cco/cco-detalhe-barra.tsx'), 'utf8');
     expect(barra).not.toContain("matchMedia('(min-width: 1024px)')");
-    expect(barra).toContain("matchMedia('(max-width: 1279px)')");
+    expect(barra).toContain('CONSULTA_BARRA_ESTREITA');
+    expect(CONSULTA_BARRA_ESTREITA).toBe('(max-width: 79.999rem)');
     const popup = readFileSync(resolve('frontend/lib/map-popup-action.ts'), 'utf8');
     expect(popup).toContain('[data-testid="cco-detalhe-barra"]');
   });

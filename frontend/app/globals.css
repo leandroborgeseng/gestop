@@ -556,7 +556,7 @@ body:has(.sigma-map-shell.sigma-map-fullscreen) .sigma-main {
 }
 
 /* CCO: alturas fixas no viewport — lista e mapa não crescem com a quantidade de itens. */
-@media (min-width: 1280px) {
+@media (min-width: 80rem) {
   .sigma-main .cco-workspace {
     height: min(640px, calc(100dvh - 17rem));
     max-height: calc(100dvh - 17rem);
@@ -586,7 +586,7 @@ body:has(.sigma-map-shell.sigma-map-fullscreen) .sigma-main {
   }
 }
 
-@media (max-width: 1279px) {
+@media (max-width: 79.999rem) {
   .sigma-main .cco-workspace {
     display: flex;
     flex-direction: column;
@@ -845,8 +845,8 @@ body:has(.sigma-map-shell.sigma-map-fullscreen) .sigma-main {
   }
 }
 
-/* 321 janela — o mesmo corte da grade: até 1279 a lista empilha sobre o mapa. */
-@media (max-width: 1279px) {
+/* 321 janela — o mesmo corte da grade (xl = 80rem): a barra empilha com a lista. */
+@media (max-width: 79.999rem) {
   .sigma-map-shell:not(:fullscreen):not(.sigma-map-fullscreen):has(.cco-detalhe-barra) {
     overflow: visible;
   }
@@ -870,7 +870,7 @@ html:has(body.cco-detalhe-trava) {
   overflow: hidden;
 }
 
-@media (max-width: 1279px) {
+@media (max-width: 79.999rem) {
   body.cco-detalhe-trava .sigma-main {
     z-index: 80;
   }
@@ -881,7 +881,7 @@ html:has(body.cco-detalhe-trava) {
   }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 80rem) {
   .sigma-map-shell:not(:fullscreen):not(.sigma-map-fullscreen):has(.cco-detalhe-barra) .sigma-map-canvas {
     /* Leaflet grava position:relative inline. Sem isto a barra sticky fica depois do mapa. */
     position: absolute !important;

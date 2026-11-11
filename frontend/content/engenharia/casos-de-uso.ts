@@ -283,7 +283,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'cco',
         nome: 'Acompanhar o CCO',
         atores: ['administrador', 'gestor', 'equipe'],
-        descricao: 'Mapa operacional, próprios, filtros e chamados georreferenciados. Zoom ou arraste manual permanece ao abrir a barra, cruzar o corte da grade ou girar a tela. Aplicar filtros continua sem mover a vista.',
+        descricao: 'Mapa operacional, próprios, filtros e chamados georreferenciados. Zoom ou arraste manual permanece ao abrir a barra, cruzar o corte da grade ou girar a tela. Aplicar filtros continua sem mover a vista. A barra e a grade empilham no mesmo corte de 80rem, então 125% e 150% de fonte mudam as duas juntas.',
         rotas: ['/cco', '/cco/unidades/[id]', 'GET /operacional/resumo', 'GET /operacional/unidades', 'GET /operacional/chamados-mapa'],
       },
       {
