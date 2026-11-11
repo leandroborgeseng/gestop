@@ -87,7 +87,12 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
       try {
         const user = await getMe();
         if (cancelado) return;
-        const refreshed: StoredAuth = { ...base, user };
+        const atual = getStoredAuth();
+        if (!atual) {
+          redirectToLogin();
+          return;
+        }
+        const refreshed: StoredAuth = { ...atual, user };
         setStoredAuth(refreshed);
         setAuth(refreshed);
         setChecking(false);
@@ -111,15 +116,26 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
   }, [router]);
 
   // 322 L3: retomada (visível, foco, pageshow com ou sem bfcache) revalida ou renova o token
-  // da sessão de 30 dias. Não chama o router — a URL da tela atual permanece.
+  // da sessão de 30 dias. Token ainda válido não troca a rota. Token vencido vai ao login.
   useEffect(() => {
     let cancelado = false;
 
+    function redirectToLogin() {
+      const params = new URLSearchParams({ reason: 'expired' });
+      const returnTo = sanitizeReturnTo(`${window.location.pathname}${window.location.search}`);
+      if (returnTo) params.set('returnTo', returnTo);
+      router.replace(`/login?${params.toString()}`);
+    }
+
     const aoRetomar = () => {
-      void revalidarSessaoNaRetomada().then(() => {
+      void revalidarSessaoNaRetomada().then((resultado) => {
         if (cancelado) return;
         const stored = getStoredAuth();
-        if (!stored) return;
+        if (resultado.redirecionou || !stored) {
+          setAuth(null);
+          redirectToLogin();
+          return;
+        }
         setAuth((atual) => {
           if (
             atual &&
@@ -153,7 +169,7 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
       window.removeEventListener('focus', onFoco);
       window.removeEventListener('pageshow', onPageShow);
     };
-  }, []);
+  }, [router]);
 
   if (checking) {
     return (

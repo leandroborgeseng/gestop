@@ -21,6 +21,7 @@ function instalarJanela(auth: unknown, remember: '0' | '1') {
       },
     },
     location,
+    dispatchEvent: vi.fn(),
   });
   return { store, location };
 }
@@ -163,6 +164,22 @@ describe('revalidarSessaoNaRetomada', () => {
     const folgado = await prepararSessaoAoAbrir();
     expect(folgado).toEqual({ acao: 'ignorada', redirecionou: false });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('token já vencido avisa a expiração e não chama a rede', async () => {
+    const { store, location } = instalarJanela(
+      { accessToken: 'velho', user: { id: 'u', permissoes: [], perfis: [] }, expiresAt: Date.now() - 1_000 },
+      '1',
+    );
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 200 })));
+
+    const resultado = await revalidarSessaoNaRetomada();
+
+    expect(resultado).toEqual({ acao: 'expirada', redirecionou: true });
+    expect(location.href).toBe('/execucao?aba=tarefas');
+    expect(store.has('sigma.auth')).toBe(false);
+    expect(vi.mocked(window.dispatchEvent)).toHaveBeenCalled();
+    expect(vi.mocked(fetch)).not.toHaveBeenCalled();
   });
 
   it('sessão folgada só revalida /auth/me e não chama o refresh', async () => {

@@ -1,15 +1,16 @@
-import { API_PROXY_PREFIX, AUTH_REMEMBER_STORAGE_KEY, getStoredAuth, setStoredAuth, type StoredAuth } from '@/lib/api';
+import { API_PROXY_PREFIX, AUTH_REMEMBER_STORAGE_KEY, AUTH_STORAGE_KEY_PUBLICA, clearStoredAuth, getStoredAuth, setStoredAuth, type StoredAuth } from '@/lib/api';
+import { notifyAuthExpired } from '@/lib/security';
 import type { LoginResponse } from '@/lib/types';
 
 /** Renova na abertura e na retomada quando falta menos de 7 dias para o token vencer. */
 export const LIMIAR_RENOVACAO_MS = 7 * 24 * 60 * 60 * 1000;
 
-export type AcaoRetomada = 'ignorada' | 'revalidar' | 'refresh' | 'refresh-falhou' | 'revalidar-falhou';
+export type AcaoRetomada = 'ignorada' | 'revalidar' | 'refresh' | 'refresh-falhou' | 'revalidar-falhou' | 'expirada';
 
 export type RetomadaResultado = {
   acao: AcaoRetomada;
-  /** A retomada nunca navega. O literal impede um retorno que diga o contrário. */
-  redirecionou: false;
+  /** Verdadeiro só quando o token já venceu e a tela deve ir ao login. */
+  redirecionou: boolean;
 };
 
 export function tokenPertoDeExpirar(expiresAt: number, agora = Date.now(), limiar = LIMIAR_RENOVACAO_MS) {
@@ -26,6 +27,17 @@ function manterConectadoAtivo() {
 
 function semRota(acao: AcaoRetomada): RetomadaResultado {
   return { acao, redirecionou: false };
+}
+
+function sessaoLocalExpirada() {
+  const raw = window.localStorage.getItem(AUTH_STORAGE_KEY_PUBLICA);
+  if (!raw) return false;
+  try {
+    const parsed = JSON.parse(raw) as { expiresAt?: number };
+    return typeof parsed.expiresAt === 'number' && parsed.expiresAt <= Date.now();
+  } catch {
+    return false;
+  }
 }
 
 async function lerJson(response: Response) {
@@ -89,6 +101,11 @@ let emCurso: Promise<RetomadaResultado> | null = null;
 
 async function executar(): Promise<RetomadaResultado> {
   if (typeof window === 'undefined') return semRota('ignorada');
+  if (sessaoLocalExpirada()) {
+    clearStoredAuth();
+    notifyAuthExpired();
+    return { acao: 'expirada', redirecionou: true };
+  }
   const stored = getStoredAuth();
   if (!stored) return semRota('ignorada');
 
@@ -118,7 +135,7 @@ export function prepararSessaoAoAbrir(): Promise<RetomadaResultado> {
 /**
  * Retomada da aba ou do PWA (visibilitychange, focus, pageshow inclusive bfcache).
  * Revalida o usuário e, na sessão de 30 dias a menos de 7 dias do fim, renova o token.
- * Não lê nem escreve a rota. Token já vencido segue para o login no layout.
+ * Não troca a rota enquanto o token vale. Token já vencido avisa a sessão e o layout vai ao login com returnTo.
  */
 export function revalidarSessaoNaRetomada(): Promise<RetomadaResultado> {
   if (emCurso) {
