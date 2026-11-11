@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,17 +57,20 @@ function usuarioDe(chave: string) {
 
 const USUARIOS = Object.fromEntries(PERFIS_NA_TELA.map((chave) => [usuarioDe(chave).email, usuarioDe(chave)]));
 
-function catalogoDaMatriz() {
-  return BASELINE.matriz.map((tela) => ({
-    id: tela.id,
-    label: tela.label,
-    functions: tela.funcoes.map((funcao) => ({
-      id: funcao.id,
-      label: funcao.label,
-      actions: funcao.acoes,
-    })),
-  }));
+/**
+ * O mock da matriz serve serializeCatalog() de src/domain/permissions-catalog.ts.
+ * O import estático vira CommonJS no Playwright (o pacote é "type": "commonjs") e perde o named export.
+ * A asserção da tela continua no baseline congelado: um rótulo novo no catálogo fura o e2e.
+ */
+function catalogoReal() {
+  const raiz = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+  const tsx = path.join(raiz, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+  const script = `import { serializeCatalog } from './src/domain/permissions-catalog.ts'; process.stdout.write(JSON.stringify(serializeCatalog()))`;
+  const bruto = execFileSync(process.execPath, [tsx, '-e', script], { cwd: raiz, encoding: 'utf8' });
+  return JSON.parse(bruto) as ReturnType<typeof JSON.parse>;
 }
+
+const CATALOGO_REAL = catalogoReal();
 
 async function mockApi(page: Page) {
   const trocas: string[] = [];
@@ -105,7 +109,7 @@ async function mockApi(page: Page) {
     }
     if (url.includes('/admin/perfis/configuraveis')) return json([perfil]);
     if (/\/admin\/perfis\/[^/]+\/matriz/.test(new URL(url).pathname)) {
-      return json({ perfil, catalogo: catalogoDaMatriz(), chaves: [] });
+      return json({ perfil, catalogo: CATALOGO_REAL, chaves: [] });
     }
     if (url.includes('/documentos/pendencias-abertura-diaria')) {
       return json({ abrir: false, pendencias: { total: 0, grupos: [] } });

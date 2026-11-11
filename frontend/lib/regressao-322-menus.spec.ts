@@ -8,7 +8,7 @@ import {
   type PermissionAction,
   type PermissionCatalogFunction,
 } from '@/lib/permissions-matrix';
-import { PERMISSIONS_CATALOG, type PermissionFunctionDef } from '../../src/domain/permissions-catalog';
+import { PERMISSIONS_CATALOG, serializeCatalog, type PermissionFunctionDef } from '../../src/domain/permissions-catalog';
 import { PERFIS_REGRESSAO_322 } from './regressao-322-perfis';
 
 function rotulo(funcao: PermissionFunctionDef, acao: string) {
@@ -66,5 +66,20 @@ const baseline = JSON.parse(readFileSync(resolve(__dirname, 'regressao-322-menus
 describe('regressão 322 L6', () => {
   it('menu lateral, barra inferior e matriz de permissões permanecem iguais a main 6f7c642', () => {
     expect(montarRetratoMenusEMatriz()).toEqual(baseline);
+  });
+
+  it('o e2e serve o catálogo real e um rótulo alterado deixa de bater com o baseline', () => {
+    const e2e = readFileSync(resolve(__dirname, '../e2e/322-regressao-menus.spec.ts'), 'utf8');
+    expect(e2e).toContain("import { serializeCatalog } from './src/domain/permissions-catalog.ts'");
+    expect(e2e).toContain('catalogo: CATALOGO_REAL');
+    expect(e2e).toContain('expect(telas).toEqual(BASELINE.matriz.map((tela) => tela.label))');
+    expect(e2e).not.toContain('catalogoDaMatriz');
+
+    const servidas = serializeCatalog().map((tela) => tela.label);
+    const congeladas = baseline.matriz.map((tela) => tela.label);
+    expect(servidas).toEqual(congeladas);
+
+    const alteradas = servidas.map((label, index) => (index === 0 ? `${label} (alterado)` : label));
+    expect(alteradas).not.toEqual(congeladas);
   });
 });
