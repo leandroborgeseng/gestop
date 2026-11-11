@@ -107,9 +107,15 @@ async function executar(): Promise<RetomadaResultado> {
  * Não lê nem escreve a rota.
  */
 export function revalidarSessaoNaRetomada(): Promise<RetomadaResultado> {
-  if (emCurso) return emCurso;
-  emCurso = executar().finally(() => {
-    emCurso = null;
+  if (emCurso) {
+    const atual = emCurso;
+    // Quem chegou no meio de uma revalidação espera e decide de novo.
+    // Assim um token envelhecido durante o /auth/me ainda dispara o refresh.
+    return atual.then(() => revalidarSessaoNaRetomada());
+  }
+  const promessa = executar().finally(() => {
+    if (emCurso === promessa) emCurso = null;
   });
-  return emCurso;
+  emCurso = promessa;
+  return promessa;
 }

@@ -86,6 +86,46 @@ describe('revalidarSessaoNaRetomada', () => {
     expect(JSON.parse(store.get('sigma.auth') ?? '{}').accessToken).toBe('velho');
   });
 
+  it('revalidação em andamento não engole o refresh de um token que envelheceu', async () => {
+    const { store } = instalarJanela(
+      { accessToken: 'ok', user: { id: 'u', permissoes: [], perfis: [] }, expiresAt: Date.now() + 10 * 24 * 3600 * 1000 },
+      '1',
+    );
+    let liberar: () => void = () => undefined;
+    const porta = new Promise<void>((resolve) => {
+      liberar = resolve;
+    });
+    const urls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        urls.push(String(input));
+        if (urls.length === 1) await porta;
+        if (String(input).includes('/auth/refresh')) {
+          return new Response(
+            JSON.stringify({ accessToken: 'novo', tokenType: 'Bearer', expiresInSeconds: 30 * 24 * 3600, user: { id: 'u', permissoes: [], perfis: [] } }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ id: 'u', permissoes: [], perfis: [] }), { status: 200 });
+      }),
+    );
+
+    const primeira = revalidarSessaoNaRetomada();
+    await vi.waitFor(() => expect(urls).toEqual(['/api-gestop/auth/me']));
+    const auth = JSON.parse(store.get('sigma.auth') ?? '{}') as { expiresAt: number };
+    auth.expiresAt = Date.now() + 20_000;
+    store.set('sigma.auth', JSON.stringify(auth));
+    const segunda = revalidarSessaoNaRetomada();
+    liberar();
+    const [a, b] = await Promise.all([primeira, segunda]);
+
+    expect(a.redirecionou).toBe(false);
+    expect(b).toEqual({ acao: 'refresh', redirecionou: false });
+    expect(urls).toContain('/api-gestop/auth/refresh');
+    expect(JSON.parse(store.get('sigma.auth') ?? '{}').accessToken).toBe('novo');
+  });
+
   it('sessão folgada só revalida /auth/me e não chama o refresh', async () => {
     instalarJanela(
       { accessToken: 'ok', user: { id: 'u', permissoes: [], perfis: [] }, expiresAt: Date.now() + 10 * 24 * 3600 * 1000 },
