@@ -168,7 +168,7 @@ export function CcoDetalheBarra({
     document.body.dataset.ccoScrollTop = String(origem.top);
     const ajustar = () => {
       const fullscreen = Boolean(document.fullscreenElement) || Boolean(shell?.classList.contains('sigma-map-fullscreen'));
-      const estreita = window.matchMedia('(max-width: 1023px)').matches;
+      const estreita = window.matchMedia('(max-width: 1279px)').matches;
       document.body.classList.toggle('cco-detalhe-trava', !fullscreen && estreita);
       if (fullscreen || estreita || !(shell instanceof HTMLElement)) {
         barra.style.removeProperty('--cco-barra-topo');

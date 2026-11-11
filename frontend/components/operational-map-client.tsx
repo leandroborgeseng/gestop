@@ -411,12 +411,17 @@ export function OperationalMapClient({
       window.clearTimeout(refitTimerRef.current);
     }
 
+    const zoomAoAgendar = map.getZoom();
     refitTimerRef.current = window.setTimeout(() => {
       refreshMapSize(map);
+      // A7: um reflow (painel, barra, rotação) depois que o usuário aproximou
+      // não pode desfazer o zoom. O enquadramento da tela cheia, agendado no
+      // zoom automático, continua.
+      if (reason === 'layout' && map.getZoom() > zoomAoAgendar + 0.01) return;
       fitMapToPoints(map, locatedRef.current);
-      if (reason === 'data') {
-        lastFitKeyRef.current = locatedKey;
-      }
+      // O timer de layout cancela o de dados. Sem gravar a chave, Aplicar
+      // acha que o mapa nunca foi enquadrado e chama fitBounds de novo.
+      lastFitKeyRef.current = locatedKey;
     }, reason === 'layout' ? 420 : 80);
   }, [locatedKey]);
 
@@ -795,8 +800,11 @@ export function OperationalMapClient({
     }
 
     const shouldRefit = lastFitKeyRef.current !== locatedKey;
-    if (shouldRefit && manterVistaRef.current && lastFitKeyRef.current !== '') {
-      // 299: Aplicar/Atualizar mantêm centro e zoom; só registra os dados como já enquadrados.
+    // 299 / A7: Aplicar mantém centro e zoom. Zoom acima do inicial também conta
+    // como vista já definida — a chave pode ter ficado vazia se o timer de
+    // layout cancelou o de dados.
+    const vistaDefinida = lastFitKeyRef.current !== '' || map.getZoom() > FRANCA_DEFAULT_ZOOM;
+    if (shouldRefit && manterVistaRef.current && vistaDefinida) {
       lastFitKeyRef.current = locatedKey;
       refreshMapSize(map);
     } else if (shouldRefit) {

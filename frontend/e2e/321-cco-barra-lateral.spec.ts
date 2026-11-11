@@ -322,10 +322,10 @@ async function scrollPagina(page: Page) {
   });
 }
 
-/** Fora da tela cheia: o X está no viewport e recebe o hit. Abaixo de 1024 fica acima da nav e a página não rola. */
+/** Fora da tela cheia. Até 1279 a lista empilha (barra fixed). A partir de 1280, lado a lado (sticky). */
 async function assertJanela(page: Page, w: number) {
   await expect.poll(async () => {
-    return page.evaluate((estreita) => {
+    return page.evaluate(({ empilhada, comNav }) => {
       const btn = document.querySelector('[data-testid="cco-detalhe-fechar"]') as HTMLElement | null;
       const barra = document.querySelector('[data-testid="cco-detalhe-barra"]') as HTMLElement | null;
       if (!btn || !barra) return 'ausente';
@@ -334,19 +334,30 @@ async function assertJanela(page: Page, w: number) {
       const dentro = (b: DOMRect) =>
         b.width > 0 && b.height > 0 && b.top >= -1 && b.left >= -1 && b.right <= window.innerWidth + 1 && b.bottom <= window.innerHeight + 1;
       if (!dentro(r) || r.width < 44 || r.height < 44) return `fechar ${Math.round(r.top)}..${Math.round(r.bottom)}`;
-      if (!dentro(box)) return `barra ${Math.round(box.top)}..${Math.round(box.bottom)}`;
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
       if (!hit || (hit !== btn && !btn.contains(hit))) return 'hit';
-      if (!estreita) return 'ok';
-      const nav = document.querySelector('nav[aria-label="Navegação mobile"]');
-      if (!nav) return 'sem nav';
-      const navTop = nav.getBoundingClientRect().top;
-      if (r.bottom > navTop - 8) return `nav ${Math.round(navTop)} x ${Math.round(r.bottom)}`;
-      const pagina = document.querySelector('main.sigma-main > .overflow-y-auto') as HTMLElement | null;
+      if (!empilhada) {
+        if (!dentro(box)) return `barra ${Math.round(box.top)}..${Math.round(box.bottom)}`;
+        return 'ok';
+      }
+      if (box.top > 1) return `topo ${Math.round(box.top)}`;
+      if (box.bottom < window.innerHeight - 8) return `rodape ${Math.round(box.bottom)}`;
+      const rodape = document.querySelector('.cco-detalhe-rodape');
+      if (rodape) {
+        const rr = rodape.getBoundingClientRect();
+        if (rr.height > 0 && (rr.top < -1 || rr.bottom > window.innerHeight + 1)) return `rodape ${Math.round(rr.top)}..${Math.round(rr.bottom)}`;
+      }
       if (!document.body.classList.contains('cco-detalhe-trava')) return 'sem trava';
+      const pagina = document.querySelector('main.sigma-main > .overflow-y-auto') as HTMLElement | null;
       if (!pagina || getComputedStyle(pagina).overflowY !== 'hidden') return 'pagina rola';
+      if (comNav) {
+        const nav = document.querySelector('nav[aria-label="Navegação mobile"]');
+        if (!nav) return 'sem nav';
+        const navTop = nav.getBoundingClientRect().top;
+        if (r.bottom > navTop - 8) return `nav ${Math.round(navTop)} x ${Math.round(r.bottom)}`;
+      }
       return 'ok';
-    }, w < 1024);
+    }, { empilhada: w < 1280, comNav: w < 1024 });
   }, { timeout: 4_000 }).toBe('ok');
 }
 
@@ -362,7 +373,7 @@ async function assertRodapeNoViewport(page: Page) {
       };
       const r = btn.getBoundingClientRect();
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-      return dentro(btn) && dentro(link) && Boolean(hit && (hit === btn || btn.contains(hit))) && window.scrollY === 0;
+      return dentro(btn) && dentro(link) && Boolean(hit && (hit === btn || btn.contains(hit)));
     });
   }, { timeout: 4_000 }).toBe(true);
 }
@@ -490,8 +501,8 @@ test.describe('321 barra lateral do mapa', () => {
       await expect(page.locator('.sigma-map-shell[data-map-zoom]')).toBeAttached({ timeout: 20_000 });
 
       const botaoLista = page.locator('.cco-list-panel').getByRole('button', { name: /EMEB ZZ Barra 321/ });
-      if (vp.w >= 1024) await page.locator('.sigma-map-shell').scrollIntoViewIfNeeded();
-      else await botaoLista.scrollIntoViewIfNeeded();
+      if (vp.w >= 1280) await page.locator('.sigma-map-shell').scrollIntoViewIfNeeded();
+      else if (vp.w < 1024) await botaoLista.scrollIntoViewIfNeeded();
       const scrollAntes = await scrollPagina(page);
       if (vp.w >= 1024) {
         await botaoLista.evaluate((el) => {
@@ -506,7 +517,7 @@ test.describe('321 barra lateral do mapa', () => {
       }
       await assertJanela(page, vp.w);
       expect(await scrollPagina(page)).toEqual(scrollAntes);
-      if (vp.w < 1024) {
+      if (vp.w < 1280) {
         const fora = await page.evaluate(() => {
           const barra = document.querySelector('[data-testid="cco-detalhe-barra"]')!.getBoundingClientRect();
           return { x: Math.max(8, barra.left - 12), y: 180 };
@@ -521,7 +532,7 @@ test.describe('321 barra lateral do mapa', () => {
       await page.getByTestId('cco-detalhe-fechar').click();
       await expect(page.getByTestId('cco-detalhe-barra')).toHaveCount(0);
       await expect(page.locator('.cco-list-panel').getByRole('button', { name: /EMEB ZZ Barra 321/ })).toBeFocused();
-      if (vp.w < 1024) {
+      if (vp.w < 1280) {
         await expect.poll(() => page.evaluate(() => document.body.classList.contains('cco-detalhe-trava'))).toBe(false);
       }
 
@@ -644,6 +655,7 @@ test.describe('321 barra lateral do mapa', () => {
       await expect(painel.getByRole('checkbox', { name: /ZZ Camada 321/ })).toBeChecked();
       await painel.getByRole('button', { name: 'Fechar painel' }).click();
       expect(await modoTelaCheia(page)).toBe(modo);
+      expect(await vista(page)).toEqual(vistaAntes);
     });
   }
 
@@ -696,6 +708,37 @@ test.describe('321 barra lateral do mapa', () => {
       await expect(page.getByTestId('cco-detalhe-barra')).toHaveCount(0);
       expect(await modoTelaCheia(page)).toBe(modo);
       expect(await vista(page)).toEqual(antes);
+    });
+  }
+
+  for (const vp of [
+    { w: 1024, h: 768 },
+    { w: 390, h: 844 },
+    { w: 768, h: 1024 },
+    { w: 320, h: 568 },
+  ] as const) {
+    test(`chamado janela ${vp.w}x${vp.h}`, async ({ page, browserName }) => {
+      const tag = `${browserName}-${vp.w}x${vp.h}`;
+      await page.setViewportSize({ width: vp.w, height: vp.h });
+      await page.goto('/cco');
+      await page.getByRole('button', { name: 'Todos os chamados' }).click();
+      const botao = page.locator('.cco-list-panel').getByRole('button', { name: /ZZ Chamado Barra 321/ });
+      await expect(botao).toBeVisible({ timeout: 30_000 });
+      const scrollAntes = await scrollPagina(page);
+      await botao.evaluate((el) => {
+        if (!(el instanceof HTMLElement)) return;
+        el.focus({ preventScroll: true });
+        el.click();
+      });
+      await expect(page.getByTestId('cco-detalhe-barra')).toBeVisible();
+      await assertJanela(page, vp.w);
+      expect(await scrollPagina(page)).toEqual(scrollAntes);
+      await assertRodapeNoViewport(page);
+      if (vp.w !== 1024) {
+        await page.screenshot({ path: path.join(OUT, `${tag}-topo-janela-chamado.png`), animations: 'disabled' });
+      }
+      await page.getByTestId('cco-detalhe-fechar').click();
+      await expect(page.getByTestId('cco-detalhe-barra')).toHaveCount(0);
     });
   }
 });

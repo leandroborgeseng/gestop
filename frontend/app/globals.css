@@ -768,7 +768,7 @@ body:has(.sigma-map-shell.sigma-map-fullscreen) .sigma-main {
   border-bottom: 0;
 }
 
-/* Indica que a fileira continua além da borda, sem cortar o clique na aba. */
+/* Degradê na borda de corte da fileira (o padding de 12px fica fora do fade). */
 .cco-detalhe-abas[data-overflow='1']::after,
 .cco-detalhe-abas[data-rolou='1']::before {
   content: '';
@@ -776,17 +776,17 @@ body:has(.sigma-map-shell.sigma-map-fullscreen) .sigma-main {
   top: 0;
   bottom: 0;
   z-index: 1;
-  width: 28px;
+  width: 24px;
   pointer-events: none;
 }
 
 .cco-detalhe-abas[data-overflow='1']::after {
-  right: 0;
+  right: 12px;
   background: linear-gradient(to left, var(--surface), transparent);
 }
 
 .cco-detalhe-abas[data-rolou='1']::before {
-  left: 0;
+  left: 12px;
   background: linear-gradient(to right, var(--surface), transparent);
 }
 
@@ -845,8 +845,8 @@ body:has(.sigma-map-shell.sigma-map-fullscreen) .sigma-main {
   }
 }
 
-/* 321 janela — fora da tela cheia. A tela cheia (nativa ou .sigma-map-fullscreen) não entra aqui. */
-@media (max-width: 1023px) {
+/* 321 janela — o mesmo corte da grade: até 1279 a lista empilha sobre o mapa. */
+@media (max-width: 1279px) {
   .sigma-map-shell:not(:fullscreen):not(.sigma-map-fullscreen):has(.cco-detalhe-barra) {
     overflow: visible;
   }
@@ -870,7 +870,7 @@ html:has(body.cco-detalhe-trava) {
   overflow: hidden;
 }
 
-@media (max-width: 1023px) {
+@media (max-width: 1279px) {
   body.cco-detalhe-trava .sigma-main {
     z-index: 80;
   }
@@ -881,7 +881,7 @@ html:has(body.cco-detalhe-trava) {
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .sigma-map-shell:not(:fullscreen):not(.sigma-map-fullscreen):has(.cco-detalhe-barra) .sigma-map-canvas {
     /* Leaflet grava position:relative inline. Sem isto a barra sticky fica depois do mapa. */
     position: absolute !important;

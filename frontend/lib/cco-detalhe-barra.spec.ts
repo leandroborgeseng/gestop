@@ -30,7 +30,10 @@ describe('321 · convivência da barra de detalhes', () => {
     expect(css).toContain('max-height: 48px');
     expect(css).toContain('body.cco-detalhe-trava');
     expect(css).toContain('position: sticky');
+    expect(css).toContain('@media (max-width: 1279px)');
     expect(css).toContain('linear-gradient(to left, var(--surface), transparent)');
+    expect(css).toContain('right: 12px');
+    expect(css).toContain('width: 24px');
     expect(css).not.toMatch(/\.cco-detalhe-barra[\s\S]{0,400}animation\s*:/);
     const layout = readFileSync(resolve('frontend/app/layout.tsx'), 'utf8');
     expect(layout).toContain("viewportFit: 'cover'");
@@ -52,6 +55,7 @@ describe('321 · convivência da barra de detalhes', () => {
     expect(mapa).toContain('data-fullscreen-mode');
     const barra = readFileSync(resolve('frontend/components/cco/cco-detalhe-barra.tsx'), 'utf8');
     expect(barra).not.toContain("matchMedia('(min-width: 1024px)')");
+    expect(barra).toContain("matchMedia('(max-width: 1279px)')");
     const popup = readFileSync(resolve('frontend/lib/map-popup-action.ts'), 'utf8');
     expect(popup).toContain('[data-testid="cco-detalhe-barra"]');
   });
