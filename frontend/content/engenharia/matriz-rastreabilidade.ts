@@ -163,7 +163,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/dashboard (grade) e /relatorios (card Gerar)',
     api: 'ChamadoTarefasController: GET /chamado-tarefas/relatorio e /relatorio.csv|pdf|xlsx. capa=simples exporta a grade; o PDF formal usa o cabeçalho SIGMA.',
     tabelas: 'ChamadoTarefa, Chamado, Secretaria, Equipe',
-    permissao: 'chamados.gerenciar, dashboard.visualizar ou matriz de relatórios/tarefas. O escopo de secretaria do usuário é aplicado na consulta. O período da grade do dashboard e do modal formal filtra createdAt (data de abertura). Os agrupamentos por secretaria e equipe devolvem pendentes e atrasadas. Tarefas não entram nos indicadores de chamados do MonitoramentoService. O export da grade reenvia os mesmos filtros aplicados. Grade, modal formal e export PDF/CSV/XLSX usam o teto de 500 linhas; acima disso a tela e o arquivo dizem "Mostrando 500 de N tarefas".',
+    permissao: 'chamados.gerenciar, dashboard.visualizar ou matriz de relatórios/tarefas. O escopo de secretaria do usuário é aplicado na consulta. O período da grade do dashboard e do modal formal filtra createdAt (data de abertura). Os agrupamentos por secretaria e equipe devolvem pendentes e atrasadas e, na tela, ordenam por atrasadas, pendentes e nome, com +N outras e Ver todas acima de seis. Tarefas não entram nos indicadores de chamados do MonitoramentoService. O export da grade reenvia os mesmos filtros aplicados. Grade, modal formal e export PDF/CSV/XLSX usam o teto de 500 linhas; acima disso a tela e o arquivo dizem "Mostrando 500 de N tarefas".',
   },
   {
     id: 'mobile',

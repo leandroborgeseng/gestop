@@ -6,9 +6,12 @@ import { downloadRelatorioTarefas, getRelatorioTarefas, getSecretarias, listEqui
 import {
   avisoCorteRelatorioTarefas,
   formatarGrupoIndicadoresTarefas,
+  LIMITE_GRUPOS_VISIVEIS,
   montarFiltrosRelatorioTarefas,
+  ordenarGruposPendencias,
   TAREFA_PRIORIDADE_LABEL,
   TAREFA_STATUS_LABEL,
+  textoCorteGrupos,
   type GrupoIndicadoresTarefas,
   type RelatorioTarefasResponse,
 } from '@/lib/chamado-tarefa';
@@ -244,17 +247,29 @@ function Grupo({
   itens: GrupoIndicadoresTarefas[];
   detalharPendencias?: boolean;
 }) {
+  const [expandido, setExpandido] = useState(false);
+  const ordenados = detalharPendencias ? ordenarGruposPendencias(itens) : itens;
+  const visiveis = expandido || !detalharPendencias ? ordenados : ordenados.slice(0, LIMITE_GRUPOS_VISIVEIS);
+  const corte = detalharPendencias && !expandido ? textoCorteGrupos(ordenados.length) : null;
   return (
     <div>
       <p className="text-[12px] font-semibold text-[var(--ink-2)]">{titulo}</p>
       <ul className="mt-1 text-[12px] text-[var(--ink-3)]">
-        {itens.slice(0, 6).map((item) => (
+        {visiveis.map((item) => (
           <li key={item.nome}>
             {detalharPendencias ? formatarGrupoIndicadoresTarefas(item) : `${item.nome}: ${item.total}`}
           </li>
         ))}
-        {itens.length === 0 ? <li>Sem dados</li> : null}
+        {ordenados.length === 0 ? <li>Sem dados</li> : null}
       </ul>
+      {corte ? (
+        <p className="mt-1 text-[12px] text-[var(--ink-2)]">
+          <span data-testid={`corte-grupos-${titulo}`}>{corte}</span>{' '}
+          <button type="button" className="font-semibold text-[var(--brand)] underline" onClick={() => setExpandido(true)}>
+            Ver todas
+          </button>
+        </p>
+      ) : null}
     </div>
   );
 }

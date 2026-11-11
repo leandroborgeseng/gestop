@@ -296,3 +296,21 @@ export function montarFiltrosRelatorioTarefas(input: FiltrosRelatorioTarefasInpu
 export function formatarGrupoIndicadoresTarefas(item: Pick<GrupoIndicadoresTarefas, 'nome' | 'pendentes' | 'atrasadas'>) {
   return `${item.nome}: ${item.pendentes} pendentes · ${item.atrasadas} atrasadas`;
 }
+
+/** UX-04: pendências primeiro — atrasadas, depois pendentes, depois o nome. */
+export const LIMITE_GRUPOS_VISIVEIS = 6;
+
+export function ordenarGruposPendencias<T extends Pick<GrupoIndicadoresTarefas, 'nome' | 'pendentes' | 'atrasadas'>>(
+  itens: readonly T[],
+): T[] {
+  return [...itens].sort(
+    (a, b) => b.atrasadas - a.atrasadas || b.pendentes - a.pendentes || a.nome.localeCompare(b.nome, 'pt-BR'),
+  );
+}
+
+/** Rodapé quando a lista corta. Null se tudo já está visível. */
+export function textoCorteGrupos(total: number, visiveis = LIMITE_GRUPOS_VISIVEIS): string | null {
+  const outras = total - visiveis;
+  if (outras <= 0) return null;
+  return `+${outras} outras`;
+}

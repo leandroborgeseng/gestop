@@ -5,6 +5,8 @@ import {
   avisoCorteRelatorioTarefas,
   formatarGrupoIndicadoresTarefas,
   montarFiltrosRelatorioTarefas,
+  ordenarGruposPendencias,
+  textoCorteGrupos,
   TETO_LINHAS_RELATORIO_TAREFAS,
 } from './chamado-tarefa';
 
@@ -36,6 +38,30 @@ describe('254 — agrupamentos do dashboard', () => {
     expect(panelSrc).toContain('<Grupo titulo="Por secretaria" itens={indicadores.porSecretaria} detalharPendencias />');
     expect(panelSrc).toContain('<Grupo titulo="Por equipe" itens={indicadores.porEquipe} detalharPendencias />');
     expect(panelSrc).toContain('formatarGrupoIndicadoresTarefas(item)');
+  });
+});
+
+describe('UX-04 — ordem e corte dos agrupamentos', () => {
+  it('ordena atrasadas, pendentes e nome, e avisa as que ficam de fora', () => {
+    const grupos = [
+      { nome: 'OBRAS', pendentes: 1, atrasadas: 0 },
+      { nome: 'SAUDE', pendentes: 4, atrasadas: 2 },
+      { nome: 'EDU', pendentes: 9, atrasadas: 0 },
+      { nome: 'CULT', pendentes: 1, atrasadas: 3 },
+      { nome: 'TRANS', pendentes: 2, atrasadas: 2 },
+      { nome: 'ASSIST', pendentes: 0, atrasadas: 0 },
+      { nome: 'FAZENDA', pendentes: 0, atrasadas: 1 },
+      { nome: 'MEIO', pendentes: 8, atrasadas: 0 },
+    ];
+    const ordem = ordenarGruposPendencias(grupos).map((item) => item.nome);
+    expect(ordem[0]).toBe('CULT');
+    expect(ordem).toEqual(['CULT', 'SAUDE', 'TRANS', 'FAZENDA', 'EDU', 'MEIO', 'OBRAS', 'ASSIST']);
+    expect(textoCorteGrupos(8)).toBe('+2 outras');
+    expect(textoCorteGrupos(6)).toBeNull();
+    expect(ordem.filter((nome) => grupos.find((item) => item.nome === nome)!.atrasadas > 0).every((nome) => ordem.indexOf(nome) < 6 || textoCorteGrupos(ordem.length))).toBe(true);
+    expect(panelSrc).toContain('ordenarGruposPendencias(itens)');
+    expect(panelSrc).toContain('Ver todas');
+    expect(panelSrc).toContain('textoCorteGrupos');
   });
 });
 
