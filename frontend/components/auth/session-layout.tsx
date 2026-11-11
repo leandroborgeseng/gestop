@@ -12,7 +12,7 @@ import { PageContainer } from '@/components/layout/page-shell';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { registerServiceWorker } from '@/lib/pwa';
 import { emitirTrocaEscopo, SESSAO_ESCOPO_EVENT, SessaoEscopoDetail } from '@/lib/session-events';
-import { revalidarSessaoNaRetomada } from '@/lib/sessao-renovacao';
+import { prepararSessaoAoAbrir, revalidarSessaoNaRetomada } from '@/lib/sessao-renovacao';
 import { sanitizeReturnTo } from '@/lib/tela-inicial';
 
 export function SessionLayout({ children }: { children: React.ReactNode }) {
@@ -74,15 +74,25 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
       return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
     }
 
-    // 322: renovar o usuário (foco, visibilitychange ou refresh) não troca a rota atual.
-    getMe()
-      .then((user) => {
-        const refreshed: StoredAuth = { ...stored, user };
+    let cancelado = false;
+    // 322: na abertura, renova se faltarem menos de 7 dias. Isso não troca a rota.
+    void (async () => {
+      await prepararSessaoAoAbrir();
+      if (cancelado) return;
+      const base = getStoredAuth();
+      if (!base) {
+        redirectToLogin();
+        return;
+      }
+      try {
+        const user = await getMe();
+        if (cancelado) return;
+        const refreshed: StoredAuth = { ...base, user };
         setStoredAuth(refreshed);
         setAuth(refreshed);
         setChecking(false);
-      })
-      .catch(() => {
+      } catch {
+        if (cancelado) return;
         // Rede/offline: mantém sessão local para PWA de vistoria. 401 já limpa o storage.
         const stillStored = getStoredAuth();
         if (stillStored) {
@@ -91,9 +101,13 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
           return;
         }
         redirectToLogin();
-      });
+      }
+    })();
 
-    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
+    return () => {
+      cancelado = true;
+      window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
+    };
   }, [router]);
 
   // 322 L3: retomada (visível, foco, pageshow com ou sem bfcache) revalida ou renova o token

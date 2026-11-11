@@ -1,8 +1,8 @@
 import { API_PROXY_PREFIX, AUTH_REMEMBER_STORAGE_KEY, getStoredAuth, setStoredAuth, type StoredAuth } from '@/lib/api';
 import type { LoginResponse } from '@/lib/types';
 
-/** Renova quando falta no máximo isto para o token de "manter conectado" vencer. */
-export const LIMIAR_RENOVACAO_MS = 15 * 60 * 1000;
+/** Renova na abertura e na retomada quando falta menos de 7 dias para o token vencer. */
+export const LIMIAR_RENOVACAO_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type AcaoRetomada = 'ignorada' | 'revalidar' | 'refresh' | 'refresh-falhou' | 'revalidar-falhou';
 
@@ -102,9 +102,23 @@ async function executar(): Promise<RetomadaResultado> {
 }
 
 /**
+ * Abertura do app. Se a sessão "manter conectado" vence em menos de 7 dias, renova
+ * antes do /auth/me. O servidor recusa o que passar do teto de 30 dias do login.
+ * Token já vencido não é renovado: o layout manda ao login.
+ */
+export function prepararSessaoAoAbrir(): Promise<RetomadaResultado> {
+  if (typeof window === 'undefined') return Promise.resolve(semRota('ignorada'));
+  const stored = getStoredAuth();
+  if (!stored || !deveRenovarToken(manterConectadoAtivo(), stored.expiresAt)) {
+    return Promise.resolve(semRota('ignorada'));
+  }
+  return revalidarSessaoNaRetomada();
+}
+
+/**
  * Retomada da aba ou do PWA (visibilitychange, focus, pageshow inclusive bfcache).
- * Revalida o usuário e, na sessão de 30 dias perto de vencer, renova o token.
- * Não lê nem escreve a rota.
+ * Revalida o usuário e, na sessão de 30 dias a menos de 7 dias do fim, renova o token.
+ * Não lê nem escreve a rota. Token já vencido segue para o login no layout.
  */
 export function revalidarSessaoNaRetomada(): Promise<RetomadaResultado> {
   if (emCurso) {

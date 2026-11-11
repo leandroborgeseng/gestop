@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_REMEMBER_STORAGE_KEY } from './api';
-import { deveRenovarToken, LIMIAR_RENOVACAO_MS, revalidarSessaoNaRetomada, tokenPertoDeExpirar } from './sessao-renovacao';
+import { deveRenovarToken, LIMIAR_RENOVACAO_MS, prepararSessaoAoAbrir, revalidarSessaoNaRetomada, tokenPertoDeExpirar } from './sessao-renovacao';
 
 const AGORA = 1_700_000_000_000;
 
@@ -31,13 +31,18 @@ afterEach(() => {
 });
 
 describe('token perto de expirar', () => {
-  it('só a sessão de 30 dias dentro do limiar pede renovação', () => {
+  const dia = 24 * 60 * 60 * 1000;
+
+  it('renova a sessão de 30 dias quando faltam menos de 7 dias', () => {
+    expect(LIMIAR_RENOVACAO_MS).toBe(7 * dia);
     expect(tokenPertoDeExpirar(AGORA + LIMIAR_RENOVACAO_MS, AGORA)).toBe(true);
-    expect(tokenPertoDeExpirar(AGORA + 20_000, AGORA)).toBe(true);
+    expect(tokenPertoDeExpirar(AGORA + 6 * dia, AGORA)).toBe(true);
     expect(tokenPertoDeExpirar(AGORA + LIMIAR_RENOVACAO_MS + 1, AGORA)).toBe(false);
+    expect(tokenPertoDeExpirar(AGORA + 8 * dia, AGORA)).toBe(false);
     expect(tokenPertoDeExpirar(AGORA, AGORA)).toBe(false);
-    expect(deveRenovarToken(true, AGORA + 20_000, AGORA)).toBe(true);
-    expect(deveRenovarToken(false, AGORA + 20_000, AGORA)).toBe(false);
+    expect(deveRenovarToken(true, AGORA + 6 * dia, AGORA)).toBe(true);
+    expect(deveRenovarToken(true, AGORA + 8 * dia, AGORA)).toBe(false);
+    expect(deveRenovarToken(false, AGORA + 6 * dia, AGORA)).toBe(false);
   });
 });
 
@@ -124,6 +129,40 @@ describe('revalidarSessaoNaRetomada', () => {
     expect(b).toEqual({ acao: 'refresh', redirecionou: false });
     expect(urls).toContain('/api-gestop/auth/refresh');
     expect(JSON.parse(store.get('sigma.auth') ?? '{}').accessToken).toBe('novo');
+  });
+
+  it('na abertura, renova se faltam 6 dias e não chama a rede se faltam 8', async () => {
+    const dia = 24 * 60 * 60 * 1000;
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          accessToken: 'renovado-na-abertura',
+          tokenType: 'Bearer',
+          expiresInSeconds: 6 * 24 * 3600,
+          user: { id: 'u', permissoes: [], perfis: [] },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    instalarJanela(
+      { accessToken: 'velho', user: { id: 'u', permissoes: [], perfis: [] }, expiresAt: Date.now() + 6 * dia },
+      '1',
+    );
+    const perto = await prepararSessaoAoAbrir();
+    expect(perto).toEqual({ acao: 'refresh', redirecionou: false });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api-gestop/auth/refresh');
+
+    fetchMock.mockClear();
+    instalarJanela(
+      { accessToken: 'folgado', user: { id: 'u', permissoes: [], perfis: [] }, expiresAt: Date.now() + 8 * dia },
+      '1',
+    );
+    const folgado = await prepararSessaoAoAbrir();
+    expect(folgado).toEqual({ acao: 'ignorada', redirecionou: false });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('sessão folgada só revalida /auth/me e não chama o refresh', async () => {
