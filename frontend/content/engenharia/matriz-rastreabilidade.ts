@@ -235,7 +235,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/documentos, painel Documentos relacionados em /chamados e /meus-chamados',
     api: 'DocumentosController: GET /documentos, GET /:id, GET /por-chamado/:chamadoId, GET /chamados-busca, GET /:id/pdf/original, GET /:id/pdf/assinado, POST /:id/gerar-pdf, PATCH /:id/vinculos, /respostas, POST /:id/concluir',
     tabelas: 'Documento, DocumentoChamado, DocumentoResposta, DocumentoAssinatura, DocumentoAssinaturaPedido, ChecklistItem, Chamado, Fiscalizacao',
-    permissao: 'documentos.visualizar ou documentos.administrar (módulo). PDF e listagem relacionada também aceitam dashboard, chamados e fiscalização. O card no chamado mostra signatários pendentes (DocumentoAssinaturaPedido PENDENTE) e assinaturas vigentes. Vínculo de avulso em rascunho: documentos.criar_avulso. Depois da conclusão: documentos.editar_vinculo.',
+    permissao: 'documentos.visualizar ou documentos.administrar (módulo). PDF e listagem relacionada também aceitam dashboard, chamados e fiscalização. Busca, filtros e o id aberto ficam na query; a URL não troca Secretaria nem perfil. O card no chamado mostra signatários pendentes (DocumentoAssinaturaPedido PENDENTE) e assinaturas vigentes. Vínculo de avulso em rascunho: documentos.criar_avulso. Depois da conclusão: documentos.editar_vinculo.',
   },
   {
     id: 'avulso',

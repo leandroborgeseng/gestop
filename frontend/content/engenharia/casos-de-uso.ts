@@ -235,7 +235,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'consultar-documentos',
         nome: 'Consultar documentos',
         atores: ['administrador', 'gestor', 'equipe', 'solicitante'],
-        descricao: 'Listar peças, gerar PDF e ajustar vínculos com chamado ou vistoria. GET /documentos/por-chamado/:id devolve signatários pendentes e assinaturas vigentes no mesmo serialize da tela Documentos.',
+        descricao: 'Listar peças, gerar PDF e ajustar vínculos com chamado ou vistoria. Busca, tipo, situação, assinatura, histórico e o documento aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir o documento entra no histórico. GET /documentos/por-chamado/:id devolve signatários pendentes e assinaturas vigentes no mesmo serialize da tela Documentos.',
         rotas: ['/documentos', '/chamados', '/meus-chamados', 'GET /documentos', 'GET /documentos/por-chamado/:chamadoId', 'GET /documentos/:id/pdf/original', 'PATCH /documentos/:id/vinculos'],
       },
       {
