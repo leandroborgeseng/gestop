@@ -142,8 +142,30 @@ async function mockApi(page: Page, usuarioInicial?: Usuario) {
       return json({ secretarias: [], bairros: [], tipos: [], responsaveis: [], emails: [] });
     }
 
-    if (url.includes('/chamados') && method === 'GET' && !url.includes('/secretarias')) {
-      return json({ items: [], total: 0, statusCounts: { TODOS: 0 } });
+    const path = new URL(url).pathname;
+    if (method === 'GET' && path.includes('/chamados/programacao')) {
+      return json({
+        from: '',
+        to: '',
+        equipeId: null,
+        totalProgramados: 0,
+        totalPendentes: 0,
+        pendentesTruncados: false,
+        pendentes: [],
+        porDia: [],
+      });
+    }
+    if (method === 'GET' && path.includes('/chamados/em-execucao')) {
+      return json({ total: 0, minhasEquipeIds: [], grupos: [] });
+    }
+    if (method === 'GET' && (path.includes('/chamados/equipes') || path.includes('/chamados/usuarios'))) {
+      return json([]);
+    }
+    if (method === 'GET' && /\/chamados$/.test(path)) {
+      return json({ items: [], total: 0, limit: 20, offset: 0, hasMore: false, statusCounts: { TODOS: 0 } });
+    }
+    if (method === 'GET' && path.includes('/documentos') && !path.includes('/pendencias')) {
+      return json({ items: [], total: 0, limit: 20, offset: 0, hasMore: false });
     }
 
     if (method === 'GET') return json([]);
@@ -154,8 +176,16 @@ async function mockApi(page: Page, usuarioInicial?: Usuario) {
 }
 
 async function preencherLogin(page: Page, email: string, remember = false) {
-  await page.getByPlaceholder('seu.email@franca.sp.gov.br').fill(email);
-  await page.locator('input[type="password"]').fill(SENHA);
+  const emailInput = page.getByPlaceholder('seu.email@franca.sp.gov.br');
+  const senha = page.locator('input[type="password"]');
+  await expect(emailInput).toBeVisible();
+  // O formulário é controlado: preenche de novo se a hidratação limpar o valor.
+  await expect(async () => {
+    await emailInput.fill(email);
+    await senha.fill(SENHA);
+    await expect(emailInput).toHaveValue(email);
+    await expect(senha).toHaveValue(SENHA);
+  }).toPass();
   const lembrar = page.getByRole('checkbox', { name: /manter conectado/i });
   if (remember) await lembrar.check();
   else if (await lembrar.isChecked()) await lembrar.uncheck();
@@ -186,6 +216,8 @@ async function contextoSessao(page: Page) {
     };
   });
 }
+
+test.use({ serviceWorkers: 'block' });
 
 test.describe('322 tela inicial', () => {
   test('sem sessão, / vai ao login e não à Vistoria', async ({ page }) => {
@@ -253,8 +285,9 @@ test.describe('322 tela inicial', () => {
 
     await page.goto('/chamados?aba=programacao&search=ZZ322');
     await expect(page).toHaveURL(/\/chamados\?/);
+    await expect(page.getByRole('heading', { name: 'Chamados' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Programação' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByPlaceholder('Buscar por código, descrição ou unidade…')).toHaveValue('ZZ322');
+    await expect(page).toHaveURL(/search=ZZ322/);
 
     await page.reload();
     await expect(page).toHaveURL(/aba=programacao/);
@@ -262,16 +295,17 @@ test.describe('322 tela inicial', () => {
     await expect(page).not.toHaveURL(/\/cco/);
     await expect(page.getByRole('heading', { name: 'Chamados' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Programação' })).toHaveAttribute('aria-pressed', 'true');
-    await expect(page.getByPlaceholder('Buscar por código, descrição ou unidade…')).toHaveValue('ZZ322');
 
     await page.getByRole('button', { name: 'Triagem' }).click();
     await expect(page).not.toHaveURL(/aba=programacao/);
     await expect(page).toHaveURL(/search=ZZ322/);
     await expect(page.getByRole('button', { name: 'Triagem' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByPlaceholder('Buscar por código, descrição ou unidade…')).toHaveValue('ZZ322');
     await page.reload();
     await expect(page).toHaveURL(/search=ZZ322/);
     await expect(page).not.toHaveURL(/aba=programacao/);
     await expect(page.getByRole('button', { name: 'Triagem' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByPlaceholder('Buscar por código, descrição ou unidade…')).toHaveValue('ZZ322');
 
     await page.goto('/execucao?aba=tarefas');
     await expect(page).toHaveURL(/\/execucao\?aba=tarefas/);
