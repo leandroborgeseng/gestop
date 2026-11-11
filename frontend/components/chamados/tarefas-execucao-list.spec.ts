@@ -147,6 +147,17 @@ describe('286 §8.4 — histórico', () => {
   });
 });
 
+describe('UX-03 — teclado e anúncio', () => {
+  it('cada tarefa é um botão com foco de 2px e o nome acessível traz código e título', () => {
+    const html = lista([tarefa(), tarefa({ id: 't2', titulo: 'Segunda tarefa' })]);
+    expect(html.match(/<button type="button"/g)).toHaveLength(2);
+    expect(html).toContain('focus-visible:outline-2');
+    expect(html).not.toContain('tabindex="-1"');
+    expect(html).toContain('Tarefa Fazer laudo, do chamado CH-2026-0001');
+    expect(html).toContain('Tarefa Segunda tarefa, do chamado CH-2026-0001');
+  });
+});
+
 describe('286 §8.5 — abrir pelo card, Esc e foco', () => {
   it('o card é <button> (Enter/Espaço nativos) que chama onOpen; o painel seleciona e abre o sheet', () => {
     expect(listSrc).toContain('onClick={() => onOpen(item.id)}');
