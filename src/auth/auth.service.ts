@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuditAction } from '@prisma/client';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveJwtSecret, resolvePublicFrontendUrl } from '../config/env';
@@ -9,7 +9,7 @@ import { hashPassword, verifyPassword } from './password';
 import { PASSWORD_MAX_LENGTH, validatePasswordPolicy } from './password-policy';
 import { JwtPayload, signJwt } from './jwt';
 import { AuditService } from '../audit/audit.service';
-import { duracaoRenovacaoSegundos, SESSAO_CURTA_SEGUNDOS, SESSAO_LONGA_SEGUNDOS, tokenRevogadoPorLogout } from './session-duration';
+import { duracaoRenovacaoSegundos, identificadorDeSessao, SESSAO_CURTA_SEGUNDOS, SESSAO_LONGA_SEGUNDOS } from './session-duration';
 
 const SECRETARIA_SELECT = {
   id: true,
@@ -76,6 +76,7 @@ export class AuthService {
         acessoTodasSecretarias: session.acessoTodasSecretarias,
         secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
         auth_time: authTime,
+        sid: randomUUID(),
       },
       this.getJwtSecret(),
       expiresInSeconds,
@@ -119,7 +120,7 @@ export class AuthService {
    * Reemite o access token com o perfil ativo e a secretaria já gravados.
    * Não troca perfil, secretaria nem rota — quem chama é a retomada da aba.
    */
-  async refreshSession(atual: JwtPayload) {
+  async refreshSession(atual: JwtPayload, tokenBruto?: string | null) {
     const agora = Math.floor(Date.now() / 1000);
     const expiresInSeconds = duracaoRenovacaoSegundos(atual, agora);
     if (expiresInSeconds <= 0) {
@@ -135,17 +136,19 @@ export class AuthService {
       throw new UnauthorizedException('Sessao invalida ou expirada');
     }
 
-    const logout = await this.prisma.logAuditoria.findFirst({
-      where: {
-        usuarioId: atual.sub,
-        acao: AuditAction.LOGOUT,
-        ...(atual.iat != null ? { createdAt: { gt: new Date(atual.iat * 1000) } } : {}),
-      },
-      select: { id: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (tokenRevogadoPorLogout(atual.iat, logout?.createdAt ?? null)) {
-      throw new UnauthorizedException('Sessao invalida ou expirada');
+    const sessaoId = identificadorDeSessao(atual, tokenBruto);
+    if (sessaoId) {
+      const logout = await this.prisma.logAuditoria.findFirst({
+        where: {
+          acao: AuditAction.LOGOUT,
+          entidadeTipo: 'sessao',
+          entidadeId: sessaoId,
+        },
+        select: { id: true },
+      });
+      if (logout) {
+        throw new UnauthorizedException('Sessao invalida ou expirada');
+      }
     }
 
     const session = this.buildSessionPayload(usuario);
@@ -161,6 +164,7 @@ export class AuthService {
         perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
         acessoTodasSecretarias: session.acessoTodasSecretarias,
         secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
+        sid: atual.sid ?? randomUUID(),
         auth_time: atual.auth_time ?? atual.iat ?? agora,
       },
       this.getJwtSecret(),
@@ -175,12 +179,16 @@ export class AuthService {
     };
   }
 
-  async logout(user: JwtPayload, meta?: { ip?: string | null; userAgent?: string | null }) {
+  async logout(
+    user: JwtPayload,
+    meta?: { ip?: string | null; userAgent?: string | null },
+    tokenBruto?: string | null,
+  ) {
     await this.auditService.record({
       user,
       acao: AuditAction.LOGOUT,
-      entidadeTipo: 'Auth',
-      entidadeId: user.sub,
+      entidadeTipo: 'sessao',
+      entidadeId: identificadorDeSessao(user, tokenBruto),
       tela: 'auth',
       funcao: '_tela',
       descricao: `Logoff de ${user.email}`,

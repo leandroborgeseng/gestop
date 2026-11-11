@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 
 export type JwtPayload = {
   sub: string;
@@ -13,6 +13,10 @@ export type JwtPayload = {
   secretariasIds?: string[];
   /** Unix segundos do login original. O refresh copia o valor e não passa de 30 dias a partir dele. */
   auth_time?: number;
+  /** Sessão. O refresh copia. O logout revoga só este id, não as outras sessões do usuário. */
+  sid?: string;
+  /** Identificador deste token. Cada emissão recebe um novo. */
+  jti?: string;
   iat?: number;
   exp?: number;
 };
@@ -43,6 +47,7 @@ export function signJwt(
   };
   const body: JwtPayload = {
     ...payload,
+    jti: randomUUID(),
     iat: now,
     exp: now + expiresInSeconds,
   };

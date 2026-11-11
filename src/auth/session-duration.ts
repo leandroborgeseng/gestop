@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 export const SESSAO_CURTA_SEGUNDOS = 60 * 60 * 8;
 /** Teto absoluto da sessão "manter conectado": 30 dias desde o login original. */
 export const SESSAO_LONGA_SEGUNDOS = 60 * 60 * 24 * 30;
@@ -19,8 +21,17 @@ export function duracaoRenovacaoSegundos(
   return Math.min(base, restante);
 }
 
-/** Logout registrado depois da emissão deste token o revoga. */
-export function tokenRevogadoPorLogout(iatSegundos: number | undefined, logoutEm: Date | null) {
-  if (!logoutEm || iatSegundos == null) return false;
-  return logoutEm.getTime() > iatSegundos * 1000;
+/** sha256 do access token, em hex. Identifica token legado, sem `sid`, no logout. */
+export function hashDoToken(token: string) {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Chave da sessão no LogAuditoria.
+ * Com `sid`, o logout derruba só essa sessão. Sem `sid`, só o token apresentado.
+ */
+export function identificadorDeSessao(payload: { sid?: string | null }, tokenBruto?: string | null) {
+  if (payload.sid) return payload.sid;
+  if (!tokenBruto) return null;
+  return hashDoToken(tokenBruto);
 }

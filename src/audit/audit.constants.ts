@@ -92,6 +92,7 @@ export function entidadeTipoParaTela(entidadeTipo: string): { telaId: string; fu
       return { telaId: 'integracoes', funcaoId: 'monitorar' };
     case 'Auth':
     case 'Sessao':
+    case 'sessao':
       return { telaId: 'auth', funcaoId: '_tela' };
     default:
       return { telaId: 'admin', funcaoId: '_tela' };
