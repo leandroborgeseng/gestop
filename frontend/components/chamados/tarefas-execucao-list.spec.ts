@@ -286,7 +286,8 @@ describe('286 §8.11 — regressão de filtros e contadores', () => {
   });
   it('a sanfona e o resumo dos filtros permanecem', () => {
     expect(panelSrc).toContain('onClick={() => setFiltrosAbertos((current) => !current)}');
-    expect(panelSrc).toContain('{!filtrosAbertos ? <p className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{resumoFiltros}</p> : null}');
+    expect(panelSrc).toContain('title={resumoFiltros}');
+    expect(panelSrc).toContain('line-clamp-2');
   });
 });
 

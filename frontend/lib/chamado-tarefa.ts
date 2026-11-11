@@ -229,6 +229,28 @@ export type FiltrosTarefasExecucaoResumo = {
   prazoTo?: string;
 };
 
+/** UX-12: não conta o padrão "não finalizados" (status vazio). Prazo conta como um filtro. */
+export function contarFiltrosAtivosTarefas(opts: FiltrosTarefasExecucaoResumo) {
+  let total = 0;
+  if (opts.status) total += 1;
+  if (opts.historico) total += 1;
+  if (opts.secretariaSigla) total += 1;
+  if (opts.equipeNome) total += 1;
+  if (opts.responsavelNome) total += 1;
+  if (opts.tipoNome) total += 1;
+  if (opts.prioridade) total += 1;
+  if (opts.atribuidaAMim) total += 1;
+  if (opts.minhasEquipes) total += 1;
+  if (opts.atrasadas) total += 1;
+  if (opts.prazoFrom || opts.prazoTo) total += 1;
+  return total;
+}
+
+export function rotuloContagemFiltros(total: number) {
+  if (total <= 0) return null;
+  return total === 1 ? '(1 filtro)' : `(${total} filtros)`;
+}
+
 export function resumoFiltrosTarefasExecucao(opts: FiltrosTarefasExecucaoResumo) {
   const partes: string[] = [];
   if (opts.status === 'IMPEDIDA') partes.push('Status: Impedida (histórico)');

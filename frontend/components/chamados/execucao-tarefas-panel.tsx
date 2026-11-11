@@ -15,7 +15,9 @@ import { cn } from '@/lib/cn';
 import { getSecretarias, listEquipesExecucao, listTarefasExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
 import { agruparPinsTarefas, filtrarTarefasBusca, montarParametrosTarefasExecucao, pinDaTarefa } from '@/lib/tarefa-card';
 import {
+  contarFiltrosAtivosTarefas,
   resumoFiltrosTarefasExecucao,
+  rotuloContagemFiltros,
   TAREFA_PRIORIDADE_LABEL,
   TAREFA_STATUS_LABEL,
   TAREFA_STATUS_PENDENTES,
@@ -164,12 +166,12 @@ export function ExecucaoTarefasPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aberta]);
 
-  const resumoFiltros = useMemo(() => {
+  const filtrosResumo = useMemo(() => {
     const secretaria = secretarias.find((item) => item.id === secretariaId);
     const equipe = equipes.find((item) => item.id === equipeId);
     const responsavel = responsaveis.find((item) => item.id === responsavelId);
     const tipo = tipos.find((item) => item.id === tipoChamadoId);
-    return resumoFiltrosTarefasExecucao({
+    return {
       status,
       historico,
       secretariaSigla: secretaria?.sigla,
@@ -182,7 +184,7 @@ export function ExecucaoTarefasPanel() {
       atrasadas,
       prazoFrom,
       prazoTo,
-    });
+    };
   }, [
     atrasadas,
     atribuidaAMim,
@@ -201,6 +203,8 @@ export function ExecucaoTarefasPanel() {
     tipoChamadoId,
     tipos,
   ]);
+  const resumoFiltros = resumoFiltrosTarefasExecucao(filtrosResumo);
+  const contagemFiltros = rotuloContagemFiltros(contarFiltrosAtivosTarefas(filtrosResumo));
 
   const campo = 'h-9 w-full rounded-[10px] border border-[var(--line)] bg-[var(--surface)] px-2 text-[12px]';
 
@@ -219,8 +223,15 @@ export function ExecucaoTarefasPanel() {
           aria-expanded={filtrosAbertos}
         >
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-[var(--ink)]">Filtros de tarefas</p>
-            {!filtrosAbertos ? <p className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{resumoFiltros}</p> : null}
+            <p className="text-[13px] font-semibold text-[var(--ink)]">
+              Filtros de tarefas
+              {contagemFiltros ? <span data-testid="contagem-filtros-tarefas"> {contagemFiltros}</span> : null}
+            </p>
+            {!filtrosAbertos ? (
+              <p className="mt-0.5 line-clamp-2 text-[11px] text-[var(--ink-3)]" title={resumoFiltros}>
+                {resumoFiltros}
+              </p>
+            ) : null}
           </div>
           <ChevronDown className={cn('h-4 w-4 shrink-0 text-[var(--ink-3)] transition-transform', filtrosAbertos ? 'rotate-180' : '')} />
         </button>
@@ -313,6 +324,9 @@ export function ExecucaoTarefasPanel() {
                 <input type="date" value={prazoTo} onChange={(event) => setPrazoTo(event.target.value)} className={campo} />
               </FiltroRotulo>
             </div>
+            <Button type="button" variant="outlined" size="sm" onClick={limparFiltros}>
+              Limpar filtros
+            </Button>
           </div>
         ) : null}
       </div>
