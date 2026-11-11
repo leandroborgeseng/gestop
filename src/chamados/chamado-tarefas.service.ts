@@ -19,6 +19,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { normalizarMimeAnexo, validarBufferAnexo } from './anexos-midia';
 import { buildCsv, escapeCsvValue } from '../relatorios/relatorios.csv';
+import { agregarIndicadoresTarefas, linhasTotaisRelatorioFormal, type DbAgregacaoTarefas } from './relatorio-tarefas-agregacao';
 import { avisoCorteRelatorioTarefas, TETO_LINHAS_RELATORIO_TAREFAS } from './relatorio-tarefas-corte';
 import { instantePrazoFiltro } from './prazo-filtro';
 import { buildTablePdf } from '../relatorios/relatorios.pdf';
@@ -417,39 +418,16 @@ export class ChamadoTarefasService {
 
   async relatorio(query: Record<string, string | undefined>, user: JwtPayload) {
     if (!this.podeVerRelatorio(user)) throw new ForbiddenException('Sem permissão para o relatório de tarefas.');
-    const total = await this.prisma.chamadoTarefa.count({ where: this.whereRelatorio(query, user) });
-    const linhas = await this.carregarLinhas(query, user, TETO_LINHAS_RELATORIO_TAREFAS);
-    const por = (chave: (item: (typeof linhas)[number]) => string) => {
-      const map = new Map<string, { total: number; pendentes: number; atrasadas: number }>();
-      for (const item of linhas) {
-        const nome = chave(item);
-        const atual = map.get(nome) ?? { total: 0, pendentes: 0, atrasadas: 0 };
-        atual.total += 1;
-        if (TAREFA_STATUS_PENDENTES.includes(item.status as (typeof TAREFA_STATUS_PENDENTES)[number])) {
-          atual.pendentes += 1;
-        }
-        if (item.atrasada) atual.atrasadas += 1;
-        map.set(nome, atual);
-      }
-      return [...map.entries()]
-        .map(([nome, counts]) => ({ nome, ...counts }))
-        .sort((a, b) => b.total - a.total);
-    };
+    const where = this.whereRelatorio(query, user);
+    const [total, linhas, indicadores] = await Promise.all([
+      this.prisma.chamadoTarefa.count({ where }),
+      this.carregarLinhas(query, user, TETO_LINHAS_RELATORIO_TAREFAS),
+      agregarIndicadoresTarefas(this.prisma as unknown as DbAgregacaoTarefas, where),
+    ]);
     return {
       total,
       limite: TETO_LINHAS_RELATORIO_TAREFAS,
-      indicadores: {
-        abertas: linhas.filter((item) => !TAREFA_STATUS_FINAIS.includes(item.status as (typeof TAREFA_STATUS_FINAIS)[number])).length,
-        novas: linhas.filter((item) => item.status === 'NOVA').length,
-        emAndamento: linhas.filter((item) => item.status === 'EM_ANDAMENTO' || item.status === 'VISUALIZADA').length,
-        impedidas: linhas.filter((item) => item.status === 'IMPEDIDA').length,
-        concluidas: linhas.filter((item) => item.status === 'CONCLUIDA').length,
-        atrasadas: linhas.filter((item) => item.atrasada).length,
-        porSecretaria: por((item) => item.secretaria?.sigla || item.secretaria?.nome || '—'),
-        porEquipe: por((item) => item.equipe?.nome || 'Sem equipe'),
-        porResponsavel: por((item) => item.responsavel?.nome || 'Sem responsável'),
-        porTipoChamado: por((item) => item.chamado.tipoChamado?.nome || 'Sem tipo'),
-      },
+      indicadores,
       items: linhas,
     };
   }
@@ -467,30 +445,34 @@ export class ChamadoTarefasService {
     );
   }
 
-  exportarPdf(query: Record<string, string | undefined>, user: JwtPayload) {
-    return this.linhasExportacao(query, user).then(({ rows, aviso }) => {
-      const simples = query.capa === 'simples';
-      const filtros = this.resumoFiltros(query);
-      const corte = aviso ? ` · ${aviso}` : '';
-      return buildTablePdf({
-        title: simples ? 'Tarefas de chamados' : 'SIGMA — Tarefas de chamados',
-        subtitle: simples
-          ? `Dados exibidos conforme os filtros aplicados · ${new Date().toLocaleString('pt-BR')}${corte}`
-          : [`Gerado em ${new Date().toLocaleString('pt-BR')}`, filtros || 'Sem filtros adicionais'].join(' · ') + corte,
-        headers: TAREFA_EXPORT_HEADERS,
-        rows: rows.map((row) => row.map((cell) => String(cell ?? ''))),
-        wrapFully: true,
-        plain: simples,
-      });
+  async exportarPdf(query: Record<string, string | undefined>, user: JwtPayload) {
+    const { rows, aviso, where } = await this.linhasExportacao(query, user);
+    const simples = query.capa === 'simples';
+    const filtros = this.resumoFiltros(query);
+    const corte = aviso ? ` · ${aviso}` : '';
+    const indicadores = simples ? null : await agregarIndicadoresTarefas(this.prisma as unknown as DbAgregacaoTarefas, where);
+    const totais = indicadores ? linhasTotaisRelatorioFormal(indicadores) : undefined;
+    return buildTablePdf({
+      title: simples ? 'Tarefas de chamados' : 'SIGMA — Tarefas de chamados',
+      subtitle: simples
+        ? `Dados exibidos conforme os filtros aplicados · ${new Date().toLocaleString('pt-BR')}${corte}`
+        : [`Gerado em ${new Date().toLocaleString('pt-BR')}`, filtros || 'Sem filtros adicionais'].join(' · ') + corte,
+      headers: TAREFA_EXPORT_HEADERS,
+      rows: rows.map((row) => row.map((cell) => String(cell ?? ''))),
+      wrapFully: true,
+      plain: simples,
+      summaryLines: totais,
     });
   }
 
   private async linhasExportacao(query: Record<string, string | undefined>, user: JwtPayload) {
     if (!this.podeVerRelatorio(user)) throw new ForbiddenException('Sem permissão para o relatório de tarefas.');
     const limite = TETO_LINHAS_RELATORIO_TAREFAS;
-    const total = await this.prisma.chamadoTarefa.count({ where: this.whereRelatorio(query, user) });
+    const where = this.whereRelatorio(query, user);
+    const total = await this.prisma.chamadoTarefa.count({ where });
     const linhas = await this.carregarLinhas(query, user, limite);
     return {
+      where,
       rows: linhas.map((item) => this.linhaExportacao(item)),
       aviso: avisoCorteRelatorioTarefas(total, linhas.length, limite),
     };

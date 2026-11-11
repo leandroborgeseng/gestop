@@ -1,7 +1,9 @@
 import { ChamadoPrioridade, ChamadoTarefaStatus } from '@prisma/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { JwtPayload } from '../auth/jwt';
+import { extrairTextoPdf } from '../checklists/pdf-texto';
 import { ChamadoTarefasService } from './chamado-tarefas.service';
+import { somaGrupos } from './relatorio-tarefas-agregacao';
 
 function gestorSecretariaAtiva(): JwtPayload {
   return {
@@ -84,8 +86,12 @@ function tarefaLoaded(overrides: Record<string, unknown> = {}) {
 
 describe('ChamadoTarefasService — relatório P3', () => {
   const prisma = {
-    chamadoTarefa: { findMany: vi.fn(), count: vi.fn() },
+    chamadoTarefa: { findMany: vi.fn(), count: vi.fn(), groupBy: vi.fn() },
     equipeUsuario: { findMany: vi.fn() },
+    secretaria: { findMany: vi.fn() },
+    equipe: { findMany: vi.fn() },
+    usuario: { findMany: vi.fn() },
+    chamado: { findMany: vi.fn() },
   };
   const storage = { persistBuffer: vi.fn() };
   const audit = { record: vi.fn() };
@@ -96,38 +102,71 @@ describe('ChamadoTarefasService — relatório P3', () => {
     service = new ChamadoTarefasService(prisma as never, storage as never, audit as never);
     prisma.equipeUsuario.findMany.mockResolvedValue([]);
     prisma.chamadoTarefa.count.mockResolvedValue(0);
+    prisma.chamadoTarefa.groupBy.mockResolvedValue([]);
+    prisma.secretaria.findMany.mockResolvedValue([]);
+    prisma.equipe.findMany.mockResolvedValue([]);
+    prisma.usuario.findMany.mockResolvedValue([]);
+    prisma.chamado.findMany.mockResolvedValue([]);
   });
 
+  function mockFiltroInteiro(total: number) {
+    prisma.chamadoTarefa.count.mockResolvedValue(total);
+    prisma.chamadoTarefa.findMany.mockImplementation(async (args: { take?: number }) =>
+      Array.from({ length: Math.min(args.take ?? 0, 500) }, (_, i) => tarefaLoaded({ id: `t-${i}` })),
+    );
+    prisma.chamadoTarefa.groupBy.mockImplementation(async (args: { by: string[]; where: unknown }) => {
+      const by = args.by.join(',');
+      const atrasada = JSON.stringify(args.where).includes('"prazo"');
+      if (atrasada) return [];
+      if (by === 'status') return [{ status: 'NOVA', _count: { _all: total } }];
+      if (by === 'secretariaId,status') return [{ secretariaId: 'sec-ativa', status: 'NOVA', _count: { _all: total } }];
+      if (by === 'equipeId,status') return [{ equipeId: 'eq-a', status: 'NOVA', _count: { _all: total } }];
+      if (by === 'responsavelId,status') return [{ responsavelId: null, status: 'NOVA', _count: { _all: total } }];
+      if (by === 'chamadoId,status') return [{ chamadoId: 'chamado-sec-ativa', status: 'NOVA', _count: { _all: total } }];
+      return [];
+    });
+    prisma.secretaria.findMany.mockResolvedValue([{ id: 'sec-ativa', sigla: 'EDU', nome: 'Educação' }]);
+    prisma.equipe.findMany.mockResolvedValue([{ id: 'eq-a', nome: 'Equipe A' }]);
+    prisma.chamado.findMany.mockResolvedValue([{ id: 'chamado-sec-ativa', tipoChamado: { nome: 'Vazamento' } }]);
+  }
+
   it('agrupa secretaria e equipe com pendentes e atrasadas, não só o total', async () => {
-    prisma.chamadoTarefa.findMany.mockResolvedValue([
-      tarefaLoaded({
-        id: 't-edu-atrasada',
-        status: ChamadoTarefaStatus.NOVA,
-        prazo: new Date('2020-09-01T00:00:00.000Z'),
-      }),
-      tarefaLoaded({
-        id: 't-edu-ok',
-        status: ChamadoTarefaStatus.EM_ANDAMENTO,
-        prazo: new Date('2099-12-01T00:00:00.000Z'),
-      }),
-      tarefaLoaded({
-        id: 't-edu-concluida',
-        status: ChamadoTarefaStatus.CONCLUIDA,
-        prazo: new Date('2020-09-01T00:00:00.000Z'),
-        concluidaEm: new Date('2020-09-02T00:00:00.000Z'),
-      }),
-      tarefaLoaded({
-        id: 't-sau',
-        secretariaId: 'sec-sau',
-        secretaria: { id: 'sec-sau', nome: 'Saúde', sigla: 'SAU' },
-        equipe: { id: 'eq-b', nome: 'Equipe B', codigo: 'B' },
-        status: ChamadoTarefaStatus.VISUALIZADA,
-        prazo: new Date('2099-12-01T00:00:00.000Z'),
-        chamado: chamadoResumo('sec-sau', 'SAU'),
-      }),
+    prisma.chamadoTarefa.count.mockResolvedValue(4);
+    prisma.chamadoTarefa.findMany.mockResolvedValue([tarefaLoaded({ id: 'so-a-primeira-linha' })]);
+    prisma.chamadoTarefa.groupBy.mockImplementation(async (args: { by: string[]; where: unknown }) => {
+      const by = args.by.join(',');
+      const atrasada = JSON.stringify(args.where).includes('"prazo"');
+      if (by === 'secretariaId,status' && !atrasada) {
+        return [
+          { secretariaId: 'sec-ativa', status: 'NOVA', _count: { _all: 1 } },
+          { secretariaId: 'sec-ativa', status: 'EM_ANDAMENTO', _count: { _all: 1 } },
+          { secretariaId: 'sec-ativa', status: 'CONCLUIDA', _count: { _all: 1 } },
+          { secretariaId: 'sec-sau', status: 'VISUALIZADA', _count: { _all: 1 } },
+        ];
+      }
+      if (by === 'secretariaId' && atrasada) return [{ secretariaId: 'sec-ativa', _count: { _all: 1 } }];
+      if (by === 'equipeId,status' && !atrasada) {
+        return [
+          { equipeId: 'eq-a', status: 'NOVA', _count: { _all: 1 } },
+          { equipeId: 'eq-a', status: 'EM_ANDAMENTO', _count: { _all: 1 } },
+          { equipeId: 'eq-a', status: 'CONCLUIDA', _count: { _all: 1 } },
+          { equipeId: 'eq-b', status: 'VISUALIZADA', _count: { _all: 1 } },
+        ];
+      }
+      if (by === 'equipeId' && atrasada) return [{ equipeId: 'eq-a', _count: { _all: 1 } }];
+      return [];
+    });
+    prisma.secretaria.findMany.mockResolvedValue([
+      { id: 'sec-ativa', sigla: 'EDU', nome: 'Educação' },
+      { id: 'sec-sau', sigla: 'SAU', nome: 'Saúde' },
+    ]);
+    prisma.equipe.findMany.mockResolvedValue([
+      { id: 'eq-a', nome: 'Equipe A' },
+      { id: 'eq-b', nome: 'Equipe B' },
     ]);
 
     const resultado = await service.relatorio({}, adminGlobal());
+    expect(resultado.items).toHaveLength(1);
 
     expect(resultado.indicadores.porSecretaria).toEqual([
       { nome: 'EDU', total: 3, pendentes: 2, atrasadas: 1 },
@@ -146,6 +185,8 @@ describe('ChamadoTarefasService — relatório P3', () => {
 
     expect(prisma.chamadoTarefa.findMany).toHaveBeenCalledTimes(1);
     const where = prisma.chamadoTarefa.findMany.mock.calls[0][0].where;
+    const whereGrupo = prisma.chamadoTarefa.groupBy.mock.calls.find((call) => call[0].by.join(',') === 'status')?.[0].where;
+    expect(whereGrupo).toEqual(where);
     expect(where).toEqual({
       AND: expect.arrayContaining([
         { chamado: { excluidoEm: null } },
@@ -199,5 +240,66 @@ describe('ChamadoTarefasService — relatório P3', () => {
 
     expect(csv).not.toContain('Mostrando');
     expect(prisma.chamadoTarefa.findMany.mock.calls[0][0].take).toBe(500);
+  });
+
+  it('R-1: com 604 tarefas os cartões e os grupos somam o filtro, e o PDF formal repete esses totais', async () => {
+    mockFiltroInteiro(604);
+    const relatorio = await service.relatorio({}, adminGlobal());
+    expect(relatorio.total).toBe(604);
+    expect(relatorio.items).toHaveLength(500);
+    expect(relatorio.indicadores.abertas).toBe(604);
+    expect(somaGrupos(relatorio.indicadores.porSecretaria, 'pendentes')).toBe(604);
+    expect(somaGrupos(relatorio.indicadores.porSecretaria, 'total')).toBe(604);
+    expect(somaGrupos(relatorio.indicadores.porEquipe, 'total')).toBe(604);
+    expect(somaGrupos(relatorio.indicadores.porResponsavel, 'total')).toBe(604);
+    expect(somaGrupos(relatorio.indicadores.porTipoChamado, 'total')).toBe(604);
+    const whereLista = prisma.chamadoTarefa.count.mock.calls[0][0].where;
+    const whereGrupo = prisma.chamadoTarefa.groupBy.mock.calls.find((call) => call[0].by.join(',') === 'status')?.[0].where;
+    expect(whereGrupo).toEqual(whereLista);
+
+    const pdf = await service.exportarPdf({ capa: 'formal' }, adminGlobal());
+    const texto = await extrairTextoPdf(pdf);
+    expect(texto).toContain('Mostrando 500 de 604 tarefas');
+    expect(texto).toContain('Total de registros: 500');
+    expect(texto).toContain('Abertas: 604');
+    expect(texto).toContain('Pendentes por secretaria: EDU 604');
+
+    const simples = await extrairTextoPdf(await service.exportarPdf({ capa: 'simples' }, adminGlobal()));
+    expect(simples).toContain('Mostrando 500 de 604 tarefas');
+    expect(simples).not.toContain('Pendentes por secretaria');
+  });
+
+  it('R-1: com exatamente 500 linhas não há aviso nem corte, e os cartões somam 500', async () => {
+    mockFiltroInteiro(500);
+    const relatorio = await service.relatorio({}, adminGlobal());
+    expect(relatorio.items).toHaveLength(500);
+    expect(somaGrupos(relatorio.indicadores.porSecretaria, 'pendentes')).toBe(500);
+    expect(somaGrupos(relatorio.indicadores.porSecretaria, 'total')).toBe(500);
+    const csv = await service.exportarCsv({}, adminGlobal());
+    expect(csv).not.toContain('Mostrando');
+    expect(csv.split('\n').filter((linha) => linha.startsWith('CH-'))).toHaveLength(500);
+    const texto = await extrairTextoPdf(await service.exportarPdf({ capa: 'formal' }, adminGlobal()));
+    expect(texto).not.toContain('Mostrando');
+    expect(texto).toContain('Total de registros: 500');
+    expect(texto).toContain('Abertas: 500');
+    expect(texto).toContain('Pendentes por secretaria: EDU 500');
+  });
+
+  it('R-1: com 501 linhas avisa "Mostrando 500 de 501", corta o export e os cartões somam 501', async () => {
+    mockFiltroInteiro(501);
+    const relatorio = await service.relatorio({}, adminGlobal());
+    expect(relatorio.total).toBe(501);
+    expect(relatorio.items).toHaveLength(500);
+    expect(somaGrupos(relatorio.indicadores.porSecretaria, 'pendentes')).toBe(501);
+    expect(relatorio.indicadores.abertas).toBe(501);
+    const csv = await service.exportarCsv({ capa: 'formal' }, adminGlobal());
+    expect(csv).toContain('Mostrando 500 de 501 tarefas');
+    expect(csv.split('\n').filter((linha) => linha.startsWith('CH-'))).toHaveLength(500);
+    expect(prisma.chamadoTarefa.findMany.mock.calls[0][0].take).toBe(500);
+    const texto = await extrairTextoPdf(await service.exportarPdf({ capa: 'formal' }, adminGlobal()));
+    expect(texto).toContain('Mostrando 500 de 501 tarefas');
+    expect(texto).toContain('Total de registros: 500');
+    expect(texto).toContain('Abertas: 501');
+    expect(texto).toContain('Pendentes por secretaria: EDU 501');
   });
 });

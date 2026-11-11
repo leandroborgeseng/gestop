@@ -17,7 +17,7 @@ export const BLOCOS_ARQUITETURA: BlocoArquitetura[] = [
   {
     id: 'api',
     nome: 'API NestJS',
-    papel: 'Controllers por módulo (auth, chamados, tarefas, fiscalizações, documentos, operacional, admin, mobile, cronograma, relatórios, integrações, backup, e-mail, LGPD). AuthGuard e PermissionsGuard nas rotas privadas. A matriz de tarefas separa visualizar, criar, alterar dados, andamento, concluir, cancelar e histórico; o PATCH da tarefa recusa no serviço. GET /health (público, também via /api-gestop/health) inclui o SHA do commit implantado quando o ambiente informa um hex de 40 caracteres.',
+    papel: 'Controllers por módulo (auth, chamados, tarefas, fiscalizações, documentos, operacional, admin, mobile, cronograma, relatórios, integrações, backup, e-mail, LGPD). AuthGuard e PermissionsGuard nas rotas privadas. A matriz de tarefas separa visualizar, criar, alterar dados, andamento, concluir, cancelar e histórico; o PATCH da tarefa recusa no serviço. O relatório de tarefas agrega cartões e grupos com count/groupBy sobre o filtro inteiro (o mesmo where da listagem); a lista e os exports seguem no teto de 500, e o PDF formal repete os totais agregados. GET /health (público, também via /api-gestop/health) inclui o SHA do commit implantado quando o ambiente informa um hex de 40 caracteres.',
     onde: 'src/app.module.ts e os controllers em src/.',
   },
   {
