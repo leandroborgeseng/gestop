@@ -19,7 +19,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     api: 'AuthController: POST /auth/login, GET /auth/me, POST /auth/logout',
     tabelas: 'Usuario, Perfil, UsuarioPerfil, Permissao, PerfilPermissao, UsuarioPermissao, UsuarioSecretaria, Secretaria',
     permissao:
-      'Login é público. As demais rotas exigem sessão (AuthGuard). Depois do login, ou ao abrir `/`, a primeira tela percorre o menu visível (mesma ordem do lateral e da barra inferior), pula formulários de criação e, se a lista de Chamados está no menu, não para em Meus chamados. Usa as permissões efetivas do perfil ativo somadas às individuais (UsuarioPermissao). Só atalhos de criação levam a `/conta`. A escolha não altera perfilAtivoId nem secretariaAtivaId.',
+      'Login é público. As demais rotas exigem sessão (AuthGuard). Depois do login, ou ao abrir `/`, a primeira tela percorre o menu visível (mesma ordem do lateral e da barra inferior), pula formulários de criação e, se o item listaDeChamados está no menu, não para no item cedeParaListaDeChamados. Usa as permissões efetivas do perfil ativo somadas às individuais (UsuarioPermissao). Só atalhos de criação levam a `/conta`. A escolha não altera perfilAtivoId nem secretariaAtivaId.',
   },
   {
     id: 'contexto',

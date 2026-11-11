@@ -41,6 +41,10 @@ export type NavItem = {
   badgeKey?: NavBadgeKey;
   /** Formulário de criação. O menu mostra; a tela inicial pula. */
   atalhoCriacao?: boolean;
+  /** Lista de Chamados. Quando está no menu, a tela inicial não para em quem cede. */
+  listaDeChamados?: boolean;
+  /** Cede a entrada para a lista de Chamados quando as duas estão visíveis. */
+  cedeParaListaDeChamados?: boolean;
 };
 
 export type NavGroup = {
@@ -84,6 +88,7 @@ export const NAV_ITEMS: NavItem[] = [
     permission: 'chamados.gerenciar',
     mobilePrimary: true,
     badgeKey: 'chamados',
+    listaDeChamados: true,
   },
   {
     id: 'novo_chamado',
@@ -103,6 +108,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: Eye,
     permissions: ['meus_chamados.visualizar', 'chamados.abrir', 'chamados.gerenciar'],
     mobilePrimary: true,
+    cedeParaListaDeChamados: true,
   },
   {
     id: 'execucao',
@@ -247,11 +253,13 @@ export function getMobileNav(permissions: string[], user?: NavUser) {
  * ele fica na frente de Chamados, e o perfil Sem CCO abre `/chamados`.
  * Sem tela restante, `/conta` — o mesmo fallback do menu vazio.
  */
-export function hrefDaListaDoMenu(itens: readonly Pick<NavItem, 'id' | 'href' | 'atalhoCriacao'>[]): string {
+export function hrefDaListaDoMenu(
+  itens: readonly Pick<NavItem, 'href' | 'atalhoCriacao' | 'listaDeChamados' | 'cedeParaListaDeChamados'>[],
+): string {
   const criacao = new Set(rotasDeCriacao());
   const semCriacao = itens.filter((item) => !criacao.has(item.href));
-  const temListaDeChamados = semCriacao.some((item) => item.id === 'chamados');
-  const destino = semCriacao.find((item) => !(temListaDeChamados && item.id === 'meus_chamados'));
+  const temListaDeChamados = semCriacao.some((item) => item.listaDeChamados);
+  const destino = semCriacao.find((item) => !(temListaDeChamados && item.cedeParaListaDeChamados));
   return destino?.href ?? '/conta';
 }
 

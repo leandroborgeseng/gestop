@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getMenuItemsInDisplayOrder, getVisibleNavItems, hrefDaListaDoMenu } from './navigation';
+import { getMenuItemsInDisplayOrder, getVisibleNavItems, hrefDaListaDoMenu, NAV_ITEMS } from './navigation';
 import { buildMatrixKey } from './permissions-matrix';
 import {
   deveIrParaTelaPadrao,
@@ -88,6 +88,42 @@ describe('primeiraTelaPermitida', () => {
         individuais: [DOCUMENTOS],
       }),
     ).toBe('/documentos');
+  });
+});
+
+describe('BK-322-B1 — precedência por flag, sem id fixo', () => {
+  const casos = [
+    { destino: '/cco', permissoes: [CCO, 'dashboard.visualizar'] },
+    { destino: '/chamados', permissoes: [CHAMADOS, 'chamados.gerenciar'] },
+    { destino: '/meus-chamados', permissoes: ['chamados.abrir'] },
+    { destino: '/vistorias', permissoes: [buildMatrixKey('vistorias', '_tela', 'visualizar')] },
+    { destino: '/conta', permissoes: [] as string[] },
+  ];
+
+  it('os perfis do QA 322 ciclo 2 caem em /cco, /chamados, /meus-chamados, /vistorias e /conta', () => {
+    for (const caso of casos) {
+      expect(primeiraTelaPermitida(caso.permissoes), caso.destino).toBe(caso.destino);
+    }
+  });
+
+  it('a lista de Chamados e Meus chamados se distinguem por flag, não por id', () => {
+    const chamados = NAV_ITEMS.find((item) => item.href === '/chamados');
+    const meus = NAV_ITEMS.find((item) => item.href === '/meus-chamados');
+    expect(chamados?.listaDeChamados).toBe(true);
+    expect(meus?.cedeParaListaDeChamados).toBe(true);
+    const src = readFileSync(resolve('frontend/lib/navigation.ts'), 'utf8');
+    const corpo = src.slice(src.indexOf('export function hrefDaListaDoMenu'));
+    expect(corpo).not.toContain("item.id === 'chamados'");
+    expect(corpo).not.toContain("item.id === 'meus_chamados'");
+    expect(corpo).toContain('item.listaDeChamados');
+    expect(corpo).toContain('item.cedeParaListaDeChamados');
+    expect(
+      hrefDaListaDoMenu([
+        { href: '/meus-chamados', cedeParaListaDeChamados: true },
+        { href: '/chamados', listaDeChamados: true },
+      ]),
+    ).toBe('/chamados');
+    expect(hrefDaListaDoMenu([{ href: '/meus-chamados', cedeParaListaDeChamados: true }])).toBe('/meus-chamados');
   });
 });
 
