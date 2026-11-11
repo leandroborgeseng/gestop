@@ -7,7 +7,7 @@ import { expect, test, type Page } from '@playwright/test';
  * 322 — tela inicial por permissão.
  * Usuários sintéticos só no mock de /api-gestop (nada de banco real nem de produção).
  * A senha do formulário é fixture local; o mock não a confere.
- * Tamanhos do critério (criterios.md): 1440×900, 768×1024, 360×640 e 640×360.
+ * Tamanhos do critério (criterios.md): 1440×900, 768×1024, 1024×768, 360×640 e 640×360.
  * A6 no aparelho (PWA em segundo plano) fica para o Leandro; aqui o navegador dispara
  * visibilitychange, focus e pageshow com persisted (bfcache), inclusive sessão de 30 dias perto de vencer.
  */
@@ -30,6 +30,7 @@ const SEC_B = { id: 'sec-322-b', nome: 'Secretaria Fictícia 322 B', sigla: 'ZZ3
 const TAMANHOS = [
   { w: 1440, h: 900 },
   { w: 768, h: 1024 },
+  { w: 1024, h: 768 },
   { w: 360, h: 640 },
   { w: 640, h: 360 },
 ] as const;
@@ -691,6 +692,41 @@ test.describe('322 tela inicial', () => {
           perfilComCcoNaoAtivo: PERFIL_B.nome,
           secretaria: 'ZZ322A',
           trocas: api.trocas(),
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+  test('paisagem 1024×768: CCO e sem CCO', async ({ page }, testInfo) => {
+    const engine = engineDe(testInfo.project.name);
+    await mockApi(page);
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await entrar(page, CCO_EMAIL);
+    await expect(page).toHaveURL(/\/cco(?:\/|$|\?)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page.getByRole('heading', { name: 'Visão operacional dos próprios públicos' })).toBeVisible();
+    await page.screenshot({ path: path.join(OUT, `${engine}-1024x768-paisagem-cco.png`) });
+
+    await page.evaluate(() => window.localStorage.clear());
+    await page.goto('/login');
+    await preencherLogin(page, SEM_CCO_EMAIL);
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/cco/);
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
+    await page.screenshot({ path: path.join(OUT, `${engine}-1024x768-paisagem-sem-cco.png`) });
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-l5-1024x768.json`),
+      JSON.stringify(
+        {
+          criterio: '322-L5',
+          engine,
+          viewport: '1024x768',
+          orientacao: 'paisagem',
+          comCco: '/cco',
+          semCco: page.url(),
         },
         null,
         2,
