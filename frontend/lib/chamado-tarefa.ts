@@ -210,6 +210,7 @@ export function tarefaExecucaoToMapPoint(item: ChamadoTarefaResumo): ChamadoMapP
     equipeNome: item.equipe?.nome,
     prazoEm: item.prazo,
     responsavelNome: item.responsavel?.nome ?? null,
+    resumoChamado: resumoDoChamado(item.chamado),
   };
 }
 

@@ -1051,6 +1051,8 @@ export type ChamadoMapPoint = {
   prioridade: string;
   equipeNome?: string | null;
   responsavelNome?: string | null;
+  /** UX-10: resumo do chamado no pop-up do pin da tarefa. */
+  resumoChamado?: string | null;
   previstaExecucaoEm?: string | null;
   prazoEm?: string | null;
   programado?: boolean;

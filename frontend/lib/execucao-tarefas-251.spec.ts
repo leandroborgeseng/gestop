@@ -86,6 +86,7 @@ describe('251 — responsável no pop-up do pin', () => {
     expect(ponto?.equipeNome).toBe('Equipe Norte');
     expect(ponto?.prazoEm).toBe('2026-10-10T00:00:00.000Z');
     expect(ponto?.responsavelNome).toBe('Ana Souza');
+    expect(ponto?.resumoChamado).toBe('Vazamento na cobertura');
   });
 
   it('o pop-up mostra responsável e mantém Tarefa ·, título, número, prazo, equipe e o botão', () => {
@@ -107,13 +108,38 @@ describe('251 — responsável no pop-up do pin', () => {
     expect(html).toContain('Tarefa · EMEF Centro');
     expect(html).toContain('Equipe:');
     expect(html).toContain('Equipe Norte');
+    expect(html).toContain('Tarefa: Vistoria no local');
+    expect(html).toContain('Chamado:');
     expect(html).toContain('Responsável:');
     expect(html).toContain('Ana Souza');
+    expect(html).toContain('min-height:32px');
+    expect(html).toContain('min-width:24px');
     expect(html).toContain('Prazo:');
     expect(html).toContain('Executar tarefa');
     // 286: o popup do pin oferece "Abrir tarefa" e os pins vêm de tarefaExecucaoToMapPoint (agrupados).
     expect(panelSrc).toContain('popupActionLabel="Abrir tarefa"');
     expect(cardHelperSrc).toContain('tarefaExecucaoToMapPoint');
     expect(mapSrc).toContain("from '@/lib/chamado-map-popup'");
+  });
+
+  it('UX-10: sem responsável o pop-up ainda diz Sem responsável e rotula tarefa e chamado', () => {
+    const html = buildPopupHtml(
+      {
+        id: 'tarefa-2',
+        codigo: 'CH-002',
+        titulo: 'Troca de lâmpada',
+        latitude: -20.5,
+        longitude: -47.4,
+        unidadeNome: 'Tarefa · Sem endereço',
+        prioridade: 'Média',
+        responsavelNome: null,
+        resumoChamado: 'Lâmpada queimada no corredor',
+      },
+      'Executar tarefa',
+    );
+    expect(html).toContain('Tarefa: Troca de lâmpada');
+    expect(html).toContain('Chamado: Lâmpada queimada no corredor');
+    expect(html).toContain('Responsável: <strong>Sem responsável</strong>');
+    expect(html).toContain('min-height:32px');
   });
 });
