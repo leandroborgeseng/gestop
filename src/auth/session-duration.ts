@@ -1,8 +1,26 @@
 export const SESSAO_CURTA_SEGUNDOS = 60 * 60 * 8;
+/** Teto absoluto da sessão "manter conectado": 30 dias desde o login original. */
 export const SESSAO_LONGA_SEGUNDOS = 60 * 60 * 24 * 30;
 
-/** Sessão "manter conectado" dura 30 dias; a curta, 8 horas. A renovação repete a mesma duração. */
-export function duracaoRenovacaoSegundos(payload: { iat?: number; exp?: number }) {
+/**
+ * Quanto o refresh ainda pode emitir.
+ * A sessão curta (8 h) repete 8 h. A longa nunca passa de `auth_time` + 30 dias.
+ * Zero significa que o teto já passou e o refresh deve responder 401.
+ */
+export function duracaoRenovacaoSegundos(
+  payload: { iat?: number; exp?: number; auth_time?: number },
+  agoraSegundos = Math.floor(Date.now() / 1000),
+) {
+  const loginEm = payload.auth_time ?? payload.iat ?? agoraSegundos;
+  const restante = loginEm + SESSAO_LONGA_SEGUNDOS - agoraSegundos;
+  if (restante <= 0) return 0;
   const vida = (payload.exp ?? 0) - (payload.iat ?? 0);
-  return vida >= 60 * 60 * 24 ? SESSAO_LONGA_SEGUNDOS : SESSAO_CURTA_SEGUNDOS;
+  const base = vida >= 60 * 60 * 24 ? SESSAO_LONGA_SEGUNDOS : SESSAO_CURTA_SEGUNDOS;
+  return Math.min(base, restante);
+}
+
+/** Logout registrado depois da emissão deste token o revoga. */
+export function tokenRevogadoPorLogout(iatSegundos: number | undefined, logoutEm: Date | null) {
+  if (!logoutEm || iatSegundos == null) return false;
+  return logoutEm.getTime() > iatSegundos * 1000;
 }

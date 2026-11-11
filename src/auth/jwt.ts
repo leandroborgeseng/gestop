@@ -11,6 +11,8 @@ export type JwtPayload = {
   perfilNatureza?: 'INTERNO' | 'EXTERNO';
   acessoTodasSecretarias?: boolean;
   secretariasIds?: string[];
+  /** Unix segundos do login original. O refresh copia o valor e não passa de 30 dias a partir dele. */
+  auth_time?: number;
   iat?: number;
   exp?: number;
 };

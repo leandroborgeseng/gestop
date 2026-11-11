@@ -9,7 +9,7 @@ import { hashPassword, verifyPassword } from './password';
 import { PASSWORD_MAX_LENGTH, validatePasswordPolicy } from './password-policy';
 import { JwtPayload, signJwt } from './jwt';
 import { AuditService } from '../audit/audit.service';
-import { duracaoRenovacaoSegundos, SESSAO_CURTA_SEGUNDOS, SESSAO_LONGA_SEGUNDOS } from './session-duration';
+import { duracaoRenovacaoSegundos, SESSAO_CURTA_SEGUNDOS, SESSAO_LONGA_SEGUNDOS, tokenRevogadoPorLogout } from './session-duration';
 
 const SECRETARIA_SELECT = {
   id: true,
@@ -61,6 +61,7 @@ export class AuthService {
 
     const session = this.buildSessionPayload(usuario);
     const expiresInSeconds = remember ? SESSAO_LONGA_SEGUNDOS : SESSAO_CURTA_SEGUNDOS;
+    const authTime = Math.floor(Date.now() / 1000);
 
     const accessToken = signJwt(
       {
@@ -74,6 +75,7 @@ export class AuthService {
         perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
         acessoTodasSecretarias: session.acessoTodasSecretarias,
         secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
+        auth_time: authTime,
       },
       this.getJwtSecret(),
       expiresInSeconds,
@@ -118,6 +120,12 @@ export class AuthService {
    * Não troca perfil, secretaria nem rota — quem chama é a retomada da aba.
    */
   async refreshSession(atual: JwtPayload) {
+    const agora = Math.floor(Date.now() / 1000);
+    const expiresInSeconds = duracaoRenovacaoSegundos(atual, agora);
+    if (expiresInSeconds <= 0) {
+      throw new UnauthorizedException('Sessao invalida ou expirada');
+    }
+
     const usuario = await this.prisma.usuario.findUnique({
       where: { id: atual.sub },
       select: this.userSessionSelect(),
@@ -127,8 +135,20 @@ export class AuthService {
       throw new UnauthorizedException('Sessao invalida ou expirada');
     }
 
+    const logout = await this.prisma.logAuditoria.findFirst({
+      where: {
+        usuarioId: atual.sub,
+        acao: AuditAction.LOGOUT,
+        ...(atual.iat != null ? { createdAt: { gt: new Date(atual.iat * 1000) } } : {}),
+      },
+      select: { id: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (tokenRevogadoPorLogout(atual.iat, logout?.createdAt ?? null)) {
+      throw new UnauthorizedException('Sessao invalida ou expirada');
+    }
+
     const session = this.buildSessionPayload(usuario);
-    const expiresInSeconds = duracaoRenovacaoSegundos(atual);
     const accessToken = signJwt(
       {
         sub: usuario.id,
@@ -141,6 +161,7 @@ export class AuthService {
         perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
         acessoTodasSecretarias: session.acessoTodasSecretarias,
         secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
+        auth_time: atual.auth_time ?? atual.iat ?? agora,
       },
       this.getJwtSecret(),
       expiresInSeconds,

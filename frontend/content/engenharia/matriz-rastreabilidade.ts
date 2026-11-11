@@ -17,9 +17,9 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     ator: 'Usuário interno (qualquer perfil)',
     tela: '/login',
     api: 'AuthController: POST /auth/login, GET /auth/me, POST /auth/refresh, POST /auth/logout',
-    tabelas: 'Usuario, Perfil, UsuarioPerfil, Permissao, PerfilPermissao, UsuarioPermissao, UsuarioSecretaria, Secretaria',
+    tabelas: 'Usuario, Perfil, UsuarioPerfil, Permissao, PerfilPermissao, UsuarioPermissao, UsuarioSecretaria, Secretaria, LogAuditoria',
     permissao:
-      'Login é público. As demais rotas exigem sessão (AuthGuard). Depois do login, ou ao abrir `/`, a primeira tela percorre o menu visível (mesma ordem do lateral e da barra inferior), pula formulários de criação e, se o item listaDeChamados está no menu, não para no item cedeParaListaDeChamados. Usa as permissões efetivas do perfil ativo somadas às individuais (UsuarioPermissao). Só atalhos de criação levam a `/conta`. A escolha não altera perfilAtivoId nem secretariaAtivaId. POST /auth/refresh reemite o token com o mesmo perfil ativo e a mesma secretaria; a retomada da aba não redireciona.',
+      'Login é público. As demais rotas exigem sessão (AuthGuard). Depois do login, ou ao abrir `/`, a primeira tela percorre o menu visível (mesma ordem do lateral e da barra inferior), pula formulários de criação e, se o item listaDeChamados está no menu, não para no item cedeParaListaDeChamados. Usa as permissões efetivas do perfil ativo somadas às individuais (UsuarioPermissao). Só atalhos de criação levam a `/conta`. A escolha não altera perfilAtivoId nem secretariaAtivaId. POST /auth/refresh reemite o token com o mesmo perfil ativo e a mesma secretaria, copia auth_time e não passa de 30 dias do login; responde 401 se houver LOGOUT em LogAuditoria depois do iat. A retomada da aba não redireciona.',
   },
   {
     id: 'contexto',

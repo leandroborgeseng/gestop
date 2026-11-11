@@ -54,10 +54,13 @@ describe('jwt de sessao', () => {
 });
 
 describe('renovação do token', () => {
-  it('sessão de 30 dias renova por mais 30 dias; a de 8 horas permanece curta', () => {
-    expect(duracaoRenovacaoSegundos({ iat: 0, exp: 60 * 60 * 24 * 30 })).toBe(60 * 60 * 24 * 30);
-    expect(duracaoRenovacaoSegundos({ iat: 1_000, exp: 1_000 + 60 * 60 * 8 })).toBe(60 * 60 * 8);
-    expect(duracaoRenovacaoSegundos({})).toBe(60 * 60 * 8);
+  const dia = 60 * 60 * 24;
+
+  it('a sessão curta permanece de 8 horas e a longa não passa de 30 dias do login', () => {
+    expect(duracaoRenovacaoSegundos({ iat: 0, exp: 30 * dia, auth_time: 0 }, 0)).toBe(30 * dia);
+    expect(duracaoRenovacaoSegundos({ iat: 1_000, exp: 1_000 + 60 * 60 * 8, auth_time: 1_000 }, 1_000)).toBe(60 * 60 * 8);
+    expect(duracaoRenovacaoSegundos({ iat: 20 * dia, exp: 50 * dia, auth_time: 0 }, 20 * dia)).toBe(10 * dia);
+    expect(duracaoRenovacaoSegundos({ iat: 30 * dia, exp: 60 * dia, auth_time: 0 }, 30 * dia)).toBe(0);
   });
 });
 
