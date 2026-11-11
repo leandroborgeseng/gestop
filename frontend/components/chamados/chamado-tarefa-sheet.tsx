@@ -9,6 +9,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { getChamadoLeituraViaTarefa, getChamadoTarefa, getOpcoesTarefa, updateChamadoTarefa } from '@/lib/api';
+import { idTemFormatoPrisma } from '@/lib/id-prisma';
 import { ChamadoTarefaChamadoLeituraView } from '@/components/chamados/chamado-tarefa-chamado-leitura';
 import { ChamadoTarefaBarraAcoes, ChamadoTarefaAnexosCabecalho, ChamadoTarefaHistoricoCabecalho } from '@/components/chamados/chamado-tarefa-permissoes-view';
 import {
@@ -81,6 +82,10 @@ export function ChamadoTarefaSheet({
       setTarefa(null);
       setChamadoLeitura(null);
       setAcao(null);
+      return;
+    }
+    if (!idTemFormatoPrisma(tarefaId)) {
+      onSemAcesso?.();
       return;
     }
     let ativo = true;

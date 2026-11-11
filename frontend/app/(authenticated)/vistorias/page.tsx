@@ -31,6 +31,7 @@ import {
 import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
 import { useEstadoVistorias } from '@/lib/use-estado-vistorias';
 import { downloadFiscalizacaoPdf, getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
+import { buscarRegistroPorIdDaUrl, idTemFormatoPrisma } from '@/lib/id-prisma';
 import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
 import { cn } from '@/lib/cn';
 import { formatUnidadeTipo, UNIDADE_TIPO_LABELS } from '@/lib/unidade-tipo';
@@ -128,7 +129,7 @@ function VistoriasPageContent() {
     if (estado.id) {
       fechadoRef.current = false;
       setSelectedId(estado.id);
-      setSemAcesso(false);
+      setSemAcesso(!idTemFormatoPrisma(estado.id));
     } else if (tinhaIdRef.current) {
       fechadoRef.current = true;
       setSelectedId(null);
@@ -184,9 +185,15 @@ function VistoriasPageContent() {
 
     let active = true;
     setDetailLoading(true);
-    getFiscalizacao(selectedId)
-      .then((data) => {
-        if (active) setDetail(data);
+    void buscarRegistroPorIdDaUrl(selectedId, getFiscalizacao)
+      .then((resultado) => {
+        if (!active) return;
+        if (resultado.tipo === 'formato') {
+          setSemAcesso(true);
+          setDetail(null);
+          return;
+        }
+        if (resultado.tipo === 'ok') setDetail(resultado.data);
       })
       .catch((err) => {
         if (!active) return;

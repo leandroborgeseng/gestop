@@ -23,10 +23,12 @@ describe('322 L1 · query de Vistorias', () => {
     expect(canonico.get('avulsa')).toBe('sim');
   });
 
-  it('ignora status, mês e id que não são UUID', () => {
+  it('ignora status inválido e mantém id fora do UUID', () => {
     const { estado, canonico } = lerEstadoVistorias(new URLSearchParams('status=xyz&id=nao-e-uuid&avulsa=talvez'));
     expect(estado.status).toBe('CONCLUIDA');
-    expect(estado.id).toBeNull();
-    expect(canonico.toString()).toBe('');
+    expect(estado.id).toBe('nao-e-uuid');
+    expect(canonico.get('id')).toBe('nao-e-uuid');
+    expect(canonico.get('status')).toBeNull();
+    expect(canonico.get('avulsa')).toBeNull();
   });
 });

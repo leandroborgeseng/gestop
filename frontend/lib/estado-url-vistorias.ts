@@ -1,6 +1,5 @@
 import { dataIsoValida, definirParam, enumUrl, idUrl } from '@/lib/estado-url';
 import type { FiscalizacaoStatus, UnidadeTipo } from '@/lib/types';
-import { lerIdVistoriaDaUrl } from '@/lib/vistoria-deep-link';
 
 const STATUS: FiscalizacaoStatus[] = ['CONCLUIDA', 'EM_ANDAMENTO', 'PLANEJADA', 'SINCRONIZACAO_PENDENTE', 'CANCELADA'];
 const TIPOS: UnidadeTipo[] = ['ESCOLA', 'UBS', 'PRACA', 'PREDIO_ADMINISTRATIVO', 'ESPACO_ESPORTIVO', 'OUTRO'];
@@ -27,7 +26,7 @@ export function lerEstadoVistorias(sp: URLSearchParams): { estado: EstadoVistori
   const avulsaRaw = sp.get('avulsa')?.trim().toLowerCase();
   const estado: EstadoVistorias = {
     search: sp.get('search')?.trim() ?? '',
-    id: lerIdVistoriaDaUrl(`?id=${encodeURIComponent(sp.get('id') ?? '')}`),
+    id: idUrl(sp.get('id')),
     status,
     tipo: enumUrl(sp.get('tipoUnidade'), TIPOS) ?? '',
     secretaria: idUrl(sp.get('secretaria')) ?? '',

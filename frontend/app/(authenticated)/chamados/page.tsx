@@ -33,6 +33,7 @@ import { ChamadoTarefasPanel } from '@/components/chamados/chamado-tarefas-panel
 import { ChamadoAnexosAberturaView } from '@/components/chamados/chamado-anexos-abertura-view';
 import { PageShell } from '@/components/layout/page-shell';
 import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
+import { buscarRegistroPorIdDaUrl, idTemFormatoPrisma } from '@/lib/id-prisma';
 import { filtrosDeEstado, patchDeFiltros, patchLimparFiltros } from '@/lib/estado-url-chamados';
 import { useEstadoChamados } from '@/lib/use-estado-chamados';
 import { aberturaParaQuery } from '@/lib/filtro-data-abertura';
@@ -168,6 +169,13 @@ function ChamadosPageContent() {
       pedidoUrlRef.current = estado.id;
       setSelectedId(estado.id);
       marcarDetalheFechado(false);
+      if (!idTemFormatoPrisma(estado.id)) {
+        semAcessoRef.current = estado.id;
+        setSemAcessoId(estado.id);
+      } else {
+        semAcessoRef.current = null;
+        setSemAcessoId(null);
+      }
     } else if (tinhaIdRef.current) {
       pedidoUrlRef.current = null;
       setSelectedId(null);
@@ -322,9 +330,17 @@ function ChamadosPageContent() {
 
     let active = true;
     setDetailLoading(true);
-    getChamado(selectedId)
-      .then((data) => {
+    void buscarRegistroPorIdDaUrl(selectedId, getChamado)
+      .then((resultado) => {
         if (!active) return;
+        if (resultado.tipo === 'formato') {
+          semAcessoRef.current = selectedId;
+          setSemAcessoId(selectedId);
+          setDetail(null);
+          return;
+        }
+        if (resultado.tipo !== 'ok') return;
+        const data = resultado.data;
         if (data.excluidoEm && !(podeVerExcluidos && exibirExcluidos)) {
           setDetail((current) => (current?.id === data.id ? null : current));
           setSelectedId((current) => (current === data.id ? null : current));

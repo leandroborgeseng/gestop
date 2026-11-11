@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
+import { buscarRegistroPorIdDaUrl, idTemFormatoPrisma } from '@/lib/id-prisma';
 import { useEstadoDocumentos } from '@/lib/use-estado-documentos';
 import { Copy, FileText, Search } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
@@ -111,7 +112,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
     if (estado.id) {
       fechadoRef.current = false;
       setSelectedId(estado.id);
-      setSemAcesso(false);
+      setSemAcesso(!idTemFormatoPrisma(estado.id));
     } else if (tinhaIdRef.current) {
       fechadoRef.current = true;
       setSelectedId(null);
@@ -159,9 +160,15 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
     }
     let active = true;
     setDetailLoading(true);
-    getDocumento(selectedId)
-      .then((data) => {
-        if (active) setDetail(data);
+    void buscarRegistroPorIdDaUrl(selectedId, getDocumento)
+      .then((resultado) => {
+        if (!active) return;
+        if (resultado.tipo === 'formato') {
+          setSemAcesso(true);
+          setDetail(null);
+          return;
+        }
+        if (resultado.tipo === 'ok') setDetail(resultado.data);
       })
       .catch((err) => {
         if (!active) return;
@@ -187,7 +194,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
   );
 
   async function refreshSelected() {
-    if (!selectedId) return;
+    if (!selectedId || !idTemFormatoPrisma(selectedId)) return;
     const [list, nextDetail] = await Promise.all([
       modoPendencias
         ? listMinhasPendenciasAssinatura()

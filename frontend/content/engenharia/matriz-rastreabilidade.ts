@@ -100,7 +100,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/chamados',
     api: 'ChamadosController: GET /chamados, PUT /:id/status, /triagem, /atribuicao, /planejamento, /abertura, /observadores, POST /:id/historico, POST /:id/notificar-equipe',
     tabelas: 'Chamado, HistoricoStatus, Equipe, EquipeUsuario, Usuario, ChamadoObservador, TipoChamado',
-    permissao: 'chamados.gerenciar. Edição da abertura também aceita chamados.editar_abertura. Escopo pela secretaria ativa. A busca da lista consulta o conjunto do escopo, não só a página visível. Aba, filtros, busca, página, período da programação e o id ficam na query; valor fora do contexto da secretaria é ignorado e a URL não troca o perfil ativo.',
+    permissao: 'chamados.gerenciar. Edição da abertura também aceita chamados.editar_abertura. Escopo pela secretaria ativa. A busca da lista consulta o conjunto do escopo, não só a página visível. Aba, filtros, busca, página, período da programação e o id ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Valor fora do contexto da secretaria é ignorado e a URL não troca o perfil ativo.',
   },
   {
     id: 'meus',
@@ -118,7 +118,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/execucao, /execucao/[id], /chamados/em-execucao',
     api: 'ChamadosController: GET /chamados/em-execucao, GET /:id/execucao, POST checkin, evidencias, concluir',
     tabelas: 'Chamado, Evidencia, HistoricoStatus, Equipe, Usuario',
-    permissao: 'chamados.gerenciar ou chamados.executar. Menu Execução usa as duas. Aba, busca, filtros, painel e a tarefa aberta ficam na query; a URL não troca Secretaria nem perfil.',
+    permissao: 'chamados.gerenciar ou chamados.executar. Menu Execução usa as duas. Aba, busca, filtros, painel e a tarefa aberta ficam na query. Tarefa fora do UUID permanece na URL, mostra o aviso e não chama a API. A URL não troca Secretaria nem perfil.',
   },
   {
     id: 'manual',
@@ -190,7 +190,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/vistorias',
     api: 'FiscalizacoesController: GET /fiscalizacoes, GET /fiscalizacoes/:id, GET /fiscalizacoes/:id/pdf',
     tabelas: 'Fiscalizacao, RespostaChecklist, Evidencia, NaoConformidade, UnidadePublica, Usuario',
-    permissao: 'fiscalizacoes.executar, dashboard.visualizar ou chamados.gerenciar. Busca, filtros e o id aberto ficam na query; Secretaria fora do contexto é ignorada e a URL não troca o perfil.',
+    permissao: 'fiscalizacoes.executar, dashboard.visualizar ou chamados.gerenciar. Busca, filtros e o id aberto ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Secretaria fora do contexto é ignorada e a URL não troca o perfil.',
   },
   {
     id: 'vistoria-manual',
@@ -217,7 +217,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/cronograma',
     api: 'CronogramaController: GET /cronograma, GET /calendario, POST, PUT /:id, DELETE /:id (inativar), POST /:id/reativar',
     tabelas: 'CronogramaChecagem, CronogramaChecagemResponsavel, Checklist, UnidadePublica, Usuario',
-    permissao: 'cronograma.visualizar/inserir/alterar/excluir, legado dashboard.visualizar e checklists.gerenciar, ou matriz.cronograma. Mês, Secretaria, próprio e dia ficam na query; Secretaria fora do contexto é ignorada.',
+    permissao: 'cronograma.visualizar/inserir/alterar/excluir, legado dashboard.visualizar e checklists.gerenciar, ou matriz.cronograma. Mês, Secretaria, próprio e dia ficam na query. A query não abre checagem por id; o id no caminho é UUID. Secretaria fora do contexto é ignorada.',
   },
   {
     id: 'nc',
@@ -235,7 +235,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/documentos, painel Documentos relacionados em /chamados e /meus-chamados',
     api: 'DocumentosController: GET /documentos, GET /:id, GET /por-chamado/:chamadoId, GET /chamados-busca, GET /:id/pdf/original, GET /:id/pdf/assinado, POST /:id/gerar-pdf, PATCH /:id/vinculos, /respostas, POST /:id/concluir',
     tabelas: 'Documento, DocumentoChamado, DocumentoResposta, DocumentoAssinatura, DocumentoAssinaturaPedido, ChecklistItem, Chamado, Fiscalizacao',
-    permissao: 'documentos.visualizar ou documentos.administrar (módulo). PDF e listagem relacionada também aceitam dashboard, chamados e fiscalização. Busca, filtros e o id aberto ficam na query; a URL não troca Secretaria nem perfil. O card no chamado mostra signatários pendentes (DocumentoAssinaturaPedido PENDENTE) e assinaturas vigentes. Vínculo de avulso em rascunho: documentos.criar_avulso. Depois da conclusão: documentos.editar_vinculo.',
+    permissao: 'documentos.visualizar ou documentos.administrar (módulo). PDF e listagem relacionada também aceitam dashboard, chamados e fiscalização. Busca, filtros e o id aberto ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. A URL não troca Secretaria nem perfil. O card no chamado mostra signatários pendentes (DocumentoAssinaturaPedido PENDENTE) e assinaturas vigentes. Vínculo de avulso em rascunho: documentos.criar_avulso. Depois da conclusão: documentos.editar_vinculo.',
   },
   {
     id: 'avulso',

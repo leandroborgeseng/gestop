@@ -117,7 +117,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'triar',
         nome: 'Triar e atribuir',
         atores: ['administrador', 'gestor'],
-        descricao: 'Mudar status, triagem, atribuição, planejamento, abertura, observadores e aviso à equipe. A lista e o detalhe rolam por dentro, na mesma altura. A busca por código, descrição ou unidade só dispara no botão Pesquisar ou no Enter. Aba, filtros, busca, página, período da programação e o chamado aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Valor inválido some da query. Id inexistente ou sem acesso mostra a lista com o aviso e não troca Secretaria nem perfil. No celular, abrir o chamado entra no histórico para o Voltar fechar o detalhe. Documentos relacionados do chamado mostram signatários pendentes e as ações de assinatura, cada uma com a permissão correspondente.',
+        descricao: 'Mudar status, triagem, atribuição, planejamento, abertura, observadores e aviso à equipe. A lista e o detalhe rolam por dentro, na mesma altura. A busca por código, descrição ou unidade só dispara no botão Pesquisar ou no Enter. Aba, filtros, busca, página, período da programação e o chamado aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Valor de filtro fora do vocabulário some da query. Id do chamado fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso e não troca Secretaria nem perfil. No celular, abrir o chamado entra no histórico para o Voltar fechar o detalhe. Documentos relacionados do chamado mostram signatários pendentes e as ações de assinatura, cada uma com a permissão correspondente.',
         rotas: ['/chamados', 'GET /chamados', 'PUT /chamados/:id/triagem', 'PUT /chamados/:id/atribuicao', 'PUT /chamados/:id/planejamento', 'GET /documentos/por-chamado/:chamadoId'],
       },
       {
@@ -131,7 +131,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'executar',
         nome: 'Executar chamado',
         atores: ['equipe', 'gestor'],
-        descricao: 'Check-in, evidências e conclusão da ordem em execução. Aba, busca, filtros, painel do celular, chamado selecionado e tarefa aberta ficam na URL; no celular a tarefa entra no histórico para o Voltar fechar o detalhe.',
+        descricao: 'Check-in, evidências e conclusão da ordem em execução. Aba, busca, filtros, painel do celular, chamado selecionado e tarefa aberta ficam na URL. Tarefa fora do UUID permanece na URL, mostra o aviso e não chama a API. No celular a tarefa entra no histórico para o Voltar fechar o detalhe.',
         rotas: ['/execucao', '/execucao/[id]', 'POST /chamados/:id/execucao/checkin', 'POST /chamados/:id/execucao/evidencias', 'POST /chamados/:id/execucao/concluir'],
       },
       {
@@ -201,7 +201,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'consultar-vistorias',
         nome: 'Consultar vistorias',
         atores: ['gestor', 'equipe', 'administrador'],
-        descricao: 'Listar fiscalizações realizadas e abrir o PDF. Busca, status, tipo, período, avulsa e o id (UUID) ficam na URL; o padrão concluídas fica de fora. Id inválido ou sem acesso mostra a lista com o aviso. No celular, abrir a vistoria entra no histórico. As respostas de múltipla escolha saem formatadas; o código técnico da pergunta não aparece; seções agrupam perguntas consecutivas.',
+        descricao: 'Listar fiscalizações realizadas e abrir o PDF. Busca, status, tipo, período, avulsa e o id (UUID) ficam na URL; o padrão concluídas fica de fora. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir a vistoria entra no histórico. As respostas de múltipla escolha saem formatadas; o código técnico da pergunta não aparece; seções agrupam perguntas consecutivas.',
         rotas: ['/vistorias', 'GET /fiscalizacoes', 'GET /fiscalizacoes/:id', 'GET /fiscalizacoes/:id/pdf'],
       },
       {
@@ -215,7 +215,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'cronograma',
         nome: 'Programar cronograma',
         atores: ['administrador', 'gestor'],
-        descricao: 'Agendar a recorrência de checagem por unidade e checklist. Mês, Secretaria, próprio e dia ficam na URL; o mês corrente e o dia vazio ficam de fora. Secretaria fora do contexto ativo é ignorada e a URL não troca o perfil.',
+        descricao: 'Agendar a recorrência de checagem por unidade e checklist. Mês, Secretaria, próprio e dia ficam na URL; o mês corrente e o dia vazio ficam de fora. A query não abre checagem por id. O id da checagem no caminho é UUID. Secretaria fora do contexto ativo é ignorada e a URL não troca o perfil.',
         rotas: ['/cronograma', 'GET /cronograma', 'POST /cronograma', 'PUT /cronograma/:id', 'DELETE /cronograma/:id', 'POST /cronograma/:id/reativar'],
       },
       {
@@ -235,7 +235,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'consultar-documentos',
         nome: 'Consultar documentos',
         atores: ['administrador', 'gestor', 'equipe', 'solicitante'],
-        descricao: 'Listar peças, gerar PDF e ajustar vínculos com chamado ou vistoria. Busca, tipo, situação, assinatura, histórico e o documento aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir o documento entra no histórico. GET /documentos/por-chamado/:id devolve signatários pendentes e assinaturas vigentes no mesmo serialize da tela Documentos.',
+        descricao: 'Listar peças, gerar PDF e ajustar vínculos com chamado ou vistoria. Busca, tipo, situação, assinatura, histórico e o documento aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir o documento entra no histórico. GET /documentos/por-chamado/:id devolve signatários pendentes e assinaturas vigentes no mesmo serialize da tela Documentos.',
         rotas: ['/documentos', '/chamados', '/meus-chamados', 'GET /documentos', 'GET /documentos/por-chamado/:chamadoId', 'GET /documentos/:id/pdf/original', 'PATCH /documentos/:id/vinculos'],
       },
       {

@@ -13,9 +13,9 @@ mkdirSync(OUT, { recursive: true });
 const SENHA = 'Zzteste322!Aa';
 const EMAIL = 'zzteste-cco@aion.local';
 const AVISO = 'Registro não encontrado ou sem acesso';
-const CHAMADO_ID = 'ch-l1';
-const TAREFA_ID = 't-l1';
-const DOC_ID = 'doc-l1';
+const CHAMADO_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1';
+const TAREFA_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+const DOC_ID = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1';
 const VISTORIA_ID = '11111111-1111-4111-8111-111111111111';
 const SECRETARIA = { id: 'sec-322', nome: 'Secretaria Fictícia 322', sigla: 'ZZ322' };
 
@@ -476,7 +476,8 @@ test.describe('322 L1 estado na URL', () => {
     await expect(page).not.toHaveURL(/status=/);
     await expect(page).toHaveURL(/tipoUnidade=escola/);
     await page.goto(`/vistorias?id=nao-e-uuid&tipoUnidade=escola`);
-    await expect(page).not.toHaveURL(/id=/);
+    await expect(page.getByText(AVISO)).toBeVisible();
+    await expect(page).toHaveURL(/id=nao-e-uuid/);
     await expect(page).toHaveURL(/tipoUnidade=escola/);
 
     const engine = engineDe(testInfo.project.name);

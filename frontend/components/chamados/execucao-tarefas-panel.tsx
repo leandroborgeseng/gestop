@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
+import { idTemFormatoPrisma } from '@/lib/id-prisma';
 import type { EstadoExecucao } from '@/lib/estado-url-execucao';
 import { useEstadoExecucao } from '@/lib/use-estado-execucao';
 import { ChevronDown, ListX, Search } from 'lucide-react';
@@ -58,6 +59,7 @@ export function ExecucaoTarefasPanel({
   const [responsaveis, setResponsaveis] = useState<Array<{ id: string; nome: string }>>([]);
   const [tipos, setTipos] = useState<Array<{ id: string; nome: string }>>([]);
   const aberta = estado.tarefa;
+  const tarefaForaDoFormato = Boolean(aberta) && !idTemFormatoPrisma(aberta);
   const [semAcesso, setSemAcesso] = useState(false);
   // 286: no celular a aba abre em Lista (decisão 14/10).
   const mobile = estado.painelTarefas;
@@ -451,7 +453,7 @@ export function ExecucaoTarefasPanel({
           </section>
         </div>
       </div>
-      {semAcesso && aberta ? (
+      {(semAcesso || tarefaForaDoFormato) && aberta ? (
         <div role="status" data-testid="aviso-registro-url" className="flex items-center justify-between gap-3 rounded-[var(--r-md)] border border-amber-200 bg-amber-50 px-4 py-3">
           <p className="text-[13px] text-amber-950">{AVISO_REGISTRO_URL}</p>
           <button type="button" className="text-[13px] font-semibold text-amber-950" onClick={fecharTarefa}>
@@ -460,7 +462,7 @@ export function ExecucaoTarefasPanel({
         </div>
       ) : null}
       <ChamadoTarefaSheet
-        tarefaId={semAcesso ? null : aberta}
+        tarefaId={semAcesso || tarefaForaDoFormato ? null : aberta}
         onClose={fecharTarefa}
         onChanged={carregar}
         onSemAcesso={() => setSemAcesso(true)}
