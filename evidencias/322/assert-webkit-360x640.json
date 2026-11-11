@@ -1,0 +1,8 @@
+{
+  "criterio": "322-A1",
+  "engine": "webkit",
+  "viewport": "360x640",
+  "url": "http://localhost:3000/cco",
+  "emCco": true,
+  "headingVisivel": true
+}

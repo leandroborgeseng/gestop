@@ -1,0 +1,15 @@
+{
+  "criterio": [
+    "322-A1",
+    "322-A7"
+  ],
+  "engine": "chromium",
+  "url": "http://localhost:3000/cco",
+  "contexto": {
+    "perfilId": "perfil-zzteste-cco@aion.local",
+    "perfilNome": "ZZTESTE 322 CCO",
+    "secretariaId": "sec-322",
+    "secretariaSigla": "ZZ322"
+  },
+  "trocas": []
+}
