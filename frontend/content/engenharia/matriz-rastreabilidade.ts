@@ -217,7 +217,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/cronograma',
     api: 'CronogramaController: GET /cronograma, GET /calendario, POST, PUT /:id, DELETE /:id (inativar), POST /:id/reativar',
     tabelas: 'CronogramaChecagem, CronogramaChecagemResponsavel, Checklist, UnidadePublica, Usuario',
-    permissao: 'cronograma.visualizar/inserir/alterar/excluir, legado dashboard.visualizar e checklists.gerenciar, ou matriz.cronograma.',
+    permissao: 'cronograma.visualizar/inserir/alterar/excluir, legado dashboard.visualizar e checklists.gerenciar, ou matriz.cronograma. Mês, Secretaria, próprio e dia ficam na query; Secretaria fora do contexto é ignorada.',
   },
   {
     id: 'nc',

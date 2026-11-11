@@ -2,7 +2,7 @@
 
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { SESSAO_ESCOPO_EVENT } from '@/lib/session-events';
 import { ResponsaveisCombobox } from '@/components/cronograma/responsaveis-combobox';
 import { bloqueioSalvar, avisoCronogramaForaEscopo, MSG_REGULARIZAR, pendentesRegularizacao } from '@/lib/cronograma-responsaveis';
@@ -38,6 +38,9 @@ import {
   getSituacaoResponsaveisCronograma,
 } from '@/lib/api';
 import { CRONOGRAMA_FREQUENCIAS, CRONOGRAMA_FREQUENCIA_LABELS, monthBounds, toInputDate } from '@/lib/cronograma';
+import { mesAtualIso } from '@/lib/estado-url';
+import { dataDoMes } from '@/lib/estado-url-cronograma';
+import { useEstadoCronograma } from '@/lib/use-estado-cronograma';
 import { hasCronogramaAccess } from '@/lib/permissions-matrix';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
@@ -53,6 +56,14 @@ import {
 } from '@/lib/types';
 
 export default function CronogramaPage() {
+  return (
+    <Suspense>
+      <CronogramaPageContent />
+    </Suspense>
+  );
+}
+
+function CronogramaPageContent() {
   const backHref = useSafeBackHref('/cco');
   const sessionUser = useSessionUser();
   const permissoes = sessionUser?.permissoes ?? [];
@@ -67,10 +78,12 @@ export default function CronogramaPage() {
     ? null
     : (sessionUser?.secretariaAtiva?.id ?? sessionUser?.secretaria?.id ?? null);
 
-  const [month, setMonth] = useState(() => new Date());
-  const [secretariaId, setSecretariaId] = useState(lockedSecretariaId ?? '');
-  const [unidadeId, setUnidadeId] = useState('');
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const { estado, definir } = useEstadoCronograma();
+  const mes = estado.mes ?? mesAtualIso();
+  const month = useMemo(() => dataDoMes(mes), [mes]);
+  const secretariaId = estado.secretaria;
+  const unidadeId = estado.unidade;
+  const selectedDate = estado.dia;
   const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
   const [unidades, setUnidades] = useState<UnidadeOperacional[]>([]);
   const [checklists, setChecklists] = useState<ChecklistModel[]>([]);
@@ -106,11 +119,20 @@ export default function CronogramaPage() {
   const effectiveSecretariaId = lockedSecretariaId ?? secretariaId;
 
   useEffect(() => {
-    if (lockedSecretariaId) {
-      setSecretariaId(lockedSecretariaId);
-      setUnidadeId('');
+    if (lockedSecretariaId && estado.secretaria) definir({ secretaria: '' });
+  }, [lockedSecretariaId, estado.secretaria, definir]);
+
+  useEffect(() => {
+    if (secretarias.length && secretariaId && !secretarias.some((item) => item.id === secretariaId)) {
+      definir({ secretaria: '' });
     }
-  }, [lockedSecretariaId]);
+  }, [secretarias, secretariaId, definir]);
+
+  useEffect(() => {
+    if (unidades.length && unidadeId && !unidades.some((item) => item.id === unidadeId)) {
+      definir({ unidade: '' });
+    }
+  }, [unidades, unidadeId, definir]);
 
   async function loadStatic() {
     const nextSecretarias = await getSecretarias();
@@ -426,10 +448,7 @@ export default function CronogramaPage() {
               <Select
                 value={effectiveSecretariaId}
                 disabled={Boolean(lockedSecretariaId)}
-                onChange={(event) => {
-                  setSecretariaId(event.target.value);
-                  setUnidadeId('');
-                }}
+                onChange={(event) => definir({ secretaria: event.target.value, unidade: '' })}
               >
                 {!lockedSecretariaId ? <option value="">Todas</option> : null}
                 {secretarias.map((secretaria) => (
@@ -442,7 +461,7 @@ export default function CronogramaPage() {
             <Field label="Próprio">
               <SearchableSelect
                 value={unidadeId}
-                onChange={setUnidadeId}
+                onChange={(value) => definir({ unidade: value })}
                 placeholder="Todos"
                 options={unidades.map((unidade) => ({ value: unidade.id, label: unidade.nome }))}
               />
@@ -472,9 +491,9 @@ export default function CronogramaPage() {
                 month={month}
                 eventosPorDia={eventosPorDia}
                 selectedDate={selectedDate}
-                onSelectDate={setSelectedDate}
-                onPrevMonth={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))}
-                onNextMonth={() => setMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))}
+                onSelectDate={(dia) => definir({ dia })}
+                onPrevMonth={() => definir({ mes: toInputDate(new Date(month.getFullYear(), month.getMonth() - 1, 1)).slice(0, 7) })}
+                onNextMonth={() => definir({ mes: toInputDate(new Date(month.getFullYear(), month.getMonth() + 1, 1)).slice(0, 7) })}
               />
 
               <Card elevation={1}>
@@ -665,7 +684,7 @@ export default function CronogramaPage() {
                 <Select
                   value={effectiveSecretariaId}
                   disabled={Boolean(lockedSecretariaId)}
-                  onChange={(event) => setSecretariaId(event.target.value)}
+                  onChange={(event) => definir({ secretaria: event.target.value })}
                 >
                   {!lockedSecretariaId ? <option value="">Todas</option> : null}
                   {secretarias.map((secretaria) => (

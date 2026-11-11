@@ -215,7 +215,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'cronograma',
         nome: 'Programar cronograma',
         atores: ['administrador', 'gestor'],
-        descricao: 'Agendar a recorrência de checagem por unidade e checklist.',
+        descricao: 'Agendar a recorrência de checagem por unidade e checklist. Mês, Secretaria, próprio e dia ficam na URL; o mês corrente e o dia vazio ficam de fora. Secretaria fora do contexto ativo é ignorada e a URL não troca o perfil.',
         rotas: ['/cronograma', 'GET /cronograma', 'POST /cronograma', 'PUT /cronograma/:id', 'DELETE /cronograma/:id', 'POST /cronograma/:id/reativar'],
       },
       {
