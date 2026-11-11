@@ -2,7 +2,7 @@ import { getDefaultAuthenticatedHref, resolvePreferredHref, type NavUser } from 
 
 /**
  * 322 — primeira tela depois do login ou ao abrir `/` (start_url do PWA).
- * A ordem é a do menu, que começa pelo CCO.
+ * A ordem é a do menu visível (lateral e barra inferior), que começa pelo CCO.
  * A função é pura: não troca Secretaria nem perfil ativo.
  *
  * As permissões individuais (Administração > Permissões) somam às do perfil,

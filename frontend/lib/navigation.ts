@@ -182,7 +182,7 @@ export const NAV_GROUPS: NavGroup[] = [
   { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
 ];
 
-/** Atalhos fixos na barra inferior mobile — Execução sempre incluído quando permitido. */
+/** Itens da barra inferior. A ordem é a de getMenuItemsInDisplayOrder, não a desta lista. */
 const MOBILE_BAR_CORE = ['cco', 'mobile', 'novo_chamado', 'meus_chamados', 'chamados', 'execucao'] as const;
 
 export type NavUser = { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null | undefined;
@@ -219,22 +219,28 @@ export function getGroupedNavItems(permissions: string[], user?: NavUser) {
   })).filter((group) => group.items.length > 0);
 }
 
+/**
+ * Itens já filtrados, na ordem em que o menu lateral os mostra.
+ * A barra inferior e a tela inicial leem esta lista — não a ordem interna de NAV_ITEMS.
+ */
+export function getMenuItemsInDisplayOrder(permissions: string[], user?: NavUser) {
+  return getGroupedNavItems(permissions, user).flatMap((group) => group.items);
+}
+
 export function getMobileNav(permissions: string[], user?: NavUser) {
-  const visible = getVisibleNavItems(permissions, user);
-  const visibleById = new Map(visible.map((item) => [item.id, item]));
-
-  const primary = MOBILE_BAR_CORE.map((id) => visibleById.get(id)).filter(Boolean) as NavItem[];
-
+  const ordered = getMenuItemsInDisplayOrder(permissions, user);
+  const core = new Set<string>(MOBILE_BAR_CORE);
+  const primary = ordered.filter((item) => core.has(item.id));
   const primaryIds = new Set(primary.map((item) => item.id));
-  const secondary = visible.filter((item) => !primaryIds.has(item.id));
+  const secondary = ordered.filter((item) => !primaryIds.has(item.id));
 
   // Menu "Mais" é nativo da conta (perfil, secretaria, sair) — sempre disponível.
   return { primary, secondary, hasMore: true };
 }
 
-/** Primeira rota operacional permitida na ordem dos menus; fallback `/conta` se nada for liberado. */
+/** Primeira rota visível no menu; fallback `/conta` se nada for liberado. */
 export function getDefaultAuthenticatedHref(permissions: string[], user?: NavUser): string {
-  const first = getVisibleNavItems(permissions, user)[0];
+  const first = getMenuItemsInDisplayOrder(permissions, user)[0];
   return first?.href ?? '/conta';
 }
 

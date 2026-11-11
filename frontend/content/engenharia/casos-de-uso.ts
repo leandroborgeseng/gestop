@@ -68,7 +68,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         nome: 'Autenticar',
         atores: ['administrador', 'gestor', 'equipe', 'solicitante', 'externo'],
         descricao:
-          'Entrar com e-mail e senha. Sem returnTo, a sessão abre a primeira tela do menu que o perfil ativo e as permissões individuais liberam, começando pelo CCO. A raiz `/` é o start_url do PWA e usa a mesma escolha, sem trocar Secretaria nem perfil. Rota específica, F5 e volta do segundo plano permanecem na tela atual. Encerrar a sessão sai do sistema.',
+          'Entrar com e-mail e senha. Sem returnTo, a sessão abre o primeiro item visível do menu, na mesma ordem do lateral e da barra inferior, que o perfil ativo e as permissões individuais liberam, começando pelo CCO. A raiz `/` é o start_url do PWA e usa a mesma escolha, sem trocar Secretaria nem perfil. Rota específica, F5 e volta do segundo plano permanecem na tela atual. Encerrar a sessão sai do sistema.',
         rotas: ['/', '/login', 'POST /auth/login', 'GET /auth/me', 'POST /auth/logout'],
       },
       {

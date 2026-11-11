@@ -284,14 +284,14 @@ test.describe('322 tela inicial', () => {
     await expect(page.getByText('Não há nenhuma funcionalidade liberada')).toHaveCount(0);
   });
 
-  test('usuário sem CCO cai em Chamados', async ({ page }, testInfo) => {
+  test('usuário sem CCO cai em Novo chamado', async ({ page }, testInfo) => {
     await mockApi(page);
     await page.setViewportSize({ width: 360, height: 640 });
     await entrar(page, SEM_CCO_EMAIL);
-    await expect(page).toHaveURL(/\/chamados(?:\/|$|\?)/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/\/chamados\/novo(?:\?|$)/, { timeout: 20_000 });
     await expect(page).not.toHaveURL(/\/cco/);
     await expect(page).not.toHaveURL(/\/mobile/);
-    await expect(page.getByRole('heading', { name: 'Chamados' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Novo chamado' })).toBeVisible();
     const engine = engineDe(testInfo.project.name);
     await page.screenshot({ path: path.join(OUT, `${engine}-360x640-sem-cco.png`) });
     writeFileSync(

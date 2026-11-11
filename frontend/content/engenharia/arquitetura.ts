@@ -11,7 +11,7 @@ export const BLOCOS_ARQUITETURA: BlocoArquitetura[] = [
   {
     id: 'frontend',
     nome: 'Frontend Next.js',
-    papel: 'App Router com telas autenticadas, rotas públicas de chamado e validação de documento, e a área administrativa. O botão Coletar no chamado usa canColetarAssinatura, alinhado ao PermissionsGuard (não basta usuarios.gerenciar). A entrada em `/` (start_url do PWA) e o login sem returnTo usam primeiraTelaPermitida: a primeira tela do menu liberada ao perfil ativo e às permissões individuais, começando pelo CCO. Rota específica, F5, foco e renovação de token não trocam a tela.',
+    papel: 'App Router com telas autenticadas, rotas públicas de chamado e validação de documento, e a área administrativa. O botão Coletar no chamado usa canColetarAssinatura, alinhado ao PermissionsGuard (não basta usuarios.gerenciar). A entrada em `/` (start_url do PWA) e o login sem returnTo usam primeiraTelaPermitida: o primeiro item visível do menu (a mesma ordem do lateral e da barra inferior) liberado ao perfil ativo e às permissões individuais, começando pelo CCO. Rota específica, F5, foco e renovação de token não trocam a tela.',
     onde: 'frontend/app. Sessão e menu em frontend/lib/navigation.ts, frontend/lib/tela-inicial.ts, frontend/lib/permissions-matrix.ts e frontend/lib/chamado-tarefa-permissoes.ts. Administrador do Sistema: frontend/lib/administrador-sistema.ts (nome e isAdministradorSistemaAtivo; o frontend não importa src/). Coletar no chamado: frontend/lib/can-coletar-assinatura.ts (reexportado pela matriz).',
   },
   {
