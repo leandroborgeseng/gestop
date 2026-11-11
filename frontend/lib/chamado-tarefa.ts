@@ -293,8 +293,12 @@ export function montarFiltrosRelatorioTarefas(input: FiltrosRelatorioTarefasInpu
   };
 }
 
+export function rotuloContagem(n: number, um: string, varios: string) {
+  return `${n} ${n === 1 ? um : varios}`;
+}
+
 export function formatarGrupoIndicadoresTarefas(item: Pick<GrupoIndicadoresTarefas, 'nome' | 'pendentes' | 'atrasadas'>) {
-  return `${item.nome}: ${item.pendentes} pendentes · ${item.atrasadas} atrasadas`;
+  return `${item.nome} — ${rotuloContagem(item.pendentes, 'pendente', 'pendentes')}, ${rotuloContagem(item.atrasadas, 'atrasada', 'atrasadas')}`;
 }
 
 /** UX-04: pendências primeiro — atrasadas, depois pendentes, depois o nome. */

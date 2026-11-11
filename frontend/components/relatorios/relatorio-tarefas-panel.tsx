@@ -7,6 +7,7 @@ import {
   avisoCorteRelatorioTarefas,
   formatarGrupoIndicadoresTarefas,
   LIMITE_GRUPOS_VISIVEIS,
+  rotuloContagem,
   montarFiltrosRelatorioTarefas,
   ordenarGruposPendencias,
   TAREFA_PRIORIDADE_LABEL,
@@ -229,6 +230,20 @@ export function RelatorioTarefasPanel() {
   );
 }
 
+function TextoPendencias({ item }: { item: GrupoIndicadoresTarefas }) {
+  return (
+    <span>
+      <span className="sr-only">{formatarGrupoIndicadoresTarefas(item)}</span>
+      <span aria-hidden="true">
+        {item.nome} — {rotuloContagem(item.pendentes, 'pendente', 'pendentes')},{' '}
+        <span className={item.atrasadas > 0 ? 'font-semibold text-[var(--danger)]' : undefined}>
+          {rotuloContagem(item.atrasadas, 'atrasada', 'atrasadas')}
+        </span>
+      </span>
+    </span>
+  );
+}
+
 function Indicador({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-[12px] border border-[var(--line)] p-3">
@@ -256,12 +271,15 @@ function Grupo({
       <p className="text-[12px] font-semibold text-[var(--ink-2)]">{titulo}</p>
       <ul className="mt-1 text-[12px] text-[var(--ink-3)]">
         {visiveis.map((item) => (
-          <li key={item.nome}>
-            {detalharPendencias ? formatarGrupoIndicadoresTarefas(item) : `${item.nome}: ${item.total}`}
+          <li key={item.nome} className={detalharPendencias && item.pendentes === 0 && item.atrasadas === 0 ? 'opacity-60' : undefined}>
+            {detalharPendencias ? <TextoPendencias item={item} /> : `${item.nome}: ${item.total}`}
           </li>
         ))}
         {ordenados.length === 0 ? <li>Sem dados</li> : null}
       </ul>
+      {detalharPendencias ? (
+        <p className="mt-1 text-[11px] text-[var(--ink-2)]">Atrasadas estão incluídas nas pendentes</p>
+      ) : null}
       {corte ? (
         <p className="mt-1 text-[12px] text-[var(--ink-2)]">
           <span data-testid={`corte-grupos-${titulo}`}>{corte}</span>{' '}

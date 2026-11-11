@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { razaoContraste } from './tarefa-card';
 import {
   avisoCorteRelatorioTarefas,
   formatarGrupoIndicadoresTarefas,
@@ -32,12 +33,28 @@ describe('UX-01 — teto de 500 e aviso de corte', () => {
 
 describe('254 — agrupamentos do dashboard', () => {
   it('secretaria e equipe mostram pendentes e atrasadas, não só o total', () => {
-    expect(
-      formatarGrupoIndicadoresTarefas({ nome: 'EDU', pendentes: 3, atrasadas: 1 }),
-    ).toBe('EDU: 3 pendentes · 1 atrasadas');
+    expect(formatarGrupoIndicadoresTarefas({ nome: 'EDU', pendentes: 3, atrasadas: 1 })).toBe(
+      'EDU — 3 pendentes, 1 atrasada',
+    );
     expect(panelSrc).toContain('<Grupo titulo="Por secretaria" itens={indicadores.porSecretaria} detalharPendencias />');
     expect(panelSrc).toContain('<Grupo titulo="Por equipe" itens={indicadores.porEquipe} detalharPendencias />');
     expect(panelSrc).toContain('formatarGrupoIndicadoresTarefas(item)');
+  });
+
+  it('UX-05: singular e plural em 0, 1 e N, vermelho com contraste e legenda', () => {
+    expect(formatarGrupoIndicadoresTarefas({ nome: 'SEMAD', pendentes: 0, atrasadas: 0 })).toBe(
+      'SEMAD — 0 pendentes, 0 atrasadas',
+    );
+    expect(formatarGrupoIndicadoresTarefas({ nome: 'SEMAD', pendentes: 1, atrasadas: 1 })).toBe(
+      'SEMAD — 1 pendente, 1 atrasada',
+    );
+    expect(formatarGrupoIndicadoresTarefas({ nome: 'SEMAD', pendentes: 12, atrasadas: 3 })).toBe(
+      'SEMAD — 12 pendentes, 3 atrasadas',
+    );
+    expect(razaoContraste('#d62b2b', '#ffffff')).toBeGreaterThanOrEqual(4.5);
+    expect(panelSrc).toContain("item.atrasadas > 0 ? 'font-semibold text-[var(--danger)]'");
+    expect(panelSrc).toContain('Atrasadas estão incluídas nas pendentes');
+    expect(panelSrc).toContain('opacity-60');
   });
 });
 
