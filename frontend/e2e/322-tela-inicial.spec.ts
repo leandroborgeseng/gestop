@@ -18,9 +18,14 @@ const SENHA = 'Zzteste322!Aa';
 const CCO_EMAIL = 'zzteste-cco@aion.local';
 const SEM_CCO_EMAIL = 'zzteste-semcco@aion.local';
 const MATRIZ_EMAIL = 'zzteste-cco-matriz@aion.local';
+const DOIS_EMAIL = 'zzteste-dois-perfis@aion.local';
 const PERFIL_CCO = 'ZZTESTE 322 CCO';
 const PERFIL_SEM = 'ZZTESTE 322 Sem CCO';
+const PERFIL_A = { id: 'perfil-a-322', nome: 'ZZTESTE 322 Perfil A' };
+const PERFIL_B = { id: 'perfil-b-322', nome: 'ZZTESTE 322 Perfil B' };
 const SIGLA = 'ZZ322';
+const SEC_A = { id: 'sec-322-a', nome: 'Secretaria Fictícia 322 A', sigla: 'ZZ322A' };
+const SEC_B = { id: 'sec-322-b', nome: 'Secretaria Fictícia 322 B', sigla: 'ZZ322B' };
 
 const TAMANHOS = [
   { w: 1440, h: 900 },
@@ -80,6 +85,20 @@ const USUARIOS: Record<string, Usuario> = {
   [MATRIZ_EMAIL]: usuario(MATRIZ_EMAIL, 'ZZTESTE 322 Matriz CCO', PERFIL_CCO, [
     'matriz.cco._tela.visualizar',
   ]),
+  // Perfil A (ativo, sem CCO) e perfil B (com CCO). A sessão traz só as permissões de A,
+  // como buildSessionPayload: não une os perfis e não troca o ativo.
+  [DOIS_EMAIL]: {
+    id: 'user-dois-322',
+    nome: 'ZZTESTE 322 Dois perfis',
+    email: DOIS_EMAIL,
+    perfis: [PERFIL_A.nome],
+    permissoes: ['matriz.chamados._tela.visualizar', 'chamados.gerenciar'],
+    secretaria: SEC_A,
+    perfilAtivo: PERFIL_A,
+    perfisDisponiveis: [PERFIL_A, PERFIL_B],
+    secretariaAtiva: SEC_A,
+    secretariasDisponiveis: [SEC_A, SEC_B],
+  },
 };
 
 function engineDe(projectName: string) {
@@ -629,6 +648,53 @@ test.describe('322 tela inicial', () => {
     writeFileSync(
       path.join(OUT, `assert-${engine}-l3-refresh-falhou.json`),
       JSON.stringify({ criterio: '322-L3', engine, url: page.url(), refreshFalhou: true, redirecionou: false }, null, 2),
+    );
+  });
+
+  test('dois perfis: o ativo sem CCO abre a tela dele e não troca perfil nem secretaria', async ({ page }, testInfo) => {
+    const api = await mockApi(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await entrar(page, DOIS_EMAIL);
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/cco/);
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page).not.toHaveURL(/\/meus-chamados/);
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Perfil ativo' })).toHaveValue(PERFIL_A.id);
+    await expect(page.getByRole('combobox', { name: 'Secretaria ativa' })).toHaveValue(SEC_A.id);
+
+    const contexto = await contextoSessao(page);
+    expect(contexto?.perfilId).toBe(PERFIL_A.id);
+    expect(contexto?.perfilNome).toBe(PERFIL_A.nome);
+    expect(contexto?.secretariaId).toBe(SEC_A.id);
+    expect(contexto?.secretariaSigla).toBe('ZZ322A');
+    expect(api.trocas()).toEqual([]);
+
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/cco/);
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
+    expect(await contextoSessao(page)).toEqual(contexto);
+    expect(api.trocas()).toEqual([]);
+
+    const engine = engineDe(testInfo.project.name);
+    await page.screenshot({ path: path.join(OUT, `${engine}-l4-dois-perfis.png`) });
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-l4.json`),
+      JSON.stringify(
+        {
+          criterio: '322-L4',
+          engine,
+          url: page.url(),
+          perfilAtivo: PERFIL_A.nome,
+          perfilComCcoNaoAtivo: PERFIL_B.nome,
+          secretaria: 'ZZ322A',
+          trocas: api.trocas(),
+        },
+        null,
+        2,
+      ),
     );
   });
 

@@ -48,6 +48,16 @@ describe('primeiraTelaPermitida', () => {
     }
   });
 
+  it('perfil ativo sem CCO não herda o CCO do outro perfil', () => {
+    const perfilA = [CHAMADOS, 'chamados.gerenciar'];
+    const perfilB = [CCO, 'dashboard.visualizar'];
+    // A sessão efetiva é a do perfil ativo. A união abriria o CCO e não pode ser a entrada.
+    expect(primeiraTelaPermitida(perfilA)).toBe('/chamados');
+    expect(primeiraTelaPermitida(perfilA)).not.toBe('/cco');
+    expect(primeiraTelaPermitida(perfilB)).toBe('/cco');
+    expect(primeiraTelaPermitida([...perfilA, ...perfilB])).toBe('/cco');
+  });
+
   it('Sem CCO abre Chamados e pula o atalho Novo chamado', () => {
     const permissoes = [CHAMADOS, 'chamados.gerenciar'];
     const visivel = getMenuItemsInDisplayOrder(permissoes);
