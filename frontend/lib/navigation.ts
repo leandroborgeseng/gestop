@@ -39,6 +39,8 @@ export type NavItem = {
   permissions?: string[];
   mobilePrimary?: boolean;
   badgeKey?: NavBadgeKey;
+  /** Formulário de criação. O menu mostra; a tela inicial pula. */
+  atalhoCriacao?: boolean;
 };
 
 export type NavGroup = {
@@ -91,6 +93,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: PlusCircle,
     permissions: ['chamados.abrir', 'chamados.gerenciar'],
     mobilePrimary: true,
+    atalhoCriacao: true,
   },
   {
     id: 'meus_chamados',
@@ -238,10 +241,27 @@ export function getMobileNav(permissions: string[], user?: NavUser) {
   return { primary, secondary, hasMore: true };
 }
 
-/** Primeira rota visível no menu; fallback `/conta` se nada for liberado. */
+/**
+ * Percorre a ordem visível e pula formulários de criação.
+ * Com a lista de Chamados no menu, Meus chamados não vira a entrada:
+ * ele fica na frente de Chamados, e o perfil Sem CCO abre `/chamados`.
+ * Sem tela restante, `/conta` — o mesmo fallback do menu vazio.
+ */
+export function hrefDaListaDoMenu(itens: readonly Pick<NavItem, 'id' | 'href' | 'atalhoCriacao'>[]): string {
+  const criacao = new Set(rotasDeCriacao());
+  const semCriacao = itens.filter((item) => !criacao.has(item.href));
+  const temListaDeChamados = semCriacao.some((item) => item.id === 'chamados');
+  const destino = semCriacao.find((item) => !(temListaDeChamados && item.id === 'meus_chamados'));
+  return destino?.href ?? '/conta';
+}
+
+/** Rotas de criação derivadas da flag nos itens do menu. Não é uma segunda ordem. */
+export function rotasDeCriacao(): string[] {
+  return NAV_ITEMS.filter((item) => item.atalhoCriacao).map((item) => item.href);
+}
+
 export function getDefaultAuthenticatedHref(permissions: string[], user?: NavUser): string {
-  const first = getMenuItemsInDisplayOrder(permissions, user)[0];
-  return first?.href ?? '/conta';
+  return hrefDaListaDoMenu(getMenuItemsInDisplayOrder(permissions, user));
 }
 
 export function hasOperationalNavAccess(permissions: string[], user?: NavUser): boolean {

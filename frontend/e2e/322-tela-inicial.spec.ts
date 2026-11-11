@@ -161,6 +161,9 @@ async function mockApi(page: Page, usuarioInicial?: Usuario) {
     if (method === 'GET' && (path.includes('/chamados/equipes') || path.includes('/chamados/usuarios'))) {
       return json([]);
     }
+    if (method === 'GET' && /\/meus-chamados$/.test(path)) {
+      return json({ items: [], total: 0, limit: 50, offset: 0, hasMore: false });
+    }
     if (method === 'GET' && /\/chamados$/.test(path)) {
       return json({ items: [], total: 0, limit: 20, offset: 0, hasMore: false, statusCounts: { TODOS: 0 } });
     }
@@ -284,14 +287,16 @@ test.describe('322 tela inicial', () => {
     await expect(page.getByText('Não há nenhuma funcionalidade liberada')).toHaveCount(0);
   });
 
-  test('usuário sem CCO cai em Novo chamado', async ({ page }, testInfo) => {
+  test('usuário sem CCO cai em Chamados', async ({ page }, testInfo) => {
     await mockApi(page);
     await page.setViewportSize({ width: 360, height: 640 });
     await entrar(page, SEM_CCO_EMAIL);
-    await expect(page).toHaveURL(/\/chamados\/novo(?:\?|$)/, { timeout: 20_000 });
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/chamados\/novo/);
+    await expect(page).not.toHaveURL(/\/meus-chamados/);
     await expect(page).not.toHaveURL(/\/cco/);
     await expect(page).not.toHaveURL(/\/mobile/);
-    await expect(page.getByRole('heading', { name: 'Novo chamado' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
     const engine = engineDe(testInfo.project.name);
     await page.screenshot({ path: path.join(OUT, `${engine}-360x640-sem-cco.png`) });
     writeFileSync(

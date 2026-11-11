@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { getMenuItemsInDisplayOrder } from './navigation';
+import { getMenuItemsInDisplayOrder, getVisibleNavItems, hrefDaListaDoMenu } from './navigation';
 import { buildMatrixKey } from './permissions-matrix';
 import {
   deveIrParaTelaPadrao,
@@ -36,34 +36,41 @@ describe('primeiraTelaPermitida', () => {
     ).toBe('/cco');
   });
 
-  it('sem CCO cai no primeiro item visível do menu, não na ordem interna do NAV_ITEMS', () => {
-    expect(primeiraTelaPermitida([CHAMADOS, 'chamados.gerenciar'])).toBe('/chamados/novo');
-    expect(getMenuItemsInDisplayOrder([CHAMADOS, 'chamados.gerenciar'])[0]?.label).toBe('Novo chamado');
+  it('a ordem visível difere da ordem interna de NAV_ITEMS', () => {
+    const perfis = [
+      { nome: 'Sem CCO', permissoes: [CHAMADOS, 'chamados.gerenciar'] },
+      { nome: 'gestor legado', permissoes: ['chamados.gerenciar'] },
+    ];
+    for (const perfil of perfis) {
+      const interna = getVisibleNavItems(perfil.permissoes).map((item) => item.id);
+      const visivel = getMenuItemsInDisplayOrder(perfil.permissoes).map((item) => item.id);
+      expect(visivel, perfil.nome).not.toEqual(interna);
+    }
+  });
+
+  it('Sem CCO abre Chamados e pula o atalho Novo chamado', () => {
+    const permissoes = [CHAMADOS, 'chamados.gerenciar'];
+    const visivel = getMenuItemsInDisplayOrder(permissoes);
+    expect(visivel.map((item) => item.label)).toEqual(['Novo chamado', 'Meus chamados', 'Chamados']);
+    expect(visivel[0]?.href).toBe('/chamados/novo');
+    expect(visivel[0]?.atalhoCriacao).toBe(true);
+    expect(getVisibleNavItems(permissoes)[0]?.href).toBe('/chamados');
+    expect(primeiraTelaPermitida(permissoes)).toBe('/chamados');
+    expect(primeiraTelaPermitida(permissoes)).not.toBe('/chamados/novo');
+  });
+
+  it('pula o atalho de criação mesmo quando ele é o primeiro do menu', () => {
+    const permissoes = ['chamados.abrir'];
+    expect(getMenuItemsInDisplayOrder(permissoes)[0]?.href).toBe('/chamados/novo');
+    expect(primeiraTelaPermitida(permissoes)).toBe('/meus-chamados');
+    expect(hrefDaListaDoMenu([{ id: 'novo_chamado', href: '/chamados/novo', atalhoCriacao: true }])).toBe('/conta');
+  });
+
+  it('sem a lista de Chamados, a ordem interna não manda na entrada', () => {
     expect(primeiraTelaPermitida(['fiscalizacoes.executar'])).toBe('/mobile');
     expect(primeiraTelaPermitida([CHAMADOS])).toBe('/chamados');
     expect(primeiraTelaPermitida([CHAMADOS])).not.toBe('/cco');
     expect(primeiraTelaPermitida([CHAMADOS])).not.toBe('/mobile');
-  });
-
-  it('a rota inicial é o primeiro item visível do menu em vários perfis', () => {
-    const perfis = [
-      { nome: 'CCO', permissoes: [CCO, VISTORIA, 'dashboard.visualizar', 'fiscalizacoes.executar'], href: '/cco', label: 'CCO' },
-      { nome: 'Sem CCO', permissoes: [CHAMADOS, 'chamados.gerenciar'], href: '/chamados/novo', label: 'Novo chamado' },
-      { nome: 'só Chamados, sem abrir', permissoes: [CHAMADOS], href: '/chamados', label: 'Chamados' },
-      { nome: 'Vistoria', permissoes: ['fiscalizacoes.executar'], href: '/mobile', label: 'Vistoria' },
-      { nome: 'Execução', permissoes: ['chamados.executar'], href: '/execucao', label: 'Execução' },
-      { nome: 'Documentos na matriz', permissoes: ['dashboard.visualizar', DOCUMENTOS], href: '/documentos', label: 'Documentos' },
-    ];
-
-    for (const perfil of perfis) {
-      const primeiro = getMenuItemsInDisplayOrder(perfil.permissoes)[0];
-      expect(primeiro?.href, perfil.nome).toBe(perfil.href);
-      expect(primeiro?.label, perfil.nome).toBe(perfil.label);
-      expect(primeiraTelaPermitida(perfil.permissoes), perfil.nome).toBe(primeiro?.href);
-    }
-
-    expect(getMenuItemsInDisplayOrder([])).toEqual([]);
-    expect(primeiraTelaPermitida([])).toBe('/conta');
   });
 
   it('sem nenhuma permissão vai para /conta', () => {
@@ -90,7 +97,7 @@ describe('entrada e login', () => {
     expect(hrefDepoisDoLogin([CCO, CHAMADOS, 'dashboard.visualizar'], undefined, '/chamados?aba=programacao&search=322')).toBe(
       '/chamados?aba=programacao&search=322',
     );
-    expect(hrefDepoisDoLogin([CHAMADOS, 'chamados.gerenciar'], undefined, '/cco')).toBe('/chamados/novo');
+    expect(hrefDepoisDoLogin([CHAMADOS, 'chamados.gerenciar'], undefined, '/cco')).toBe('/chamados');
     expect(hrefDepoisDoLogin([CCO, 'dashboard.visualizar'], undefined, '/')).toBe('/cco');
   });
 

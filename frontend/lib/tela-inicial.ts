@@ -3,6 +3,9 @@ import { getDefaultAuthenticatedHref, resolvePreferredHref, type NavUser } from 
 /**
  * 322 — primeira tela depois do login ou ao abrir `/` (start_url do PWA).
  * A ordem é a do menu visível (lateral e barra inferior), que começa pelo CCO.
+ * Formulários de criação (flag `atalhoCriacao`) ficam de fora.
+ * Se a lista de Chamados também está visível, Meus chamados não é a entrada.
+ * Sem outra tela, `/conta`.
  * A função é pura: não troca Secretaria nem perfil ativo.
  *
  * As permissões individuais (Administração > Permissões) somam às do perfil,

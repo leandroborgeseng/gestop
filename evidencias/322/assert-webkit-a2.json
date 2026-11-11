@@ -2,5 +2,5 @@
   "criterio": "322-A2",
   "engine": "webkit",
   "viewport": "360x640",
-  "url": "http://localhost:3000/chamados/novo"
+  "url": "http://localhost:3000/chamados"
 }
