@@ -283,7 +283,9 @@ test.describe('322 L1 estado na URL', () => {
     await page.goto('/cco');
     await page.goto('/chamados');
     await page.getByRole('button', { name: /^Aberto \d/ }).click();
+    await expect(page).toHaveURL(/status=aberto/);
     await page.getByRole('button', { name: 'Alta', exact: true }).click();
+    await expect(page).toHaveURL(/prioridade=alta/);
     await page.getByRole('button', { name: 'Fora do prazo', exact: true }).click();
     await expect(page).toHaveURL(/sla=fora/);
     await page.goBack();
@@ -332,10 +334,11 @@ test.describe('322 L1 estado na URL', () => {
     await page.goto('/cco');
     await page.goto('/execucao');
     await page.getByRole('button', { name: 'Tarefas', exact: true }).click();
+    await expect(page).toHaveURL(/aba=tarefas/);
     await page.getByRole('button', { name: /Filtros de tarefas/ }).click();
     await page.getByRole('button', { name: 'Atrasadas', exact: true }).click();
-    await page.getByRole('button', { name: 'Histórico', exact: true }).click();
     await expect(page).toHaveURL(/atrasadas=1/);
+    await page.getByRole('button', { name: 'Histórico', exact: true }).click();
     await expect(page).toHaveURL(/historico=1/);
     await page.goBack();
     await expect(page).toHaveURL(/\/cco(?:\/|$|\?)/);
@@ -374,9 +377,11 @@ test.describe('322 L1 estado na URL', () => {
     await page.goto('/cco');
     await page.goto('/documentos');
     await page.locator('select').first().selectOption('NOTIFICACAO');
-    await page.getByTestId('toggle-historico').check();
-    await page.getByPlaceholder(/Buscar código/).fill('ZZ');
     await expect(page).toHaveURL(/tipo=notificacao/);
+    await page.getByTestId('toggle-historico').check();
+    await expect(page).toHaveURL(/historico=1/);
+    await page.getByPlaceholder(/Buscar código/).fill('ZZ');
+    await expect(page).toHaveURL(/search=ZZ/);
     await page.goBack();
     await expect(page).toHaveURL(/\/cco(?:\/|$|\?)/);
 
@@ -456,8 +461,8 @@ test.describe('322 L1 estado na URL', () => {
     await page.goto('/cco');
     await page.goto('/vistorias');
     await page.locator('select').first().selectOption('');
-    await page.locator('select').nth(2).selectOption('ESCOLA');
     await expect(page).toHaveURL(/status=todas/);
+    await page.locator('select').nth(2).selectOption('ESCOLA');
     await expect(page).toHaveURL(/tipoUnidade=escola/);
     await page.goBack();
     await expect(page).toHaveURL(/\/cco(?:\/|$|\?)/);
