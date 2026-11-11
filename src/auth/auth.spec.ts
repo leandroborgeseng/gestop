@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { duracaoRenovacaoSegundos } from './session-duration';
 import { signJwt, verifyJwt } from './jwt';
 import { hashPassword, verifyPassword } from './password';
 import { hasAllPermissions, hasAnyPermission } from './permissions';
@@ -49,6 +50,14 @@ describe('jwt de sessao', () => {
     );
 
     expect(() => verifyJwt(token, 'outro-secret')).toThrow('Assinatura invalida');
+  });
+});
+
+describe('renovação do token', () => {
+  it('sessão de 30 dias renova por mais 30 dias; a de 8 horas permanece curta', () => {
+    expect(duracaoRenovacaoSegundos({ iat: 0, exp: 60 * 60 * 24 * 30 })).toBe(60 * 60 * 24 * 30);
+    expect(duracaoRenovacaoSegundos({ iat: 1_000, exp: 1_000 + 60 * 60 * 8 })).toBe(60 * 60 * 8);
+    expect(duracaoRenovacaoSegundos({})).toBe(60 * 60 * 8);
   });
 });
 

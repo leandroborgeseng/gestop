@@ -12,6 +12,7 @@ import { PageContainer } from '@/components/layout/page-shell';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { registerServiceWorker } from '@/lib/pwa';
 import { emitirTrocaEscopo, SESSAO_ESCOPO_EVENT, SessaoEscopoDetail } from '@/lib/session-events';
+import { revalidarSessaoNaRetomada } from '@/lib/sessao-renovacao';
 import { sanitizeReturnTo } from '@/lib/tela-inicial';
 
 export function SessionLayout({ children }: { children: React.ReactNode }) {
@@ -94,6 +95,51 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
 
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
   }, [router]);
+
+  // 322 L3: retomada (visível, foco, pageshow com ou sem bfcache) revalida ou renova o token
+  // da sessão de 30 dias. Não chama o router — a URL da tela atual permanece.
+  useEffect(() => {
+    let cancelado = false;
+
+    const aoRetomar = () => {
+      void revalidarSessaoNaRetomada().then(() => {
+        if (cancelado) return;
+        const stored = getStoredAuth();
+        if (!stored) return;
+        setAuth((atual) => {
+          if (
+            atual &&
+            atual.accessToken === stored.accessToken &&
+            atual.expiresAt === stored.expiresAt &&
+            JSON.stringify(atual.user) === JSON.stringify(stored.user)
+          ) {
+            return atual;
+          }
+          return stored;
+        });
+      });
+    };
+
+    const onVisibilidade = () => {
+      if (document.visibilityState === 'visible') aoRetomar();
+    };
+    const onFoco = () => aoRetomar();
+    const onPageShow = (event: PageTransitionEvent) => {
+      // event.persisted cobre a volta do bfcache. A rota não é reescrita.
+      void event.persisted;
+      aoRetomar();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilidade);
+    window.addEventListener('focus', onFoco);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      cancelado = true;
+      document.removeEventListener('visibilitychange', onVisibilidade);
+      window.removeEventListener('focus', onFoco);
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, []);
 
   if (checking) {
     return (

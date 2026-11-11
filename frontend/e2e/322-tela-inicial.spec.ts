@@ -8,7 +8,8 @@ import { expect, test, type Page } from '@playwright/test';
  * Usuários sintéticos só no mock de /api-gestop (nada de banco real nem de produção).
  * A senha do formulário é fixture local; o mock não a confere.
  * Tamanhos do critério (criterios.md): 1440×900, 768×1024, 360×640 e 640×360.
- * A6 no aparelho (PWA em segundo plano) fica para o Leandro; aqui só o que o navegador dispara.
+ * A6 no aparelho (PWA em segundo plano) fica para o Leandro; aqui o navegador dispara
+ * visibilitychange, focus e pageshow com persisted (bfcache), inclusive sessão de 30 dias perto de vencer.
  */
 const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../evidencias/322');
 mkdirSync(OUT, { recursive: true });
@@ -85,8 +86,9 @@ function engineDe(projectName: string) {
   return projectName.includes('webkit') ? 'webkit' : 'chromium';
 }
 
-async function mockApi(page: Page, usuarioInicial?: Usuario) {
+async function mockApi(page: Page, usuarioInicial?: Usuario, opcoes?: { refreshStatus?: number }) {
   const trocas: string[] = [];
+  const renovacoes: string[] = [];
   let sessao: Usuario | null = usuarioInicial ?? null;
 
   await page.route('**/api-gestop/**', async (route) => {
@@ -107,6 +109,18 @@ async function mockApi(page: Page, usuarioInicial?: Usuario) {
         tokenType: 'Bearer',
         expiresInSeconds: 30 * 24 * 3600,
         user,
+      });
+    }
+
+    if (url.includes('/auth/refresh') && method === 'POST') {
+      renovacoes.push(new URL(url).pathname);
+      if ((opcoes?.refreshStatus ?? 200) !== 200) return json({ message: 'refresh recusado no teste' }, opcoes?.refreshStatus ?? 401);
+      if (!sessao) return json({}, 401);
+      return json({
+        accessToken: `token-renovado-${sessao.id}`,
+        tokenType: 'Bearer',
+        expiresInSeconds: 30 * 24 * 3600,
+        user: sessao,
       });
     }
 
@@ -197,7 +211,38 @@ async function mockApi(page: Page, usuarioInicial?: Usuario) {
     return json({});
   });
 
-  return { trocas: () => [...trocas] };
+  return { trocas: () => [...trocas], renovacoes: () => [...renovacoes] };
+}
+
+async function envelhecerSessao(page: Page, margemMs = 20_000) {
+  await page.evaluate((margem) => {
+    const bruto = window.localStorage.getItem('sigma.auth');
+    if (!bruto) throw new Error('sem sessão para envelhecer');
+    const auth = JSON.parse(bruto) as { expiresAt: number };
+    auth.expiresAt = Date.now() + margem;
+    window.localStorage.setItem('sigma.auth', JSON.stringify(auth));
+    window.localStorage.setItem('gestop.auth.remember', '1');
+  }, margemMs);
+}
+
+async function dispararRetomada(page: Page) {
+  await page.evaluate(() => {
+    const emitir = (state: DocumentVisibilityState) => {
+      const definir = (alvo: object) => {
+        Object.defineProperty(alvo, 'visibilityState', { configurable: true, get: () => state });
+      };
+      try {
+        definir(document);
+      } catch {
+        definir(Document.prototype);
+      }
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    emitir('hidden');
+    emitir('visible');
+    window.dispatchEvent(new Event('focus'));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  });
 }
 
 async function preencherLogin(page: Page, email: string, remember = false) {
@@ -462,6 +507,128 @@ test.describe('322 tela inicial', () => {
         null,
         2,
       ),
+    );
+  });
+
+  test('retomada com sessão de 30 dias perto de expirar não troca a rota e / segue A1', async ({ page }, testInfo) => {
+    const api = await mockApi(page);
+    await entrar(page, CCO_EMAIL, true);
+    await expect(page).toHaveURL(/\/cco(?:\/|$|\?)/, { timeout: 20_000 });
+    await page.goto('/execucao?aba=tarefas');
+    await expect(page).toHaveURL(/\/execucao\?aba=tarefas/);
+    await expect(page.getByRole('heading', { name: 'Execução' })).toBeVisible();
+    const antes = page.url();
+    const contextoAntes = await contextoSessao(page);
+
+    await envelhecerSessao(page);
+    const pedido = page.waitForRequest((req) => req.method() === 'POST' && req.url().includes('/auth/refresh'));
+    await dispararRetomada(page);
+    await pedido;
+    await expect
+      .poll(async () =>
+        page.evaluate(() => (JSON.parse(window.localStorage.getItem('sigma.auth') || '{}') as { accessToken?: string }).accessToken ?? ''),
+      )
+      .toContain('token-renovado-');
+
+    expect(page.url()).toBe(antes);
+    await expect(page.getByRole('heading', { name: 'Execução' })).toBeVisible();
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page).not.toHaveURL(/\/mobile/);
+    expect(api.trocas()).toEqual([]);
+    expect(api.renovacoes().length).toBeGreaterThan(0);
+    expect(await contextoSessao(page)).toEqual(contextoAntes);
+
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/cco(?:\/|$|\?)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page.getByRole('heading', { name: 'Visão operacional dos próprios públicos' })).toBeVisible();
+    expect(await contextoSessao(page)).toEqual(contextoAntes);
+    expect(api.trocas()).toEqual([]);
+
+    const engine = engineDe(testInfo.project.name);
+    await page.screenshot({ path: path.join(OUT, `${engine}-l3-retomada-cco.png`) });
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-l3.json`),
+      JSON.stringify(
+        {
+          criterio: '322-L3',
+          engine,
+          retomada: 'visibilitychange, focus, pageshow persisted',
+          urlDuranteRetomada: antes,
+          urlDepoisDeAbrirRaiz: page.url(),
+          refreshDisparado: true,
+          redirecionouNaRetomada: false,
+          perfilId: contextoAntes?.perfilId,
+          secretariaId: contextoAntes?.secretariaId,
+          naoAbriuVistoria: !page.url().includes('/mobile'),
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+  test('retomada sem CCO permanece na tela e uma nova ida a / cai em Chamados', async ({ page }, testInfo) => {
+    const api = await mockApi(page);
+    await entrar(page, SEM_CCO_EMAIL, true);
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    const antes = page.url();
+    const contextoAntes = await contextoSessao(page);
+    await envelhecerSessao(page);
+    const pedido = page.waitForRequest((req) => req.method() === 'POST' && req.url().includes('/auth/refresh'));
+    await dispararRetomada(page);
+    await pedido;
+    expect(page.url()).toBe(antes);
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
+    expect(api.trocas()).toEqual([]);
+
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page).not.toHaveURL(/\/cco/);
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
+    expect(await contextoSessao(page)).toEqual(contextoAntes);
+
+    const engine = engineDe(testInfo.project.name);
+    await page.screenshot({ path: path.join(OUT, `${engine}-l3-retomada-sem-cco.png`) });
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-l3-a2.json`),
+      JSON.stringify({ criterio: '322-L3', engine, url: page.url(), primeiraTela: '/chamados' }, null, 2),
+    );
+  });
+
+  test('falha no refresh da sessão de 30 dias não redireciona', async ({ page }, testInfo) => {
+    await mockApi(page, undefined, { refreshStatus: 401 });
+    await entrar(page, CCO_EMAIL, true);
+    await expect(page).not.toHaveURL(/\/login/, { timeout: 20_000 });
+    await page.goto('/documentos?search=ZZ322');
+    await expect(page).toHaveURL(/\/documentos\?/);
+    await expect(page.getByRole('heading', { name: 'Documentos' })).toBeVisible();
+    const antes = page.url();
+    const tokenAntes = await page.evaluate(
+      () => (JSON.parse(window.localStorage.getItem('sigma.auth') || '{}') as { accessToken?: string }).accessToken,
+    );
+
+    await envelhecerSessao(page);
+    const pedido = page.waitForRequest((req) => req.method() === 'POST' && req.url().includes('/auth/refresh'));
+    await dispararRetomada(page);
+    await pedido;
+    await page.waitForTimeout(400);
+
+    expect(page.url()).toBe(antes);
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page).not.toHaveURL(/\/cco/);
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page.getByRole('heading', { name: 'Documentos' })).toBeVisible();
+    const tokenDepois = await page.evaluate(
+      () => (JSON.parse(window.localStorage.getItem('sigma.auth') || '{}') as { accessToken?: string }).accessToken,
+    );
+    expect(tokenDepois).toBe(tokenAntes);
+
+    const engine = engineDe(testInfo.project.name);
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-l3-refresh-falhou.json`),
+      JSON.stringify({ criterio: '322-L3', engine, url: page.url(), refreshFalhou: true, redirecionou: false }, null, 2),
     );
   });
 

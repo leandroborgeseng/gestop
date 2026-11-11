@@ -91,6 +91,12 @@ export class AuthController {
   }
 
   @UseGuards(AuthGuard)
+  @Post('refresh')
+  refresh(@CurrentUser() user: JwtPayload) {
+    return this.authService.refreshSession(user);
+  }
+
+  @UseGuards(AuthGuard)
   @Post('perfil-ativo')
   switchPerfil(@CurrentUser() user: JwtPayload, @Body() body: SwitchPerfilDto) {
     return this.authService.switchPerfilAtivo(user.sub, body.perfilId);

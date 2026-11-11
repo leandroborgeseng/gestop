@@ -65,7 +65,7 @@ export type MotivoEntrada = 'raiz' | 'login' | 'rota' | 'foco' | 'visibilidade' 
 
 /**
  * A tela padrão só entra na raiz `/` (start_url do PWA) ou no login sem returnTo.
- * F5, rota específica, foco, visibilitychange e renovação de token não redirecionam.
+ * F5, rota específica, foco, visibilitychange, pageshow (inclusive bfcache) e renovação de token não redirecionam.
  */
 export function deveIrParaTelaPadrao(motivo: MotivoEntrada, pathname: string): boolean {
   if (motivo === 'foco' || motivo === 'visibilidade' || motivo === 'refresh-token' || motivo === 'rota') {

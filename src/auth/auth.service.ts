@@ -9,6 +9,7 @@ import { hashPassword, verifyPassword } from './password';
 import { PASSWORD_MAX_LENGTH, validatePasswordPolicy } from './password-policy';
 import { JwtPayload, signJwt } from './jwt';
 import { AuditService } from '../audit/audit.service';
+import { duracaoRenovacaoSegundos, SESSAO_CURTA_SEGUNDOS, SESSAO_LONGA_SEGUNDOS } from './session-duration';
 
 const SECRETARIA_SELECT = {
   id: true,
@@ -59,7 +60,7 @@ export class AuthService {
     }
 
     const session = this.buildSessionPayload(usuario);
-    const expiresInSeconds = remember ? 60 * 60 * 24 * 30 : 60 * 60 * 8;
+    const expiresInSeconds = remember ? SESSAO_LONGA_SEGUNDOS : SESSAO_CURTA_SEGUNDOS;
 
     const accessToken = signJwt(
       {
@@ -107,6 +108,47 @@ export class AuthService {
     return {
       accessToken,
       tokenType: 'Bearer',
+      expiresInSeconds,
+      user: session.user,
+    };
+  }
+
+  /**
+   * Reemite o access token com o perfil ativo e a secretaria já gravados.
+   * Não troca perfil, secretaria nem rota — quem chama é a retomada da aba.
+   */
+  async refreshSession(atual: JwtPayload) {
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: atual.sub },
+      select: this.userSessionSelect(),
+    });
+
+    if (!usuario?.ativo) {
+      throw new UnauthorizedException('Sessao invalida ou expirada');
+    }
+
+    const session = this.buildSessionPayload(usuario);
+    const expiresInSeconds = duracaoRenovacaoSegundos(atual);
+    const accessToken = signJwt(
+      {
+        sub: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        perfis: session.perfis,
+        permissoes: session.permissoes,
+        secretariaId: session.secretariaId,
+        perfilAtivoId: session.perfilAtivo?.id ?? null,
+        perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
+        acessoTodasSecretarias: session.acessoTodasSecretarias,
+        secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
+      },
+      this.getJwtSecret(),
+      expiresInSeconds,
+    );
+
+    return {
+      accessToken,
+      tokenType: 'Bearer' as const,
       expiresInSeconds,
       user: session.user,
     };

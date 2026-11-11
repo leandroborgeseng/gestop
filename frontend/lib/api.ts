@@ -74,6 +74,8 @@ import { extractApiErrorMessage, readForbiddenMessage } from './api-errors';
 export const API_PROXY_PREFIX = '/api-gestop';
 const API_BASE_URL = API_PROXY_PREFIX;
 const AUTH_STORAGE_KEY = 'sigma.auth';
+/** 1 quando o login marcou "manter conectado" (sessão de 30 dias). */
+export const AUTH_REMEMBER_STORAGE_KEY = 'gestop.auth.remember';
 /** Chave do localStorage da sessão (para o evento `storage` entre abas). */
 export const AUTH_STORAGE_KEY_PUBLICA = AUTH_STORAGE_KEY;
 const LEGACY_AUTH_STORAGE_KEY = 'gestop.auth';
@@ -216,7 +218,7 @@ export async function login(email: string, password: string, remember = false) {
     expiresAt: Date.now() + data.expiresInSeconds * 1000,
   });
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem('gestop.auth.remember', remember ? '1' : '0');
+    window.localStorage.setItem(AUTH_REMEMBER_STORAGE_KEY, remember ? '1' : '0');
   }
 
   return data;
