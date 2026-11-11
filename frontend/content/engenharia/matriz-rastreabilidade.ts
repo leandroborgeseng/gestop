@@ -323,9 +323,9 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Configurar e-mail transacional',
     ator: 'Administrador do Sistema',
     tela: '/admin (E-mail)',
-    api: 'EmailConfigController: GET|PUT /admin/email, POST /admin/email/teste',
+    api: 'EmailConfigController: GET|PUT /admin/email, POST /admin/email/teste, POST /admin/email/diagnostico. O diagnóstico só obtém token no Entra ID e informa a presença das variáveis.',
     tabelas: 'ConfiguracaoEmail',
-    permissao: 'Aba email, em geral usuarios.gerenciar ou matriz.admin.email. A senha SMTP não sai na API.',
+    permissao: 'Aba email, em geral usuarios.gerenciar ou matriz.admin.email. Senha SMTP, segredo do aplicativo e token não saem na API. O diagnóstico exige a mesma ação executar do teste.',
   },
   {
     id: 'integracoes',

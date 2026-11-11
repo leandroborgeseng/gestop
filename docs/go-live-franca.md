@@ -42,14 +42,21 @@ Guia operacional para colocar o SIGMA em produção na Prefeitura de Franca/SP e
 
 | Variável | Recomendada | Descrição |
 |----------|-------------|-----------|
-| `EMAIL_DRIVER` | Sim | `smtp` em produção |
+| `EMAIL_DRIVER` | Se SMTP/webhook | `smtp` quando o provedor não for Microsoft 365 |
+| `EMAIL_PROVIDER` | Não | `smtp` (padrão, fluxo atual) ou `m365` |
+| `M365_TENANT_ID` | Se m365 | GUID do locatário no Entra ID |
+| `M365_CLIENT_ID` | Se m365 | GUID do registro de aplicativo |
+| `M365_CLIENT_SECRET` | Se m365 | Valor do segredo do aplicativo, só no cofre |
+| `M365_SENDER` | Se m365 | UPN ou endereço da caixa remetente |
 | `SMTP_HOST` | Se SMTP | Ex.: `smtp.office365.com` |
 | `SMTP_PORT` | Se SMTP | `587` |
 | `SMTP_SECURE` | Se SMTP | `false` para STARTTLS |
 | `SMTP_USER` | Se SMTP | Conta de envio |
 | `SMTP_PASSWORD` | Se SMTP | Senha ou app password |
-| `EMAIL_FROM` | Sim | `SIGMA <gestop@franca.sp.gov.br>` |
+| `EMAIL_FROM` | Se SMTP | Remetente do fluxo SMTP |
 | `EMAIL_ALERTS_ENABLED` | Não | `true` — alertas operacionais por e-mail |
+
+Formato e diagnóstico do Microsoft 365: [`docs/email-m365.md`](./email-m365.md). Sem as quatro variáveis `M365_*`, `EMAIL_PROVIDER=m365` não é usado e o SMTP atual continua.
 
 **Webmap QGIS:**
 

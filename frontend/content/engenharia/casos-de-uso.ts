@@ -339,8 +339,9 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'backup-email',
         nome: 'Configurar backup e e-mail',
         atores: ['administrador'],
-        descricao: 'Backup compatível com S3 e SMTP. Segredos não retornam nas respostas.',
-        rotas: ['/admin', 'GET /admin/backup', 'POST /admin/backup/run', 'PUT /admin/email', 'POST /admin/email/teste'],
+        descricao:
+          'Backup compatível com S3. A tela grava SMTP. O envio usa Microsoft Graph quando EMAIL_PROVIDER=m365 está completo no ambiente; se o provedor não for m365 ou faltar variável, permanece o fluxo SMTP, webhook ou log. Segredos e o token não retornam nas respostas. O diagnóstico só obtém o token.',
+        rotas: ['/admin', 'GET /admin/backup', 'POST /admin/backup/run', 'PUT /admin/email', 'POST /admin/email/teste', 'POST /admin/email/diagnostico'],
       },
       {
         id: 'lgpd',
