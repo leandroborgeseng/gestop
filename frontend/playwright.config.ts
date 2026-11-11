@@ -8,7 +8,20 @@ export default defineConfig({
     baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000',
     trace: 'on-first-retry',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      // 321: WebKit com UA de iPhone. O Safari do iPhone não põe div em fullscreen;
+      // o teste recusa requestFullscreen para exercer o fallback CSS.
+      name: 'webkit',
+      testMatch: /321-cco-barra-lateral/,
+      use: {
+        ...devices['Desktop Safari'],
+        userAgent:
+          'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+      },
+    },
+  ],
   webServer: process.env.CI
     ? {
         command: 'node ./scripts/e2e-webserver.mjs',

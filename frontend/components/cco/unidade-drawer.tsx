@@ -3,7 +3,6 @@
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -14,7 +13,6 @@ import {
   LocateFixed,
   UserRound,
   Megaphone,
-  X,
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
 import { chamadoTitulo } from '@/lib/chamado-geo';
@@ -26,13 +24,12 @@ import { cn } from '@/lib/cn';
 import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { IconButton } from '@/components/ui/icon-button';
 import { Tabs } from '@/components/ui/tabs';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 import { VistoriaConsultaModal } from '@/components/cco/vistoria-consulta-modal';
 import { ordenarVistoriasRecentes, rotuloCardVistoria } from '@/lib/cco-vistorias';
-import { useOverlayPortalHost } from '@/lib/overlay-portal-host';
+import { CcoDetalheBarra } from '@/components/cco/cco-detalhe-barra';
 
 type DrawerTab = 'geral' | 'fisc' | 'nc' | 'chamados';
 
@@ -49,7 +46,6 @@ export function UnidadeDrawer({
   const [detalhe, setDetalhe] = useState<UnidadeDetalhe | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const host = useOverlayPortalHost();
 
   useEffect(() => {
     if (!open || !unidade) {
@@ -79,26 +75,7 @@ export function UnidadeDrawer({
     };
   }, [open, unidade?.id]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      // #311: com o modal de consulta (ou lightbox) aberto, Esc é dele — o drawer fica.
-      if (event.key !== 'Escape') return;
-      if (document.querySelector('[data-cco-vistoria-modal], [data-zoom-lightbox]')) return;
-      onClose();
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open, onClose]);
-
-  if (!open || !unidade || !host) return null;
+  if (!open || !unidade) return null;
 
   const ncCount =
     detalhe?.pendenciasDetalhadas.naoConformidades.filter((nc) => nc.pendenteAtiva).length ??
@@ -106,50 +83,34 @@ export function UnidadeDrawer({
   const chamadosCount = detalhe?.pendenciasDetalhadas.chamados.length ?? unidade.pendencias.chamadosAbertos;
   const fiscCount = detalhe?.ultimasFiscalizacoes.length ?? unidade.totais.fiscalizacoes;
 
-  return createPortal(
-    <>
-      <button
-        type="button"
-        aria-label="Fechar detalhe"
-        className="fixed inset-0 z-[100] bg-[rgba(15,23,42,0.35)] backdrop-blur-[1px]"
-        onClick={onClose}
-      />
-
-      <aside
-        role="dialog"
-        aria-label={`Detalhe ${unidade.nome}`}
-        className="fixed top-0 right-0 z-[110] flex h-dvh max-h-dvh w-full max-w-[min(440px,calc(100%-2.5rem))] flex-col border-l border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-lg)] lg:max-w-[440px]"
-      >
-        <header className="shrink-0 border-b border-[var(--line-2)] p-4">
-          <div className="flex items-start justify-between gap-3">
-            <span className="mono text-[12px] font-semibold text-[var(--brand-hover)]">{unidade.codigoPatrimonial}</span>
-            <IconButton variant="ghost" size="sm" aria-label="Fechar" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </IconButton>
-          </div>
-          <h2 className="mt-2 text-[17px] font-bold leading-snug text-[var(--ink)]">{unidade.nome}</h2>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <StatusBadge situacao={unidade.situacao} size="sm" />
-            <span className="text-[12px] text-[var(--ink-3)]">
-              {formatUnidadeTipo(unidade.tipo)} · {unidade.bairro ?? 'Sem bairro'}
-            </span>
-          </div>
-        </header>
-
-        <div className="shrink-0 border-b border-[var(--line-2)] px-4">
-          <Tabs
-            value={tab}
-            onChange={(value) => setTab(value as DrawerTab)}
-            items={[
-              { id: 'geral', label: 'Visão geral' },
-              { id: 'fisc', label: 'Vistorias', count: fiscCount },
-              { id: 'nc', label: 'Não conf.', count: ncCount },
-              { id: 'chamados', label: 'Chamados', count: chamadosCount },
-            ]}
-          />
+  return (
+    <CcoDetalheBarra
+      titulo={unidade.nome}
+      rotuloFechar={`Fechar detalhes de ${unidade.nome}`}
+      onClose={onClose}
+      abaKey={tab}
+      kicker={<span className="mono text-[12px] font-semibold text-[var(--brand-hover)]">{unidade.codigoPatrimonial}</span>}
+      meta={
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <StatusBadge situacao={unidade.situacao} size="sm" />
+          <span className="text-[12px] text-[var(--ink-3)]">
+            {formatUnidadeTipo(unidade.tipo)} · {unidade.bairro ?? 'Sem bairro'}
+          </span>
         </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      }
+      abas={
+        <Tabs
+          value={tab}
+          onChange={(value) => setTab(value as DrawerTab)}
+          items={[
+            { id: 'geral', label: 'Visão geral' },
+            { id: 'fisc', label: 'Vistorias', count: fiscCount },
+            { id: 'nc', label: 'Não conf.', count: ncCount },
+            { id: 'chamados', label: 'Chamados', count: chamadosCount },
+          ]}
+        />
+      }
+    >
           {loading ? <LoadingState label={tab === 'fisc' ? 'Carregando vistorias…' : 'Carregando detalhe...'} /> : null}
           {error ? <ErrorState message={tab === 'fisc' ? 'Não foi possível carregar as vistorias. Tentar de novo' : error} onRetry={() => void getUnidadeDetalhe(unidade.id).then(setDetalhe)} /> : null}
 
@@ -167,10 +128,7 @@ export function UnidadeDrawer({
               {tab === 'chamados' ? <ChamadosTab unidade={detalhe} onClose={onClose} /> : null}
             </>
           ) : null}
-        </div>
-      </aside>
-    </>,
-    host,
+    </CcoDetalheBarra>
   );
 }
 

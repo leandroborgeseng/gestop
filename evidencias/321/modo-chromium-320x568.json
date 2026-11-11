@@ -1,0 +1,6 @@
+{
+  "engine": "chromium",
+  "viewport": "320x568",
+  "fullscreen": "native",
+  "nota": "Fullscreen API aceita neste navegador."
+}

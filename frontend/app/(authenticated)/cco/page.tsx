@@ -33,6 +33,7 @@ import { MetricSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { CcoMapControles, CcoPainelAba } from '@/components/cco/cco-map-controles';
 import { CcoMapPainel } from '@/components/cco/cco-map-painel';
+import { fecharDetalheAoAbrirPainel, fecharPainelAoAbrirDetalhe } from '@/lib/cco-detalhe-barra';
 import {
   CcoFiltrosSnapshot,
   DEFAULT_TIPOS_PENDENCIA,
@@ -151,6 +152,13 @@ function CcoPageContent() {
   const selectItem = useCallback((id: string) => {
     setSelectedId(id);
     setDrawerOpen(true);
+    // 321: a barra fica no mesmo lado do painel. Fecha Filtros/Camadas sem mexer nos filtros aplicados nem no mapa.
+    if (fecharPainelAoAbrirDetalhe()) {
+      setPainelAba(null);
+      setRascunho(null);
+      rascunhoBaseRef.current = null;
+      setAvisoExterno(false);
+    }
   }, []);
 
   const handleMapHover = useCallback((id: string | null) => {
@@ -432,6 +440,8 @@ function CcoPageContent() {
       fecharPainel();
       return;
     }
+    // 321: abaixo de 1024 px só um painel. A seleção e os filtros aplicados permanecem.
+    if (fecharDetalheAoAbrirPainel(window.innerWidth)) setDrawerOpen(false);
     if (!painelAba) origemPainelRef.current = aba;
     if (!rascunho) {
       rascunhoBaseRef.current = aplicado;
@@ -786,15 +796,16 @@ function CcoPageContent() {
                   />
                 ) : null
               }
+              detalhe={
+                  tab === 'proprios' ? (
+                    <UnidadeDrawer open={drawerOpen} unidade={selectedUnidade} onClose={() => setDrawerOpen(false)} />
+                  ) : (
+                    <ChamadoMapaDrawer open={drawerOpen} chamado={selectedChamado} onClose={() => setDrawerOpen(false)} />
+                  )
+              }
             />
           </div>
         </div>
-
-        {tab === 'proprios' ? (
-          <UnidadeDrawer open={drawerOpen} unidade={selectedUnidade} onClose={() => setDrawerOpen(false)} />
-        ) : (
-          <ChamadoMapaDrawer open={drawerOpen} chamado={selectedChamado} onClose={() => setDrawerOpen(false)} />
-        )}
       </PageShell>
     </RequirePermissions>
   );
