@@ -1,0 +1,1848 @@
+{
+  "origem": "main 6f7c642",
+  "colunasMatriz": [
+    "Visualizar",
+    "Inserir",
+    "Alterar",
+    "Excluir",
+    "Executar"
+  ],
+  "perfis": {
+    "cco-322": {
+      "lateral": [
+        {
+          "titulo": "Operação",
+          "itens": [
+            {
+              "id": "cco",
+              "label": "CCO",
+              "href": "/cco"
+            },
+            {
+              "id": "mobile",
+              "label": "Vistoria",
+              "href": "/mobile"
+            },
+            {
+              "id": "novo_chamado",
+              "label": "Novo chamado",
+              "href": "/chamados/novo"
+            },
+            {
+              "id": "meus_chamados",
+              "label": "Meus chamados",
+              "href": "/meus-chamados"
+            },
+            {
+              "id": "chamados",
+              "label": "Chamados",
+              "href": "/chamados"
+            },
+            {
+              "id": "execucao",
+              "label": "Execução",
+              "href": "/execucao"
+            }
+          ]
+        },
+        {
+          "titulo": "Gestão",
+          "itens": [
+            {
+              "id": "documentos",
+              "label": "Documentos",
+              "href": "/documentos"
+            }
+          ]
+        }
+      ],
+      "inferior": {
+        "primaria": [
+          {
+            "id": "cco",
+            "label": "CCO",
+            "href": "/cco"
+          },
+          {
+            "id": "mobile",
+            "label": "Vistoria",
+            "href": "/mobile"
+          },
+          {
+            "id": "novo_chamado",
+            "label": "Novo",
+            "href": "/chamados/novo"
+          },
+          {
+            "id": "meus_chamados",
+            "label": "Meus",
+            "href": "/meus-chamados"
+          },
+          {
+            "id": "chamados",
+            "label": "Chamados",
+            "href": "/chamados"
+          },
+          {
+            "id": "execucao",
+            "label": "Execução",
+            "href": "/execucao"
+          }
+        ],
+        "secundaria": [
+          {
+            "id": "documentos",
+            "label": "Documentos",
+            "href": "/documentos"
+          }
+        ],
+        "mais": true
+      }
+    },
+    "sem-cco-322": {
+      "lateral": [
+        {
+          "titulo": "Operação",
+          "itens": [
+            {
+              "id": "novo_chamado",
+              "label": "Novo chamado",
+              "href": "/chamados/novo"
+            },
+            {
+              "id": "meus_chamados",
+              "label": "Meus chamados",
+              "href": "/meus-chamados"
+            },
+            {
+              "id": "chamados",
+              "label": "Chamados",
+              "href": "/chamados"
+            }
+          ]
+        }
+      ],
+      "inferior": {
+        "primaria": [
+          {
+            "id": "novo_chamado",
+            "label": "Novo",
+            "href": "/chamados/novo"
+          },
+          {
+            "id": "meus_chamados",
+            "label": "Meus",
+            "href": "/meus-chamados"
+          },
+          {
+            "id": "chamados",
+            "label": "Chamados",
+            "href": "/chamados"
+          }
+        ],
+        "secundaria": [],
+        "mais": true
+      }
+    },
+    "matriz-cco": {
+      "lateral": [
+        {
+          "titulo": "Operação",
+          "itens": [
+            {
+              "id": "cco",
+              "label": "CCO",
+              "href": "/cco"
+            }
+          ]
+        }
+      ],
+      "inferior": {
+        "primaria": [
+          {
+            "id": "cco",
+            "label": "CCO",
+            "href": "/cco"
+          }
+        ],
+        "secundaria": [],
+        "mais": true
+      }
+    },
+    "legado-chamados": {
+      "lateral": [
+        {
+          "titulo": "Operação",
+          "itens": [
+            {
+              "id": "vistorias",
+              "label": "Vistorias realizadas",
+              "href": "/vistorias"
+            },
+            {
+              "id": "novo_chamado",
+              "label": "Novo chamado",
+              "href": "/chamados/novo"
+            },
+            {
+              "id": "meus_chamados",
+              "label": "Meus chamados",
+              "href": "/meus-chamados"
+            },
+            {
+              "id": "chamados",
+              "label": "Chamados",
+              "href": "/chamados"
+            },
+            {
+              "id": "execucao",
+              "label": "Execução",
+              "href": "/execucao"
+            }
+          ]
+        },
+        {
+          "titulo": "Gestão",
+          "itens": [
+            {
+              "id": "documentos",
+              "label": "Documentos",
+              "href": "/documentos"
+            }
+          ]
+        }
+      ],
+      "inferior": {
+        "primaria": [
+          {
+            "id": "novo_chamado",
+            "label": "Novo",
+            "href": "/chamados/novo"
+          },
+          {
+            "id": "meus_chamados",
+            "label": "Meus",
+            "href": "/meus-chamados"
+          },
+          {
+            "id": "chamados",
+            "label": "Chamados",
+            "href": "/chamados"
+          },
+          {
+            "id": "execucao",
+            "label": "Execução",
+            "href": "/execucao"
+          }
+        ],
+        "secundaria": [
+          {
+            "id": "vistorias",
+            "label": "Vistorias realizadas",
+            "href": "/vistorias"
+          },
+          {
+            "id": "documentos",
+            "label": "Documentos",
+            "href": "/documentos"
+          }
+        ],
+        "mais": true
+      }
+    },
+    "so-vistoria": {
+      "lateral": [
+        {
+          "titulo": "Operação",
+          "itens": [
+            {
+              "id": "mobile",
+              "label": "Vistoria",
+              "href": "/mobile"
+            },
+            {
+              "id": "vistorias",
+              "label": "Vistorias realizadas",
+              "href": "/vistorias"
+            }
+          ]
+        },
+        {
+          "titulo": "Gestão",
+          "itens": [
+            {
+              "id": "documentos",
+              "label": "Documentos",
+              "href": "/documentos"
+            }
+          ]
+        }
+      ],
+      "inferior": {
+        "primaria": [
+          {
+            "id": "mobile",
+            "label": "Vistoria",
+            "href": "/mobile"
+          }
+        ],
+        "secundaria": [
+          {
+            "id": "vistorias",
+            "label": "Vistorias realizadas",
+            "href": "/vistorias"
+          },
+          {
+            "id": "documentos",
+            "label": "Documentos",
+            "href": "/documentos"
+          }
+        ],
+        "mais": true
+      }
+    },
+    "so-abrir-chamado": {
+      "lateral": [
+        {
+          "titulo": "Operação",
+          "itens": [
+            {
+              "id": "novo_chamado",
+              "label": "Novo chamado",
+              "href": "/chamados/novo"
+            },
+            {
+              "id": "meus_chamados",
+              "label": "Meus chamados",
+              "href": "/meus-chamados"
+            }
+          ]
+        }
+      ],
+      "inferior": {
+        "primaria": [
+          {
+            "id": "novo_chamado",
+            "label": "Novo",
+            "href": "/chamados/novo"
+          },
+          {
+            "id": "meus_chamados",
+            "label": "Meus",
+            "href": "/meus-chamados"
+          }
+        ],
+        "secundaria": [],
+        "mais": true
+      }
+    },
+    "admin-permissoes": {
+      "lateral": [
+        {
+          "titulo": "Configuração",
+          "itens": [
+            {
+              "id": "admin",
+              "label": "Administração",
+              "href": "/admin"
+            }
+          ]
+        }
+      ],
+      "inferior": {
+        "primaria": [],
+        "secundaria": [
+          {
+            "id": "admin",
+            "label": "Administração",
+            "href": "/admin"
+          }
+        ],
+        "mais": true
+      }
+    },
+    "administrador-sistema": {
+      "lateral": [
+        {
+          "titulo": "Operação",
+          "itens": [
+            {
+              "id": "cco",
+              "label": "CCO",
+              "href": "/cco"
+            },
+            {
+              "id": "mobile",
+              "label": "Vistoria",
+              "href": "/mobile"
+            },
+            {
+              "id": "vistorias",
+              "label": "Vistorias realizadas",
+              "href": "/vistorias"
+            },
+            {
+              "id": "novo_chamado",
+              "label": "Novo chamado",
+              "href": "/chamados/novo"
+            },
+            {
+              "id": "meus_chamados",
+              "label": "Meus chamados",
+              "href": "/meus-chamados"
+            },
+            {
+              "id": "chamados",
+              "label": "Chamados",
+              "href": "/chamados"
+            },
+            {
+              "id": "execucao",
+              "label": "Execução",
+              "href": "/execucao"
+            }
+          ]
+        },
+        {
+          "titulo": "Gestão",
+          "itens": [
+            {
+              "id": "dashboard",
+              "label": "Dashboard",
+              "href": "/dashboard"
+            },
+            {
+              "id": "cronograma",
+              "label": "Cronograma",
+              "href": "/cronograma"
+            },
+            {
+              "id": "relatorios",
+              "label": "Relatórios",
+              "href": "/relatorios"
+            },
+            {
+              "id": "documentos",
+              "label": "Documentos",
+              "href": "/documentos"
+            }
+          ]
+        },
+        {
+          "titulo": "Configuração",
+          "itens": [
+            {
+              "id": "admin",
+              "label": "Administração",
+              "href": "/admin"
+            },
+            {
+              "id": "checklists",
+              "label": "Checklists",
+              "href": "/checklists"
+            },
+            {
+              "id": "integracoes",
+              "label": "Integrações",
+              "href": "/integracoes"
+            }
+          ]
+        }
+      ],
+      "inferior": {
+        "primaria": [
+          {
+            "id": "cco",
+            "label": "CCO",
+            "href": "/cco"
+          },
+          {
+            "id": "mobile",
+            "label": "Vistoria",
+            "href": "/mobile"
+          },
+          {
+            "id": "novo_chamado",
+            "label": "Novo",
+            "href": "/chamados/novo"
+          },
+          {
+            "id": "meus_chamados",
+            "label": "Meus",
+            "href": "/meus-chamados"
+          },
+          {
+            "id": "chamados",
+            "label": "Chamados",
+            "href": "/chamados"
+          },
+          {
+            "id": "execucao",
+            "label": "Execução",
+            "href": "/execucao"
+          }
+        ],
+        "secundaria": [
+          {
+            "id": "vistorias",
+            "label": "Vistorias realizadas",
+            "href": "/vistorias"
+          },
+          {
+            "id": "dashboard",
+            "label": "Dashboard",
+            "href": "/dashboard"
+          },
+          {
+            "id": "cronograma",
+            "label": "Cronograma",
+            "href": "/cronograma"
+          },
+          {
+            "id": "relatorios",
+            "label": "Relatórios",
+            "href": "/relatorios"
+          },
+          {
+            "id": "documentos",
+            "label": "Documentos",
+            "href": "/documentos"
+          },
+          {
+            "id": "admin",
+            "label": "Administração",
+            "href": "/admin"
+          },
+          {
+            "id": "checklists",
+            "label": "Checklists",
+            "href": "/checklists"
+          },
+          {
+            "id": "integracoes",
+            "label": "Integrações",
+            "href": "/integracoes"
+          }
+        ],
+        "mais": true
+      }
+    },
+    "vazio": {
+      "lateral": [],
+      "inferior": {
+        "primaria": [],
+        "secundaria": [],
+        "mais": true
+      }
+    },
+    "dois-perfis-ativo-sem-cco": {
+      "lateral": [
+        {
+          "titulo": "Operação",
+          "itens": [
+            {
+              "id": "novo_chamado",
+              "label": "Novo chamado",
+              "href": "/chamados/novo"
+            },
+            {
+              "id": "meus_chamados",
+              "label": "Meus chamados",
+              "href": "/meus-chamados"
+            },
+            {
+              "id": "chamados",
+              "label": "Chamados",
+              "href": "/chamados"
+            }
+          ]
+        }
+      ],
+      "inferior": {
+        "primaria": [
+          {
+            "id": "novo_chamado",
+            "label": "Novo",
+            "href": "/chamados/novo"
+          },
+          {
+            "id": "meus_chamados",
+            "label": "Meus",
+            "href": "/meus-chamados"
+          },
+          {
+            "id": "chamados",
+            "label": "Chamados",
+            "href": "/chamados"
+          }
+        ],
+        "secundaria": [],
+        "mais": true
+      }
+    }
+  },
+  "matriz": [
+    {
+      "id": "cco",
+      "label": "CCO",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "CCO",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "CCO · Visualizar",
+            "CCO · Inserir",
+            "CCO · Alterar",
+            "CCO · Excluir",
+            "CCO · Executar"
+          ]
+        },
+        {
+          "id": "mapa",
+          "label": "Mapa operacional",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Mapa operacional · Visualizar"
+          ]
+        },
+        {
+          "id": "consultar_proprios",
+          "label": "Consultar próprios",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Consultar próprios · Visualizar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vistoria_campo",
+      "label": "Vistoria (campo)",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Vistoria (campo)",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Vistoria (campo) · Visualizar",
+            "Vistoria (campo) · Inserir",
+            "Vistoria (campo) · Alterar",
+            "Vistoria (campo) · Excluir",
+            "Vistoria (campo) · Executar"
+          ]
+        },
+        {
+          "id": "iniciar_vistoria",
+          "label": "Iniciar vistoria",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Iniciar vistoria · Executar"
+          ]
+        },
+        {
+          "id": "gravar_enviar",
+          "label": "Gravar e enviar vistoria",
+          "acoes": [
+            "inserir",
+            "executar"
+          ],
+          "celulas": [
+            "Gravar e enviar vistoria · Inserir",
+            "Gravar e enviar vistoria · Executar"
+          ]
+        },
+        {
+          "id": "concluir_vistoria",
+          "label": "Concluir vistoria",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Concluir vistoria · Executar"
+          ]
+        },
+        {
+          "id": "sincronizar",
+          "label": "Sincronizar",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Sincronizar · Executar"
+          ]
+        },
+        {
+          "id": "excluir_foto",
+          "label": "Excluir foto",
+          "acoes": [
+            "excluir"
+          ],
+          "celulas": [
+            "Excluir foto · Excluir"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vistorias",
+      "label": "Vistorias realizadas",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Vistorias realizadas",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Vistorias realizadas · Visualizar",
+            "Vistorias realizadas · Inserir",
+            "Vistorias realizadas · Alterar",
+            "Vistorias realizadas · Excluir",
+            "Vistorias realizadas · Executar"
+          ]
+        },
+        {
+          "id": "consultar",
+          "label": "Consultar vistorias",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Consultar vistorias · Visualizar"
+          ]
+        },
+        {
+          "id": "exibir_questionario",
+          "label": "Exibir questionário",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Exibir questionário · Visualizar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chamados",
+      "label": "Chamados",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Chamados",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Chamados · Visualizar",
+            "Chamados · Inserir",
+            "Chamados · Alterar",
+            "Chamados · Excluir",
+            "Chamados · Executar"
+          ]
+        },
+        {
+          "id": "abrir_chamado",
+          "label": "Novo chamado",
+          "acoes": [
+            "visualizar",
+            "inserir"
+          ],
+          "celulas": [
+            "Novo chamado · Visualizar",
+            "Novo chamado · Inserir"
+          ]
+        },
+        {
+          "id": "salvar_chamado",
+          "label": "Salvar chamado",
+          "acoes": [
+            "alterar",
+            "inserir"
+          ],
+          "celulas": [
+            "Salvar chamado · Alterar",
+            "Salvar chamado · Inserir"
+          ]
+        },
+        {
+          "id": "alterar_status",
+          "label": "Alterar status",
+          "acoes": [
+            "alterar",
+            "executar"
+          ],
+          "celulas": [
+            "Alterar status · Alterar",
+            "Alterar status · Executar"
+          ]
+        },
+        {
+          "id": "notificar_equipe",
+          "label": "Notificar equipe",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Notificar equipe · Executar"
+          ]
+        },
+        {
+          "id": "emitir_ordem_servico",
+          "label": "Emitir ordem de serviço",
+          "acoes": [
+            "visualizar",
+            "executar"
+          ],
+          "celulas": [
+            "Emitir ordem de serviço · Visualizar",
+            "Emitir ordem de serviço · Executar"
+          ]
+        },
+        {
+          "id": "registrar_historico",
+          "label": "Registrar histórico",
+          "acoes": [
+            "inserir"
+          ],
+          "celulas": [
+            "Registrar histórico · Inserir"
+          ]
+        },
+        {
+          "id": "editar_abertura",
+          "label": "Editar abertura",
+          "acoes": [
+            "alterar"
+          ],
+          "celulas": [
+            "Editar abertura · Alterar"
+          ]
+        },
+        {
+          "id": "programacao",
+          "label": "Programação",
+          "acoes": [
+            "visualizar",
+            "alterar"
+          ],
+          "celulas": [
+            "Programação · Visualizar",
+            "Programação · Alterar"
+          ]
+        },
+        {
+          "id": "triagem",
+          "label": "Triagem",
+          "acoes": [
+            "alterar"
+          ],
+          "celulas": [
+            "Triagem · Alterar"
+          ]
+        },
+        {
+          "id": "exportar_pdf",
+          "label": "Exportar PDF do chamado",
+          "acoes": [
+            "visualizar",
+            "executar"
+          ],
+          "celulas": [
+            "Exportar PDF do chamado · Visualizar",
+            "Exportar PDF do chamado · Executar"
+          ]
+        },
+        {
+          "id": "execucao_manual",
+          "label": "Lançamento manual de execução",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Lançamento manual de execução · Executar"
+          ]
+        },
+        {
+          "id": "excluidos_visualizar",
+          "label": "Visualizar chamados excluídos",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Visualizar chamados excluídos · Visualizar"
+          ]
+        },
+        {
+          "id": "excluir_logicamente",
+          "label": "Excluir logicamente chamado",
+          "acoes": [
+            "excluir"
+          ],
+          "celulas": [
+            "Excluir logicamente chamado · Excluir"
+          ]
+        },
+        {
+          "id": "restaurar_excluido",
+          "label": "Restaurar chamado excluído",
+          "acoes": [
+            "alterar"
+          ],
+          "celulas": [
+            "Restaurar chamado excluído · Alterar"
+          ]
+        },
+        {
+          "id": "tarefas",
+          "label": "Tarefas do chamado",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "executar"
+          ],
+          "celulas": [
+            "Visualizar tarefas",
+            "Criar tarefa",
+            "Alterar dados da tarefa",
+            "Executar tarefa"
+          ]
+        },
+        {
+          "id": "tarefas_andamento",
+          "label": "Registrar andamento da tarefa",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Registrar andamento da tarefa · Executar"
+          ]
+        },
+        {
+          "id": "tarefas_concluir",
+          "label": "Concluir tarefa",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Concluir tarefa · Executar"
+          ]
+        },
+        {
+          "id": "tarefas_cancelar",
+          "label": "Cancelar tarefa",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Cancelar tarefa · Executar"
+          ]
+        },
+        {
+          "id": "tarefas_historico",
+          "label": "Visualizar histórico e anexos da tarefa",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Visualizar histórico e anexos da tarefa · Visualizar"
+          ]
+        },
+        {
+          "id": "tarefas_atribuidas",
+          "label": "Tarefas atribuídas à minha secretaria ou equipe",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Tarefas atribuídas à minha secretaria ou equipe · Visualizar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "meus_chamados",
+      "label": "Meus chamados",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Meus chamados",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Meus chamados · Visualizar"
+          ]
+        },
+        {
+          "id": "consultar",
+          "label": "Consultar meus chamados",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Consultar meus chamados · Visualizar"
+          ]
+        },
+        {
+          "id": "fotos_abertura",
+          "label": "Fotos e documentos de abertura",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Fotos e documentos de abertura · Visualizar"
+          ]
+        },
+        {
+          "id": "evidencias_execucao",
+          "label": "Evidências de execução",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Evidências de execução · Visualizar"
+          ]
+        },
+        {
+          "id": "participantes_execucao",
+          "label": "Participantes da execução",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Participantes da execução · Visualizar"
+          ]
+        },
+        {
+          "id": "equipe_executora",
+          "label": "Equipe executora",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Equipe executora · Visualizar"
+          ]
+        },
+        {
+          "id": "evidencias_registradas",
+          "label": "Evidências registradas",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Evidências registradas · Visualizar"
+          ]
+        },
+        {
+          "id": "relatorio_execucao",
+          "label": "Relatório da execução",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Relatório da execução · Visualizar"
+          ]
+        },
+        {
+          "id": "mudanca_status",
+          "label": "Mudança de status",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Mudança de status · Visualizar"
+          ]
+        },
+        {
+          "id": "mudanca_atribuicao",
+          "label": "Mudança de atribuição",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Mudança de atribuição · Visualizar"
+          ]
+        },
+        {
+          "id": "atualizacao_programacao",
+          "label": "Atualização de programação",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Atualização de programação · Visualizar"
+          ]
+        },
+        {
+          "id": "atualizacao_atribuicao",
+          "label": "Atualização de atribuição",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Atualização de atribuição · Visualizar"
+          ]
+        },
+        {
+          "id": "historicos_avulsos",
+          "label": "Registros de históricos avulsos",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Registros de históricos avulsos · Visualizar"
+          ]
+        },
+        {
+          "id": "cadastrar_observadores",
+          "label": "Cadastrar observadores",
+          "acoes": [
+            "inserir"
+          ],
+          "celulas": [
+            "Cadastrar observadores · Inserir"
+          ]
+        },
+        {
+          "id": "consultar_documentos",
+          "label": "Consultar documentos relacionados",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Consultar documentos relacionados · Visualizar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "execucao",
+      "label": "Execução",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Execução",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Execução · Visualizar",
+            "Execução · Inserir",
+            "Execução · Alterar",
+            "Execução · Excluir",
+            "Execução · Executar"
+          ]
+        },
+        {
+          "id": "checkin",
+          "label": "Check-in no local",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Check-in no local · Executar"
+          ]
+        },
+        {
+          "id": "anexar_evidencia",
+          "label": "Anexar evidência",
+          "acoes": [
+            "inserir"
+          ],
+          "celulas": [
+            "Anexar evidência · Inserir"
+          ]
+        },
+        {
+          "id": "concluir_execucao",
+          "label": "Concluir execução",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Concluir execução · Executar"
+          ]
+        },
+        {
+          "id": "lancamento_manual",
+          "label": "Lançamento manual",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Lançamento manual · Executar"
+          ]
+        },
+        {
+          "id": "tarefas",
+          "label": "Aba Tarefas",
+          "acoes": [
+            "visualizar",
+            "alterar",
+            "executar"
+          ],
+          "celulas": [
+            "Aba Tarefas · Visualizar",
+            "Aba Tarefas · Alterar",
+            "Aba Tarefas · Executar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dashboard",
+      "label": "Dashboard",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Dashboard",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Dashboard · Visualizar",
+            "Dashboard · Inserir",
+            "Dashboard · Alterar",
+            "Dashboard · Excluir",
+            "Dashboard · Executar"
+          ]
+        },
+        {
+          "id": "indicadores",
+          "label": "Indicadores",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Indicadores · Visualizar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cronograma",
+      "label": "Cronograma",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Cronograma",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Cronograma · Visualizar",
+            "Cronograma · Inserir",
+            "Cronograma · Alterar",
+            "Cronograma · Excluir",
+            "Cronograma · Executar"
+          ]
+        },
+        {
+          "id": "gerenciar",
+          "label": "Gerenciar cronograma",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Gerenciar cronograma · Visualizar",
+            "Gerenciar cronograma · Inserir",
+            "Gerenciar cronograma · Alterar",
+            "Gerenciar cronograma · Excluir"
+          ]
+        },
+        {
+          "id": "cobertura",
+          "label": "Cobertura de vistorias",
+          "acoes": [
+            "visualizar",
+            "executar"
+          ],
+          "celulas": [
+            "Cobertura de vistorias · Visualizar",
+            "Cobertura de vistorias · Executar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "relatorios",
+      "label": "Relatórios",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Relatórios",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Relatórios · Visualizar",
+            "Relatórios · Inserir",
+            "Relatórios · Alterar",
+            "Relatórios · Excluir",
+            "Relatórios · Executar"
+          ]
+        },
+        {
+          "id": "exportar",
+          "label": "Exportar relatórios",
+          "acoes": [
+            "visualizar",
+            "executar"
+          ],
+          "celulas": [
+            "Exportar relatórios · Visualizar",
+            "Exportar relatórios · Executar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "documentos",
+      "label": "Documentos",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Documentos",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Documentos · Visualizar",
+            "Documentos · Inserir",
+            "Documentos · Alterar",
+            "Documentos · Excluir",
+            "Documentos · Executar"
+          ]
+        },
+        {
+          "id": "consultar",
+          "label": "Visualizar documentos",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Visualizar documentos · Visualizar"
+          ]
+        },
+        {
+          "id": "avulso",
+          "label": "Criar documento avulso",
+          "acoes": [
+            "inserir"
+          ],
+          "celulas": [
+            "Criar documento avulso · Inserir"
+          ]
+        },
+        {
+          "id": "editar_vinculo",
+          "label": "Editar vínculo",
+          "acoes": [
+            "alterar"
+          ],
+          "celulas": [
+            "Editar vínculo · Alterar"
+          ]
+        },
+        {
+          "id": "gerar_pdf",
+          "label": "Gerar PDF",
+          "acoes": [
+            "visualizar",
+            "executar"
+          ],
+          "celulas": [
+            "Gerar PDF · Visualizar",
+            "Gerar PDF · Executar"
+          ]
+        },
+        {
+          "id": "coletar_assinatura",
+          "label": "Coletar assinatura",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Coletar assinatura · Executar"
+          ]
+        },
+        {
+          "id": "assinar_interno",
+          "label": "Assinar documento internamente",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Assinar documento internamente · Executar"
+          ]
+        },
+        {
+          "id": "disponibilizar_assinatura",
+          "label": "Disponibilizar para assinatura interna",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Disponibilizar para assinatura interna · Executar"
+          ]
+        },
+        {
+          "id": "cancelar_assinado",
+          "label": "Cancelar PDF assinado",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Cancelar PDF assinado · Executar"
+          ]
+        },
+        {
+          "id": "cancelar",
+          "label": "Cancelar documento (cancelamento lógico)",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Cancelar documento (cancelamento lógico) · Executar"
+          ]
+        },
+        {
+          "id": "administrar",
+          "label": "Administrar documentos",
+          "acoes": [
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Administrar documentos · Alterar",
+            "Administrar documentos · Excluir",
+            "Administrar documentos · Executar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "checklists",
+      "label": "Checklists",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Checklists",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Checklists · Visualizar",
+            "Checklists · Inserir",
+            "Checklists · Alterar",
+            "Checklists · Excluir",
+            "Checklists · Executar"
+          ]
+        },
+        {
+          "id": "gerenciar",
+          "label": "Gerenciar checklists",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Gerenciar checklists · Visualizar",
+            "Gerenciar checklists · Inserir",
+            "Gerenciar checklists · Alterar",
+            "Gerenciar checklists · Excluir"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "admin",
+      "label": "Administração",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Administração",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Administração · Visualizar",
+            "Administração · Inserir",
+            "Administração · Alterar",
+            "Administração · Excluir",
+            "Administração · Executar"
+          ]
+        },
+        {
+          "id": "secretarias",
+          "label": "Secretarias",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Secretarias · Visualizar",
+            "Secretarias · Inserir",
+            "Secretarias · Alterar",
+            "Secretarias · Excluir"
+          ]
+        },
+        {
+          "id": "proprios",
+          "label": "Próprios",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Próprios · Visualizar",
+            "Próprios · Inserir",
+            "Próprios · Alterar",
+            "Próprios · Excluir"
+          ]
+        },
+        {
+          "id": "usuarios",
+          "label": "Usuários",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Usuários · Visualizar",
+            "Usuários · Inserir",
+            "Usuários · Alterar",
+            "Usuários · Excluir"
+          ]
+        },
+        {
+          "id": "equipes",
+          "label": "Equipes",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Equipes · Visualizar",
+            "Equipes · Inserir",
+            "Equipes · Alterar",
+            "Equipes · Excluir"
+          ]
+        },
+        {
+          "id": "cargos",
+          "label": "Cargos",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Cargos · Visualizar",
+            "Cargos · Inserir",
+            "Cargos · Alterar",
+            "Cargos · Excluir"
+          ]
+        },
+        {
+          "id": "tipos_chamado",
+          "label": "Tipos de chamado",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Tipos de chamado · Visualizar",
+            "Tipos de chamado · Inserir",
+            "Tipos de chamado · Alterar",
+            "Tipos de chamado · Excluir"
+          ]
+        },
+        {
+          "id": "tipos_proprio",
+          "label": "Tipos de próprio",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Tipos de próprio · Visualizar",
+            "Tipos de próprio · Inserir",
+            "Tipos de próprio · Alterar",
+            "Tipos de próprio · Excluir"
+          ]
+        },
+        {
+          "id": "categorias_vistoria",
+          "label": "Categorias vistoria",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Categorias vistoria · Visualizar",
+            "Categorias vistoria · Inserir",
+            "Categorias vistoria · Alterar",
+            "Categorias vistoria · Excluir"
+          ]
+        },
+        {
+          "id": "permissoes",
+          "label": "Permissões",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Permissões · Visualizar",
+            "Permissões · Inserir",
+            "Permissões · Alterar",
+            "Permissões · Excluir"
+          ]
+        },
+        {
+          "id": "backup",
+          "label": "Backup S3",
+          "acoes": [
+            "visualizar",
+            "alterar",
+            "executar"
+          ],
+          "celulas": [
+            "Backup S3 · Visualizar",
+            "Backup S3 · Alterar",
+            "Backup S3 · Executar"
+          ]
+        },
+        {
+          "id": "importacao",
+          "label": "Importação",
+          "acoes": [
+            "visualizar",
+            "executar"
+          ],
+          "celulas": [
+            "Importação · Visualizar",
+            "Importação · Executar"
+          ]
+        },
+        {
+          "id": "auditoria",
+          "label": "Logs / Auditoria",
+          "acoes": [
+            "visualizar",
+            "alterar",
+            "executar"
+          ],
+          "celulas": [
+            "Logs / Auditoria · Visualizar",
+            "Logs / Auditoria · Alterar",
+            "Logs / Auditoria · Executar"
+          ]
+        },
+        {
+          "id": "email",
+          "label": "E-mail",
+          "acoes": [
+            "visualizar",
+            "alterar",
+            "executar"
+          ],
+          "celulas": [
+            "E-mail · Visualizar",
+            "E-mail · Alterar",
+            "E-mail · Executar"
+          ]
+        },
+        {
+          "id": "cadastros",
+          "label": "Cadastros (legado)",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir"
+          ],
+          "celulas": [
+            "Cadastros (legado) · Visualizar",
+            "Cadastros (legado) · Inserir",
+            "Cadastros (legado) · Alterar",
+            "Cadastros (legado) · Excluir"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "permissoes",
+      "label": "Permissões",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Permissões",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Permissões · Visualizar",
+            "Permissões · Inserir",
+            "Permissões · Alterar",
+            "Permissões · Excluir",
+            "Permissões · Executar"
+          ]
+        },
+        {
+          "id": "configurar",
+          "label": "Configurar permissões por perfil e usuário",
+          "acoes": [
+            "visualizar",
+            "alterar"
+          ],
+          "celulas": [
+            "Configurar permissões por perfil e usuário · Visualizar",
+            "Configurar permissões por perfil e usuário · Alterar"
+          ]
+        },
+        {
+          "id": "criar_perfil",
+          "label": "Criar perfil",
+          "acoes": [
+            "inserir"
+          ],
+          "celulas": [
+            "Criar perfil · Inserir"
+          ]
+        },
+        {
+          "id": "todas_secretarias",
+          "label": "Atuar em todas as secretarias",
+          "acoes": [
+            "executar"
+          ],
+          "celulas": [
+            "Atuar em todas as secretarias · Executar"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "integracoes",
+      "label": "Integrações",
+      "funcoes": [
+        {
+          "id": "_tela",
+          "label": "Integrações",
+          "acoes": [
+            "visualizar",
+            "inserir",
+            "alterar",
+            "excluir",
+            "executar"
+          ],
+          "celulas": [
+            "Integrações · Visualizar",
+            "Integrações · Inserir",
+            "Integrações · Alterar",
+            "Integrações · Excluir",
+            "Integrações · Executar"
+          ]
+        },
+        {
+          "id": "monitorar",
+          "label": "Monitorar integrações",
+          "acoes": [
+            "visualizar",
+            "executar"
+          ],
+          "celulas": [
+            "Monitorar integrações · Visualizar",
+            "Monitorar integrações · Executar"
+          ]
+        }
+      ]
+    }
+  ]
+}
