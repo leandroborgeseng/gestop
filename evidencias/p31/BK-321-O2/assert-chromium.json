@@ -1,0 +1,16 @@
+{
+  "fonte": 16,
+  "corte": 1280,
+  "abaixo": {
+    "barra": "fixed",
+    "colunas": "none",
+    "estreita": true
+  },
+  "acima": {
+    "barra": "sticky",
+    "colunas": "340px 612px",
+    "estreita": false
+  },
+  "fonte125": 1600,
+  "fonte150": 1920
+}

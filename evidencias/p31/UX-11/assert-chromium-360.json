@@ -1,0 +1,8 @@
+{
+  "secundaria": "none",
+  "codigo": "block",
+  "tarefa": "block",
+  "status": "flex",
+  "prazo": "inline-flex",
+  "estouro": 0
+}
