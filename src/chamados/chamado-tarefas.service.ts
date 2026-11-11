@@ -20,6 +20,7 @@ import { StorageService } from '../storage/storage.service';
 import { normalizarMimeAnexo, validarBufferAnexo } from './anexos-midia';
 import { buildCsv, escapeCsvValue } from '../relatorios/relatorios.csv';
 import { avisoCorteRelatorioTarefas, TETO_LINHAS_RELATORIO_TAREFAS } from './relatorio-tarefas-corte';
+import { instantePrazoFiltro } from './prazo-filtro';
 import { buildTablePdf } from '../relatorios/relatorios.pdf';
 import { buildXlsx } from '../relatorios/relatorios.xlsx';
 import {
@@ -619,10 +620,12 @@ export class ChamadoTarefasService {
       and.push({ status: { in: [...TAREFA_STATUS_PENDENTES] }, prazo: { lt: new Date() } });
     }
     if (query.prazoFrom || query.prazoTo) {
+      const gte = instantePrazoFiltro(query.prazoFrom, 'de');
+      const lte = instantePrazoFiltro(query.prazoTo, 'ate');
       and.push({
         prazo: {
-          ...(query.prazoFrom ? { gte: new Date(query.prazoFrom) } : {}),
-          ...(query.prazoTo ? { lte: new Date(query.prazoTo) } : {}),
+          ...(gte ? { gte } : {}),
+          ...(lte ? { lte } : {}),
         },
       });
     }

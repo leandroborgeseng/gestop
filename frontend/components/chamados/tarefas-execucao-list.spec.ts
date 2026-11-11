@@ -243,8 +243,9 @@ describe('286 §8.11 — regressão de filtros e contadores', () => {
       minhasEquipes: minhasEquipes ? '1' : undefined,
       atrasadas: atrasadas ? '1' : undefined,
       historico: historico ? '1' : undefined,
-      prazoFrom: prazoFrom ? new Date(prazoFrom).toISOString() : undefined,
-      prazoTo: prazoTo ? new Date(prazoTo).toISOString() : undefined,
+      // UX-02: o dia civil vai cru; o servidor inclui o fim do dia em America/Sao_Paulo.
+      prazoFrom: prazoFrom || undefined,
+      prazoTo: prazoTo || undefined,
       secretariaId: secretariaId || undefined,
       equipeId: equipeId || undefined,
       responsavelId: responsavelId || undefined,

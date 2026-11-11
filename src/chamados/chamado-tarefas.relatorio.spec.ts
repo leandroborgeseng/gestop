@@ -172,6 +172,25 @@ describe('ChamadoTarefasService — relatório P3', () => {
     expect(csv.split('\n').filter((linha) => linha.startsWith('CH-')).length).toBe(1);
   });
 
+  it('UX-02: Prazo até fecha o dia em America/Sao_Paulo, sem mexer no createdAt', async () => {
+    prisma.chamadoTarefa.findMany.mockResolvedValue([]);
+    await service.relatorio({ prazoTo: '2026-10-05', from: '2026-10-01', to: '2026-10-06' }, adminGlobal());
+    const where = prisma.chamadoTarefa.findMany.mock.calls.at(-1)?.[0].where;
+    expect(where).toEqual({
+      AND: expect.arrayContaining([
+        {
+          prazo: { lte: new Date('2026-10-06T02:59:59.999Z') },
+        },
+        {
+          createdAt: {
+            gte: new Date('2026-10-01'),
+            lte: new Date('2026-10-06T23:59:59.999'),
+          },
+        },
+      ]),
+    });
+  });
+
   it('UX-01: com 500 ou menos o CSV não traz aviso de corte', async () => {
     prisma.chamadoTarefa.count.mockResolvedValue(1);
     prisma.chamadoTarefa.findMany.mockResolvedValue([tarefaLoaded()]);

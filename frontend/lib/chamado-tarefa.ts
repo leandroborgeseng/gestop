@@ -242,8 +242,27 @@ export function resumoFiltrosTarefasExecucao(opts: FiltrosTarefasExecucaoResumo)
   if (opts.atribuidaAMim) partes.push('Atribuídas a mim');
   if (opts.minhasEquipes) partes.push('Minhas equipes');
   if (opts.atrasadas) partes.push('Atrasadas');
-  if (opts.prazoFrom || opts.prazoTo) partes.push('Prazo');
+  const prazo = textoPrazoFiltro(opts.prazoFrom, opts.prazoTo);
+  if (prazo) partes.push(prazo);
   return partes.length ? partes.join(' · ') : 'Nenhum filtro ativo';
+}
+
+/** UX-02: resumo da sanfona com as datas do prazo (dd/mm). */
+export function textoPrazoFiltro(from?: string, to?: string): string | null {
+  const de = dataCivilCurta(from);
+  const ate = dataCivilCurta(to);
+  if (de && ate) return `Prazo: ${de} a ${ate}`;
+  if (de) return `Prazo: a partir de ${de}`;
+  if (ate) return `Prazo: até ${ate}`;
+  return null;
+}
+
+function dataCivilCurta(valor?: string) {
+  const texto = valor?.trim();
+  if (!texto) return '';
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(texto);
+  if (!match) return texto;
+  return `${match[3]}/${match[2]}`;
 }
 
 export type FiltrosRelatorioTarefasInput = {

@@ -306,10 +306,10 @@ export function ExecucaoTarefasPanel() {
                   ))}
                 </select>
               </FiltroRotulo>
-              <FiltroRotulo label="Data inicial">
+              <FiltroRotulo label="Prazo de">
                 <input type="date" value={prazoFrom} onChange={(event) => setPrazoFrom(event.target.value)} className={campo} />
               </FiltroRotulo>
-              <FiltroRotulo label="Data final">
+              <FiltroRotulo label="Prazo até">
                 <input type="date" value={prazoTo} onChange={(event) => setPrazoTo(event.target.value)} className={campo} />
               </FiltroRotulo>
             </div>
