@@ -11,8 +11,8 @@ export const BLOCOS_ARQUITETURA: BlocoArquitetura[] = [
   {
     id: 'frontend',
     nome: 'Frontend Next.js',
-    papel: 'App Router com telas autenticadas, rotas públicas de chamado e validação de documento, e a área administrativa. O botão Coletar no chamado usa canColetarAssinatura, alinhado ao PermissionsGuard (não basta usuarios.gerenciar).',
-    onde: 'frontend/app. Sessão e menu em frontend/lib/navigation.ts, frontend/lib/permissions-matrix.ts e frontend/lib/chamado-tarefa-permissoes.ts. Administrador do Sistema: frontend/lib/administrador-sistema.ts (nome e isAdministradorSistemaAtivo; o frontend não importa src/). Coletar no chamado: frontend/lib/can-coletar-assinatura.ts (reexportado pela matriz).',
+    papel: 'App Router com telas autenticadas, rotas públicas de chamado e validação de documento, e a área administrativa. O botão Coletar no chamado usa canColetarAssinatura, alinhado ao PermissionsGuard (não basta usuarios.gerenciar). A entrada em `/` (start_url do PWA) e o login sem returnTo usam primeiraTelaPermitida: percorre o menu visível (lateral e barra inferior), pula formulários de criação e, se a lista de Chamados está no menu, não para em Meus chamados. Começa pelo CCO quando ele está liberado ao perfil ativo e às permissões individuais. Se só houver atalho de criação, a entrada é `/conta`. Rota específica, F5, foco e renovação de token não trocam a tela.',
+    onde: 'frontend/app. Sessão e menu em frontend/lib/navigation.ts, frontend/lib/tela-inicial.ts, frontend/lib/permissions-matrix.ts e frontend/lib/chamado-tarefa-permissoes.ts. Administrador do Sistema: frontend/lib/administrador-sistema.ts (nome e isAdministradorSistemaAtivo; o frontend não importa src/). Coletar no chamado: frontend/lib/can-coletar-assinatura.ts (reexportado pela matriz).',
   },
   {
     id: 'api',

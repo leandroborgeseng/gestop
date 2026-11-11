@@ -39,6 +39,8 @@ export type NavItem = {
   permissions?: string[];
   mobilePrimary?: boolean;
   badgeKey?: NavBadgeKey;
+  /** Formulário de criação. O menu mostra; a tela inicial pula. */
+  atalhoCriacao?: boolean;
 };
 
 export type NavGroup = {
@@ -91,6 +93,7 @@ export const NAV_ITEMS: NavItem[] = [
     icon: PlusCircle,
     permissions: ['chamados.abrir', 'chamados.gerenciar'],
     mobilePrimary: true,
+    atalhoCriacao: true,
   },
   {
     id: 'meus_chamados',
@@ -182,10 +185,10 @@ export const NAV_GROUPS: NavGroup[] = [
   { title: 'Configuração', itemIds: ['admin', 'checklists', 'integracoes'] },
 ];
 
-/** Atalhos fixos na barra inferior mobile — Execução sempre incluído quando permitido. */
+/** Itens da barra inferior. A ordem é a de getMenuItemsInDisplayOrder, não a desta lista. */
 const MOBILE_BAR_CORE = ['cco', 'mobile', 'novo_chamado', 'meus_chamados', 'chamados', 'execucao'] as const;
 
-type NavUser = { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null | undefined;
+export type NavUser = { perfilAtivo?: { nome?: string } | null; perfis?: string[] } | null | undefined;
 
 export function getVisibleNavItems(permissions: string[], user?: NavUser) {
   if (isAdministradorSistemaAtivo(user)) {
@@ -219,23 +222,46 @@ export function getGroupedNavItems(permissions: string[], user?: NavUser) {
   })).filter((group) => group.items.length > 0);
 }
 
+/**
+ * Itens já filtrados, na ordem em que o menu lateral os mostra.
+ * A barra inferior e a tela inicial leem esta lista — não a ordem interna de NAV_ITEMS.
+ */
+export function getMenuItemsInDisplayOrder(permissions: string[], user?: NavUser) {
+  return getGroupedNavItems(permissions, user).flatMap((group) => group.items);
+}
+
 export function getMobileNav(permissions: string[], user?: NavUser) {
-  const visible = getVisibleNavItems(permissions, user);
-  const visibleById = new Map(visible.map((item) => [item.id, item]));
-
-  const primary = MOBILE_BAR_CORE.map((id) => visibleById.get(id)).filter(Boolean) as NavItem[];
-
+  const ordered = getMenuItemsInDisplayOrder(permissions, user);
+  const core = new Set<string>(MOBILE_BAR_CORE);
+  const primary = ordered.filter((item) => core.has(item.id));
   const primaryIds = new Set(primary.map((item) => item.id));
-  const secondary = visible.filter((item) => !primaryIds.has(item.id));
+  const secondary = ordered.filter((item) => !primaryIds.has(item.id));
 
   // Menu "Mais" é nativo da conta (perfil, secretaria, sair) — sempre disponível.
   return { primary, secondary, hasMore: true };
 }
 
-/** Primeira rota operacional permitida na ordem dos menus; fallback `/conta` se nada for liberado. */
+/**
+ * Percorre a ordem visível e pula formulários de criação.
+ * Com a lista de Chamados no menu, Meus chamados não vira a entrada:
+ * ele fica na frente de Chamados, e o perfil Sem CCO abre `/chamados`.
+ * Sem tela restante, `/conta` — o mesmo fallback do menu vazio.
+ */
+export function hrefDaListaDoMenu(itens: readonly Pick<NavItem, 'id' | 'href' | 'atalhoCriacao'>[]): string {
+  const criacao = new Set(rotasDeCriacao());
+  const semCriacao = itens.filter((item) => !criacao.has(item.href));
+  const temListaDeChamados = semCriacao.some((item) => item.id === 'chamados');
+  const destino = semCriacao.find((item) => !(temListaDeChamados && item.id === 'meus_chamados'));
+  return destino?.href ?? '/conta';
+}
+
+/** Rotas de criação derivadas da flag nos itens do menu. Não é uma segunda ordem. */
+export function rotasDeCriacao(): string[] {
+  return NAV_ITEMS.filter((item) => item.atalhoCriacao).map((item) => item.href);
+}
+
 export function getDefaultAuthenticatedHref(permissions: string[], user?: NavUser): string {
-  const first = getVisibleNavItems(permissions, user)[0];
-  return first?.href ?? '/conta';
+  return hrefDaListaDoMenu(getMenuItemsInDisplayOrder(permissions, user));
 }
 
 export function hasOperationalNavAccess(permissions: string[], user?: NavUser): boolean {

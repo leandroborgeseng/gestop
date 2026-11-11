@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   CalendarDays,
   Bell,
@@ -122,6 +122,7 @@ export default function ChamadosPage() {
 }
 
 function ChamadosPageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
@@ -142,9 +143,29 @@ function ChamadosPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [filtros, setFiltros] = useState<ChamadosFiltrosValue>(DEFAULT_FILTROS);
   const triagemSeq = useRef(0);
-  const [view, setView] = useState<ChamadosView>('triagem');
+  // 322: a aba fica na URL para o F5 reabrir Triagem ou Programação.
+  const view: ChamadosView = searchParams.get('aba') === 'programacao' ? 'programacao' : 'triagem';
+
+  function selecionarAba(next: ChamadosView) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === 'programacao') params.set('aba', 'programacao');
+    else params.delete('aba');
+    const qs = params.toString();
+    router.replace(qs ? `/chamados?${qs}` : '/chamados');
+  }
+
   const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
   const [searchDraft, setSearchDraft] = useState(() => searchParams.get('search') ?? '');
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    const atual = params.get('search') ?? '';
+    if (atual === search) return;
+    if (search) params.set('search', search);
+    else params.delete('search');
+    const qs = params.toString();
+    router.replace(qs ? `/chamados?${qs}` : '/chamados');
+  }, [search, searchParams, router]);
   const [exibirExcluidos, setExibirExcluidos] = useState(false);
   const podeVerExcluidos = canVisualizarChamadosExcluidos(sessionUser);
 
@@ -471,10 +492,10 @@ function ChamadosPageContent() {
         </TipBanner>
 
         <div className="mb-4 flex flex-wrap gap-2">
-          <Chip active={view === 'triagem'} onClick={() => setView('triagem')}>
+          <Chip active={view === 'triagem'} pressed={view === 'triagem'} onClick={() => selecionarAba('triagem')}>
             Triagem
           </Chip>
-          <Chip active={view === 'programacao'} onClick={() => setView('programacao')}>
+          <Chip active={view === 'programacao'} pressed={view === 'programacao'} onClick={() => selecionarAba('programacao')}>
             Programação
           </Chip>
         </div>

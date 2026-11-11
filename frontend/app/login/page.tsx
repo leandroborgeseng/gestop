@@ -7,7 +7,7 @@ import { LockKeyhole } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { SIGMA_NAME, SIGMA_TAGLINE } from '@/lib/brand';
 import { login } from '@/lib/api';
-import { getDefaultAuthenticatedHref } from '@/lib/navigation';
+import { hrefDepoisDoLogin } from '@/lib/tela-inicial';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -70,8 +70,9 @@ function LoginContent() {
 
     try {
       const data = await login(email, password, remember);
-      const href = getDefaultAuthenticatedHref(data.user.permissoes, data.user);
+      // 322: sem returnTo, a primeira tela permitida (CCO quando a visualização existe).
       // 289: o modal de pendências abre no shell, uma vez por dia, quando o servidor decidir.
+      const href = hrefDepoisDoLogin(data.user.permissoes, data.user, searchParams.get('returnTo'));
       router.replace(href);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha inesperada no login.');

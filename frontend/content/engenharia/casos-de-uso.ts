@@ -67,8 +67,9 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'autenticar',
         nome: 'Autenticar',
         atores: ['administrador', 'gestor', 'equipe', 'solicitante', 'externo'],
-        descricao: 'Entrar com e-mail e senha e encerrar a sessão.',
-        rotas: ['/login', 'POST /auth/login', 'GET /auth/me', 'POST /auth/logout'],
+        descricao:
+          'Entrar com e-mail e senha. Sem returnTo, a sessão percorre o menu visível, na mesma ordem do lateral e da barra inferior, pula formulários de criação e, se a lista de Chamados está no menu, não para em Meus chamados. Começa pelo CCO quando o perfil ativo e as permissões individuais liberam. Se só houver atalho de criação, abre `/conta`. A raiz `/` é o start_url do PWA e usa a mesma escolha, sem trocar Secretaria nem perfil. Rota específica, F5 e volta do segundo plano permanecem na tela atual. Encerrar a sessão sai do sistema.',
+        rotas: ['/', '/login', 'POST /auth/login', 'GET /auth/me', 'POST /auth/logout'],
       },
       {
         id: 'trocar-contexto',

@@ -1,5 +1,6 @@
 /* SIGMA PWA — cache do shell + assets Next para vistoria offline */
-const CACHE_VERSION = 'sigma-campo-v6';
+// v7: `/` deixa de ser gravado como shell da Vistoria (322 — a entrada resolve a tela permitida).
+const CACHE_VERSION = 'sigma-campo-v7';
 const SHELL_URL = '/mobile';
 const PRECACHE_URLS = [
   SHELL_URL,
@@ -138,9 +139,9 @@ async function networkFirstNavigate(request) {
     const response = await fetch(request);
     if (response.ok) {
       await putInCache(request, response);
-      // Mantém cópia canônica do shell de vistoria
+      // Cópia canônica só do shell de vistoria offline. A raiz `/` não vira `/mobile`.
       const url = new URL(request.url);
-      if (url.pathname === SHELL_URL || url.pathname === '/') {
+      if (url.pathname === SHELL_URL) {
         const cache = await caches.open(CACHE_VERSION);
         await cache.put(SHELL_URL, response.clone());
       }
