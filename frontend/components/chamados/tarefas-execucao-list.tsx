@@ -86,10 +86,11 @@ export function TarefasExecucaoList({
               )}
             >
               <span className="flex items-center justify-between gap-2">
-                <span className="unit-code mono text-[11px] font-semibold text-[var(--brand-hover)]">{item.chamado.codigo}</span>
-                <span className={cn('text-[10.5px] font-bold tracking-[.06em] uppercase', meta)}>Tarefa do chamado</span>
+                <span data-col="codigo" className="unit-code mono text-[11px] font-semibold text-[var(--brand-hover)]">{item.chamado.codigo}</span>
+                <span data-col="secundaria" className={cn('text-[10.5px] font-bold tracking-[.06em] uppercase', meta)}>Tarefa do chamado</span>
               </span>
               <span
+                data-col="tarefa"
                 title={item.titulo}
                 className={cn(
                   'tarefa-titulo mt-1 line-clamp-2 block text-[15px] font-bold',
@@ -100,13 +101,15 @@ export function TarefasExecucaoList({
               >
                 {item.titulo}
               </span>
-              <span title={resumoTipoTarefa(item)} className="tarefa-resumo mt-0.5 block truncate text-[12.5px] text-[var(--ink-2)]">
+              <span data-col="secundaria" title={resumoTipoTarefa(item)} className="tarefa-resumo mt-0.5 block truncate text-[12.5px] text-[var(--ink-2)]">
                 {resumoTipoTarefa(item)}
               </span>
-              <span className="tarefa-tags mt-2 flex flex-wrap items-center gap-1.5">
+              <span data-col="status" className="tarefa-tags mt-2 flex flex-wrap items-center gap-1.5">
                 <Badge variant={statusVariant} className={BADGE_INK[statusVariant]}>
                   {TAREFA_STATUS_LABEL[item.status] ?? item.status}
                 </Badge>
+              </span>
+              <span data-col="secundaria" className="mt-1.5 flex flex-wrap items-center gap-1.5">
                 <Badge variant={prioVariant} className={BADGE_INK[prioVariant]}>
                   {TAREFA_PRIORIDADE_LABEL[item.prioridade] ?? item.prioridade}
                 </Badge>
@@ -116,19 +119,20 @@ export function TarefasExecucaoList({
                   </Badge>
                 ) : null}
                 {coord ? null : (
-                  <span className={cn('inline-flex items-center gap-1 text-[11px]', meta)}>
+                  <span data-col="secundaria" className={cn('inline-flex items-center gap-1 text-[11px]', meta)}>
                     <MapPinOff className="h-3 w-3" aria-hidden />
                     Sem localização
                   </span>
                 )}
                 {coord?.origem === 'chamado' ? (
-                  <span className={cn('inline-flex items-center gap-1 text-[11px]', meta)}>
+                  <span data-col="secundaria" className={cn('inline-flex items-center gap-1 text-[11px]', meta)}>
                     <MapPin className="h-3 w-3" aria-hidden />
                     Local do chamado
                   </span>
                 ) : null}
               </span>
               <span
+                data-col="prazo"
                 className={cn(
                   'tarefa-prazo mt-1.5 inline-flex items-center gap-1 text-[12px] font-semibold',
                   prazo.tom === 'danger' && (ativa ? 'text-[var(--danger-ink)]' : 'text-[var(--danger)]'),
@@ -140,7 +144,7 @@ export function TarefasExecucaoList({
                 <Clock className="h-3 w-3" aria-hidden />
                 {prazo.texto}
               </span>
-              <span className={cn('unit-meta mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]', meta)}>
+              <span data-col="secundaria" className={cn('unit-meta mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]', meta)}>
                 <span title={item.secretaria?.nome}>{item.secretaria?.sigla ?? 'Sem Secretaria'}</span>
                 <span className="inline-flex items-center gap-1">
                   <UsersRound className="h-3 w-3" aria-hidden />

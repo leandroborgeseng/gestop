@@ -905,3 +905,14 @@ html:has(body.cco-detalhe-trava) {
 .webmap-popup .webmap-balao table { border-collapse: collapse; }
 .webmap-popup .webmap-balao th { text-align: left; padding: 1px 8px 1px 0; color: var(--ink-3); font-weight: 600; vertical-align: top; }
 .webmap-popup .webmap-balao td { padding: 1px 0; word-break: break-word; }
+
+/* UX-11: abaixo de 600px a lista de tarefas fica em código, tarefa, Status e Prazo. */
+.tarefas-lista {
+  max-width: 100%;
+}
+
+@media (max-width: 599px) {
+  .tarefas-lista [data-col='secundaria'] {
+    display: none;
+  }
+}

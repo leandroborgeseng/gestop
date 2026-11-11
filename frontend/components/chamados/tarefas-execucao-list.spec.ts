@@ -354,6 +354,18 @@ describe('286 §8.13 — estados da fila dentro do painel', () => {
     expect(r('erro')).toContain('Tentar novamente');
     expect(r('lista')).toBe('<p>LISTA</p>');
   });
+  it('UX-11: abaixo de 600px some a coluna secundária e ficam código, tarefa, Status e Prazo', () => {
+    const html = lista([tarefa()]);
+    expect(html).toContain('data-col="codigo"');
+    expect(html).toContain('data-col="tarefa"');
+    expect(html).toContain('data-col="status"');
+    expect(html).toContain('data-col="prazo"');
+    expect(html).toContain('data-col="secundaria"');
+    expect(css).toContain("@media (max-width: 599px)");
+    expect(css).toContain(".tarefas-lista [data-col='secundaria']");
+    expect(css).toContain('display: none');
+  });
+
   it('o painel começa no estado carregando dentro da fila, com busca visível', () => {
     const html = renderToStaticMarkup(createElement(ExecucaoTarefasPanel));
     const fila = html.slice(html.indexOf('aria-label="Fila de tarefas"'));
