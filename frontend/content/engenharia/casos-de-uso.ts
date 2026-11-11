@@ -201,7 +201,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'consultar-vistorias',
         nome: 'Consultar vistorias',
         atores: ['gestor', 'equipe', 'administrador'],
-        descricao: 'Listar fiscalizações realizadas e abrir o PDF. As respostas de múltipla escolha saem formatadas; o código técnico da pergunta não aparece; seções agrupam perguntas consecutivas.',
+        descricao: 'Listar fiscalizações realizadas e abrir o PDF. Busca, status, tipo, período, avulsa e o id (UUID) ficam na URL; o padrão concluídas fica de fora. Id inválido ou sem acesso mostra a lista com o aviso. No celular, abrir a vistoria entra no histórico. As respostas de múltipla escolha saem formatadas; o código técnico da pergunta não aparece; seções agrupam perguntas consecutivas.',
         rotas: ['/vistorias', 'GET /fiscalizacoes', 'GET /fiscalizacoes/:id', 'GET /fiscalizacoes/:id/pdf'],
       },
       {

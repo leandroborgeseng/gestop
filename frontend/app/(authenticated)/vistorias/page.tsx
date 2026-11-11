@@ -3,7 +3,7 @@
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, ClipboardPen, FileDown, FileText, MapPin, Printer, Search, UserRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
@@ -28,7 +28,8 @@ import {
   statusLabel,
   VistoriaDetalheCorpo,
 } from '@/components/vistorias/vistoria-detalhe-consulta';
-import { lerIdVistoriaDaUrl } from '@/lib/vistoria-deep-link';
+import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
+import { useEstadoVistorias } from '@/lib/use-estado-vistorias';
 import { downloadFiscalizacaoPdf, getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
 import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
 import { cn } from '@/lib/cn';
@@ -46,6 +47,14 @@ import type {
 const PAGE_SIZE = 50;
 
 export default function VistoriasPage() {
+  return (
+    <Suspense>
+      <VistoriasPageContent />
+    </Suspense>
+  );
+}
+
+function VistoriasPageContent() {
   const sessionUser = useSessionUser();
   const snackbar = useSnackbar();
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -63,19 +72,23 @@ export default function VistoriasPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { estado, definir } = useEstadoVistorias();
+  const [selectedId, setSelectedId] = useState<string | null>(estado.id);
   const [detail, setDetail] = useState<FiscalizacaoDetalhe | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [questionarioOpen, setQuestionarioOpen] = useState(false);
 
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<'' | FiscalizacaoStatus>('CONCLUIDA');
-  const [tipo, setTipo] = useState<'' | UnidadeTipo>('');
-  const [secretariaId, setSecretariaId] = useState('');
-  const [agenteId, setAgenteId] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [avulsaConflito, setAvulsaConflito] = useState<'' | 'true' | 'false'>('');
+  const search = estado.search;
+  const status = estado.status;
+  const tipo = estado.tipo;
+  const secretariaId = estado.secretaria;
+  const agenteId = estado.agente;
+  const from = estado.de;
+  const to = estado.ate;
+  const avulsaConflito = estado.avulsa;
+  const [semAcesso, setSemAcesso] = useState(false);
+  const fechadoRef = useRef(false);
+  const tinhaIdRef = useRef(Boolean(estado.id));
 
   const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
@@ -111,11 +124,32 @@ export default function VistoriasPage() {
     [search, status, tipo, secretariaId, agenteId, from, to, avulsaConflito],
   );
 
-  // #311: deep-link `/vistorias?id=<uuid>` abre a vistoria por id único (sem depender dos filtros da lista).
   useEffect(() => {
-    const id = lerIdVistoriaDaUrl(window.location.search);
-    if (id) setSelectedId(id);
-  }, []);
+    if (estado.id) {
+      fechadoRef.current = false;
+      setSelectedId(estado.id);
+      setSemAcesso(false);
+    } else if (tinhaIdRef.current) {
+      fechadoRef.current = true;
+      setSelectedId(null);
+      setDetail(null);
+      setSemAcesso(false);
+    }
+    tinhaIdRef.current = Boolean(estado.id);
+  }, [estado.id]);
+
+  useEffect(() => {
+    if (!canFilterSecretaria && secretariaId) definir({ secretaria: '' });
+    if (!canFilterAgente && agenteId) definir({ agente: '' });
+  }, [canFilterSecretaria, canFilterAgente, secretariaId, agenteId, definir]);
+
+  useEffect(() => {
+    if (secretarias.length && secretariaId && !secretarias.some((item) => item.id === secretariaId)) definir({ secretaria: '' });
+  }, [secretarias, secretariaId, definir]);
+
+  useEffect(() => {
+    if (usuarios.length && agenteId && !usuarios.some((item) => item.id === agenteId)) definir({ agente: '' });
+  }, [usuarios, agenteId, definir]);
 
   const loadList = useCallback(async (offset = 0, append = false) => {
     if (offset === 0) setLoading(true);
@@ -128,7 +162,7 @@ export default function VistoriasPage() {
       setTotal(response.total);
       setHasMore(response.hasMore);
       if (!append) {
-        setSelectedId((current) => current ?? response.items[0]?.id ?? null);
+        setSelectedId((current) => (fechadoRef.current ? null : (current ?? response.items[0]?.id ?? null)));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar vistorias.');
@@ -155,7 +189,14 @@ export default function VistoriasPage() {
         if (active) setDetail(data);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe da vistoria.');
+        if (!active) return;
+        const statusHttp = (err as { status?: number } | null)?.status;
+        if (statusHttp === 403 || statusHttp === 404) {
+          setSemAcesso(true);
+          setDetail(null);
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe da vistoria.');
       })
       .finally(() => {
         if (active) setDetailLoading(false);
@@ -213,14 +254,14 @@ export default function VistoriasPage() {
                   <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
                   <input
                     value={search}
-                    onChange={(event) => setSearch(event.target.value)}
+                    onChange={(event) => definir({ search: event.target.value })}
                     placeholder="Buscar por unidade, código patrimonial, agente ou checklist…"
                     className="h-10 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px]"
                   />
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Status</label>
-                  <Select value={status} onChange={(event) => setStatus(event.target.value as '' | FiscalizacaoStatus)} className="h-9 w-full text-xs">
+                  <Select value={status} onChange={(event) => definir({ status: event.target.value as '' | FiscalizacaoStatus })} className="h-9 w-full text-xs">
                     {STATUS_OPTIONS.map((item) => (
                       <option key={item.value || 'all'} value={item.value}>
                         {item.label}
@@ -236,7 +277,7 @@ export default function VistoriasPage() {
                     id="filtro-avulsa-conflito"
                     data-testid="filtro-avulsa-conflito"
                     value={avulsaConflito}
-                    onChange={(event) => setAvulsaConflito(event.target.value as '' | 'true' | 'false')}
+                    onChange={(event) => definir({ avulsa: event.target.value as '' | 'true' | 'false' })}
                     className="h-9 w-full text-xs"
                   >
                     <option value="">Todas</option>
@@ -246,7 +287,7 @@ export default function VistoriasPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Tipo de próprio</label>
-                  <Select value={tipo} onChange={(event) => setTipo(event.target.value as '' | UnidadeTipo)} className="h-9 w-full text-xs">
+                  <Select value={tipo} onChange={(event) => definir({ tipo: event.target.value as '' | UnidadeTipo })} className="h-9 w-full text-xs">
                     <option value="">Todos</option>
                     {(Object.keys(UNIDADE_TIPO_LABELS) as UnidadeTipo[]).map((item) => (
                       <option key={item} value={item}>
@@ -258,7 +299,7 @@ export default function VistoriasPage() {
                 {canFilterSecretaria ? (
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Secretaria</label>
-                    <Select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} className="h-9 w-full text-xs">
+                    <Select value={secretariaId} onChange={(event) => definir({ secretaria: event.target.value })} className="h-9 w-full text-xs">
                       <option value="">Todas</option>
                       {secretarias.map((item) => (
                         <option key={item.id} value={item.id}>
@@ -271,7 +312,7 @@ export default function VistoriasPage() {
                 {canFilterAgente ? (
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Agente</label>
-                    <Select value={agenteId} onChange={(event) => setAgenteId(event.target.value)} className="h-9 w-full text-xs">
+                    <Select value={agenteId} onChange={(event) => definir({ agente: event.target.value })} className="h-9 w-full text-xs">
                       <option value="">Todos</option>
                       {usuarios.filter((item) => item.ativo).map((item) => (
                         <option key={item.id} value={item.id}>
@@ -283,11 +324,11 @@ export default function VistoriasPage() {
                 ) : null}
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">De</label>
-                  <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
+                  <input type="date" value={from} onChange={(event) => definir({ de: event.target.value })} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Até</label>
-                  <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
+                  <input type="date" value={to} onChange={(event) => definir({ ate: event.target.value })} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
                 </div>
               </CardContent>
             </Card>
@@ -308,7 +349,12 @@ export default function VistoriasPage() {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setSelectedId(item.id)}
+                        onClick={() => {
+                          fechadoRef.current = false;
+                          setSemAcesso(false);
+                          setSelectedId(item.id);
+                          definir({ id: item.id }, detalheCobreLista() ? 'push' : 'replace');
+                        }}
                         className={cn(
                           'mb-1 flex w-full flex-col gap-1.5 rounded-[var(--r-md)] border border-transparent px-3 py-3 text-left transition-colors',
                           isSelected
@@ -371,7 +417,14 @@ export default function VistoriasPage() {
           </section>
 
           <section className="min-h-[320px]">
-            {!selected ? (
+            {selectedId && semAcesso ? (
+              <div role="status" data-testid="aviso-registro-url" className="rounded-[var(--r-md)] border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-[13px] text-amber-950">{AVISO_REGISTRO_URL}</p>
+                <button type="button" className="mt-2 text-[13px] font-semibold text-amber-950" onClick={() => definir({ id: null })}>
+                  Fechar
+                </button>
+              </div>
+            ) : !selected ? (
               <Card elevation={1} className="flex h-full min-h-[320px] items-center justify-center p-8 text-center">
                 <div>
                   <MapPin className="mx-auto h-8 w-8 text-[var(--ink-3)]" />

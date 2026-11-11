@@ -190,7 +190,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/vistorias',
     api: 'FiscalizacoesController: GET /fiscalizacoes, GET /fiscalizacoes/:id, GET /fiscalizacoes/:id/pdf',
     tabelas: 'Fiscalizacao, RespostaChecklist, Evidencia, NaoConformidade, UnidadePublica, Usuario',
-    permissao: 'fiscalizacoes.executar, dashboard.visualizar ou chamados.gerenciar.',
+    permissao: 'fiscalizacoes.executar, dashboard.visualizar ou chamados.gerenciar. Busca, filtros e o id aberto ficam na query; Secretaria fora do contexto é ignorada e a URL não troca o perfil.',
   },
   {
     id: 'vistoria-manual',
