@@ -117,7 +117,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'triar',
         nome: 'Triar e atribuir',
         atores: ['administrador', 'gestor'],
-        descricao: 'Mudar status, triagem, atribuição, planejamento, abertura, observadores e aviso à equipe. A lista e o detalhe rolam por dentro, na mesma altura. A busca por código, descrição ou unidade só dispara no botão Pesquisar ou no Enter. Documentos relacionados do chamado mostram signatários pendentes e as ações de assinatura, cada uma com a permissão correspondente.',
+        descricao: 'Mudar status, triagem, atribuição, planejamento, abertura, observadores e aviso à equipe. A lista e o detalhe rolam por dentro, na mesma altura. A busca por código, descrição ou unidade só dispara no botão Pesquisar ou no Enter. Aba, filtros, busca, página, período da programação e o chamado aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Valor inválido some da query. Id inexistente ou sem acesso mostra a lista com o aviso e não troca Secretaria nem perfil. No celular, abrir o chamado entra no histórico para o Voltar fechar o detalhe. Documentos relacionados do chamado mostram signatários pendentes e as ações de assinatura, cada uma com a permissão correspondente.',
         rotas: ['/chamados', 'GET /chamados', 'PUT /chamados/:id/triagem', 'PUT /chamados/:id/atribuicao', 'PUT /chamados/:id/planejamento', 'GET /documentos/por-chamado/:chamadoId'],
       },
       {

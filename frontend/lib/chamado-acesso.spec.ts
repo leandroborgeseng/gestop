@@ -41,13 +41,13 @@ describe('315 · chamado de outra Secretaria aberto pelo id', () => {
     const src = readFileSync(resolve('frontend/app/(authenticated)/chamados/page.tsx'), 'utf8');
     expect(src).toMatch(/ehSemAcessoChamado\(err\)[\s\S]*setSemAcessoId\(selectedId\)/);
     expect(src).toMatch(/selectedId === semAcessoId\) return null/);
-    expect(src).toMatch(/data-testid="chamado-sem-acesso"[\s\S]*SEM_ACESSO_CHAMADO/);
+    expect(src).toMatch(/data-testid="chamado-sem-acesso"[\s\S]*AVISO_REGISTRO_URL/);
   });
   it('link direto para chamado fora da página atual usa o detalhe buscado pelo id', () => {
     const src = readFileSync(resolve('frontend/app/(authenticated)/chamados/page.tsx'), 'utf8');
     expect(src).toMatch(/if \(detail\?\.id === selectedId\) return detail;/);
     expect(src).toMatch(/current === pedidoUrlRef\.current/);
-    expect(src).toMatch(/pedidoUrlRef\.current = null;[^}]*setSelectedId\(chamado\.id\)/);
+    expect(src).toMatch(/function abrirChamado\(id: string\)[\s\S]*pedidoUrlRef\.current = null;[\s\S]*setSelectedId\(id\)/);
   });
   it('Execução mostra a mensagem', () => {
     const src = readFileSync(resolve('frontend/components/chamados/chamado-execucao-flow.tsx'), 'utf8');
