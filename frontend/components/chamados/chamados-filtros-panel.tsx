@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
@@ -82,6 +82,15 @@ export function ChamadosFiltrosPanel({
   className?: string;
 }) {
   const [open, setOpen] = useState(true);
+  const valorRef = useRef(value);
+  useEffect(() => {
+    valorRef.current = value;
+  }, [value]);
+
+  function publicar(next: ChamadosFiltrosValue) {
+    valorRef.current = next;
+    onChange(next);
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -138,13 +147,13 @@ export function ChamadosFiltrosPanel({
 
   function toggleStatus(next: 'TODOS' | ChamadoStatus) {
     if (next === 'TODOS') {
-      onChange({ ...value, statuses: 'TODOS' });
+      publicar({ ...valorRef.current, statuses: 'TODOS' });
       return;
     }
-    const current = value.statuses === 'TODOS' ? new Set<ChamadoStatus>() : new Set(value.statuses);
+    const current = valorRef.current.statuses === 'TODOS' ? new Set<ChamadoStatus>() : new Set(valorRef.current.statuses);
     if (current.has(next)) current.delete(next);
     else current.add(next);
-    onChange({ ...value, statuses: current.size === 0 ? 'TODOS' : current });
+    publicar({ ...valorRef.current, statuses: current.size === 0 ? 'TODOS' : current });
   }
 
   const slaChips = showSemSla ? SLA_CHIPS : SLA_CHIPS.filter((item) => item.value !== 'SEM');
@@ -205,7 +214,7 @@ export function ChamadosFiltrosPanel({
             <FiltroDataAbertura
               idPrefixo="triagem-abertura"
               value={value.abertura}
-              onChange={(abertura) => onChange({ ...value, abertura })}
+              onChange={(abertura) => publicar({ ...valorRef.current, abertura })}
             />
           ) : null}
 
@@ -216,7 +225,7 @@ export function ChamadosFiltrosPanel({
                 <Chip
                   key={item.value}
                   active={value.prioridade === item.value}
-                  onClick={() => onChange({ ...value, prioridade: item.value })}
+                  onClick={() => publicar({ ...valorRef.current, prioridade: item.value })}
                 >
                   {item.label}
                 </Chip>
@@ -231,7 +240,7 @@ export function ChamadosFiltrosPanel({
                 <Chip
                   key={item.value}
                   active={value.sla === item.value}
-                  onClick={() => onChange({ ...value, sla: item.value })}
+                  onClick={() => publicar({ ...valorRef.current, sla: item.value })}
                 >
                   {item.label}
                 </Chip>
@@ -246,7 +255,7 @@ export function ChamadosFiltrosPanel({
                 <Chip
                   key={item.value}
                   active={value.atribuicao === item.value}
-                  onClick={() => onChange({ ...value, atribuicao: item.value })}
+                  onClick={() => publicar({ ...valorRef.current, atribuicao: item.value })}
                 >
                   {item.label}
                 </Chip>
@@ -259,7 +268,7 @@ export function ChamadosFiltrosPanel({
               <p className="mb-1 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Equipe</p>
               <Select
                 value={value.equipeId}
-                onChange={(event) => onChange({ ...value, equipeId: event.target.value })}
+                onChange={(event) => publicar({ ...valorRef.current, equipeId: event.target.value })}
                 className="h-8 w-full text-xs"
                 aria-label="Filtrar por equipe"
               >
@@ -280,7 +289,7 @@ export function ChamadosFiltrosPanel({
               </p>
               <Select
                 value={value.secretariaProprioId}
-                onChange={(event) => onChange({ ...value, secretariaProprioId: event.target.value })}
+                onChange={(event) => publicar({ ...valorRef.current, secretariaProprioId: event.target.value })}
                 className="h-8 w-full text-xs"
                 aria-label="Secretaria responsável pelo próprio"
               >
@@ -299,7 +308,7 @@ export function ChamadosFiltrosPanel({
               </p>
               <Select
                 value={value.secretariaExecucaoId}
-                onChange={(event) => onChange({ ...value, secretariaExecucaoId: event.target.value })}
+                onChange={(event) => publicar({ ...valorRef.current, secretariaExecucaoId: event.target.value })}
                 className="h-8 w-full text-xs"
                 aria-label="Secretaria responsável pelo chamado"
               >
@@ -316,7 +325,7 @@ export function ChamadosFiltrosPanel({
               <p className="mb-1 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Tipo de chamado</p>
               <TipoChamadoSelect
                 value={value.tipoChamadoId}
-                onChange={(tipoChamadoId) => onChange({ ...value, tipoChamadoId })}
+                onChange={(tipoChamadoId) => publicar({ ...valorRef.current, tipoChamadoId })}
                 tipos={tiposChamado}
                 allowEmpty
                 emptyOptionLabel="Todos os tipos"
