@@ -1,13 +1,13 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { pastaEvidencias } from './evidencia-local';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
  * 322-A8 L1 — o que a pessoa escolheu ver fica na URL.
  * Usuário sintético só no mock. A spec de UX (U-A8-1..10) vale sobre o critérios.md.
  */
-const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../evidencias/322');
+const OUT = pastaEvidencias('322');
 mkdirSync(OUT, { recursive: true });
 
 const SENHA = 'Zzteste322!Aa';

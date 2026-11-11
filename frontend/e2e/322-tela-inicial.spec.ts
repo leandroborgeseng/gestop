@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { pastaEvidencias } from './evidencia-local';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
@@ -11,7 +11,7 @@ import { expect, test, type Page } from '@playwright/test';
  * A6 no aparelho (PWA em segundo plano) fica para o Leandro; aqui o navegador dispara
  * visibilitychange, focus e pageshow com persisted (bfcache), inclusive sessão de 30 dias perto de vencer.
  */
-const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../evidencias/322');
+const OUT = pastaEvidencias('322');
 mkdirSync(OUT, { recursive: true });
 
 const SENHA = 'Zzteste322!Aa';

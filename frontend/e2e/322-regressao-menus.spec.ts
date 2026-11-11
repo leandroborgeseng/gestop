@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
+import { pastaEvidencias } from './evidencia-local';
 import { PERFIS_REGRESSAO_322 } from '../lib/regressao-322-perfis';
 
 /**
@@ -10,7 +11,7 @@ import { PERFIS_REGRESSAO_322 } from '../lib/regressao-322-perfis';
  * iguais ao retrato gravado em main 6f7c642.
  * Usuários sintéticos só no mock. Nada de banco real.
  */
-const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../evidencias/322');
+const OUT = pastaEvidencias('322');
 mkdirSync(OUT, { recursive: true });
 
 type Retrato = {
