@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { decidirEcoDaUrl, registrarEscrita } from './eco-url';
+import { afterEach, describe, expect, it } from 'vitest';
+import { cancelarTravessia, decidirEcoDaUrl, registrarDestinoTravessia, registrarEscrita, travessiaCorresponde } from './eco-url';
 
 describe('322 C-1 · eco da URL que nós escrevemos', () => {
+  afterEach(() => cancelarTravessia());
   it('um eco atrasado do clique intermediário não volta o estado, nem na segunda vez', () => {
     let nossas = registrarEscrita([], '');
     let chave = '';
@@ -47,6 +48,23 @@ describe('322 C-1 · eco da URL que nós escrevemos', () => {
       escritaPendente: false,
     });
     expect(tarde.tipo).toBe('eco');
+  });
+
+  it('a URL anterior continua externa na travessia mesmo sem o flag de popstate', () => {
+    registrarDestinoTravessia('/chamados?status=aberto&prioridade=alta');
+    expect(travessiaCorresponde('/chamados', 'prioridade=alta&status=aberto')).toBe(true);
+    expect(travessiaCorresponde('/chamados', 'id=1&prioridade=alta&status=aberto')).toBe(false);
+    expect(travessiaCorresponde('/documentos', 'status=aberto&prioridade=alta')).toBe(false);
+
+    const nossas = ['prioridade=alta&status=aberto', 'id=zz&prioridade=alta&status=aberto'];
+    const decisao = decidirEcoDaUrl({
+      canon: 'prioridade=alta&status=aberto',
+      chave: 'id=zz&prioridade=alta&status=aberto',
+      nossas,
+      popstate: travessiaCorresponde('/chamados', 'prioridade=alta&status=aberto'),
+      escritaPendente: false,
+    });
+    expect(decisao.tipo).toBe('externa');
   });
 
   it('query que não escrevemos entra como navegação externa', () => {

@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { decidirEcoDaUrl, registrarEscrita } from '@/lib/eco-url';
+import {
+  buscaDaTravessia,
+  cancelarTravessia,
+  concluirTravessia,
+  decidirEcoDaUrl,
+  instalarObservadorDeTravessia,
+  registrarDestinoTravessia,
+  registrarEscrita,
+  travessiaCorresponde,
+} from '@/lib/eco-url';
 import { hrefDe, paramsIguais } from '@/lib/estado-url';
 import { lerEstadoCronograma, serializarEstadoCronograma, type EstadoCronograma } from '@/lib/estado-url-cronograma';
 
@@ -21,8 +30,13 @@ export function useEstadoCronograma() {
   const estadoRef = useRef(estado);
 
   useEffect(() => {
+    instalarObservadorDeTravessia();
     const marcar = () => {
       popstateRef.current = true;
+      registrarDestinoTravessia(`${window.location.pathname}${window.location.search}`);
+      const lidoAgora = lerEstadoCronograma(new URLSearchParams(window.location.search));
+      chaveRef.current = lidoAgora.canonico.toString();
+      estadoRef.current = lidoAgora.estado;
     };
     window.addEventListener('popstate', marcar, true);
     return () => window.removeEventListener('popstate', marcar, true);
@@ -36,22 +50,33 @@ export function useEstadoCronograma() {
 
   useEffect(() => {
     const spChave = sp.toString();
-    if (spVisto.current === spChave) return;
-    spVisto.current = spChave;
     const next = lerEstadoCronograma(new URLSearchParams(spChave));
     const canon = next.canonico.toString();
-    const popstate = popstateRef.current;
+    const destino = buscaDaTravessia('/cronograma');
+    if (destino !== null && !travessiaCorresponde('/cronograma', canon) && !travessiaCorresponde('/cronograma', spChave)) {
+      router.replace(hrefDe('/cronograma', new URLSearchParams(destino)));
+      return;
+    }
+    const historico =
+      popstateRef.current || travessiaCorresponde('/cronograma', canon) || travessiaCorresponde('/cronograma', spChave);
+    if (spVisto.current === spChave && !historico) return;
+    spVisto.current = spChave;
     popstateRef.current = false;
+    if (historico) concluirTravessia();
     const decisao = decidirEcoDaUrl({
       canon,
       chave: chaveRef.current,
       nossas: nossasRef.current,
-      popstate,
+      popstate: historico,
       escritaPendente: escritaRef.current !== confirmadaRef.current,
     });
     nossasRef.current = decisao.nossas;
     if (decisao.tipo === 'igual') {
       confirmadaRef.current = escritaRef.current;
+      if (historico) {
+        estadoRef.current = next.estado;
+        setEstado(next.estado);
+      }
       return;
     }
     if (decisao.tipo === 'eco') {
@@ -65,6 +90,7 @@ export function useEstadoCronograma() {
   }, [sp, router]);
 
   const definir = useCallback((patch: Partial<EstadoCronograma>) => {
+    cancelarTravessia();
     escritaRef.current += 1;
     const next = { ...estadoRef.current, ...patch };
     const canon = serializarEstadoCronograma(next);
