@@ -135,10 +135,8 @@ export async function seedChecklists309(prisma: PrismaClient, senha: string, dat
         checklistVersaoId: inativo.versao,
         agenteId: gestor,
         status: 'CONCLUIDA',
-        // Data fixa, fora de 2026-11-10. A partir de 12/11 a conta "hoje − 2 dias"
-        // cai no dia da checagem mensal e a programação some como já realizada.
-        iniciadaEm: new Date('2026-10-20T12:00:00.000Z'),
-        concluidaEm: new Date('2026-10-20T15:00:00.000Z'),
+        iniciadaEm: new Date(Date.now() - 2 * 86_400_000),
+        concluidaEm: new Date(Date.now() - 2 * 86_400_000),
       },
     }));
 
