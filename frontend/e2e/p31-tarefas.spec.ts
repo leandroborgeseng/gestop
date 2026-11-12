@@ -15,6 +15,10 @@ mkdirSync(OUT, { recursive: true });
 const RESUMO =
   'ZZ resumo completo do chamado P31 com texto longo o bastante para cortar na lista e revelar no mouse';
 
+/** 322 C-2 só abre a sheet com UUID. `t1` permanece na URL e mostra o aviso. */
+const ID_TAREFA_1 = 'a31a0001-0000-4000-8000-000000000001';
+const ID_TAREFA_2 = 'a31a0002-0000-4000-8000-000000000002';
+
 const USER = {
   id: 'u-p31',
   nome: 'ZZTESTE P31',
@@ -75,8 +79,8 @@ function tarefa(id: string, titulo: string, codigo: string, comResponsavel: bool
 }
 
 const TAREFAS = [
-  tarefa('t1', 'Laudo da praça', 'CH-P31-0001', true, -20.2),
-  tarefa('t2', 'Segunda medição', 'CH-P31-0002', false, -21.0),
+  tarefa(ID_TAREFA_1, 'Laudo da praça', 'CH-P31-0001', true, -20.2),
+  tarefa(ID_TAREFA_2, 'Segunda medição', 'CH-P31-0002', false, -21.0),
 ];
 
 const LISTA = {
@@ -135,7 +139,7 @@ async function mockApi(page: Page) {
       return send(LISTA);
     }
     if (pathName.includes('/chamado-tarefas/relatorio')) return send(RELATORIO);
-    if (pathName === '/chamado-tarefas/t1' || pathName === '/chamado-tarefas/t2') {
+    if (pathName === `/chamado-tarefas/${ID_TAREFA_1}` || pathName === `/chamado-tarefas/${ID_TAREFA_2}`) {
       return send(TAREFAS.find((item) => pathName.endsWith(item.id)));
     }
     if (pathName.includes('/chamado-tarefas/') && pathName.includes('/chamado/')) {
@@ -196,9 +200,9 @@ test('UX-03 Tab chega em cada tarefa e Enter abre a sheet certa', async ({ page,
   await expect(dialog).toContainText('CH-P31-0001');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.locator('[data-tarefa-id="t1"]')).toBeFocused();
+  await expect(page.locator(`[data-tarefa-id="${ID_TAREFA_1}"]`)).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.locator('[data-tarefa-id="t2"]')).toBeFocused();
+  await expect(page.locator(`[data-tarefa-id="${ID_TAREFA_2}"]`)).toBeFocused();
   const anuncio = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '');
   expect(anuncio).toContain('Segunda medição');
   expect(anuncio).toContain('CH-P31-0002');
@@ -216,7 +220,7 @@ test('UX-10 o pop-up do pin mostra tarefa, chamado e responsável', async ({ pag
   await expect(page.locator('.leaflet-marker-pane .sigma-map-marker').first()).toBeVisible({ timeout: 20_000 });
   const textos: string[] = [];
   const tamanhos: Array<{ largura: number; altura: number }> = [];
-  for (const id of ['t1', 't2']) {
+  for (const id of [ID_TAREFA_1, ID_TAREFA_2]) {
     const pin = page.locator('.sigma-map-shell').last().locator('.leaflet-marker-icon').filter({ has: page.locator(`[data-pin="${id}"]`) });
     await pin.click({ force: true });
     const popup = page.locator('.leaflet-popup-content').last();
@@ -330,7 +334,7 @@ test('UX-15 o resumo completo aparece no mouse e é o mesmo da grade', async ({ 
   const tag = motor(browserName);
   await page.setViewportSize({ width: 1280, height: 800 });
   await abrirTarefas(page);
-  const card = page.locator('[data-tarefa-id="t1"]');
+  const card = page.locator(`[data-tarefa-id="${ID_TAREFA_1}"]`);
   const titulo = await card.locator('.tarefa-resumo [title]').getAttribute('title');
   expect(titulo).toBe(RESUMO);
   await expect(card.getByText('Resumo do chamado')).toBeVisible();
