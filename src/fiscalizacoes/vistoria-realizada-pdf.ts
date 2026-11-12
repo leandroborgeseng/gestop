@@ -1,4 +1,5 @@
 import { formatSecretariaLabel } from '../common/format-secretaria';
+import { chamadoStatusLabel } from '../chamados/chamados-sla';
 import { deveExibirCabecalhoSecao, tituloPerguntaChecklist } from '../checklists/checklist-resposta-apresentacao';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -207,18 +208,13 @@ function drawPergunta(
   doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND_PRIMARY).text(title, left, y, { width });
   y = doc.y + 4;
 
-  const metaLine = [
-    resposta.categoriaNome ? `Categoria: ${resposta.categoriaNome}` : null,
-    `Tipo: ${resposta.tipo}`,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED).text(metaLine, left, y, { width });
-  y = doc.y + 6;
+  const metaLine = [resposta.categoriaNome ? `Categoria: ${resposta.categoriaNome}` : null].filter(Boolean).join(' · ');
+  if (metaLine) {
+    doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED).text(metaLine, left, y, { width });
+    y = doc.y + 6;
+  }
 
-  const respostaLine = `Resposta: ${resposta.respostaTexto}${
-    resposta.conformidade ? ` (${resposta.conformidade})` : ''
-  }`;
+  const respostaLine = `Resposta: ${resposta.respostaTexto}`;
   y = ensureSpace(doc, y, 14, marginTop);
   doc.font('Helvetica').fontSize(9).fillColor(TEXT_PRIMARY).text(respostaLine, left, y, { width });
   y = doc.y + 4;
@@ -234,7 +230,9 @@ function drawPergunta(
   if (resposta.naoConformidade) {
     const nc = resposta.naoConformidade;
     const ncLine = nc.chamado
-      ? `Não conformidade → chamado ${nc.chamado.codigo}${nc.chamado.status ? ` (${nc.chamado.status})` : ''}`
+      ? `Não conformidade → chamado ${nc.chamado.codigo}${
+          nc.chamado.status ? ` (${chamadoStatusLabel(nc.chamado.status)})` : ''
+        }`
       : nc.status === 'BAIXADA_MANUAL'
         ? `Não conformidade baixada manualmente${nc.motivoBaixa ? `: ${nc.motivoBaixa}` : ''}`
         : 'Não conformidade pendente sem chamado';

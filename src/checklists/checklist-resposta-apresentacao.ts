@@ -1,4 +1,19 @@
+import { ConformidadeStatus } from '@prisma/client';
 import { apresentarValorTexto } from './checklist-item.rules';
+
+/** Mapa único de ConformidadeStatus. Valor fora do mapa vira "Outro", nunca o enum. */
+export const CONFORMIDADE_STATUS_LABEL: Record<ConformidadeStatus, string> = {
+  [ConformidadeStatus.CONFORME]: 'Conforme',
+  [ConformidadeStatus.NAO_CONFORME]: 'Não conforme',
+  [ConformidadeStatus.NAO_APLICAVEL]: 'Não se aplica',
+};
+
+export function conformidadeStatusLabel(status: string): string {
+  if (Object.prototype.hasOwnProperty.call(CONFORMIDADE_STATUS_LABEL, status)) {
+    return CONFORMIDADE_STATUS_LABEL[status as ConformidadeStatus];
+  }
+  return 'Outro';
+}
 
 export type RespostaParaApresentar = {
   valorTexto?: string | null;
@@ -16,7 +31,7 @@ export function resolveRespostaTexto(resposta: RespostaParaApresentar): string {
   if (resposta.valorBooleano === false) return 'Não';
   if (resposta.valorNumero != null) return String(resposta.valorNumero);
   if (resposta.conformidade) {
-    return resposta.conformidade === 'CONFORME' ? 'Conforme' : resposta.conformidade === 'NAO_CONFORME' ? 'Não conforme' : String(resposta.conformidade);
+    return conformidadeStatusLabel(resposta.conformidade);
   }
   return '—';
 }

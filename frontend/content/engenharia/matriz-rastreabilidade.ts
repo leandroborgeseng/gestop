@@ -118,7 +118,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/execucao, /execucao/[id], /chamados/em-execucao',
     api: 'ChamadosController: GET /chamados/em-execucao, GET /:id/execucao, POST checkin, evidencias, concluir',
     tabelas: 'Chamado, Evidencia, HistoricoStatus, Equipe, Usuario',
-    permissao: 'chamados.gerenciar ou chamados.executar. Menu Execução usa as duas. Aba, busca, filtros, painel e a tarefa aberta ficam na query. Tarefa fora do UUID permanece na URL, mostra o aviso e não chama a API. A URL não troca Secretaria nem perfil.',
+    permissao: 'chamados.gerenciar ou chamados.executar. Menu Execução usa as duas. Aba, busca, filtros, painel e a tarefa aberta ficam na query. Tarefa fora do UUID permanece na URL, mostra o aviso e não chama a API. A URL não troca Secretaria nem perfil. O PDF do relatório de execução gerado na conclusão mostra a conformidade, quando existe, como Conforme, Não conforme ou Não se aplica; qualquer outro valor vira Outro.',
   },
   {
     id: 'manual',
@@ -185,12 +185,12 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
   },
   {
     id: 'vistorias',
-    capacidade: 'Consultar vistorias realizadas (PDF e tela sem código técnico; múltipla escolha formatada)',
+    capacidade: 'Consultar vistorias realizadas (PDF e tela sem código técnico; múltipla escolha formatada; sem tipo do item)',
     ator: 'Gestor, equipe, administrador',
     tela: '/vistorias',
     api: 'FiscalizacoesController: GET /fiscalizacoes, GET /fiscalizacoes/:id, GET /fiscalizacoes/:id/pdf',
     tabelas: 'Fiscalizacao, RespostaChecklist, Evidencia, NaoConformidade, UnidadePublica, Usuario',
-    permissao: 'fiscalizacoes.executar, dashboard.visualizar ou chamados.gerenciar. Busca, filtros e o id aberto ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Secretaria fora do contexto é ignorada e a URL não troca o perfil.',
+    permissao: 'fiscalizacoes.executar, dashboard.visualizar ou chamados.gerenciar. Busca, filtros e o id aberto ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Secretaria fora do contexto é ignorada e a URL não troca o perfil. No PDF da vistoria realizada, o tipo do item não aparece e a categoria continua quando existe. A resposta não traz o código de conformidade entre parênteses. O status do chamado da não conformidade sai pelo rótulo legível.',
   },
   {
     id: 'vistoria-manual',
@@ -235,7 +235,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/documentos, painel Documentos relacionados em /chamados e /meus-chamados',
     api: 'DocumentosController: GET /documentos, GET /:id, GET /por-chamado/:chamadoId, GET /chamados-busca, GET /:id/pdf/original, GET /:id/pdf/assinado, POST /:id/gerar-pdf, PATCH /:id/vinculos, /respostas, POST /:id/concluir',
     tabelas: 'Documento, DocumentoChamado, DocumentoResposta, DocumentoAssinatura, DocumentoAssinaturaPedido, ChecklistItem, Chamado, Fiscalizacao',
-    permissao: 'documentos.visualizar ou documentos.administrar (módulo). PDF e listagem relacionada também aceitam dashboard, chamados e fiscalização. Busca, filtros e o id aberto ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. A URL não troca Secretaria nem perfil. O card no chamado mostra signatários pendentes (DocumentoAssinaturaPedido PENDENTE) e assinaturas vigentes. Vínculo de avulso em rascunho: documentos.criar_avulso. Depois da conclusão: documentos.editar_vinculo.',
+    permissao: 'documentos.visualizar ou documentos.administrar (módulo). PDF e listagem relacionada também aceitam dashboard, chamados e fiscalização. Busca, filtros e o id aberto ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. A URL não troca Secretaria nem perfil. O card no chamado mostra signatários pendentes (DocumentoAssinaturaPedido PENDENTE) e assinaturas vigentes. Vínculo de avulso em rascunho: documentos.criar_avulso. Depois da conclusão: documentos.editar_vinculo. No PDF do documento e no PDF do relatório de execução, a conformidade da resposta, quando existe, sai como Conforme, Não conforme ou Não se aplica. Qualquer outro valor vira Outro.',
   },
   {
     id: 'avulso',
