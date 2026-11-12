@@ -50,6 +50,7 @@ import {
 import { buildRelatorioExecucaoPdf } from './relatorio-execucao-pdf';
 import { apresentarValorTexto } from '../checklists/checklist-item.rules';
 import { resolveRespostaTexto } from '../checklists/checklist-resposta-apresentacao';
+import { chamadoStatusLabel } from '../chamados/chamados-sla';
 import { tarefaAtrasada } from '../chamados/chamado-tarefa.regras';
 import { extractStorageKeyFromUrl } from '../storage/storage-url';
 import { isPdfRenderableImage } from '../fiscalizacoes/vistoria-realizada-pdf';
@@ -2548,7 +2549,7 @@ export class DocumentosService {
         ? `${chamado.unidade.codigoPatrimonial ?? ''} ${chamado.unidade.nome}`.trim()
         : chamado.enderecoTexto || 'Local livre',
       endereco: chamado.enderecoTexto || chamado.unidade?.endereco || null,
-      statusLabel: chamado.status,
+      statusLabel: chamadoStatusLabel(chamado.status),
       responsavelLabel: chamado.responsavel?.nome ?? documento.responsavel?.nome ?? null,
       equipeLabel:
         (typeof equipeMeta.nome === 'string' && equipeMeta.nome) || chamado.equipe?.nome || null,

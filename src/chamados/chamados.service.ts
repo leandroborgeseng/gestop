@@ -86,6 +86,7 @@ import {
   buildPlanejamentoAlteracoes,
   buildTriagemAlteracoes,
   calcularPrazoSla,
+  chamadoStatusLabel,
   formatDateBr,
 } from './chamados-sla';
 import {
@@ -2394,7 +2395,7 @@ export class ChamadosService {
         : '—',
       localLabel,
       endereco: chamado.enderecoTexto || chamado.unidade?.endereco || null,
-      statusLabel: chamado.status,
+      statusLabel: chamadoStatusLabel(chamado.status),
       responsavelLabel: chamado.responsavel?.nome ?? null,
       equipeLabel: opts.equipeNome || chamado.equipe?.nome || null,
       executadoEm: new Date(opts.executadoEm).toLocaleString('pt-BR'),

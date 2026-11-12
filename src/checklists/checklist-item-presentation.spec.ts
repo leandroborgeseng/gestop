@@ -20,6 +20,9 @@ describe('resolveRespostaTexto (caminho real do PDF de vistoria)', () => {
     expect(resolveRespostaTexto({ valorBooleano: true })).toBe('Sim');
     expect(resolveRespostaTexto({ valorNumero: 3 })).toBe('3');
     expect(resolveRespostaTexto({ conformidade: 'CONFORME' })).toBe('Conforme');
+    expect(resolveRespostaTexto({ conformidade: 'NAO_CONFORME' })).toBe('Não conforme');
+    expect(resolveRespostaTexto({ conformidade: 'NAO_APLICAVEL' })).toBe('Não se aplica');
+    expect(resolveRespostaTexto({ conformidade: 'FORA_DO_MAPA' })).toBe('Outro');
   });
 });
 

@@ -131,7 +131,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'executar',
         nome: 'Executar chamado',
         atores: ['equipe', 'gestor'],
-        descricao: 'Check-in, evidências e conclusão da ordem em execução. Aba, busca, filtros, painel do celular, chamado selecionado e tarefa aberta ficam na URL. Tarefa fora do UUID permanece na URL, mostra o aviso e não chama a API. No celular a tarefa entra no histórico para o Voltar fechar o detalhe.',
+        descricao: 'Check-in, evidências e conclusão da ordem em execução. O PDF do relatório de execução gerado na conclusão mostra a conformidade da resposta, quando existe, como Conforme, Não conforme ou Não se aplica; qualquer outro valor vira Outro. O status do chamado nesse PDF sai pelo rótulo legível. Aba, busca, filtros, painel do celular, chamado selecionado e tarefa aberta ficam na URL. Tarefa fora do UUID permanece na URL, mostra o aviso e não chama a API. No celular a tarefa entra no histórico para o Voltar fechar o detalhe.',
         rotas: ['/execucao', '/execucao/[id]', 'POST /chamados/:id/execucao/checkin', 'POST /chamados/:id/execucao/evidencias', 'POST /chamados/:id/execucao/concluir'],
       },
       {
@@ -201,7 +201,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'consultar-vistorias',
         nome: 'Consultar vistorias',
         atores: ['gestor', 'equipe', 'administrador'],
-        descricao: 'Listar fiscalizações realizadas e abrir o PDF. Busca, status, tipo, período, avulsa e o id (UUID) ficam na URL; o padrão concluídas fica de fora. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir a vistoria entra no histórico. As respostas de múltipla escolha saem formatadas; o código técnico da pergunta não aparece; seções agrupam perguntas consecutivas.',
+        descricao: 'Listar fiscalizações realizadas e abrir o PDF. Busca, status, tipo, período, avulsa e o id (UUID) ficam na URL; o padrão concluídas fica de fora. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir a vistoria entra no histórico. As respostas de múltipla escolha saem formatadas; o código técnico da pergunta não aparece; seções agrupam perguntas consecutivas. O PDF da vistoria realizada não imprime o tipo do item; a categoria continua quando existe. A linha da resposta não traz o código de conformidade entre parênteses. O status do chamado da não conformidade sai pelo rótulo legível.',
         rotas: ['/vistorias', 'GET /fiscalizacoes', 'GET /fiscalizacoes/:id', 'GET /fiscalizacoes/:id/pdf'],
       },
       {
@@ -235,7 +235,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'consultar-documentos',
         nome: 'Consultar documentos',
         atores: ['administrador', 'gestor', 'equipe', 'solicitante'],
-        descricao: 'Listar peças, gerar PDF e ajustar vínculos com chamado ou vistoria. Busca, tipo, situação, assinatura, histórico e o documento aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir o documento entra no histórico. GET /documentos/por-chamado/:id devolve signatários pendentes e assinaturas vigentes no mesmo serialize da tela Documentos.',
+        descricao: 'Listar peças, gerar PDF e ajustar vínculos com chamado ou vistoria. Busca, tipo, situação, assinatura, histórico e o documento aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir o documento entra no histórico. GET /documentos/por-chamado/:id devolve signatários pendentes e assinaturas vigentes no mesmo serialize da tela Documentos. No PDF do documento e no PDF do relatório de execução, a conformidade da resposta, quando existe, sai como Conforme, Não conforme ou Não se aplica. Qualquer outro valor vira Outro. O status do chamado no relatório de execução sai pelo rótulo legível.',
         rotas: ['/documentos', '/chamados', '/meus-chamados', 'GET /documentos', 'GET /documentos/por-chamado/:chamadoId', 'GET /documentos/:id/pdf/original', 'PATCH /documentos/:id/vinculos'],
       },
       {
