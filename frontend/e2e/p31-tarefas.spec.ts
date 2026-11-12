@@ -292,23 +292,48 @@ test('UX-11 no desktop as colunas secundárias continuam visíveis', async ({ pa
 });
 
 test('UX-12 cinco filtros cabem no resumo e Limpar filtros recarrega o padrão', async ({ page, browserName }) => {
+  test.setTimeout(60_000);
   const tag = motor(browserName);
   await page.setViewportSize({ width: 390, height: 844 });
   const sessao = await entrar(page);
   await page.goto('/execucao?aba=tarefas');
   await expect(page.getByRole('button', { name: /Laudo da praça/ })).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: /Filtros de tarefas/ }).click();
   const campo = (rotulo: string) => page.locator('label').filter({ hasText: rotulo }).locator('select, input');
-  await campo('Status').selectOption('NOVA');
-  await campo('Secretaria da tarefa').selectOption({ label: 'ZZP31' });
-  await campo('Equipe').selectOption({ label: 'Equipe ZZ P31' });
-  await campo('Prioridade').selectOption({ label: 'Alta' });
-  await campo('Prazo de').fill('2026-10-01');
-  await campo('Prazo até').fill('2026-10-05');
+  const botaoFiltros = page.getByRole('button', { name: /Filtros de tarefas/ });
+  // O replace da URL pode remontar o painel e fechar os campos no meio da ação.
+  const abrirFiltros = async () => {
+    const status = campo('Status');
+    if (!(await status.isVisible())) await botaoFiltros.click();
+    await expect(status).toBeVisible();
+  };
+  const aplicar = async (rotulo: string, opcao: string | { label: string }, url: RegExp) => {
+    await expect(async () => {
+      await abrirFiltros();
+      if (typeof opcao === 'string') await campo(rotulo).selectOption(opcao, { timeout: 3_000 });
+      else await campo(rotulo).selectOption(opcao, { timeout: 3_000 });
+      await expect(page).toHaveURL(url);
+    }).toPass();
+  };
+  await aplicar('Status', 'NOVA', /status=nova/);
+  await aplicar('Secretaria da tarefa', { label: 'ZZP31' }, /secretaria=sec-p31/);
+  await aplicar('Equipe', { label: 'Equipe ZZ P31' }, /equipe=eq-p31/);
+  await aplicar('Prioridade', { label: 'Alta' }, /prioridade=alta/);
+  await expect(async () => {
+    await abrirFiltros();
+    await campo('Prazo de').fill('2026-10-01', { timeout: 3_000 });
+    await expect(page).toHaveURL(/prazoDe=2026-10-01/);
+  }).toPass();
+  await expect(async () => {
+    await abrirFiltros();
+    await campo('Prazo até').fill('2026-10-05', { timeout: 3_000 });
+    await expect(page).toHaveURL(/prazoAte=2026-10-05/);
+  }).toPass();
   await expect(page.getByTestId('contagem-filtros-tarefas')).toHaveText('(5 filtros)');
-  await page.getByRole('button', { name: /Filtros de tarefas/ }).click();
   const resumo = page.locator('p[title]').filter({ hasText: 'Status: Nova' });
-  await expect(resumo).toBeVisible();
+  await expect(async () => {
+    if (!(await resumo.isVisible())) await botaoFiltros.click();
+    await expect(resumo).toBeVisible();
+  }).toPass();
   const texto = await resumo.getAttribute('title');
   expect(texto).toContain('Status: Nova');
   expect(texto).toContain('Secretaria: ZZP31');
@@ -321,11 +346,17 @@ test('UX-12 cinco filtros cabem no resumo e Limpar filtros recarrega o padrão',
   mkdirSync(pasta, { recursive: true });
   await page.screenshot({ path: path.join(pasta, `${tag}-390.png`), animations: 'disabled' });
   const antes = sessao.cargas().length;
-  await page.getByRole('button', { name: /Filtros de tarefas/ }).click();
-  await page.getByRole('button', { name: 'Limpar filtros' }).click();
+  await expect(async () => {
+    await abrirFiltros();
+    await page.getByRole('button', { name: 'Limpar filtros' }).click({ timeout: 3_000 });
+    await expect(page).not.toHaveURL(/status=nova/);
+  }).toPass();
   await expect(page.getByTestId('contagem-filtros-tarefas')).toHaveCount(0);
-  await page.getByRole('button', { name: /Filtros de tarefas/ }).click();
-  await expect(page.locator('p[title]').filter({ hasText: 'Status: não finalizados' })).toBeVisible();
+  const padrao = page.locator('p[title]').filter({ hasText: 'Status: não finalizados' });
+  await expect(async () => {
+    if (!(await padrao.isVisible())) await botaoFiltros.click();
+    await expect(padrao).toBeVisible();
+  }).toPass();
   await expect.poll(() => sessao.cargas().length).toBeGreaterThan(antes);
   gravar('UX-12', `assert-${tag}.json`, { texto, cargas: sessao.cargas().length });
 });
