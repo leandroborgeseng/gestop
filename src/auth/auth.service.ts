@@ -9,7 +9,7 @@ import { hashPassword, verifyPassword } from './password';
 import { PASSWORD_MAX_LENGTH, validatePasswordPolicy } from './password-policy';
 import { JwtPayload, signJwt } from './jwt';
 import { AuditService } from '../audit/audit.service';
-import { duracaoRenovacaoSegundos, identificadorDeSessao, SESSAO_CURTA_SEGUNDOS, SESSAO_LONGA_SEGUNDOS } from './session-duration';
+import { duracaoRenovacaoSegundos, hashDoToken, identificadorDeSessao, SESSAO_CURTA_SEGUNDOS, SESSAO_LONGA_SEGUNDOS } from './session-duration';
 
 const SECRETARIA_SELECT = {
   id: true,
@@ -164,7 +164,7 @@ export class AuthService {
         perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
         acessoTodasSecretarias: session.acessoTodasSecretarias,
         secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
-        sid: atual.sid ?? randomUUID(),
+        sid: atual.sid ?? (tokenBruto ? hashDoToken(tokenBruto) : randomUUID()),
         auth_time: atual.auth_time ?? atual.iat ?? agora,
       },
       this.getJwtSecret(),

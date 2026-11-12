@@ -134,6 +134,25 @@ describe('POST /auth/refresh', () => {
     expect(emitido.exp!).toBeLessThanOrEqual(iat + 30 * DIA);
   });
 
+  it('logout do token renovado recusa o legado que o originou', async () => {
+    const agora = Math.floor(Date.now() / 1000);
+    const auditoria: LinhaAuditoria[] = [];
+    const { service } = montar(auditoria);
+    const bruto = 'token-legado-L';
+    const legado = token({ iat: agora - 60, exp: agora - 60 + 8 * 60 * 60 });
+
+    const renovado = await service.refreshSession(legado, bruto);
+    const emitido = verifyJwt(renovado.accessToken, SEGREDO);
+    expect(emitido.sid).toBe(hashDoToken(bruto));
+
+    await service.logout(emitido, undefined, renovado.accessToken);
+    await expect(service.refreshSession(emitido, renovado.accessToken)).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(service.refreshSession(legado, bruto)).rejects.toBeInstanceOf(UnauthorizedException);
+
+    const outro = await service.refreshSession(legado, 'token-legado-outro');
+    expect(verifyJwt(outro.accessToken, SEGREDO).sid).toBe(hashDoToken('token-legado-outro'));
+  });
+
   it('token legado com iat há mais de 30 dias não renova', async () => {
     const agora = Math.floor(Date.now() / 1000);
     const { service, prisma } = montar([]);
