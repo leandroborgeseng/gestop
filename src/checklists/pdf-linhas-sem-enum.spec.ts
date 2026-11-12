@@ -1,7 +1,10 @@
 import { ChamadoStatus, ChecklistItemTipo, ConformidadeStatus } from '@prisma/client';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { JwtPayload } from '../auth/jwt';
 import { chamadoStatusLabel } from '../chamados/chamados-sla';
+import { ChamadosService } from '../chamados/chamados.service';
 import { buildDocumentoPdf } from '../documentos/documentos-pdf';
+import { DocumentosService } from '../documentos/documentos.service';
 import { buildRelatorioExecucaoPdf } from '../documentos/relatorio-execucao-pdf';
 import { buildVistoriaRealizadaPdf } from '../fiscalizacoes/vistoria-realizada-pdf';
 import {
@@ -167,5 +170,160 @@ describe('linhas dos PDFs sem enum interno', () => {
       expect(textoVistoria).toContain(`(${chamadoStatusLabel(status)})`);
       expect(contemToken(textoVistoria, status)).toBe(false);
     }
+
+    expect(textoVistoria).toContain('Não conformidade — chamado');
+    expect(textoVistoria).not.toContain("!'");
+    expect(textoVistoria).not.toContain('!’');
   });
+
+  it.each(Object.values(ChamadoStatus))(
+    'relatório de execução dos dois serviços não vaza o status %s',
+    async (status) => {
+      const textoChamados = await extrairTextoPdf(await pdfRelatorioPeloChamados(status));
+      const textoDocumentos = await extrairTextoPdf(await pdfRelatorioPelosDocumentos(status));
+      const rotulo = chamadoStatusLabel(status);
+
+      for (const texto of [textoChamados, textoDocumentos]) {
+        expect(texto).toContain(`Status ${rotulo}`);
+        expect(texto).not.toMatch(CODIGO_INTERNO);
+        expect(contemToken(texto, status)).toBe(false);
+        expect(texto).not.toContain("!'");
+        expect(texto).not.toContain('!’');
+      }
+    },
+  );
 });
+
+const usuarioPdf: JwtPayload = {
+  sub: 'u-ficticio',
+  email: 'ana.lima@exemplo.invalid',
+  nome: 'Ana Lima',
+  perfis: [],
+  permissoes: [],
+};
+
+function pdfRelatorioPeloChamados(status: ChamadoStatus) {
+  const prisma = {
+    evidencia: { findMany: vi.fn().mockResolvedValue([]) },
+    checklistVersao: { findUnique: vi.fn() },
+  };
+  const service = new ChamadosService(
+    prisma as never,
+    {} as never,
+    { readObjectBuffer: vi.fn() } as never,
+    {} as never,
+    {} as never,
+  );
+  return (
+    service as unknown as {
+      buildRelatorioExecucaoPdfBuffer: (
+        chamado: Record<string, unknown>,
+        user: JwtPayload,
+        opts: Record<string, unknown>,
+        documentoCodigo?: string | null,
+      ) => Promise<Buffer>;
+    }
+  ).buildRelatorioExecucaoPdfBuffer(
+    {
+      id: 'ch-9005',
+      codigo: 'CH-9005',
+      status,
+      secretaria: { nome: 'Secretaria Municipal de Educação', sigla: 'SEDUC' },
+      unidade: {
+        nome: 'Escola Municipal Fictícia Aurora',
+        codigoPatrimonial: 'EM-9001',
+        endereco: 'Rua das Acácias, 120',
+      },
+      enderecoTexto: 'Rua das Acácias, 120',
+      tipoChamado: { nome: 'Manutenção predial' },
+      responsavel: { nome: 'Carlos Mendes' },
+      equipe: { nome: 'Equipe fictícia Norte' },
+    },
+    usuarioPdf,
+    {
+      relatorio: 'Relatório fictício da execução.',
+      checklistNome: 'Checklist da execução',
+      checklistRespostas: [
+        {
+          codigo: 'ITEM-1',
+          titulo: 'Piso da sala',
+          tipo: 'TEXTO',
+          valorTexto: 'Piso irregular na entrada',
+        },
+      ],
+      origem: 'execucao_conclusao',
+      evidenciaIds: [],
+      executadoEm: '2026-10-05T15:00:00.000Z',
+    },
+    'DOC-9005',
+  );
+}
+
+function pdfRelatorioPelosDocumentos(status: ChamadoStatus) {
+  const prisma = {
+    chamado: {
+      findUnique: vi.fn().mockResolvedValue({
+        id: 'ch-9005',
+        codigo: 'CH-9005',
+        status,
+        enderecoTexto: 'Rua das Acácias, 120',
+        secretaria: { nome: 'Secretaria Municipal de Educação', sigla: 'SEDUC' },
+        unidade: {
+          nome: 'Escola Municipal Fictícia Aurora',
+          codigoPatrimonial: 'EM-9001',
+          endereco: 'Rua das Acácias, 120',
+        },
+        tipoChamado: { nome: 'Manutenção predial' },
+        responsavel: { nome: 'Carlos Mendes' },
+        equipe: { nome: 'Equipe fictícia Norte' },
+      }),
+    },
+    historicoStatus: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn().mockResolvedValue({
+        id: 'hist-1',
+        createdAt: new Date('2026-10-05T15:00:00.000Z'),
+        metadata: {
+          tipo: 'execucao_conclusao',
+          relatorio: 'Relatório fictício da execução.',
+          checklistComplementar: {
+            checklistNome: 'Checklist da execução',
+            respostas: [
+              {
+                codigo: 'ITEM-1',
+                titulo: 'Piso da sala',
+                tipo: 'TEXTO',
+                valorTexto: 'Piso irregular na entrada',
+              },
+            ],
+          },
+        },
+      }),
+    },
+    evidencia: { findMany: vi.fn().mockResolvedValue([]) },
+  };
+  const service = new DocumentosService(prisma as never, { readObjectBuffer: vi.fn() } as never);
+  return (
+    service as unknown as {
+      buildRelatorioExecucaoFromDocumento: (doc: {
+        codigo: string;
+        descricao: string;
+        chamadoId: string;
+        createdAt: Date;
+        metadata: Record<string, unknown>;
+        checklistVersao: { versao: number; checklist: { nome: string } };
+        responsavel: { nome: string };
+        criadoPor: { nome: string };
+      }) => Promise<Buffer>;
+    }
+  ).buildRelatorioExecucaoFromDocumento({
+    codigo: 'DOC-9005',
+    descricao: 'Execução fictícia',
+    chamadoId: 'ch-9005',
+    createdAt: new Date('2026-10-05T15:00:00.000Z'),
+    metadata: {},
+    checklistVersao: { versao: 1, checklist: { nome: 'Checklist da execução' } },
+    responsavel: { nome: 'Carlos Mendes' },
+    criadoPor: { nome: 'Ana Lima' },
+  });
+}

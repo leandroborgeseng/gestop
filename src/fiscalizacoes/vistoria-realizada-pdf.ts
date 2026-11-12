@@ -230,7 +230,7 @@ function drawPergunta(
   if (resposta.naoConformidade) {
     const nc = resposta.naoConformidade;
     const ncLine = nc.chamado
-      ? `Não conformidade → chamado ${nc.chamado.codigo}${
+      ? `Não conformidade — chamado ${nc.chamado.codigo}${
           nc.chamado.status ? ` (${chamadoStatusLabel(nc.chamado.status)})` : ''
         }`
       : nc.status === 'BAIXADA_MANUAL'
