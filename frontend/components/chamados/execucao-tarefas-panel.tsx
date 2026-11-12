@@ -1,7 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
+import { idTemFormatoPrisma } from '@/lib/id-prisma';
+import type { EstadoExecucao } from '@/lib/estado-url-execucao';
+import { useEstadoExecucao } from '@/lib/use-estado-execucao';
 import { ChevronDown, ListX, Search } from 'lucide-react';
 import { ChamadosExecucaoMap } from '@/components/chamados/chamados-execucao-map';
 import { ChamadoTarefaSheet } from '@/components/chamados/chamado-tarefa-sheet';
@@ -24,32 +28,56 @@ import {
   type TarefasExecucaoResponse,
 } from '@/lib/chamado-tarefa';
 
-export function ExecucaoTarefasPanel() {
-  const searchParams = useSearchParams();
+export function ExecucaoTarefasPanel(props: {
+  estado?: EstadoExecucao;
+  definir?: (patch: Partial<EstadoExecucao>, modo?: 'replace' | 'push') => void;
+} = {}) {
+  if (props.estado && props.definir) {
+    return <ExecucaoTarefasConteudo estado={props.estado} definir={props.definir} />;
+  }
+  return <ExecucaoTarefasComEstado />;
+}
+
+function ExecucaoTarefasComEstado() {
+  const { estado, definir } = useEstadoExecucao();
+  return <ExecucaoTarefasConteudo estado={estado} definir={definir} />;
+}
+
+function ExecucaoTarefasConteudo({
+  estado,
+  definir,
+}: {
+  estado: EstadoExecucao;
+  definir: (patch: Partial<EstadoExecucao>, modo?: 'replace' | 'push') => void;
+}) {
+  const router = useRouter();
+  const empurrou = useRef(false);
   const [data, setData] = useState<TarefasExecucaoResponse | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const [status, setStatus] = useState('');
-  const [atribuidaAMim, setAtribuidaAMim] = useState(searchParams.get('atribuidaAMim') === '1');
-  const [minhasEquipes, setMinhasEquipes] = useState(false);
-  const [atrasadas, setAtrasadas] = useState(false);
-  const [historico, setHistorico] = useState(false);
-  const [prazoFrom, setPrazoFrom] = useState('');
-  const [prazoTo, setPrazoTo] = useState('');
-  const [secretariaId, setSecretariaId] = useState('');
-  const [equipeId, setEquipeId] = useState('');
-  const [responsavelId, setResponsavelId] = useState('');
-  const [tipoChamadoId, setTipoChamadoId] = useState('');
-  const [prioridade, setPrioridade] = useState('');
+  const status = estado.status;
+  const atribuidaAMim = estado.atribuidaAMim;
+  const minhasEquipes = estado.minhasEquipes;
+  const atrasadas = estado.atrasadas;
+  const historico = estado.historico;
+  const prazoFrom = estado.prazoDe;
+  const prazoTo = estado.prazoAte;
+  const secretariaId = estado.secretaria;
+  const equipeId = estado.equipeTarefa;
+  const responsavelId = estado.responsavelTarefa;
+  const tipoChamadoId = estado.tipo;
+  const prioridade = estado.prioridade;
   const [secretarias, setSecretarias] = useState<Array<{ id: string; nome: string; sigla: string }>>([]);
   const [equipes, setEquipes] = useState<Array<{ id: string; nome: string }>>([]);
   const [responsaveis, setResponsaveis] = useState<Array<{ id: string; nome: string }>>([]);
   const [tipos, setTipos] = useState<Array<{ id: string; nome: string }>>([]);
-  const [aberta, setAberta] = useState<string | null>(searchParams.get('tarefa'));
+  const aberta = estado.tarefa;
+  const tarefaForaDoFormato = Boolean(aberta) && !idTemFormatoPrisma(aberta);
+  const [semAcesso, setSemAcesso] = useState(false);
   // 286: no celular a aba abre em Lista (decisão 14/10).
-  const [mobile, setMobile] = useState<'lista' | 'mapa'>('lista');
+  const mobile = estado.painelTarefas;
   const [carregando, setCarregando] = useState(true);
-  const [busca, setBusca] = useState('');
-  const [selecionada, setSelecionada] = useState<string | null>(searchParams.get('tarefa'));
+  const [busca, setBusca] = useState(estado.search);
+  const [selecionada, setSelecionada] = useState<string | null>(estado.tarefa);
   const [destacadas, setDestacadas] = useState<string[]>([]);
   const [hovered, setHovered] = useState<string | null>(null);
   const [rolarParaSelecionada, setRolarParaSelecionada] = useState(0);
@@ -81,19 +109,22 @@ export function ExecucaoTarefasPanel() {
   }
 
   function limparFiltros() {
-    setStatus('');
-    setAtribuidaAMim(false);
-    setMinhasEquipes(false);
-    setAtrasadas(false);
-    setHistorico(false);
-    setPrazoFrom('');
-    setPrazoTo('');
-    setSecretariaId('');
-    setEquipeId('');
-    setResponsavelId('');
-    setTipoChamadoId('');
-    setPrioridade('');
     setBusca('');
+    definir({
+      status: '',
+      atribuidaAMim: false,
+      minhasEquipes: false,
+      atrasadas: false,
+      historico: false,
+      prazoDe: '',
+      prazoAte: '',
+      secretaria: '',
+      equipeTarefa: '',
+      responsavelTarefa: '',
+      tipo: '',
+      prioridade: '',
+      search: '',
+    });
   }
 
   /** 286: clique no pin só seleciona (não abre o modal), rola a lista e anuncia. */
@@ -118,12 +149,21 @@ export function ExecucaoTarefasPanel() {
   function abrirTarefa(id: string) {
     setSelecionada(id);
     setDestacadas([]);
-    setAberta(id);
+    setSemAcesso(false);
+    const modo = detalheCobreLista() ? 'push' : 'replace';
+    empurrou.current = modo === 'push';
+    definir({ tarefa: id }, modo);
   }
 
   function fecharTarefa() {
     const id = aberta;
-    setAberta(null);
+    setSemAcesso(false);
+    if (empurrou.current) {
+      empurrou.current = false;
+      router.back();
+    } else if (estado.tarefa) {
+      definir({ tarefa: null });
+    }
     if (id && typeof document !== 'undefined') {
       requestAnimationFrame(() => {
         const card = document.querySelector<HTMLButtonElement>(`[data-tarefa-id="${CSS.escape(id)}"]`);
@@ -133,10 +173,19 @@ export function ExecucaoTarefasPanel() {
   }
 
   useEffect(() => {
-    if (searchParams.get('atribuidaAMim') === '1') setAtribuidaAMim(true);
-    const tarefa = searchParams.get('tarefa');
-    if (tarefa) setAberta(tarefa);
-  }, [searchParams]);
+    setBusca(estado.search);
+  }, [estado.search]);
+
+  useEffect(() => {
+    setSemAcesso(false);
+  }, [estado.tarefa]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (busca !== estado.search) definir({ search: busca });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [busca, estado.search, definir]);
 
   useEffect(() => {
     carregar();
@@ -149,6 +198,15 @@ export function ExecucaoTarefasPanel() {
     listUsuariosAtivosExecucao().then(setResponsaveis).catch(() => setResponsaveis([]));
     listTiposChamadoOpcoes().then(setTipos).catch(() => setTipos([]));
   }, []);
+
+  useEffect(() => {
+    const patch: Partial<EstadoExecucao> = {};
+    if (secretarias.length && secretariaId && !secretarias.some((item) => item.id === secretariaId)) patch.secretaria = '';
+    if (equipes.length && equipeId && !equipes.some((item) => item.id === equipeId)) patch.equipeTarefa = '';
+    if (responsaveis.length && responsavelId && !responsaveis.some((item) => item.id === responsavelId)) patch.responsavelTarefa = '';
+    if (tipos.length && tipoChamadoId && !tipos.some((item) => item.id === tipoChamadoId)) patch.tipo = '';
+    if (Object.keys(patch).length) definir(patch);
+  }, [secretarias, equipes, responsaveis, tipos, secretariaId, equipeId, responsavelId, tipoChamadoId, definir]);
 
   const visiveis = useMemo(() => filtrarTarefasBusca(data?.items ?? [], busca), [data, busca]);
   // 286: um pin por ponto, com contador; a busca local também filtra os pins.
@@ -238,22 +296,22 @@ export function ExecucaoTarefasPanel() {
         {filtrosAbertos ? (
           <div className="space-y-3 border-t border-[var(--line-2)] px-3.5 py-3.5">
             <div className="flex flex-wrap gap-1.5">
-              <Chip active={atribuidaAMim} onClick={() => setAtribuidaAMim((value) => !value)}>
+              <Chip active={atribuidaAMim} onClick={() => definir({ atribuidaAMim: !atribuidaAMim })}>
                 Atribuídas a mim
               </Chip>
-              <Chip active={minhasEquipes} onClick={() => setMinhasEquipes((value) => !value)}>
+              <Chip active={minhasEquipes} onClick={() => definir({ minhasEquipes: !minhasEquipes })}>
                 Minhas equipes
               </Chip>
-              <Chip active={atrasadas} onClick={() => setAtrasadas((value) => !value)}>
+              <Chip active={atrasadas} onClick={() => definir({ atrasadas: !atrasadas })}>
                 Atrasadas
               </Chip>
-              <Chip active={historico} onClick={() => setHistorico((value) => !value)}>
+              <Chip active={historico} onClick={() => definir({ historico: !historico })}>
                 Histórico
               </Chip>
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <FiltroRotulo label="Status">
-                <select value={status} onChange={(event) => setStatus(event.target.value)} className={campo}>
+                <select value={status} onChange={(event) => definir({ status: event.target.value as EstadoExecucao['status'] })} className={campo}>
                   <option value="">Não finalizados</option>
                   {TAREFA_STATUS_PENDENTES.map((item) => (
                     <option key={item} value={item}>
@@ -266,7 +324,7 @@ export function ExecucaoTarefasPanel() {
                 </select>
               </FiltroRotulo>
               <FiltroRotulo label="Secretaria da tarefa">
-                <select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} className={campo}>
+                <select value={secretariaId} onChange={(event) => definir({ secretaria: event.target.value })} className={campo}>
                   <option value="">Todas</option>
                   {secretarias.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -276,7 +334,7 @@ export function ExecucaoTarefasPanel() {
                 </select>
               </FiltroRotulo>
               <FiltroRotulo label="Equipe">
-                <select value={equipeId} onChange={(event) => setEquipeId(event.target.value)} className={campo}>
+                <select value={equipeId} onChange={(event) => definir({ equipeTarefa: event.target.value })} className={campo}>
                   <option value="">Todas</option>
                   {equipes.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -286,7 +344,7 @@ export function ExecucaoTarefasPanel() {
                 </select>
               </FiltroRotulo>
               <FiltroRotulo label="Responsável">
-                <select value={responsavelId} onChange={(event) => setResponsavelId(event.target.value)} className={campo}>
+                <select value={responsavelId} onChange={(event) => definir({ responsavelTarefa: event.target.value })} className={campo}>
                   <option value="">Todos</option>
                   {responsaveis.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -298,7 +356,7 @@ export function ExecucaoTarefasPanel() {
             </div>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <FiltroRotulo label="Tipo de chamado">
-                <select value={tipoChamadoId} onChange={(event) => setTipoChamadoId(event.target.value)} className={campo}>
+                <select value={tipoChamadoId} onChange={(event) => definir({ tipo: event.target.value })} className={campo}>
                   <option value="">Todos</option>
                   {tipos.map((item) => (
                     <option key={item.id} value={item.id}>
@@ -308,7 +366,7 @@ export function ExecucaoTarefasPanel() {
                 </select>
               </FiltroRotulo>
               <FiltroRotulo label="Prioridade">
-                <select value={prioridade} onChange={(event) => setPrioridade(event.target.value)} className={campo}>
+                <select value={prioridade} onChange={(event) => definir({ prioridade: event.target.value as EstadoExecucao['prioridade'] })} className={campo}>
                   <option value="">Todas</option>
                   {Object.entries(TAREFA_PRIORIDADE_LABEL).map(([value, label]) => (
                     <option key={value} value={value}>
@@ -318,10 +376,10 @@ export function ExecucaoTarefasPanel() {
                 </select>
               </FiltroRotulo>
               <FiltroRotulo label="Prazo de">
-                <input type="date" value={prazoFrom} onChange={(event) => setPrazoFrom(event.target.value)} className={campo} />
+                <input type="date" value={prazoFrom} onChange={(event) => definir({ prazoDe: event.target.value })} className={campo} />
               </FiltroRotulo>
               <FiltroRotulo label="Prazo até">
-                <input type="date" value={prazoTo} onChange={(event) => setPrazoTo(event.target.value)} className={campo} />
+                <input type="date" value={prazoTo} onChange={(event) => definir({ prazoAte: event.target.value })} className={campo} />
               </FiltroRotulo>
             </div>
             <Button type="button" variant="outlined" size="sm" onClick={limparFiltros}>
@@ -331,10 +389,10 @@ export function ExecucaoTarefasPanel() {
         ) : null}
       </div>
       <div className="flex gap-2 xl:hidden">
-        <Chip active={mobile === 'lista'} onClick={() => setMobile('lista')} className="min-h-11">
+        <Chip active={mobile === 'lista'} onClick={() => definir({ painelTarefas: 'lista' })} className="min-h-11">
           Lista
         </Chip>
-        <Chip active={mobile === 'mapa'} onClick={() => setMobile('mapa')} className="min-h-11">
+        <Chip active={mobile === 'mapa'} onClick={() => definir({ painelTarefas: 'mapa' })} className="min-h-11">
           Mapa
         </Chip>
       </div>
@@ -407,7 +465,20 @@ export function ExecucaoTarefasPanel() {
           </section>
         </div>
       </div>
-      <ChamadoTarefaSheet tarefaId={aberta} onClose={fecharTarefa} onChanged={carregar} />
+      {(semAcesso || tarefaForaDoFormato) && aberta ? (
+        <div role="status" data-testid="aviso-registro-url" className="flex items-center justify-between gap-3 rounded-[var(--r-md)] border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-[13px] text-amber-950">{AVISO_REGISTRO_URL}</p>
+          <button type="button" className="text-[13px] font-semibold text-amber-950" onClick={fecharTarefa}>
+            Fechar
+          </button>
+        </div>
+      ) : null}
+      <ChamadoTarefaSheet
+        tarefaId={semAcesso || tarefaForaDoFormato ? null : aberta}
+        onClose={fecharTarefa}
+        onChanged={carregar}
+        onSemAcesso={() => setSemAcesso(true)}
+      />
     </div>
   );
 }

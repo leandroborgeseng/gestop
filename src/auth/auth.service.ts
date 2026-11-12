@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AuditAction } from '@prisma/client';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { EmailService } from '../email/email.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { resolveJwtSecret, resolvePublicFrontendUrl } from '../config/env';
@@ -9,6 +9,7 @@ import { hashPassword, verifyPassword } from './password';
 import { PASSWORD_MAX_LENGTH, validatePasswordPolicy } from './password-policy';
 import { JwtPayload, signJwt } from './jwt';
 import { AuditService } from '../audit/audit.service';
+import { duracaoRenovacaoSegundos, hashDoToken, identificadorDeSessao, SESSAO_CURTA_SEGUNDOS, SESSAO_LONGA_SEGUNDOS } from './session-duration';
 
 const SECRETARIA_SELECT = {
   id: true,
@@ -59,7 +60,8 @@ export class AuthService {
     }
 
     const session = this.buildSessionPayload(usuario);
-    const expiresInSeconds = remember ? 60 * 60 * 24 * 30 : 60 * 60 * 8;
+    const expiresInSeconds = remember ? SESSAO_LONGA_SEGUNDOS : SESSAO_CURTA_SEGUNDOS;
+    const authTime = Math.floor(Date.now() / 1000);
 
     const accessToken = signJwt(
       {
@@ -73,6 +75,8 @@ export class AuthService {
         perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
         acessoTodasSecretarias: session.acessoTodasSecretarias,
         secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
+        auth_time: authTime,
+        sid: randomUUID(),
       },
       this.getJwtSecret(),
       expiresInSeconds,
@@ -112,12 +116,79 @@ export class AuthService {
     };
   }
 
-  async logout(user: JwtPayload, meta?: { ip?: string | null; userAgent?: string | null }) {
+  /**
+   * Reemite o access token com o perfil ativo e a secretaria já gravados.
+   * Não troca perfil, secretaria nem rota — quem chama é a retomada da aba.
+   */
+  async refreshSession(atual: JwtPayload, tokenBruto?: string | null) {
+    const agora = Math.floor(Date.now() / 1000);
+    const expiresInSeconds = duracaoRenovacaoSegundos(atual, agora);
+    if (expiresInSeconds <= 0) {
+      throw new UnauthorizedException('Sessao invalida ou expirada');
+    }
+
+    const usuario = await this.prisma.usuario.findUnique({
+      where: { id: atual.sub },
+      select: this.userSessionSelect(),
+    });
+
+    if (!usuario?.ativo) {
+      throw new UnauthorizedException('Sessao invalida ou expirada');
+    }
+
+    const sessaoId = identificadorDeSessao(atual, tokenBruto);
+    if (sessaoId) {
+      const logout = await this.prisma.logAuditoria.findFirst({
+        where: {
+          acao: AuditAction.LOGOUT,
+          entidadeTipo: 'sessao',
+          entidadeId: sessaoId,
+        },
+        select: { id: true },
+      });
+      if (logout) {
+        throw new UnauthorizedException('Sessao invalida ou expirada');
+      }
+    }
+
+    const session = this.buildSessionPayload(usuario);
+    const accessToken = signJwt(
+      {
+        sub: usuario.id,
+        nome: usuario.nome,
+        email: usuario.email,
+        perfis: session.perfis,
+        permissoes: session.permissoes,
+        secretariaId: session.secretariaId,
+        perfilAtivoId: session.perfilAtivo?.id ?? null,
+        perfilNatureza: session.perfilAtivo?.natureza ?? 'INTERNO',
+        acessoTodasSecretarias: session.acessoTodasSecretarias,
+        secretariasIds: session.secretariasDisponiveis.map((item) => item.id),
+        sid: atual.sid ?? (tokenBruto ? hashDoToken(tokenBruto) : randomUUID()),
+        auth_time: atual.auth_time ?? atual.iat ?? agora,
+      },
+      this.getJwtSecret(),
+      expiresInSeconds,
+    );
+
+    return {
+      accessToken,
+      tokenType: 'Bearer' as const,
+      expiresInSeconds,
+      user: session.user,
+    };
+  }
+
+  async logout(
+    user: JwtPayload,
+    meta?: { ip?: string | null; userAgent?: string | null },
+    tokenBruto?: string | null,
+  ) {
     await this.auditService.record({
       user,
       acao: AuditAction.LOGOUT,
-      entidadeTipo: 'Auth',
-      entidadeId: user.sub,
+      entidadeTipo: 'sessao',
+      entidadeId: identificadorDeSessao(user, tokenBruto),
       tela: 'auth',
       funcao: '_tela',
       descricao: `Logoff de ${user.email}`,

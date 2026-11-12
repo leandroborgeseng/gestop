@@ -18,6 +18,8 @@ import { PageSkeleton } from '@/components/ui/skeleton';
 
 const showDemoLogin = process.env.NEXT_PUBLIC_SHOW_DEMO_LOGIN === 'true';
 
+const MENSAGEM_SESSAO_EXPIRADA = 'Sua sessão expirou. Entre de novo para continuar de onde parou.';
+
 export default function LoginPage() {
   return (
     <Suspense fallback={<LoginSkeleton />}>
@@ -48,9 +50,6 @@ function LoginContent() {
   const notice = useMemo(() => {
     const reason = searchParams.get('reason');
 
-    if (reason === 'expired') {
-      return { variant: 'warning' as const, text: 'Sua sessão expirou ou é necessária para acessar esta área.' };
-    }
     if (reason === 'logout') {
       return { variant: 'success' as const, text: 'Você saiu do sistema com segurança.' };
     }
@@ -117,6 +116,11 @@ function LoginContent() {
           </CardHeader>
 
           <CardContent>
+            {searchParams.get('reason') === 'expired' ? (
+              <p role="status" className="mb-4 text-sm text-[var(--ink)]">
+                {MENSAGEM_SESSAO_EXPIRADA}
+              </p>
+            ) : null}
             {notice ? <Alert variant={notice.variant} className="mb-4">{notice.text}</Alert> : null}
             {error ? <Alert variant="error" className="mb-4">{error}</Alert> : null}
 

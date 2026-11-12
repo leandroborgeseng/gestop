@@ -12,6 +12,7 @@ import { PageContainer } from '@/components/layout/page-shell';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import { registerServiceWorker } from '@/lib/pwa';
 import { emitirTrocaEscopo, SESSAO_ESCOPO_EVENT, SessaoEscopoDetail } from '@/lib/session-events';
+import { agendarRevalidacaoNaRetomada, prepararSessaoAoAbrir } from '@/lib/sessao-renovacao';
 import { sanitizeReturnTo } from '@/lib/tela-inicial';
 
 export function SessionLayout({ children }: { children: React.ReactNode }) {
@@ -73,15 +74,30 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
       return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
     }
 
-    // 322: renovar o usuário (foco, visibilitychange ou refresh) não troca a rota atual.
-    getMe()
-      .then((user) => {
-        const refreshed: StoredAuth = { ...stored, user };
+    let cancelado = false;
+    // 322: na abertura, renova se faltarem menos de 7 dias. Isso não troca a rota.
+    void (async () => {
+      await prepararSessaoAoAbrir();
+      if (cancelado) return;
+      const base = getStoredAuth();
+      if (!base) {
+        redirectToLogin();
+        return;
+      }
+      try {
+        const user = await getMe();
+        if (cancelado) return;
+        const atual = getStoredAuth();
+        if (!atual) {
+          redirectToLogin();
+          return;
+        }
+        const refreshed: StoredAuth = { ...atual, user };
         setStoredAuth(refreshed);
         setAuth(refreshed);
         setChecking(false);
-      })
-      .catch(() => {
+      } catch {
+        if (cancelado) return;
         // Rede/offline: mantém sessão local para PWA de vistoria. 401 já limpa o storage.
         const stillStored = getStoredAuth();
         if (stillStored) {
@@ -90,9 +106,69 @@ export function SessionLayout({ children }: { children: React.ReactNode }) {
           return;
         }
         redirectToLogin();
-      });
+      }
+    })();
 
-    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
+    return () => {
+      cancelado = true;
+      window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
+    };
+  }, [router]);
+
+  // 322 L3: retomada (visível, foco, pageshow com ou sem bfcache) revalida ou renova o token
+  // da sessão de 30 dias. Token ainda válido não troca a rota. Token vencido vai ao login.
+  useEffect(() => {
+    let cancelado = false;
+
+    function redirectToLogin() {
+      const params = new URLSearchParams({ reason: 'expired' });
+      const returnTo = sanitizeReturnTo(`${window.location.pathname}${window.location.search}`);
+      if (returnTo) params.set('returnTo', returnTo);
+      router.replace(`/login?${params.toString()}`);
+    }
+
+    const aoRetomar = () => {
+      void agendarRevalidacaoNaRetomada().then((resultado) => {
+        if (cancelado) return;
+        const stored = getStoredAuth();
+        if (resultado.redirecionou || !stored) {
+          setAuth(null);
+          redirectToLogin();
+          return;
+        }
+        setAuth((atual) => {
+          if (
+            atual &&
+            atual.accessToken === stored.accessToken &&
+            atual.expiresAt === stored.expiresAt &&
+            JSON.stringify(atual.user) === JSON.stringify(stored.user)
+          ) {
+            return atual;
+          }
+          return stored;
+        });
+      });
+    };
+
+    const onVisibilidade = () => {
+      if (document.visibilityState === 'visible') aoRetomar();
+    };
+    const onFoco = () => aoRetomar();
+    const onPageShow = (event: PageTransitionEvent) => {
+      // event.persisted cobre a volta do bfcache. A rota não é reescrita.
+      void event.persisted;
+      aoRetomar();
+    };
+
+    document.addEventListener('visibilitychange', onVisibilidade);
+    window.addEventListener('focus', onFoco);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      cancelado = true;
+      document.removeEventListener('visibilitychange', onVisibilidade);
+      window.removeEventListener('focus', onFoco);
+      window.removeEventListener('pageshow', onPageShow);
+    };
   }, [router]);
 
   if (checking) {

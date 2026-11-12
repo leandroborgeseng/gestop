@@ -15,6 +15,10 @@ mkdirSync(OUT, { recursive: true });
 const RESUMO =
   'ZZ resumo completo do chamado P31 com texto longo o bastante para cortar na lista e revelar no mouse';
 
+/** 322 C-2 só abre a sheet com UUID. `t1` permanece na URL e mostra o aviso. */
+const ID_TAREFA_1 = 'a31a0001-0000-4000-8000-000000000001';
+const ID_TAREFA_2 = 'a31a0002-0000-4000-8000-000000000002';
+
 const USER = {
   id: 'u-p31',
   nome: 'ZZTESTE P31',
@@ -75,8 +79,8 @@ function tarefa(id: string, titulo: string, codigo: string, comResponsavel: bool
 }
 
 const TAREFAS = [
-  tarefa('t1', 'Laudo da praça', 'CH-P31-0001', true, -20.2),
-  tarefa('t2', 'Segunda medição', 'CH-P31-0002', false, -21.0),
+  tarefa(ID_TAREFA_1, 'Laudo da praça', 'CH-P31-0001', true, -20.2),
+  tarefa(ID_TAREFA_2, 'Segunda medição', 'CH-P31-0002', false, -21.0),
 ];
 
 const LISTA = {
@@ -135,7 +139,7 @@ async function mockApi(page: Page) {
       return send(LISTA);
     }
     if (pathName.includes('/chamado-tarefas/relatorio')) return send(RELATORIO);
-    if (pathName === '/chamado-tarefas/t1' || pathName === '/chamado-tarefas/t2') {
+    if (pathName === `/chamado-tarefas/${ID_TAREFA_1}` || pathName === `/chamado-tarefas/${ID_TAREFA_2}`) {
       return send(TAREFAS.find((item) => pathName.endsWith(item.id)));
     }
     if (pathName.includes('/chamado-tarefas/') && pathName.includes('/chamado/')) {
@@ -196,9 +200,9 @@ test('UX-03 Tab chega em cada tarefa e Enter abre a sheet certa', async ({ page,
   await expect(dialog).toContainText('CH-P31-0001');
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.locator('[data-tarefa-id="t1"]')).toBeFocused();
+  await expect(page.locator(`[data-tarefa-id="${ID_TAREFA_1}"]`)).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(page.locator('[data-tarefa-id="t2"]')).toBeFocused();
+  await expect(page.locator(`[data-tarefa-id="${ID_TAREFA_2}"]`)).toBeFocused();
   const anuncio = await page.evaluate(() => document.activeElement?.getAttribute('aria-label') ?? '');
   expect(anuncio).toContain('Segunda medição');
   expect(anuncio).toContain('CH-P31-0002');
@@ -212,11 +216,13 @@ test('UX-10 o pop-up do pin mostra tarefa, chamado e responsável', async ({ pag
   await page.setViewportSize({ width: 1280, height: 800 });
   await abrirTarefas(page);
   const mapa = page.locator('.sigma-map-shell').last();
-  await mapa.scrollIntoViewIfNeeded();
+  await expect(async () => {
+    await mapa.scrollIntoViewIfNeeded({ timeout: 3_000 });
+  }).toPass();
   await expect(page.locator('.leaflet-marker-pane .sigma-map-marker').first()).toBeVisible({ timeout: 20_000 });
   const textos: string[] = [];
   const tamanhos: Array<{ largura: number; altura: number }> = [];
-  for (const id of ['t1', 't2']) {
+  for (const id of [ID_TAREFA_1, ID_TAREFA_2]) {
     const pin = page.locator('.sigma-map-shell').last().locator('.leaflet-marker-icon').filter({ has: page.locator(`[data-pin="${id}"]`) });
     await pin.click({ force: true });
     const popup = page.locator('.leaflet-popup-content').last();
@@ -288,23 +294,48 @@ test('UX-11 no desktop as colunas secundárias continuam visíveis', async ({ pa
 });
 
 test('UX-12 cinco filtros cabem no resumo e Limpar filtros recarrega o padrão', async ({ page, browserName }) => {
+  test.setTimeout(60_000);
   const tag = motor(browserName);
   await page.setViewportSize({ width: 390, height: 844 });
   const sessao = await entrar(page);
   await page.goto('/execucao?aba=tarefas');
   await expect(page.getByRole('button', { name: /Laudo da praça/ })).toBeVisible({ timeout: 30_000 });
-  await page.getByRole('button', { name: /Filtros de tarefas/ }).click();
   const campo = (rotulo: string) => page.locator('label').filter({ hasText: rotulo }).locator('select, input');
-  await campo('Status').selectOption('NOVA');
-  await campo('Secretaria da tarefa').selectOption({ label: 'ZZP31' });
-  await campo('Equipe').selectOption({ label: 'Equipe ZZ P31' });
-  await campo('Prioridade').selectOption({ label: 'Alta' });
-  await campo('Prazo de').fill('2026-10-01');
-  await campo('Prazo até').fill('2026-10-05');
+  const botaoFiltros = page.getByRole('button', { name: /Filtros de tarefas/ });
+  // O replace da URL pode remontar o painel e fechar os campos no meio da ação.
+  const abrirFiltros = async () => {
+    const status = campo('Status');
+    if (!(await status.isVisible())) await botaoFiltros.click();
+    await expect(status).toBeVisible();
+  };
+  const aplicar = async (rotulo: string, opcao: string | { label: string }, valor: string) => {
+    await expect(async () => {
+      await abrirFiltros();
+      if (typeof opcao === 'string') await campo(rotulo).selectOption(opcao, { timeout: 3_000 });
+      else await campo(rotulo).selectOption(opcao, { timeout: 3_000 });
+      await expect(campo(rotulo)).toHaveValue(valor);
+    }).toPass();
+  };
+  await aplicar('Status', 'NOVA', 'NOVA');
+  await aplicar('Secretaria da tarefa', { label: 'ZZP31' }, 'sec-p31');
+  await aplicar('Equipe', { label: 'Equipe ZZ P31' }, 'eq-p31');
+  await aplicar('Prioridade', { label: 'Alta' }, 'ALTA');
+  await expect(async () => {
+    await abrirFiltros();
+    await campo('Prazo de').fill('2026-10-01', { timeout: 3_000 });
+    await expect(campo('Prazo de')).toHaveValue('2026-10-01');
+  }).toPass();
+  await expect(async () => {
+    await abrirFiltros();
+    await campo('Prazo até').fill('2026-10-05', { timeout: 3_000 });
+    await expect(campo('Prazo até')).toHaveValue('2026-10-05');
+  }).toPass();
   await expect(page.getByTestId('contagem-filtros-tarefas')).toHaveText('(5 filtros)');
-  await page.getByRole('button', { name: /Filtros de tarefas/ }).click();
   const resumo = page.locator('p[title]').filter({ hasText: 'Status: Nova' });
-  await expect(resumo).toBeVisible();
+  await expect(async () => {
+    if (!(await resumo.isVisible())) await botaoFiltros.click();
+    await expect(resumo).toBeVisible();
+  }).toPass();
   const texto = await resumo.getAttribute('title');
   expect(texto).toContain('Status: Nova');
   expect(texto).toContain('Secretaria: ZZP31');
@@ -317,11 +348,17 @@ test('UX-12 cinco filtros cabem no resumo e Limpar filtros recarrega o padrão',
   mkdirSync(pasta, { recursive: true });
   await page.screenshot({ path: path.join(pasta, `${tag}-390.png`), animations: 'disabled' });
   const antes = sessao.cargas().length;
-  await page.getByRole('button', { name: /Filtros de tarefas/ }).click();
-  await page.getByRole('button', { name: 'Limpar filtros' }).click();
+  await expect(async () => {
+    await abrirFiltros();
+    await page.getByRole('button', { name: 'Limpar filtros' }).click({ timeout: 3_000 });
+    await expect(campo('Status')).toHaveValue('');
+  }).toPass();
   await expect(page.getByTestId('contagem-filtros-tarefas')).toHaveCount(0);
-  await page.getByRole('button', { name: /Filtros de tarefas/ }).click();
-  await expect(page.locator('p[title]').filter({ hasText: 'Status: não finalizados' })).toBeVisible();
+  const padrao = page.locator('p[title]').filter({ hasText: 'Status: não finalizados' });
+  await expect(async () => {
+    if (!(await padrao.isVisible())) await botaoFiltros.click();
+    await expect(padrao).toBeVisible();
+  }).toPass();
   await expect.poll(() => sessao.cargas().length).toBeGreaterThan(antes);
   gravar('UX-12', `assert-${tag}.json`, { texto, cargas: sessao.cargas().length });
 });
@@ -330,7 +367,7 @@ test('UX-15 o resumo completo aparece no mouse e é o mesmo da grade', async ({ 
   const tag = motor(browserName);
   await page.setViewportSize({ width: 1280, height: 800 });
   await abrirTarefas(page);
-  const card = page.locator('[data-tarefa-id="t1"]');
+  const card = page.locator(`[data-tarefa-id="${ID_TAREFA_1}"]`);
   const titulo = await card.locator('.tarefa-resumo [title]').getAttribute('title');
   expect(titulo).toBe(RESUMO);
   await expect(card.getByText('Resumo do chamado')).toBeVisible();

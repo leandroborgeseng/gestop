@@ -14,7 +14,7 @@ const servidor = vi.hoisted(() => ({ tarefa: null as unknown as Record<string, u
 
 function tarefaBase(): ChamadoTarefaDetalhe {
   return {
-    id: 't1', titulo: 'Trocar lâmpadas do pátio', descricao: null, prazo: null, prioridade: 'MEDIA', status: 'NOVA', justificativa: null, conclusaoTexto: null,
+    id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1', titulo: 'Trocar lâmpadas do pátio', descricao: null, prazo: null, prioridade: 'MEDIA', status: 'NOVA', justificativa: null, conclusaoTexto: null,
     observacao: null, atrasada: false, createdAt: '2026-10-01T12:00:00.000Z', concluidaEm: null, visualizadaEm: null,
     secretaria: { id: 's1', nome: 'Secretaria', sigla: 'SEC' }, equipe: null, responsavel: { id: 'u1', nome: 'Bruno' },
     criadaPor: null, concluidaPor: null, anexos: [], podeTratar: true, podeAlterarDados: false, podeAndamento: true, podeConcluir: true,
@@ -26,7 +26,7 @@ function tarefaBase(): ChamadoTarefaDetalhe {
 
 vi.mock('@/components/ui/snackbar', () => ({ useSnackbar: () => ({ show: () => undefined }) }));
 vi.mock('@/components/auth/session-context', () => ({ useSessionUser: () => ({ permissoes: [] }) }));
-vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams('tarefa=t1'), useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams('tarefa=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'), useRouter: () => ({ replace: vi.fn(), push: vi.fn() }) }));
 vi.mock('@/components/ui/sheet', () => ({
   Sheet: ({ open, children }: { open: boolean; children: ReactNode }) => (open ? createElement('div', { 'data-testid': 'sheet' }, children) : null),
 }));

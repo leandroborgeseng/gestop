@@ -9,6 +9,7 @@ import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { getChamadoLeituraViaTarefa, getChamadoTarefa, getOpcoesTarefa, updateChamadoTarefa } from '@/lib/api';
+import { idTemFormatoPrisma } from '@/lib/id-prisma';
 import { ChamadoTarefaChamadoLeituraView } from '@/components/chamados/chamado-tarefa-chamado-leitura';
 import { ChamadoTarefaBarraAcoes, ChamadoTarefaAnexosCabecalho, ChamadoTarefaHistoricoCabecalho } from '@/components/chamados/chamado-tarefa-permissoes-view';
 import {
@@ -52,10 +53,12 @@ export function ChamadoTarefaSheet({
   tarefaId,
   onClose,
   onChanged,
+  onSemAcesso,
 }: {
   tarefaId: string | null;
   onClose: () => void;
   onChanged?: () => void;
+  onSemAcesso?: () => void;
 }) {
   const snackbar = useSnackbar();
   const [tarefa, setTarefa] = useState<ChamadoTarefaDetalhe | null>(null);
@@ -81,6 +84,10 @@ export function ChamadoTarefaSheet({
       setAcao(null);
       return;
     }
+    if (!idTemFormatoPrisma(tarefaId)) {
+      onSemAcesso?.();
+      return;
+    }
     let ativo = true;
     getChamadoTarefa(tarefaId)
       .then(async (data) => {
@@ -96,7 +103,14 @@ export function ChamadoTarefaSheet({
           setChamadoLeitura(null);
         }
       })
-      .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao abrir a tarefa.', 'error'));
+      .catch((err) => {
+        const status = (err as { status?: number } | null)?.status;
+        if (status === 403 || status === 404) {
+          onSemAcesso?.();
+          return;
+        }
+        snackbar.show(err instanceof Error ? err.message : 'Falha ao abrir a tarefa.', 'error');
+      });
     return () => {
       ativo = false;
     };

@@ -68,8 +68,8 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         nome: 'Autenticar',
         atores: ['administrador', 'gestor', 'equipe', 'solicitante', 'externo'],
         descricao:
-          'Entrar com e-mail e senha. Sem returnTo, a sessão percorre o menu visível, na mesma ordem do lateral e da barra inferior, pula formulários de criação e, se o item listaDeChamados está no menu, não para no item cedeParaListaDeChamados. Começa pelo CCO quando o perfil ativo e as permissões individuais liberam. Se só houver atalho de criação, abre `/conta`. A raiz `/` é o start_url do PWA e usa a mesma escolha, sem trocar Secretaria nem perfil. Rota específica, F5 e volta do segundo plano permanecem na tela atual. Encerrar a sessão sai do sistema.',
-        rotas: ['/', '/login', 'POST /auth/login', 'GET /auth/me', 'POST /auth/logout'],
+          'Entrar com e-mail e senha. Sem returnTo, a sessão percorre o menu visível, na mesma ordem do lateral e da barra inferior, pula formulários de criação e, se o item listaDeChamados está no menu, não para no item cedeParaListaDeChamados. Começa pelo CCO quando o perfil ativo e as permissões individuais liberam. Se só houver atalho de criação, abre `/conta`. A raiz `/` é o start_url do PWA e usa a mesma escolha, sem trocar Secretaria nem perfil. Rota específica, F5 e volta do segundo plano permanecem na tela atual. Retomada da aba ou do PWA (visibilitychange, focus, pageshow com bfcache) e POST /auth/refresh não trocam a rota, o perfil ativo nem a secretaria. O refresh recusa só a sessão desconectada (LogAuditoria LOGOUT com entidadeTipo sessao e entidadeId igual ao sid, ou ao sha256 do token legado sem sid) e nunca emite token além de 30 dias do instante do login (claim auth_time). Outra sessão do mesmo usuário continua. Token legado sem sid, ao renovar, recebe sid igual ao sha256 desse token, de modo que o logout do token renovado recusa o anterior, e conta o teto a partir do iat. A abertura do app e a retomada renovam a sessão quando faltam menos de 7 dias, sem passar desse teto. No fim do prazo, visibilitychange, focus ou pageshow levam ao login com returnTo da URL completa e a mensagem de sessão expirada acima do formulário. Encerrar a sessão sai do sistema.',
+        rotas: ['/', '/login', 'POST /auth/login', 'GET /auth/me', 'POST /auth/refresh', 'POST /auth/logout'],
       },
       {
         id: 'trocar-contexto',
@@ -117,7 +117,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'triar',
         nome: 'Triar e atribuir',
         atores: ['administrador', 'gestor'],
-        descricao: 'Mudar status, triagem, atribuição, planejamento, abertura, observadores e aviso à equipe. A lista e o detalhe rolam por dentro, na mesma altura. A busca por código, descrição ou unidade só dispara no botão Pesquisar ou no Enter. Documentos relacionados do chamado mostram signatários pendentes e as ações de assinatura, cada uma com a permissão correspondente.',
+        descricao: 'Mudar status, triagem, atribuição, planejamento, abertura, observadores e aviso à equipe. A lista e o detalhe rolam por dentro, na mesma altura. A busca por código, descrição ou unidade só dispara no botão Pesquisar ou no Enter. Aba, filtros, busca, página, período da programação e o chamado aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Valor de filtro fora do vocabulário some da query. Id do chamado fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso e não troca Secretaria nem perfil. No celular, abrir o chamado entra no histórico para o Voltar fechar o detalhe. Documentos relacionados do chamado mostram signatários pendentes e as ações de assinatura, cada uma com a permissão correspondente.',
         rotas: ['/chamados', 'GET /chamados', 'PUT /chamados/:id/triagem', 'PUT /chamados/:id/atribuicao', 'PUT /chamados/:id/planejamento', 'GET /documentos/por-chamado/:chamadoId'],
       },
       {
@@ -131,7 +131,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'executar',
         nome: 'Executar chamado',
         atores: ['equipe', 'gestor'],
-        descricao: 'Check-in, evidências e conclusão da ordem em execução.',
+        descricao: 'Check-in, evidências e conclusão da ordem em execução. Aba, busca, filtros, painel do celular, chamado selecionado e tarefa aberta ficam na URL. Tarefa fora do UUID permanece na URL, mostra o aviso e não chama a API. No celular a tarefa entra no histórico para o Voltar fechar o detalhe.',
         rotas: ['/execucao', '/execucao/[id]', 'POST /chamados/:id/execucao/checkin', 'POST /chamados/:id/execucao/evidencias', 'POST /chamados/:id/execucao/concluir'],
       },
       {
@@ -201,7 +201,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'consultar-vistorias',
         nome: 'Consultar vistorias',
         atores: ['gestor', 'equipe', 'administrador'],
-        descricao: 'Listar fiscalizações realizadas e abrir o PDF. As respostas de múltipla escolha saem formatadas; o código técnico da pergunta não aparece; seções agrupam perguntas consecutivas.',
+        descricao: 'Listar fiscalizações realizadas e abrir o PDF. Busca, status, tipo, período, avulsa e o id (UUID) ficam na URL; o padrão concluídas fica de fora. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir a vistoria entra no histórico. As respostas de múltipla escolha saem formatadas; o código técnico da pergunta não aparece; seções agrupam perguntas consecutivas.',
         rotas: ['/vistorias', 'GET /fiscalizacoes', 'GET /fiscalizacoes/:id', 'GET /fiscalizacoes/:id/pdf'],
       },
       {
@@ -215,7 +215,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'cronograma',
         nome: 'Programar cronograma',
         atores: ['administrador', 'gestor'],
-        descricao: 'Agendar a recorrência de checagem por unidade e checklist.',
+        descricao: 'Agendar a recorrência de checagem por unidade e checklist. Mês, Secretaria, próprio e dia ficam na URL; o mês corrente e o dia vazio ficam de fora. A query não abre checagem por id. O id da checagem no caminho é UUID. Secretaria fora do contexto ativo é ignorada e a URL não troca o perfil.',
         rotas: ['/cronograma', 'GET /cronograma', 'POST /cronograma', 'PUT /cronograma/:id', 'DELETE /cronograma/:id', 'POST /cronograma/:id/reativar'],
       },
       {
@@ -235,7 +235,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'consultar-documentos',
         nome: 'Consultar documentos',
         atores: ['administrador', 'gestor', 'equipe', 'solicitante'],
-        descricao: 'Listar peças, gerar PDF e ajustar vínculos com chamado ou vistoria. GET /documentos/por-chamado/:id devolve signatários pendentes e assinaturas vigentes no mesmo serialize da tela Documentos.',
+        descricao: 'Listar peças, gerar PDF e ajustar vínculos com chamado ou vistoria. Busca, tipo, situação, assinatura, histórico e o documento aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir o documento entra no histórico. GET /documentos/por-chamado/:id devolve signatários pendentes e assinaturas vigentes no mesmo serialize da tela Documentos.',
         rotas: ['/documentos', '/chamados', '/meus-chamados', 'GET /documentos', 'GET /documentos/por-chamado/:chamadoId', 'GET /documentos/:id/pdf/original', 'PATCH /documentos/:id/vinculos'],
       },
       {

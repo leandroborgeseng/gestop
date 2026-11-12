@@ -1,29 +1,36 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { pastaEvidencias } from './evidencia-local';
 import { expect, test, type Page } from '@playwright/test';
 
 /**
  * 322 — tela inicial por permissão.
  * Usuários sintéticos só no mock de /api-gestop (nada de banco real nem de produção).
  * A senha do formulário é fixture local; o mock não a confere.
- * Tamanhos do critério (criterios.md): 1440×900, 768×1024, 360×640 e 640×360.
- * A6 no aparelho (PWA em segundo plano) fica para o Leandro; aqui só o que o navegador dispara.
+ * Tamanhos do critério (criterios.md): 1440×900, 768×1024, 1024×768, 360×640 e 640×360.
+ * A6 no aparelho (PWA em segundo plano) fica para o Leandro; aqui o navegador dispara
+ * visibilitychange, focus e pageshow com persisted (bfcache), inclusive sessão de 30 dias perto de vencer.
  */
-const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../evidencias/322');
+const OUT = pastaEvidencias('322');
 mkdirSync(OUT, { recursive: true });
 
 const SENHA = 'Zzteste322!Aa';
 const CCO_EMAIL = 'zzteste-cco@aion.local';
 const SEM_CCO_EMAIL = 'zzteste-semcco@aion.local';
 const MATRIZ_EMAIL = 'zzteste-cco-matriz@aion.local';
+const DOIS_EMAIL = 'zzteste-dois-perfis@aion.local';
 const PERFIL_CCO = 'ZZTESTE 322 CCO';
 const PERFIL_SEM = 'ZZTESTE 322 Sem CCO';
+const PERFIL_A = { id: 'perfil-a-322', nome: 'ZZTESTE 322 Perfil A' };
+const PERFIL_B = { id: 'perfil-b-322', nome: 'ZZTESTE 322 Perfil B' };
 const SIGLA = 'ZZ322';
+const SEC_A = { id: 'sec-322-a', nome: 'Secretaria Fictícia 322 A', sigla: 'ZZ322A' };
+const SEC_B = { id: 'sec-322-b', nome: 'Secretaria Fictícia 322 B', sigla: 'ZZ322B' };
 
 const TAMANHOS = [
   { w: 1440, h: 900 },
   { w: 768, h: 1024 },
+  { w: 1024, h: 768 },
   { w: 360, h: 640 },
   { w: 640, h: 360 },
 ] as const;
@@ -79,14 +86,29 @@ const USUARIOS: Record<string, Usuario> = {
   [MATRIZ_EMAIL]: usuario(MATRIZ_EMAIL, 'ZZTESTE 322 Matriz CCO', PERFIL_CCO, [
     'matriz.cco._tela.visualizar',
   ]),
+  // Perfil A (ativo, sem CCO) e perfil B (com CCO). A sessão traz só as permissões de A,
+  // como buildSessionPayload: não une os perfis e não troca o ativo.
+  [DOIS_EMAIL]: {
+    id: 'user-dois-322',
+    nome: 'ZZTESTE 322 Dois perfis',
+    email: DOIS_EMAIL,
+    perfis: [PERFIL_A.nome],
+    permissoes: ['matriz.chamados._tela.visualizar', 'chamados.gerenciar'],
+    secretaria: SEC_A,
+    perfilAtivo: PERFIL_A,
+    perfisDisponiveis: [PERFIL_A, PERFIL_B],
+    secretariaAtiva: SEC_A,
+    secretariasDisponiveis: [SEC_A, SEC_B],
+  },
 };
 
 function engineDe(projectName: string) {
   return projectName.includes('webkit') ? 'webkit' : 'chromium';
 }
 
-async function mockApi(page: Page, usuarioInicial?: Usuario) {
+async function mockApi(page: Page, usuarioInicial?: Usuario, opcoes?: { refreshStatus?: number }) {
   const trocas: string[] = [];
+  const renovacoes: string[] = [];
   let sessao: Usuario | null = usuarioInicial ?? null;
 
   await page.route('**/api-gestop/**', async (route) => {
@@ -107,6 +129,18 @@ async function mockApi(page: Page, usuarioInicial?: Usuario) {
         tokenType: 'Bearer',
         expiresInSeconds: 30 * 24 * 3600,
         user,
+      });
+    }
+
+    if (url.includes('/auth/refresh') && method === 'POST') {
+      renovacoes.push(new URL(url).pathname);
+      if ((opcoes?.refreshStatus ?? 200) !== 200) return json({ message: 'refresh recusado no teste' }, opcoes?.refreshStatus ?? 401);
+      if (!sessao) return json({}, 401);
+      return json({
+        accessToken: `token-renovado-${sessao.id}`,
+        tokenType: 'Bearer',
+        expiresInSeconds: 30 * 24 * 3600,
+        user: sessao,
       });
     }
 
@@ -197,7 +231,38 @@ async function mockApi(page: Page, usuarioInicial?: Usuario) {
     return json({});
   });
 
-  return { trocas: () => [...trocas] };
+  return { trocas: () => [...trocas], renovacoes: () => [...renovacoes] };
+}
+
+async function envelhecerSessao(page: Page, margemMs = 20_000) {
+  await page.evaluate((margem) => {
+    const bruto = window.localStorage.getItem('sigma.auth');
+    if (!bruto) throw new Error('sem sessão para envelhecer');
+    const auth = JSON.parse(bruto) as { expiresAt: number };
+    auth.expiresAt = Date.now() + margem;
+    window.localStorage.setItem('sigma.auth', JSON.stringify(auth));
+    window.localStorage.setItem('gestop.auth.remember', '1');
+  }, margemMs);
+}
+
+async function dispararRetomada(page: Page) {
+  await page.evaluate(() => {
+    const emitir = (state: DocumentVisibilityState) => {
+      const definir = (alvo: object) => {
+        Object.defineProperty(alvo, 'visibilityState', { configurable: true, get: () => state });
+      };
+      try {
+        definir(document);
+      } catch {
+        definir(Document.prototype);
+      }
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    emitir('hidden');
+    emitir('visible');
+    window.dispatchEvent(new Event('focus'));
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+  });
 }
 
 async function preencherLogin(page: Page, email: string, remember = false) {
@@ -458,6 +523,211 @@ test.describe('322 tela inicial', () => {
           engine,
           url: page.url(),
           nota: 'visibilitychange, focus e pageshow no navegador não redirecionam. A validação do PWA no aparelho é manual do Leandro.',
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+  test('retomada com sessão de 30 dias perto de expirar não troca a rota e / segue A1', async ({ page }, testInfo) => {
+    const api = await mockApi(page);
+    await entrar(page, CCO_EMAIL, true);
+    await expect(page).toHaveURL(/\/cco(?:\/|$|\?)/, { timeout: 20_000 });
+    await page.goto('/execucao?aba=tarefas');
+    await expect(page).toHaveURL(/\/execucao\?aba=tarefas/);
+    await expect(page.getByRole('heading', { name: 'Execução' })).toBeVisible();
+    const antes = page.url();
+    const contextoAntes = await contextoSessao(page);
+
+    await envelhecerSessao(page);
+    const pedido = page.waitForRequest((req) => req.method() === 'POST' && req.url().includes('/auth/refresh'));
+    await dispararRetomada(page);
+    await pedido;
+    await expect
+      .poll(async () =>
+        page.evaluate(() => (JSON.parse(window.localStorage.getItem('sigma.auth') || '{}') as { accessToken?: string }).accessToken ?? ''),
+      )
+      .toContain('token-renovado-');
+
+    expect(page.url()).toBe(antes);
+    await expect(page.getByRole('heading', { name: 'Execução' })).toBeVisible();
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page).not.toHaveURL(/\/mobile/);
+    expect(api.trocas()).toEqual([]);
+    await page.waitForTimeout(500);
+    expect(api.renovacoes()).toHaveLength(1);
+    expect(await contextoSessao(page)).toEqual(contextoAntes);
+
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/cco(?:\/|$|\?)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page.getByRole('heading', { name: 'Visão operacional dos próprios públicos' })).toBeVisible();
+    expect(await contextoSessao(page)).toEqual(contextoAntes);
+    expect(api.trocas()).toEqual([]);
+
+    const engine = engineDe(testInfo.project.name);
+    await page.screenshot({ path: path.join(OUT, `${engine}-l3-retomada-cco.png`) });
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-l3.json`),
+      JSON.stringify(
+        {
+          criterio: '322-L3',
+          engine,
+          retomada: 'visibilitychange, focus, pageshow persisted',
+          urlDuranteRetomada: antes,
+          urlDepoisDeAbrirRaiz: page.url(),
+          refreshDisparado: true,
+          redirecionouNaRetomada: false,
+          perfilId: contextoAntes?.perfilId,
+          secretariaId: contextoAntes?.secretariaId,
+          naoAbriuVistoria: !page.url().includes('/mobile'),
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+  test('retomada sem CCO permanece na tela e uma nova ida a / cai em Chamados', async ({ page }, testInfo) => {
+    const api = await mockApi(page);
+    await entrar(page, SEM_CCO_EMAIL, true);
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    const antes = page.url();
+    const contextoAntes = await contextoSessao(page);
+    await envelhecerSessao(page);
+    const pedido = page.waitForRequest((req) => req.method() === 'POST' && req.url().includes('/auth/refresh'));
+    await dispararRetomada(page);
+    await pedido;
+    expect(page.url()).toBe(antes);
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
+    expect(api.trocas()).toEqual([]);
+
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page).not.toHaveURL(/\/cco/);
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
+    expect(await contextoSessao(page)).toEqual(contextoAntes);
+
+    const engine = engineDe(testInfo.project.name);
+    await page.screenshot({ path: path.join(OUT, `${engine}-l3-retomada-sem-cco.png`) });
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-l3-a2.json`),
+      JSON.stringify({ criterio: '322-L3', engine, url: page.url(), primeiraTela: '/chamados' }, null, 2),
+    );
+  });
+
+  test('falha no refresh da sessão de 30 dias não redireciona', async ({ page }, testInfo) => {
+    await mockApi(page, undefined, { refreshStatus: 401 });
+    await entrar(page, CCO_EMAIL, true);
+    await expect(page).not.toHaveURL(/\/login/, { timeout: 20_000 });
+    await page.goto('/documentos?search=ZZ322');
+    await expect(page).toHaveURL(/\/documentos\?/);
+    await expect(page.getByRole('heading', { name: 'Documentos' })).toBeVisible();
+    const antes = page.url();
+    const tokenAntes = await page.evaluate(
+      () => (JSON.parse(window.localStorage.getItem('sigma.auth') || '{}') as { accessToken?: string }).accessToken,
+    );
+
+    await envelhecerSessao(page);
+    const pedido = page.waitForRequest((req) => req.method() === 'POST' && req.url().includes('/auth/refresh'));
+    await dispararRetomada(page);
+    await pedido;
+    await page.waitForTimeout(400);
+
+    expect(page.url()).toBe(antes);
+    await expect(page).not.toHaveURL(/\/login/);
+    await expect(page).not.toHaveURL(/\/cco/);
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page.getByRole('heading', { name: 'Documentos' })).toBeVisible();
+    const tokenDepois = await page.evaluate(
+      () => (JSON.parse(window.localStorage.getItem('sigma.auth') || '{}') as { accessToken?: string }).accessToken,
+    );
+    expect(tokenDepois).toBe(tokenAntes);
+
+    const engine = engineDe(testInfo.project.name);
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-l3-refresh-falhou.json`),
+      JSON.stringify({ criterio: '322-L3', engine, url: page.url(), refreshFalhou: true, redirecionou: false }, null, 2),
+    );
+  });
+
+  test('dois perfis: o ativo sem CCO abre a tela dele e não troca perfil nem secretaria', async ({ page }, testInfo) => {
+    const api = await mockApi(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await entrar(page, DOIS_EMAIL);
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/cco/);
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page).not.toHaveURL(/\/meus-chamados/);
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Perfil ativo' })).toHaveValue(PERFIL_A.id);
+    await expect(page.getByRole('combobox', { name: 'Secretaria ativa' })).toHaveValue(SEC_A.id);
+
+    const contexto = await contextoSessao(page);
+    expect(contexto?.perfilId).toBe(PERFIL_A.id);
+    expect(contexto?.perfilNome).toBe(PERFIL_A.nome);
+    expect(contexto?.secretariaId).toBe(SEC_A.id);
+    expect(contexto?.secretariaSigla).toBe('ZZ322A');
+    expect(api.trocas()).toEqual([]);
+
+    await page.goto('/');
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/cco/);
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
+    expect(await contextoSessao(page)).toEqual(contexto);
+    expect(api.trocas()).toEqual([]);
+
+    const engine = engineDe(testInfo.project.name);
+    await page.screenshot({ path: path.join(OUT, `${engine}-l4-dois-perfis.png`) });
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-l4.json`),
+      JSON.stringify(
+        {
+          criterio: '322-L4',
+          engine,
+          url: page.url(),
+          perfilAtivo: PERFIL_A.nome,
+          perfilComCcoNaoAtivo: PERFIL_B.nome,
+          secretaria: 'ZZ322A',
+          trocas: api.trocas(),
+        },
+        null,
+        2,
+      ),
+    );
+  });
+
+  test('paisagem 1024×768: CCO e sem CCO', async ({ page }, testInfo) => {
+    const engine = engineDe(testInfo.project.name);
+    await mockApi(page);
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await entrar(page, CCO_EMAIL);
+    await expect(page).toHaveURL(/\/cco(?:\/|$|\?)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page.getByRole('heading', { name: 'Visão operacional dos próprios públicos' })).toBeVisible();
+    await page.screenshot({ path: path.join(OUT, `${engine}-1024x768-paisagem-cco.png`) });
+
+    await page.evaluate(() => window.localStorage.clear());
+    await page.goto('/login');
+    await preencherLogin(page, SEM_CCO_EMAIL);
+    await expect(page).toHaveURL(/\/chamados(?:\?|$)/, { timeout: 20_000 });
+    await expect(page).not.toHaveURL(/\/cco/);
+    await expect(page).not.toHaveURL(/\/mobile/);
+    await expect(page.getByRole('heading', { name: 'Chamados', exact: true })).toBeVisible();
+    await page.screenshot({ path: path.join(OUT, `${engine}-1024x768-paisagem-sem-cco.png`) });
+    writeFileSync(
+      path.join(OUT, `assert-${engine}-l5-1024x768.json`),
+      JSON.stringify(
+        {
+          criterio: '322-L5',
+          engine,
+          viewport: '1024x768',
+          orientacao: 'paisagem',
+          comCco: '/cco',
+          semCco: page.url(),
         },
         null,
         2,

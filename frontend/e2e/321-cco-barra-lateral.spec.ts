@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { pastaEvidencias } from './evidencia-local';
 
 /**
  * 321 — barra de detalhes do mapa do CCO.
@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
  * fallback CSS (`.sigma-map-fullscreen`). No WebKit o requestFullscreen é recusado de
  * propósito: o Safari do iPhone não coloca `div` em fullscreen, e o SIGMA usa esse fallback.
  */
-const OUT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../evidencias/321');
+const OUT = pastaEvidencias('321');
 mkdirSync(OUT, { recursive: true });
 
 const VIEWPORTS = [

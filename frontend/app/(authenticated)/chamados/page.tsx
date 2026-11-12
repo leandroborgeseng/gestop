@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { ehSemAcessoChamado, podeExcluirChamado } from '@/lib/chamado-acesso';
 import {
   CalendarDays,
   Bell,
@@ -26,12 +26,16 @@ import { ChamadoAberturaSection } from '@/components/chamados/chamado-abertura-s
 import { ChamadoDescricaoExpandivel } from '@/components/chamados/chamado-descricao-expandivel';
 import { ChamadoAcoesMobile } from '@/components/chamados/chamado-acoes-mobile';
 import { ChamadoObservadoresSection } from '@/components/chamados/chamado-observadores-section';
-import { ChamadosFiltrosPanel, ChamadosFiltrosValue } from '@/components/chamados/chamados-filtros-panel';
+import { ChamadosFiltrosPanel } from '@/components/chamados/chamados-filtros-panel';
 import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
 import { DocumentosRelacionadosPanel } from '@/components/documentos/documentos-relacionados-panel';
 import { ChamadoTarefasPanel } from '@/components/chamados/chamado-tarefas-panel';
 import { ChamadoAnexosAberturaView } from '@/components/chamados/chamado-anexos-abertura-view';
 import { PageShell } from '@/components/layout/page-shell';
+import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
+import { buscarRegistroPorIdDaUrl, idTemFormatoPrisma } from '@/lib/id-prisma';
+import { filtrosDeEstado, patchDeFiltros, patchLimparFiltros } from '@/lib/estado-url-chamados';
+import { useEstadoChamados } from '@/lib/use-estado-chamados';
 import { aberturaParaQuery } from '@/lib/filtro-data-abertura';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Badge } from '@/components/ui/badge';
@@ -41,7 +45,6 @@ import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
-import { ehSemAcessoChamado, podeExcluirChamado, SEM_ACESSO_CHAMADO } from '@/lib/chamado-acesso';
 import { ListPagination } from '@/components/ui/list-pagination';
 import { downloadChamadoPdf, excluirChamadoLogicamente, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTarefasDoChamado, listTiposChamadoOpcoes, notificarChamadoEquipe, restaurarChamadoExcluido, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
 import { buildChamadoAcoes, executarAcaoChamado, type ChamadoAcaoId } from '@/lib/chamado-acoes';
@@ -88,18 +91,6 @@ const TRIAGEM_ALL_MAX = 5000;
 const ALTURA_PAINEL_CHAMADOS =
   'h-[min(560px,calc(100dvh-14rem-env(safe-area-inset-bottom)))] max-h-[min(560px,calc(100dvh-14rem-env(safe-area-inset-bottom)))] min-h-[320px] lg:h-[min(860px,calc(100dvh-9.5rem))] lg:max-h-[min(860px,calc(100dvh-9.5rem))]';
 
-const DEFAULT_FILTROS: ChamadosFiltrosValue = {
-  statuses: 'TODOS',
-  prioridade: 'TODAS',
-  sla: 'TODOS',
-  atribuicao: 'TODOS',
-  equipeId: '',
-  secretariaProprioId: '',
-  secretariaExecucaoId: '',
-  tipoChamadoId: '',
-  abertura: {},
-};
-
 function origemMeta(origem: ChamadoOrigem) {
   switch (origem) {
     case 'QR_CODE':
@@ -122,8 +113,6 @@ export default function ChamadosPage() {
 }
 
 function ChamadosPageContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
   const sessionUser = useSessionUser();
@@ -131,9 +120,10 @@ function ChamadosPageContent() {
   const [chamadosTotal, setChamadosTotal] = useState(0);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({ TODOS: 0 });
   const [hasSemSlaApi, setHasSemSlaApi] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(TRIAGEM_PAGE_SIZE);
-  const [allSelected, setAllSelected] = useState(false);
+  const { estado, definir } = useEstadoChamados();
+  const page = estado.pagina;
+  const allSelected = estado.porPagina === 'todos';
+  const pageSize: number = estado.porPagina === 'todos' ? TRIAGEM_PAGE_SIZE : estado.porPagina;
   const [equipes, setEquipes] = useState<EquipeOpcao[]>([]);
   const [tiposChamado, setTiposChamado] = useState<TipoChamadoOpcao[]>([]);
   const [secretariasCadastro, setSecretariasCadastro] = useState<SecretariaOption[]>([]);
@@ -141,74 +131,119 @@ function ChamadosPageContent() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filtros, setFiltros] = useState<ChamadosFiltrosValue>(DEFAULT_FILTROS);
+  const filtros = useMemo(() => filtrosDeEstado(estado, true), [estado]);
   const triagemSeq = useRef(0);
-  // 322: a aba fica na URL para o F5 reabrir Triagem ou Programação.
-  const view: ChamadosView = searchParams.get('aba') === 'programacao' ? 'programacao' : 'triagem';
-
-  function selecionarAba(next: ChamadosView) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === 'programacao') params.set('aba', 'programacao');
-    else params.delete('aba');
-    const qs = params.toString();
-    router.replace(qs ? `/chamados?${qs}` : '/chamados');
-  }
-
-  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
-  const [searchDraft, setSearchDraft] = useState(() => searchParams.get('search') ?? '');
-
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString());
-    const atual = params.get('search') ?? '';
-    if (atual === search) return;
-    if (search) params.set('search', search);
-    else params.delete('search');
-    const qs = params.toString();
-    router.replace(qs ? `/chamados?${qs}` : '/chamados');
-  }, [search, searchParams, router]);
-  const [exibirExcluidos, setExibirExcluidos] = useState(false);
+  // 322 L1: aba, filtros, busca, página e registro ficam na URL.
+  const view: ChamadosView = estado.aba;
+  const search = estado.search;
+  const [searchDraft, setSearchDraft] = useState(estado.search);
+  const exibirExcluidos = estado.excluidos;
   const podeVerExcluidos = canVisualizarChamadosExcluidos(sessionUser);
 
   useEffect(() => {
-    const value = searchParams.get('search');
-    if (value) {
-      setSearch(value);
-      setSearchDraft(value);
-    }
-    const atribuicao = searchParams.get('atribuicao');
-    if (atribuicao === 'MIM' || atribuicao === 'MINHA_EQUIPE') {
-      setFiltros((current) => (current.atribuicao === atribuicao ? current : { ...current, atribuicao }));
-    }
-  }, [searchParams]);
+    setSearchDraft(estado.search);
+  }, [estado.search]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('id'));
+  function selecionarAba(next: ChamadosView) {
+    definir({ aba: next });
+  }
+
+  const [selectedId, setSelectedId] = useState<string | null>(estado.id);
   const [busyId, setBusyId] = useState<string | null>(null);
   /** 315: id pedido na URL que o usuário não pode ver (outra Secretaria / inexistente). */
   const [semAcessoId, setSemAcessoId] = useState<string | null>(null);
   const semAcessoRef = useRef<string | null>(null);
   /** 315: id pedido pela URL (link direto). A lista não troca essa seleção, mesmo fora da página atual, até o usuário escolher outro. */
-  const pedidoUrlRef = useRef<string | null>(searchParams.get('id'));
+  const pedidoUrlRef = useRef<string | null>(estado.id);
   const [detalheFechado, setDetalheFechado] = useState(false);
+  const detalheFechadoRef = useRef(false);
+  const tinhaIdRef = useRef(Boolean(estado.id));
+
+  function marcarDetalheFechado(fechado: boolean) {
+    detalheFechadoRef.current = fechado;
+    setDetalheFechado(fechado);
+  }
 
   useEffect(() => {
-    const id = searchParams.get('id');
-    if (id) {
-      pedidoUrlRef.current = id;
-      setSelectedId(id);
+    if (estado.id) {
+      pedidoUrlRef.current = estado.id;
+      setSelectedId(estado.id);
+      marcarDetalheFechado(false);
+      if (!idTemFormatoPrisma(estado.id)) {
+        semAcessoRef.current = estado.id;
+        setSemAcessoId(estado.id);
+      } else {
+        semAcessoRef.current = null;
+        setSemAcessoId(null);
+      }
+    } else if (tinhaIdRef.current) {
+      pedidoUrlRef.current = null;
+      setSelectedId(null);
+      marcarDetalheFechado(true);
+      setSemAcessoId(null);
+      semAcessoRef.current = null;
     }
-  }, [searchParams]);
+    tinhaIdRef.current = Boolean(estado.id);
+  }, [estado.id]);
+
+  function abrirChamado(id: string) {
+    pedidoUrlRef.current = null;
+    marcarDetalheFechado(false);
+    setSemAcessoId(null);
+    semAcessoRef.current = null;
+    setSelectedId(id);
+    definir({ id }, detalheCobreLista() ? 'push' : 'replace');
+  }
+
+  function fecharRegistro() {
+    marcarDetalheFechado(true);
+    setSelectedId(null);
+    setSemAcessoId(null);
+    semAcessoRef.current = null;
+    pedidoUrlRef.current = null;
+    if (estado.id) definir({ id: null });
+  }
+
+  const [opcoesOk, setOpcoesOk] = useState({ equipes: false, tipos: false, secretarias: false });
 
   useEffect(() => {
     listChamadoEquipes()
-      .then(setEquipes)
+      .then((lista) => {
+        setEquipes(lista);
+        setOpcoesOk((atual) => ({ ...atual, equipes: true }));
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar equipes.'));
     listTiposChamadoOpcoes()
-      .then(setTiposChamado)
+      .then((lista) => {
+        setTiposChamado(lista);
+        setOpcoesOk((atual) => ({ ...atual, tipos: true }));
+      })
       .catch(() => undefined);
     getSecretarias()
-      .then(setSecretariasCadastro)
+      .then((lista) => {
+        setSecretariasCadastro(lista);
+        setOpcoesOk((atual) => ({ ...atual, secretarias: true }));
+      })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    const patch: Parameters<typeof definir>[0] = {};
+    if (opcoesOk.secretarias && estado.secProprio && !secretariasCadastro.some((item) => item.id === estado.secProprio)) {
+      patch.secProprio = '';
+    }
+    if (opcoesOk.secretarias && estado.secExecucao && !secretariasCadastro.some((item) => item.id === estado.secExecucao)) {
+      patch.secExecucao = '';
+    }
+    if (opcoesOk.equipes && estado.equipeId && estado.equipeId !== 'sem-equipe' && !equipes.some((item) => item.id === estado.equipeId)) {
+      patch.equipeId = '';
+    }
+    if (opcoesOk.tipos && estado.tipo && !tiposChamado.some((item) => item.id === estado.tipo)) {
+      patch.tipo = '';
+    }
+    if (!podeVerExcluidos && estado.excluidos) patch.excluidos = false;
+    if (Object.keys(patch).length) definir(patch);
+  }, [opcoesOk, secretariasCadastro, equipes, tiposChamado, estado.secProprio, estado.secExecucao, estado.equipeId, estado.tipo, estado.excluidos, podeVerExcluidos, definir]);
 
   function triagemQuery(nextPage = page, nextSize = pageSize, nextAll = allSelected) {
     const statuses =
@@ -233,11 +268,6 @@ function ChamadosPageContent() {
 
   useEffect(() => {
     if (view !== 'triagem') return;
-    setPage(1);
-  }, [filtros, search, view, exibirExcluidos]);
-
-  useEffect(() => {
-    if (view !== 'triagem') return;
 
     // 295: só a resposta da consulta mais recente é aplicada (respostas atrasadas não sobrescrevem).
     const seq = ++triagemSeq.current;
@@ -248,17 +278,20 @@ function ChamadosPageContent() {
           if (seq !== triagemSeq.current) return;
           if (response.total > TRIAGEM_ALL_MAX && allSelected) {
             setError(`Há ${response.total} chamados. Use filtros ou uma quantidade menor que ${TRIAGEM_ALL_MAX}.`);
-            setAllSelected(false);
+            definir({ porPagina: TRIAGEM_PAGE_SIZE, pagina: 1 });
           }
           setChamados(response.items);
           setChamadosTotal(response.total);
           if (response.statusCounts) setStatusCounts(response.statusCounts);
           setHasSemSlaApi(Boolean(response.hasSemSla));
-          setSelectedId((current) =>
-            current && (response.items.some((item) => item.id === current) || current === semAcessoRef.current || current === pedidoUrlRef.current)
-              ? current
-              : response.items[0]?.id ?? null,
-          );
+          setSelectedId((current) => {
+            if (detalheFechadoRef.current && !pedidoUrlRef.current) return null;
+            if (current && (response.items.some((item) => item.id === current) || current === semAcessoRef.current || current === pedidoUrlRef.current)) {
+              return current;
+            }
+            if (pedidoUrlRef.current) return pedidoUrlRef.current;
+            return response.items[0]?.id ?? null;
+          });
         })
         .catch((err) => {
           if (seq === triagemSeq.current) setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.');
@@ -278,11 +311,14 @@ function ChamadosPageContent() {
     setChamadosTotal(response.total);
     if (response.statusCounts) setStatusCounts(response.statusCounts);
     setHasSemSlaApi(Boolean(response.hasSemSla));
-    setSelectedId((current) =>
-      current && (response.items.some((item) => item.id === current) || current === semAcessoRef.current || current === pedidoUrlRef.current)
-        ? current
-        : response.items[0]?.id ?? null,
-    );
+    setSelectedId((current) => {
+      if (detalheFechadoRef.current && !pedidoUrlRef.current) return null;
+      if (current && (response.items.some((item) => item.id === current) || current === semAcessoRef.current || current === pedidoUrlRef.current)) {
+        return current;
+      }
+      if (pedidoUrlRef.current) return pedidoUrlRef.current;
+      return response.items[0]?.id ?? null;
+    });
     return response;
   }
 
@@ -294,12 +330,21 @@ function ChamadosPageContent() {
 
     let active = true;
     setDetailLoading(true);
-    getChamado(selectedId)
-      .then((data) => {
+    void buscarRegistroPorIdDaUrl(selectedId, getChamado)
+      .then((resultado) => {
         if (!active) return;
+        if (resultado.tipo === 'formato') {
+          semAcessoRef.current = selectedId;
+          setSemAcessoId(selectedId);
+          setDetail(null);
+          return;
+        }
+        if (resultado.tipo !== 'ok') return;
+        const data = resultado.data;
         if (data.excluidoEm && !(podeVerExcluidos && exibirExcluidos)) {
           setDetail((current) => (current?.id === data.id ? null : current));
           setSelectedId((current) => (current === data.id ? null : current));
+          if (estado.id === data.id) definir({ id: null });
           return;
         }
         setDetail(data);
@@ -501,7 +546,7 @@ function ChamadosPageContent() {
         </div>
 
         {view === 'programacao' ? (
-          <ChamadosProgramacaoPanel equipes={equipes} tiposChamado={tiposChamado} />
+          <ChamadosProgramacaoPanel equipes={equipes} tiposChamado={tiposChamado} estado={estado} definir={definir} />
         ) : null}
 
         {view === 'triagem' ? (
@@ -511,7 +556,7 @@ function ChamadosPageContent() {
               pageSize={pageSize}
               total={chamadosTotal}
               allSelected={allSelected}
-              onPageChange={setPage}
+              onPageChange={(next) => definir({ pagina: next })}
               onPageSizeChange={(size) => {
                 if (size === 'TODOS') {
                   if (chamadosTotal > TRIAGEM_ALL_MAX) {
@@ -521,21 +566,21 @@ function ChamadosPageContent() {
                   if (chamadosTotal > TRIAGEM_ALL_WARN && !window.confirm('Carregar todos os chamados pode deixar a tela mais lenta. Continuar?')) {
                     return;
                   }
-                  setAllSelected(true);
-                  setPage(1);
+                  definir({ porPagina: 'todos', pagina: 1 });
                   return;
                 }
-                setAllSelected(false);
-                setPageSize(size);
-                setPage(1);
+                definir({ porPagina: size, pagina: 1 });
               }}
             />
           </div>
         ) : null}
 
         {selectedId && selectedId === semAcessoId ? (
-          <div className="mb-4 shrink-0" data-testid="chamado-sem-acesso">
-            <ErrorState message={SEM_ACESSO_CHAMADO} />
+          <div className="mb-4 flex shrink-0 items-center justify-between gap-3 rounded-[var(--r-md)] border border-amber-200 bg-amber-50 px-4 py-3" data-testid="chamado-sem-acesso" role="status">
+            <p data-testid="aviso-registro-url" className="text-[13px] text-amber-950">{AVISO_REGISTRO_URL}</p>
+            <button type="button" className="text-[13px] font-semibold text-amber-950" onClick={fecharRegistro}>
+              Fechar
+            </button>
           </div>
         ) : null}
 
@@ -549,8 +594,8 @@ function ChamadosPageContent() {
           <div className="mb-4 shrink-0">
             <ChamadosFiltrosPanel
               value={filtros}
-              onChange={setFiltros}
-              onClear={() => setFiltros(DEFAULT_FILTROS)}
+              onChange={(next) => definir(patchDeFiltros(next))}
+              onClear={() => definir(patchLimparFiltros())}
               statusCounts={counts}
               equipes={equipes}
               tiposChamado={tiposChamado}
@@ -574,7 +619,7 @@ function ChamadosPageContent() {
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         event.preventDefault();
-                        setSearch(searchDraft.trim());
+                        definir({ search: searchDraft.trim(), pagina: 1 });
                       }
                     }}
                     placeholder="Buscar por código, descrição ou unidade…"
@@ -585,7 +630,7 @@ function ChamadosPageContent() {
                     variant="filled"
                     size="md"
                     className="shrink-0 gap-1.5 px-3"
-                    onClick={() => setSearch(searchDraft.trim())}
+                    onClick={() => definir({ search: searchDraft.trim(), pagina: 1 })}
                   >
                     <Search className="h-4 w-4" />
                     Pesquisar
@@ -597,7 +642,7 @@ function ChamadosPageContent() {
                     className="mt-2 text-[12px] font-semibold text-[var(--brand)]"
                     onClick={() => {
                       setSearchDraft('');
-                      setSearch('');
+                      definir({ search: '', pagina: 1 });
                     }}
                   >
                     Limpar busca
@@ -608,7 +653,7 @@ function ChamadosPageContent() {
                     <input
                       type="checkbox"
                       checked={exibirExcluidos}
-                      onChange={(event) => setExibirExcluidos(event.target.checked)}
+                      onChange={(event) => definir({ excluidos: event.target.checked, pagina: 1 })}
                       className="h-3.5 w-3.5 accent-[var(--danger)]"
                     />
                     Exibir chamados excluídos
@@ -639,11 +684,7 @@ function ChamadosPageContent() {
                       <button
                         key={chamado.id}
                         type="button"
-                        onClick={() => {
-                          pedidoUrlRef.current = null;
-                          setDetalheFechado(false);
-                          setSelectedId(chamado.id);
-                        }}
+                        onClick={() => abrirChamado(chamado.id)}
                         className={cn(
                           'ch-row mb-0.5 flex w-full flex-col gap-1.5 rounded-[var(--r-md)] border border-transparent px-3 py-2.5 text-left transition-colors',
                           chamado.excluidoEm && 'border-[#f3c0c0] bg-[#fde8e8]',
@@ -738,17 +779,10 @@ function ChamadosPageContent() {
                 onPerdeuAcesso={() => {
                   // 310 (TL #48): o usuário perdeu o acesso após transferir a execução → fecha o detalhe e atualiza a lista.
                   const removidoId = selected?.id;
-                  pedidoUrlRef.current = null;
-                  setDetalheFechado(true);
-                  setSelectedId(null);
+                  fecharRegistro();
                   setDetail(null);
                   setChamados((current) => current.filter((item) => item.id !== removidoId));
                   setChamadosTotal((total) => Math.max(0, total - 1));
-                  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('id')) {
-                    const url = new URL(window.location.href);
-                    url.searchParams.delete('id');
-                    window.history.replaceState(window.history.state, '', url.toString());
-                  }
                   void listChamados(triagemQuery())
                     .then((response) => {
                       setChamados(response.items);
@@ -762,7 +796,7 @@ function ChamadosPageContent() {
                     const removidoId = selected?.id;
                     setChamados((current) => current.filter((item) => item.id !== removidoId));
                     setChamadosTotal((total) => Math.max(0, total - 1));
-                    setSelectedId(null);
+                    fecharRegistro();
                     setDetail(null);
                     void refreshChamadosList();
                     return;
@@ -776,7 +810,7 @@ function ChamadosPageContent() {
                         current.map((item) => (item.id === refreshed.id ? { ...item, ...refreshed } : item)),
                       );
                     })
-                    .catch(() => setSelectedId(null));
+                    .catch(() => fecharRegistro());
                 }}
               />
             </section>
