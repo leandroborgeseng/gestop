@@ -28,16 +28,28 @@ import {
   type TarefasExecucaoResponse,
 } from '@/lib/chamado-tarefa';
 
-export function ExecucaoTarefasPanel({
-  estado: estadoExterno,
-  definir: definirExterno,
-}: {
+export function ExecucaoTarefasPanel(props: {
   estado?: EstadoExecucao;
   definir?: (patch: Partial<EstadoExecucao>, modo?: 'replace' | 'push') => void;
 } = {}) {
-  const interno = useEstadoExecucao();
-  const estado = estadoExterno ?? interno.estado;
-  const definir = definirExterno ?? interno.definir;
+  if (props.estado && props.definir) {
+    return <ExecucaoTarefasConteudo estado={props.estado} definir={props.definir} />;
+  }
+  return <ExecucaoTarefasComEstado />;
+}
+
+function ExecucaoTarefasComEstado() {
+  const { estado, definir } = useEstadoExecucao();
+  return <ExecucaoTarefasConteudo estado={estado} definir={definir} />;
+}
+
+function ExecucaoTarefasConteudo({
+  estado,
+  definir,
+}: {
+  estado: EstadoExecucao;
+  definir: (patch: Partial<EstadoExecucao>, modo?: 'replace' | 'push') => void;
+}) {
   const router = useRouter();
   const empurrou = useRef(false);
   const [data, setData] = useState<TarefasExecucaoResponse | null>(null);

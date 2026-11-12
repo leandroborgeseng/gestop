@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   buscaDaTravessia,
@@ -42,9 +42,10 @@ export function useEstadoExecucao() {
     return () => window.removeEventListener('popstate', marcar, true);
   }, []);
 
-  useEffect(() => {
-    if (escritaRef.current !== confirmadaRef.current) return;
+  useLayoutEffect(() => {
     if (paramsIguais(sp, lido.canonico)) return;
+    const canon = lido.canonico.toString();
+    if (escritaRef.current !== confirmadaRef.current && canon !== chaveRef.current) return;
     router.replace(hrefDe('/execucao', lido.canonico));
   }, [sp, lido.canonico, router]);
 
