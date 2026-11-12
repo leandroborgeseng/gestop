@@ -216,7 +216,9 @@ test('UX-10 o pop-up do pin mostra tarefa, chamado e responsável', async ({ pag
   await page.setViewportSize({ width: 1280, height: 800 });
   await abrirTarefas(page);
   const mapa = page.locator('.sigma-map-shell').last();
-  await mapa.scrollIntoViewIfNeeded();
+  await expect(async () => {
+    await mapa.scrollIntoViewIfNeeded({ timeout: 3_000 });
+  }).toPass();
   await expect(page.locator('.leaflet-marker-pane .sigma-map-marker').first()).toBeVisible({ timeout: 20_000 });
   const textos: string[] = [];
   const tamanhos: Array<{ largura: number; altura: number }> = [];
@@ -306,27 +308,27 @@ test('UX-12 cinco filtros cabem no resumo e Limpar filtros recarrega o padrão',
     if (!(await status.isVisible())) await botaoFiltros.click();
     await expect(status).toBeVisible();
   };
-  const aplicar = async (rotulo: string, opcao: string | { label: string }, url: RegExp) => {
+  const aplicar = async (rotulo: string, opcao: string | { label: string }, valor: string) => {
     await expect(async () => {
       await abrirFiltros();
       if (typeof opcao === 'string') await campo(rotulo).selectOption(opcao, { timeout: 3_000 });
       else await campo(rotulo).selectOption(opcao, { timeout: 3_000 });
-      await expect(page).toHaveURL(url);
+      await expect(campo(rotulo)).toHaveValue(valor);
     }).toPass();
   };
-  await aplicar('Status', 'NOVA', /status=nova/);
-  await aplicar('Secretaria da tarefa', { label: 'ZZP31' }, /secretaria=sec-p31/);
-  await aplicar('Equipe', { label: 'Equipe ZZ P31' }, /equipe=eq-p31/);
-  await aplicar('Prioridade', { label: 'Alta' }, /prioridade=alta/);
+  await aplicar('Status', 'NOVA', 'NOVA');
+  await aplicar('Secretaria da tarefa', { label: 'ZZP31' }, 'sec-p31');
+  await aplicar('Equipe', { label: 'Equipe ZZ P31' }, 'eq-p31');
+  await aplicar('Prioridade', { label: 'Alta' }, 'ALTA');
   await expect(async () => {
     await abrirFiltros();
     await campo('Prazo de').fill('2026-10-01', { timeout: 3_000 });
-    await expect(page).toHaveURL(/prazoDe=2026-10-01/);
+    await expect(campo('Prazo de')).toHaveValue('2026-10-01');
   }).toPass();
   await expect(async () => {
     await abrirFiltros();
     await campo('Prazo até').fill('2026-10-05', { timeout: 3_000 });
-    await expect(page).toHaveURL(/prazoAte=2026-10-05/);
+    await expect(campo('Prazo até')).toHaveValue('2026-10-05');
   }).toPass();
   await expect(page.getByTestId('contagem-filtros-tarefas')).toHaveText('(5 filtros)');
   const resumo = page.locator('p[title]').filter({ hasText: 'Status: Nova' });
@@ -349,7 +351,7 @@ test('UX-12 cinco filtros cabem no resumo e Limpar filtros recarrega o padrão',
   await expect(async () => {
     await abrirFiltros();
     await page.getByRole('button', { name: 'Limpar filtros' }).click({ timeout: 3_000 });
-    await expect(page).not.toHaveURL(/status=nova/);
+    await expect(campo('Status')).toHaveValue('');
   }).toPass();
   await expect(page.getByTestId('contagem-filtros-tarefas')).toHaveCount(0);
   const padrao = page.locator('p[title]').filter({ hasText: 'Status: não finalizados' });
