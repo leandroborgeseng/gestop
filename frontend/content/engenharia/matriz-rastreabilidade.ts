@@ -301,6 +301,15 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     permissao: 'Aba importacao: unidades.gerenciar ou usuarios.gerenciar, ou matriz.admin.importacao.',
   },
   {
+    id: 'webmap-camadas',
+    capacidade: 'Importar camadas do Webmap',
+    ator: 'Administrador do Sistema',
+    tela: '/admin (Importação › Camadas do Webmap)',
+    api: 'WebmapCamadasAdminController: POST /admin/importacao/webmap-camadas/simular|aplicar, GET /status|/historico|/erros.csv. Mapa: GET /mapa/camadas e /mapa/camadas/:id/geojson',
+    tabelas: 'WebmapCamadaGrupo, WebmapCamada, WebmapCamadaVersao, WebmapElemento, WebmapImportacao, WebmapIcone',
+    permissao: 'Simular e aplicar exigem a aba importacao. O mapa usa dashboard.visualizar.',
+  },
+  {
     id: 'auditoria',
     capacidade: 'Consultar e configurar auditoria',
     ator: 'Administrador do Sistema',

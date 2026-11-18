@@ -329,6 +329,13 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         rotas: ['/admin', 'GET /admin/importacao/webmap/status', 'POST /admin/importacao/webmap/apply'],
       },
       {
+        id: 'webmap-camadas',
+        nome: 'Importar camadas do Webmap',
+        atores: ['administrador'],
+        descricao: 'Simular e aplicar grupos, camadas e feições. A fonte é lida e gravada por camada, em lotes, sem montar todas as feições. Reaplicar a mesma versão faz upsert pela chave estável da feição e não apaga o lote já gravado; a versão ativa anterior só é trocada no fim.',
+        rotas: ['/admin', 'POST /admin/importacao/webmap-camadas/simular', 'POST /admin/importacao/webmap-camadas/aplicar', 'GET /admin/importacao/webmap-camadas/status'],
+      },
+      {
         id: 'auditoria',
         nome: 'Consultar auditoria',
         atores: ['administrador'],
