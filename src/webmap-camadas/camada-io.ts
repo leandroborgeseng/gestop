@@ -3,13 +3,22 @@
  * Roda no worker do job (heap limitado) ou no próprio processo (testes). Nada da camada inteira fica em memória:
  * cada elemento é lido, reparado e vai para um lote de até LOTE_ELEMENTOS / LOTE_BYTES, gravado e solto.
  */
-import { randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { ElementoLido, ErroLeitura, lerElementosStream } from './parse';
 import type { WebmapCamadasFonte } from './source';
 
 /** Pacote (b): lote menor para baixar o pico do aplicar (antes 500 / 1 MiB). Contagens não dependem do lote. */
 export const LOTE_ELEMENTOS = 200;
 export const LOTE_BYTES = 256 * 1024;
+
+/**
+ * Id estável da feição nesta versão da camada: ordem na fonte (a mesma leitura reproduz o mesmo id).
+ * Reaplicar faz upsert nesta chave — não gera outra linha e não apaga o que o lote anterior já gravou.
+ */
+export function idFeicaoEstavel(camadaId: string, versaoId: string, indice: number) {
+  const h = createHash('sha1').update(`${camadaId}\0${versaoId}\0${indice}`).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
 
 export type Contagem = { pontos: number; linhas: number; poligonos: number };
 export type Stats = Contagem & { corrigidos: number; invalidos: number; erros: ErroLeitura[]; bbox: number[]; hash?: string };
@@ -38,23 +47,38 @@ export async function contarCamada(fonte: WebmapCamadasFonte, a: AlvoCamada): Pr
   return s;
 }
 
-const INSERT = `INSERT INTO "WebmapElemento" ("id","camadaId","versao","fidOrigem","geometriaTipo","geometria","geometriaOriginal","corrigida","atributos","minLng","minLat","maxLng","maxLat","geometriaInvalida")
+const UPSERT = `INSERT INTO "WebmapElemento" ("id","camadaId","versao","fidOrigem","geometriaTipo","geometria","geometriaOriginal","corrigida","atributos","minLng","minLat","maxLng","maxLat","geometriaInvalida")
 SELECT x.id, x."camadaId", x.versao, x."fidOrigem", x."geometriaTipo", coalesce(x.geometria, 'null'::jsonb), x."geometriaOriginal", x.corrigida, x.atributos, x."minLng", x."minLat", x."maxLng", x."maxLat", coalesce(x."geometriaInvalida", false)
-FROM jsonb_to_recordset($1::jsonb) AS x(id text, "camadaId" text, versao text, "fidOrigem" text, "geometriaTipo" text, geometria jsonb, "geometriaOriginal" jsonb, corrigida boolean, atributos jsonb, "minLng" float8, "minLat" float8, "maxLng" float8, "maxLat" float8, "geometriaInvalida" boolean)`;
+FROM jsonb_to_recordset($1::jsonb) AS x(id text, "camadaId" text, versao text, "fidOrigem" text, "geometriaTipo" text, geometria jsonb, "geometriaOriginal" jsonb, corrigida boolean, atributos jsonb, "minLng" float8, "minLat" float8, "maxLng" float8, "maxLat" float8, "geometriaInvalida" boolean)
+ON CONFLICT ("id") DO UPDATE SET
+  "camadaId" = EXCLUDED."camadaId",
+  versao = EXCLUDED.versao,
+  "fidOrigem" = EXCLUDED."fidOrigem",
+  "geometriaTipo" = EXCLUDED."geometriaTipo",
+  geometria = EXCLUDED.geometria,
+  "geometriaOriginal" = EXCLUDED."geometriaOriginal",
+  corrigida = EXCLUDED.corrigida,
+  atributos = EXCLUDED.atributos,
+  "minLng" = EXCLUDED."minLng",
+  "minLat" = EXCLUDED."minLat",
+  "maxLng" = EXCLUDED."maxLng",
+  "maxLat" = EXCLUDED."maxLat",
+  "geometriaInvalida" = EXCLUDED."geometriaInvalida"`;
 
 /**
- * Grava a camada na versão `versaoId` (apaga antes o que essa versão já tinha: retentativa nunca duplica).
- * O lote vira um único texto JSON (um parâmetro) e é solto logo após o INSERT.
+ * Grava a camada na versão `versaoId` em lotes. Cada lote é um upsert pela chave estável da feição
+ * e é solto logo após o INSERT: uma aplicação interrompida no meio pode ser reaplicada sem duplicar
+ * e sem apagar as feições que os lotes anteriores já gravaram.
  */
 export async function gravarCamada(
   exec: ExecSql, fonte: WebmapCamadasFonte, a: AlvoGravacao,
   ganchos: { aposLote?: (lote: number) => Promise<void> | void } = {},
 ): Promise<Stats> {
-  await exec(`DELETE FROM "WebmapElemento" WHERE "versao" = $1`, [a.versaoId]);
   const s = novoStats();
   let partes: string[] = [];
   let bytes = 0;
   let nLote = 0;
+  let indice = 0;
   const flush = async () => {
     if (!partes.length) return;
     // o texto do lote só existe durante o INSERT; as partes são soltas antes de esperar o banco
@@ -63,7 +87,7 @@ export async function gravarCamada(
     bytes = 0;
     const params: unknown[] = [json];
     json = null;
-    await exec(INSERT, params);
+    await exec(UPSERT, params);
     params.length = 0;
     nLote++;
     await ganchos.aposLote?.(nLote);
@@ -71,7 +95,7 @@ export async function gravarCamada(
   await lerElementosStream(fonte.lerStream(`layers/${a.arquivo}`), a.label, a.grupo, async (e) => {
     somar(s, e);
     const linha = JSON.stringify({
-      id: randomUUID(), camadaId: a.camadaId, versao: a.versaoId, fidOrigem: e.fidOrigem, geometriaTipo: e.geometriaTipo,
+      id: idFeicaoEstavel(a.camadaId, a.versaoId, indice++), camadaId: a.camadaId, versao: a.versaoId, fidOrigem: e.fidOrigem, geometriaTipo: e.geometriaTipo,
       geometria: e.geometria, geometriaOriginal: e.geometriaOriginal ?? null, corrigida: e.corrigida, atributos: e.atributos,
       geometriaInvalida: e.geometriaInvalida,
       minLng: e.bbox?.[0] ?? null, minLat: e.bbox?.[1] ?? null, maxLng: e.bbox?.[2] ?? null, maxLat: e.bbox?.[3] ?? null,

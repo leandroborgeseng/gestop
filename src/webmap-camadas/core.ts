@@ -366,13 +366,23 @@ export async function executarAplicacao(
         porChave.set(p.chaveOrigem, { ...c, grupo: gruposEx.get(p.grupoChave)! } as Existente);
       }
       const versaoId = `${importacaoId}:${camadaId}`;
+      const previa = await prisma.webmapCamadaVersao.findUnique({ where: { id: versaoId } });
+      if (previa?.status === 'PRONTA' && previa.shaArquivo === p.shaArquivo) {
+        // progresso por camada: esta importação já gravou a camada; retomar não relê nem duplica
+        statsPorChave.set(p.chaveOrigem, {
+          contagem: { pontos: previa.totalPontos, linhas: previa.totalLinhas, poligonos: previa.totalPoligonos },
+          corrigidos: previa.totalCorrigidos, invalidos: previa.totalInvalidos, erros: (previa.errosLeitura as ErroLeitura[] | null) ?? [],
+        });
+        versaoPorChave.set(p.chaveOrigem, versaoId);
+        continue;
+      }
       await prisma.webmapCamadaVersao.upsert({ where: { id: versaoId }, create: { id: versaoId, camadaId, importacaoId, status: 'GRAVANDO', shaArquivo: p.shaArquivo }, update: { status: 'GRAVANDO' } });
       const tentativas = opts.tentativasPorCamada ?? 3;
       let s = novoStats();
       const leitor = opts.leitor ?? leitorNoProcesso(prisma, fonte);
       for (let t = 1; ; t++) {
         try {
-          // retentativa da camada nunca duplica: gravarCamada apaga antes o que esta versão já tinha
+          // retentativa da camada faz upsert pela chave estável (não apaga o lote já gravado, não duplica)
           s = await leitor.gravar({ arquivo: p.arquivo, label: p.nomeOriginal, grupo: p.grupo, camadaId: camadaId!, versaoId }, async (lote) => {
             await opts.batimento?.();
             await opts.aposLote?.({ camada: p.chaveOrigem, lote });

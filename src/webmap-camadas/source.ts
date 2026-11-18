@@ -1,8 +1,14 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
+import { request as httpRequest, type IncomingMessage } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { join } from 'node:path';
+import { createGunzip, createInflate } from 'node:zlib';
 import { githubHeaders } from '../../prisma/webmap-github';
+
+/** Pedaco máximo entregue por lerStream. O parser nunca vê o arquivo inteiro de uma vez. */
+export const PEDACO_TEXTO = 64 * 1024;
 
 export type ArquivoFonte = { nome: string; sha: string; bytes: number };
 export type ListagemFonte = { commitSha: string; layersJsSha: string; layers: Map<string, ArquivoFonte>; styles: Map<string, ArquivoFonte> };
@@ -77,24 +83,8 @@ export class GithubWebmapFonte implements WebmapCamadasFonte {
   async lerTexto(caminho: string) {
     return (await this.lerBinario(caminho)).toString('utf8');
   }
-  async *lerStream(caminho: string): AsyncIterable<string> {
-    const url = `${this.rawRoot}/${caminho}`;
-    const res = await fetch(url);
-    if (!res.ok || !res.body) throw new Error(`Fonte ${res.status} em ${url}`);
-    const decoder = new TextDecoder('utf-8');
-    const reader = res.body.getReader();
-    try {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        yield decoder.decode(value, { stream: true });
-      }
-      const tail = decoder.decode();
-      if (tail) yield tail;
-    } finally {
-      reader.releaseLock();
-      await res.body.cancel().catch(() => undefined);
-    }
+  lerStream(caminho: string): AsyncIterable<string> {
+    return textoHttpEmPedacos(`${this.rawRoot}/${caminho}`);
   }
 }
 
@@ -134,7 +124,57 @@ export class DiretorioWebmapFonte implements WebmapCamadasFonte {
     return (await this.lerBinario(caminho)).toString('utf8');
   }
   async *lerStream(caminho: string): AsyncIterable<string> {
-    const stream = createReadStream(join(this.root, caminho), { encoding: 'utf8', highWaterMark: 256 * 1024 });
+    const stream = createReadStream(join(this.root, caminho), { encoding: 'utf8', highWaterMark: PEDACO_TEXTO });
     for await (const chunk of stream) yield chunk as string;
+  }
+}
+
+function pedirHttp(url: string, redirects = 0): Promise<IncomingMessage> {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const req = (u.protocol === 'http:' ? httpRequest : httpsRequest)(u, {
+      headers: { 'User-Agent': 'SIGMA-webmap-import', Accept: '*/*', 'Accept-Encoding': 'gzip, deflate' },
+    }, (res) => {
+      const code = res.statusCode ?? 0;
+      if (code >= 300 && code < 400 && res.headers.location) {
+        res.resume();
+        if (redirects >= 5) {
+          reject(new Error(`Fonte: redirects demais em ${url}`));
+          return;
+        }
+        pedirHttp(new URL(res.headers.location, url).href, redirects + 1).then(resolve, reject);
+        return;
+      }
+      resolve(res);
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/** Download em pedaços pequenos (socket/gzip), sem juntar o corpo num único Buffer. */
+export async function* textoHttpEmPedacos(url: string): AsyncIterable<string> {
+  const res = await pedirHttp(url);
+  const code = res.statusCode ?? 0;
+  if (code !== 200) {
+    res.resume();
+    throw new Error(`Fonte ${code} em ${url}`);
+  }
+  const enc = String(res.headers['content-encoding'] ?? '');
+  const corpo = /gzip/i.test(enc)
+    ? res.pipe(createGunzip({ chunkSize: 16 * 1024 }))
+    : /deflate/i.test(enc)
+      ? res.pipe(createInflate({ chunkSize: 16 * 1024 }))
+      : res;
+  const decoder = new TextDecoder('utf-8');
+  try {
+    for await (const chunk of corpo as AsyncIterable<Buffer>) {
+      const text = decoder.decode(chunk, { stream: true });
+      if (text) yield text;
+    }
+    const tail = decoder.decode();
+    if (tail) yield tail;
+  } finally {
+    res.destroy();
   }
 }

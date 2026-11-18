@@ -6,11 +6,12 @@ import type { LeitorCamadas } from './core';
 import type { FonteConfig } from './source';
 
 /**
- * 296 — limites do heap do worker (MB). A parte pesada (download em fluxo, parse, reparo, lotes) roda aqui;
- * o processo principal só planeja e troca versões. Ver desenho-296.md, "Memória".
+ * 296 — teto do heap do worker (MB), apoio ao processamento em lotes.
+ * O que evita o estouro é não materializar a fonte: cada camada entra em pedaços e sai em lotes.
+ * `maxOldGenerationSizeMb` é o equivalente, no worker, de `--max-old-space-size` (a flag não vale em worker_threads).
  */
-export const JOB_HEAP_OLD_MB = Number(process.env.WEBMAP_CAMADAS_JOB_HEAP_MB) || 48;
-export const JOB_HEAP_YOUNG_MB = 4;
+export const JOB_HEAP_OLD_MB = Number(process.env.WEBMAP_CAMADAS_JOB_HEAP_MB) || 256;
+export const JOB_HEAP_YOUNG_MB = Number(process.env.WEBMAP_CAMADAS_JOB_HEAP_YOUNG_MB) || 32;
 
 export type DadosWorker = { dbUrl: string; fonte: FonteConfig };
 export type PedidoWorker = { id: number; op: 'contar'; alvo: AlvoCamada } | { id: number; op: 'gravar'; alvo: AlvoGravacao } | { id: 0; op: 'fechar' };
