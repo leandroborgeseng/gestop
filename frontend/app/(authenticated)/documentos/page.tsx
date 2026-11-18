@@ -1,7 +1,10 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
+import { buscarRegistroPorIdDaUrl, idTemFormatoPrisma } from '@/lib/id-prisma';
+import { useEstadoDocumentos } from '@/lib/use-estado-documentos';
 import { Copy, FileText, Search } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
@@ -76,7 +79,7 @@ function DocumentosGate() {
 }
 
 function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: boolean }) {
-  const searchParams = useSearchParams();
+  const { estado, definir } = useEstadoDocumentos();
   const sessionUser = useSessionUser();
   const gestaoDocumentos = hasDocumentosModuloAccess(sessionUser?.permissoes ?? []);
   const backHref = useSafeBackHref('/dashboard');
@@ -86,27 +89,38 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
-  const [tipo, setTipo] = useState('TODOS');
-  const [situacao, setSituacao] = useState('TODOS');
-  const [assinatura, setAssinatura] = useState('TODOS');
-  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('id'));
+  const search = estado.search;
+  const tipo = estado.tipo;
+  const situacao = estado.situacao;
+  const assinatura = estado.assinatura;
+  const historico = estado.historico;
+  const [selectedId, setSelectedId] = useState<string | null>(estado.id);
   const [detail, setDetail] = useState<DocumentoDetalhe | null>(null);
   const [busyAction, setBusyAction] = useState(false);
   const [novoOpen, setNovoOpen] = useState(false);
   const [assinaturaOpen, setAssinaturaOpen] = useState(false);
   const [assinarInternoOpen, setAssinarInternoOpen] = useState(false);
   const [disponibilizarOpen, setDisponibilizarOpen] = useState(false);
-  const [preencherAberto, setPreencherAberto] = useState(() => searchParams.get('preencher') === '1');
+  const preencherAberto = estado.preencher && estado.id === selectedId;
   const [respostasAbertas, setRespostasAbertas] = useState(false);
-  const [historico, setHistorico] = useState(false);
   const [cancelarDocOpen, setCancelarDocOpen] = useState(false);
+  const [semAcesso, setSemAcesso] = useState(false);
+  const fechadoRef = useRef(false);
+  const tinhaIdRef = useRef(Boolean(estado.id));
 
   useEffect(() => {
-    setPreencherAberto(searchParams.get('id') === selectedId && searchParams.get('preencher') === '1');
-    // Só ao trocar o documento. O clique em Preencher não pode ser desfeito por uma nova referência dos search params.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+    if (estado.id) {
+      fechadoRef.current = false;
+      setSelectedId(estado.id);
+      setSemAcesso(!idTemFormatoPrisma(estado.id));
+    } else if (tinhaIdRef.current) {
+      fechadoRef.current = true;
+      setSelectedId(null);
+      setDetail(null);
+      setSemAcesso(false);
+    }
+    tinhaIdRef.current = Boolean(estado.id);
+  }, [estado.id]);
 
   function loadList() {
     setLoading(true);
@@ -127,7 +141,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
       .then((response) => {
         setItems(response.items);
         setTotal(response.total);
-        setSelectedId((current) => current ?? response.items[0]?.id ?? null);
+        setSelectedId((current) => (fechadoRef.current ? null : (current ?? response.items[0]?.id ?? null)));
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar documentos.'))
       .finally(() => setLoading(false));
@@ -146,12 +160,25 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
     }
     let active = true;
     setDetailLoading(true);
-    getDocumento(selectedId)
-      .then((data) => {
-        if (active) setDetail(data);
+    void buscarRegistroPorIdDaUrl(selectedId, getDocumento)
+      .then((resultado) => {
+        if (!active) return;
+        if (resultado.tipo === 'formato') {
+          setSemAcesso(true);
+          setDetail(null);
+          return;
+        }
+        if (resultado.tipo === 'ok') setDetail(resultado.data);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe.');
+        if (!active) return;
+        const status = (err as { status?: number } | null)?.status;
+        if (status === 403 || status === 404) {
+          setSemAcesso(true);
+          setDetail(null);
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe.');
       })
       .finally(() => {
         if (active) setDetailLoading(false);
@@ -167,7 +194,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
   );
 
   async function refreshSelected() {
-    if (!selectedId) return;
+    if (!selectedId || !idTemFormatoPrisma(selectedId)) return;
     const [list, nextDetail] = await Promise.all([
       modoPendencias
         ? listMinhasPendenciasAssinatura()
@@ -225,7 +252,9 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
           open={novoOpen}
           onClose={() => setNovoOpen(false)}
           onCreated={(id) => {
+            fechadoRef.current = false;
             setSelectedId(id);
+            definir({ id }, detalheCobreLista() ? 'push' : 'replace');
             loadList();
           }}
         />
@@ -268,26 +297,26 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
             <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => definir({ search: event.target.value })}
               placeholder="Buscar código, validação, chamado, próprio..."
               className="h-10 w-full rounded-[12px] border border-[var(--line)] bg-[var(--canvas)] pr-3 pl-9 text-[13px] outline-none focus:border-[var(--brand)]"
             />
           </label>
-          <Select value={tipo} onChange={(event) => setTipo(event.target.value)}>
+          <Select value={tipo} onChange={(event) => definir({ tipo: event.target.value as typeof tipo })}>
             {TIPO_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
           </Select>
-          <Select value={situacao} onChange={(event) => setSituacao(event.target.value)}>
+          <Select value={situacao} onChange={(event) => definir({ situacao: event.target.value as typeof situacao })}>
             {SITUACAO_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
           </Select>
-          <Select value={assinatura} onChange={(event) => setAssinatura(event.target.value)}>
+          <Select value={assinatura} onChange={(event) => definir({ assinatura: event.target.value as typeof assinatura })}>
             <option value="TODOS">Assinatura: todas</option>
             <option value="pendente">Assinatura pendente</option>
             <option value="assinado">Assinado</option>
@@ -301,7 +330,7 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
                 type="checkbox"
                 data-testid="toggle-historico"
                 checked={historico}
-                onChange={(event) => setHistorico(event.target.checked)}
+                onChange={(event) => definir({ historico: event.target.checked })}
               />
               Mostrar histórico (cancelados)
             </label>
@@ -331,7 +360,12 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
                     <li key={item.id}>
                       <button
                         type="button"
-                        onClick={() => setSelectedId(item.id)}
+                        onClick={() => {
+                          fechadoRef.current = false;
+                          setSemAcesso(false);
+                          setSelectedId(item.id);
+                          definir({ id: item.id }, detalheCobreLista() ? 'push' : 'replace');
+                        }}
                         className={cn(
                           'w-full px-4 py-3 text-left transition-colors hover:bg-[var(--canvas-2)]',
                           selectedId === item.id && 'bg-[var(--brand-soft)]',
@@ -372,7 +406,14 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
           </section>
 
           <section className="rounded-[16px] border border-[var(--line)] bg-[var(--canvas)] p-4">
-            {!selected ? (
+            {selectedId && semAcesso ? (
+              <div role="status" data-testid="aviso-registro-url" className="flex items-center justify-between gap-3 rounded-[var(--r-md)] border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-[13px] text-amber-950">{AVISO_REGISTRO_URL}</p>
+                <button type="button" className="text-[13px] font-semibold text-amber-950" onClick={() => definir({ id: null })}>
+                  Fechar
+                </button>
+              </div>
+            ) : !selected ? (
               <EmptyState title="Selecione um documento" description="Escolha um item à esquerda para ver detalhes." />
             ) : detailLoading && !detail ? (
               <LoadingState label="Carregando detalhe..." />
@@ -405,12 +446,12 @@ function DocumentosPageContent({ modoPendencias = false }: { modoPendencias?: bo
                 }
                 onConcluir={() => void runAction(() => concluirDocumento(selected.id), 'Documento concluído.')}
                 preencherAberto={preencherAberto && selected.id === selectedId}
-                onPreencher={() => setPreencherAberto(true)}
+                onPreencher={() => definir({ id: selected.id, preencher: true })}
                 onFormSaved={() => refreshSelected()}
                 respostasAbertas={respostasAbertas}
                 onVerRespostas={() => setRespostasAbertas(true)}
                 onFecharRespostas={() => setRespostasAbertas(false)}
-                onFecharPreencher={() => setPreencherAberto(false)}
+                onFecharPreencher={() => definir({ preencher: false })}
                 onColetar={() => setAssinaturaOpen(true)}
                 onAssinarInterno={() => setAssinarInternoOpen(true)}
                 onDisponibilizar={() => setDisponibilizarOpen(true)}

@@ -83,6 +83,13 @@ export function resolveUnidadeSecretariaFilter(user: JwtPayload): Prisma.Unidade
   return ids.length === 1 ? { secretariaId: ids[0] } : { secretariaId: { in: ids } };
 }
 
+/** Sem nenhum caminho de acesso (Secretaria de execução, próprio ou equipe). */
+export const MSG_SEM_ACESSO_CHAMADO =
+  'Você não tem acesso a este chamado: ele não é da sua Secretaria ativa (nem pela execução, pelo próprio ou pela equipe).';
+
+export const MSG_SEM_GESTAO_EXCLUSAO =
+  'Sem permissão para excluir: a Secretaria responsável pela execução deste chamado é outra. Só ela pode excluir o chamado.';
+
 /** Visualização: execução, próprio OU secretaria da equipe atribuída. */
 export function assertChamadoSecretariaAccess(
   user: JwtPayload,
@@ -111,7 +118,7 @@ export function assertChamadoSecretariaAccess(
   const equipeSec = chamado.equipe?.secretariaId ?? chamado.equipe?.secretaria?.id;
   if (equipeSec && ids.includes(equipeSec)) return;
 
-  throw new ForbiddenException('Chamado fora da secretaria autorizada.');
+  throw new ForbiddenException(MSG_SEM_ACESSO_CHAMADO);
 }
 
 /**
@@ -139,6 +146,30 @@ export function assertChamadoExecucaoAccess(
   if (equipeSec && ids.includes(equipeSec)) return;
 
   throw new ForbiddenException('Sem permissão de tratativa: secretaria de execução diferente da ativa.');
+}
+
+/**
+ * 310 (TL #48): gestão da abertura (editar, devolver, transferir a execução) — só a Secretaria responsável
+ * pela execução (`chamado.secretariaId`). Próprio e equipe dão só visualização/execução.
+ */
+export const MSG_SEM_GESTAO_ABERTURA =
+  'Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir.';
+
+export function podeGerirAberturaChamado(user: JwtPayload, chamado: { secretariaId: string }) {
+  if (user.permissoes.includes('usuarios.gerenciar') || user.acessoTodasSecretarias) {
+    if (!user.secretariaId?.trim()) return true;
+  }
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return true;
+  return ids.includes(chamado.secretariaId);
+}
+
+export function assertChamadoGestaoAberturaAccess(
+  user: JwtPayload,
+  chamado: { secretariaId: string },
+  mensagem: string = MSG_SEM_GESTAO_ABERTURA,
+) {
+  if (!podeGerirAberturaChamado(user, chamado)) throw new ForbiddenException(mensagem);
 }
 
 /** Garante que a secretaria alvo está no escopo ativo (abertura / cadastro). */

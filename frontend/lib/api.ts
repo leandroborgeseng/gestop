@@ -67,6 +67,7 @@ import { aberturaParaQuery } from '@/lib/filtro-data-abertura';
 import { toGeoCheckin } from '@/lib/geolocation';
 import { notifyAuthExpired } from './security';
 import { extractApiErrorMessage, readForbiddenMessage } from './api-errors';
+import { caminhoRegistro, recusarIdForaDoPrisma } from './id-prisma';
 
 // Sempre usa proxy interno do Next.js no browser.
 // NEXT_PUBLIC_API_URL apontando para URL externa quebra login no Railway.
@@ -74,6 +75,8 @@ import { extractApiErrorMessage, readForbiddenMessage } from './api-errors';
 export const API_PROXY_PREFIX = '/api-gestop';
 const API_BASE_URL = API_PROXY_PREFIX;
 const AUTH_STORAGE_KEY = 'sigma.auth';
+/** 1 quando o login marcou "manter conectado" (sessão de 30 dias). */
+export const AUTH_REMEMBER_STORAGE_KEY = 'gestop.auth.remember';
 /** Chave do localStorage da sessão (para o evento `storage` entre abas). */
 export const AUTH_STORAGE_KEY_PUBLICA = AUTH_STORAGE_KEY;
 const LEGACY_AUTH_STORAGE_KEY = 'gestop.auth';
@@ -216,7 +219,7 @@ export async function login(email: string, password: string, remember = false) {
     expiresAt: Date.now() + data.expiresInSeconds * 1000,
   });
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem('gestop.auth.remember', remember ? '1' : '0');
+    window.localStorage.setItem(AUTH_REMEMBER_STORAGE_KEY, remember ? '1' : '0');
   }
 
   return data;
@@ -272,6 +275,21 @@ export function getSecretarias() {
   return request<SecretariaOption[]>('/operacional/secretarias');
 }
 
+/** 310: todas as Secretarias ativas como destino da execução (independe da Secretaria ativa). */
+export function getSecretariasDestinoExecucao() {
+  return request<SecretariaOption[]>('/chamados/secretarias/destino-execucao');
+}
+
+/** 310: retorno da troca de Secretaria de execução. */
+export type TransferenciaExecucao = {
+  origem: SecretariaOption | null;
+  destino: SecretariaOption;
+  revisar: { equipe?: { id: string; nome: string; secretaria: SecretariaOption | null }; responsavel?: { id: string; nome: string } };
+  saiuDoEscopo: boolean;
+  /** Ainda vê/executa (próprio ou equipe), mas perdeu a gestão da abertura. */
+  somenteExecucao?: boolean;
+};
+
 export function getSecretariasExecucao() {
   return request<SecretariaOption[]>('/chamados/secretarias/execucao');
 }
@@ -301,6 +319,81 @@ export function getUnidades(filters: UnidadeFilters) {
 
   const query = params.toString();
   return request<UnidadeOperacional[]>(`/operacional/unidades${query ? `?${query}` : ''}`);
+}
+
+/** 319: categorias com nota válida nos próprios filtrados (todos os filtros da lista de próprios). */
+export function listCategoriasNotaDisponiveis(filters: UnidadeFilters, init?: { signal?: AbortSignal }) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
+    if (value) params.set(key, String(value));
+  });
+  const query = params.toString();
+  return request<import('./cco-categorias-nota').CategoriaNotaDisponivel[]>(
+    `/operacional/categorias-nota-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
+/** 312: tipos de próprio com próprios ativos acessíveis nos filtros atuais (exceto tipo). */
+export function listTiposProprioDisponiveis(filters: UnidadeFilters, init?: { signal?: AbortSignal }) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (key === 'tipo' || key === 'tipos') return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
+    if (value) params.set(key, String(value));
+  });
+  const query = params.toString();
+  return request<import('./cco-tipos-proprio').TipoProprioDisponivel[]>(
+    `/operacional/tipos-proprio-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
+function paramsDe(filters: object, ignorar: string[] = []) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (ignorar.includes(key)) return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
+    if (value && value !== 'TODOS') params.set(key, String(value));
+  });
+  return params;
+}
+
+/** 316: tipos de chamado dos chamados abertos dos próprios filtrados (todos os filtros, exceto o tipo de chamado). */
+export function listTiposChamadoDisponiveisProprios(filters: UnidadeFilters, init?: { signal?: AbortSignal }) {
+  const query = paramsDe(filters, ['tiposChamadoId']).toString();
+  return request<import('./cco-tipos-chamado').TipoChamadoDisponivel[]>(
+    `/operacional/tipos-chamado-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
+/** 316: tipos de chamado dos chamados do mapa (todos os filtros, rápidos e datas inclusive, exceto o tipo). */
+export function listTiposChamadoDisponiveisMapa(filters: ChamadosMapaFilters, init?: { signal?: AbortSignal }) {
+  const { abertura, ...resto } = filters;
+  const params = paramsDe(resto, ['tipoChamadoId']);
+  Object.entries(aberturaParaQuery(abertura)).forEach(([key, value]) => params.set(key, value));
+  const query = params.toString();
+  return request<import('./cco-tipos-chamado').TipoChamadoDisponivel[]>(
+    `/operacional/chamados-mapa/tipos-chamado-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
 }
 
 export function listChamadosMapa(filters: ChamadosMapaFilters = {}) {
@@ -782,7 +875,11 @@ export function getSituacaoResponsaveisCronograma(ids: string[]) {
 }
 
 export function saveCronograma(payload: Record<string, unknown>, id?: string) {
-  return request<CronogramaChecagem>(`/cronograma${id ? `/${id}` : ''}`, {
+  if (id) {
+    const recusa = recusarIdForaDoPrisma<CronogramaChecagem>(id);
+    if (recusa) return recusa;
+  }
+  return request<CronogramaChecagem>(id ? caminhoRegistro('/cronograma', id) : '/cronograma', {
     method: id ? 'PUT' : 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -790,7 +887,16 @@ export function saveCronograma(payload: Record<string, unknown>, id?: string) {
 }
 
 export function deactivateCronograma(id: string) {
-  return request<CronogramaChecagem>(`/cronograma/${id}`, { method: 'DELETE' });
+  const recusa = recusarIdForaDoPrisma<CronogramaChecagem>(id);
+  if (recusa) return recusa;
+  return request<CronogramaChecagem>(caminhoRegistro('/cronograma', id), { method: 'DELETE' });
+}
+
+/** 308 */
+export function reactivateCronograma(id: string) {
+  const recusa = recusarIdForaDoPrisma<CronogramaChecagem>(id);
+  if (recusa) return recusa;
+  return request<CronogramaChecagem>(`${caminhoRegistro('/cronograma', id)}/reativar`, { method: 'POST' });
 }
 
 export function createChecklistVersion(id: string) {
@@ -1119,7 +1225,9 @@ export function createChamado(payload: {
 }
 
 export function getChamado(id: string) {
-  return request<ChamadoDetalhe>(`/chamados/${id}`);
+  const recusa = recusarIdForaDoPrisma<ChamadoDetalhe>(id);
+  if (recusa) return recusa;
+  return request<ChamadoDetalhe>(caminhoRegistro('/chamados', id));
 }
 
 export function listMeusChamados(params?: {
@@ -1260,7 +1368,7 @@ export function updateChamadoAbertura(
     observadorIds?: string[];
   },
 ) {
-  return request<ChamadoResumo>(`/chamados/${id}/abertura`, {
+  return request<ChamadoResumo & { transferenciaExecucao?: TransferenciaExecucao }>(`/chamados/${id}/abertura`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -1312,7 +1420,9 @@ export function excluirFiscalizacao(id: string, motivo: string) {
 }
 
 export function getFiscalizacao(id: string) {
-  return request<FiscalizacaoDetalhe>(`/fiscalizacoes/${id}`);
+  const recusa = recusarIdForaDoPrisma<FiscalizacaoDetalhe>(id);
+  if (recusa) return recusa;
+  return request<FiscalizacaoDetalhe>(caminhoRegistro('/fiscalizacoes', id));
 }
 
 export function getFiscalizacaoOpcoesManuais() {
@@ -1853,7 +1963,9 @@ export function recusarPedidoAssinatura(pedidoId: string, motivo?: string) {
 }
 
 export function getDocumento(id: string) {
-  return request<DocumentoDetalhe>(`/documentos/${id}`);
+  const recusa = recusarIdForaDoPrisma<DocumentoDetalhe>(id);
+  if (recusa) return recusa;
+  return request<DocumentoDetalhe>(caminhoRegistro('/documentos', id));
 }
 
 export function listDocumentosPorChamado(chamadoId: string) {
@@ -2096,11 +2208,19 @@ export function listTarefasDoChamado(chamadoId: string) {
 }
 
 export function getChamadoTarefa(id: string) {
-  return request<ChamadoTarefaDetalhe>(`/chamado-tarefas/${id}`);
+  const recusa = recusarIdForaDoPrisma<ChamadoTarefaDetalhe>(id);
+  if (recusa) return recusa;
+  return request<ChamadoTarefaDetalhe>(caminhoRegistro('/chamado-tarefas', id));
 }
 
 export function getChamadoLeituraViaTarefa(tarefaId: string, chamadoId: string) {
-  return request<ChamadoTarefaChamadoLeitura>(`/chamado-tarefas/${tarefaId}/chamado/${chamadoId}`);
+  const recusaTarefa = recusarIdForaDoPrisma<ChamadoTarefaChamadoLeitura>(tarefaId);
+  if (recusaTarefa) return recusaTarefa;
+  const recusaChamado = recusarIdForaDoPrisma<ChamadoTarefaChamadoLeitura>(chamadoId);
+  if (recusaChamado) return recusaChamado;
+  return request<ChamadoTarefaChamadoLeitura>(
+    `/chamado-tarefas/${encodeURIComponent(tarefaId)}/chamado/${encodeURIComponent(chamadoId)}`,
+  );
 }
 
 export function getOpcoesTarefa(secretariaId?: string) {

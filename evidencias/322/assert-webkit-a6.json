@@ -1,0 +1,6 @@
+{
+  "criterio": "322-A6",
+  "engine": "webkit",
+  "url": "http://localhost:3000/execucao?aba=tarefas",
+  "nota": "visibilitychange, focus e pageshow no navegador não redirecionam. A validação do PWA no aparelho é manual do Leandro."
+}

@@ -1,0 +1,12 @@
+# GET /operacional/unidades/:id (endpoint do drawer do CCO e da página completa) - usuário admin global, próprio ZZT-A-001 (ZZTA)
+{"codigoPatrimonial": "ZZT-A-001", "nome": "ZZTESTE Escola Alfa 1", "ativo": true, "message": null, "statusCode": null, "secretaria": "ZZTA"}
+HTTP200
+
+# GET /operacional/unidades/:id (endpoint do drawer do CCO e da página completa) - usuário gestor ZZTA, próprio ZZT-A-001 (ZZTA)
+{"codigoPatrimonial": "ZZT-A-001", "nome": "ZZTESTE Escola Alfa 1", "ativo": true, "message": null, "statusCode": null, "secretaria": "ZZTA"}
+HTTP200
+
+# GET /operacional/unidades/:id (endpoint do drawer do CCO e da página completa) - usuário gestor ZZTA, próprio ZZT-B-001 (ZZTB)
+{"codigoPatrimonial": null, "nome": null, "ativo": null, "message": "Proprio publico nao encontrado", "statusCode": 404}
+HTTP404
+

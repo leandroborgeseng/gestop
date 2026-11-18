@@ -11,19 +11,19 @@ export const BLOCOS_ARQUITETURA: BlocoArquitetura[] = [
   {
     id: 'frontend',
     nome: 'Frontend Next.js',
-    papel: 'App Router com telas autenticadas, rotas públicas de chamado e validação de documento, e a área administrativa. O botão Coletar no chamado usa canColetarAssinatura, alinhado ao PermissionsGuard (não basta usuarios.gerenciar).',
-    onde: 'frontend/app. Sessão e menu em frontend/lib/navigation.ts, frontend/lib/permissions-matrix.ts e frontend/lib/chamado-tarefa-permissoes.ts. Administrador do Sistema: frontend/lib/administrador-sistema.ts (nome e isAdministradorSistemaAtivo; o frontend não importa src/). Coletar no chamado: frontend/lib/can-coletar-assinatura.ts (reexportado pela matriz).',
+    papel: 'App Router com telas autenticadas, rotas públicas de chamado e validação de documento, e a área administrativa. O botão Coletar no chamado usa canColetarAssinatura, alinhado ao PermissionsGuard (não basta usuarios.gerenciar). A entrada em `/` (start_url do PWA) e o login sem returnTo usam primeiraTelaPermitida: percorre o menu visível (lateral e barra inferior), pula o item com atalhoCriacao e, se o item com listaDeChamados está no menu, não para no item com cedeParaListaDeChamados. Começa pelo CCO quando ele está liberado ao perfil ativo e às permissões individuais. Se só houver atalho de criação, a entrada é `/conta`. Rota específica, F5, foco, pageshow (inclusive bfcache) e a renovação do token da sessão de 30 dias (POST /auth/refresh) não trocam a tela. O refresh recusa o token da sessão que fez logout (sid, ou o hash do token legado) e não derruba outra sessão do mesmo usuário. Token legado sem sid, ao renovar, recebe sid igual ao sha256 desse token, para o logout do renovado recusar o anterior. Não emite sessão além de 30 dias do login original (auth_time; no token legado, o iat). Abertura e retomada renovam quando faltam menos de 7 dias para vencer. Token já vencido em visibilitychange, focus ou pageshow vai ao login com returnTo da URL completa (rota e query) e a mensagem de sessão expirada. Os três eventos da mesma retomada disparam uma única renovação. Em Chamados, Execução, Documentos, Cronograma e Vistorias, aba, filtros, busca, página, painel ou período e o registro aberto ficam na query, com o valor padrão omitido; a URL não troca Secretaria nem perfil. Uma nova abertura de / volta a usar primeiraTelaPermitida.',
+    onde: 'frontend/app. Sessão e menu em frontend/lib/navigation.ts, frontend/lib/tela-inicial.ts, frontend/lib/permissions-matrix.ts e frontend/lib/chamado-tarefa-permissoes.ts. Administrador do Sistema: frontend/lib/administrador-sistema.ts (nome e isAdministradorSistemaAtivo; o frontend não importa src/). Coletar no chamado: frontend/lib/can-coletar-assinatura.ts (reexportado pela matriz).',
   },
   {
     id: 'api',
     nome: 'API NestJS',
-    papel: 'Controllers por módulo (auth, chamados, tarefas, fiscalizações, documentos, operacional, admin, mobile, cronograma, relatórios, integrações, backup, e-mail, LGPD). AuthGuard e PermissionsGuard nas rotas privadas. A matriz de tarefas separa visualizar, criar, alterar dados, andamento, concluir, cancelar e histórico; o PATCH da tarefa recusa no serviço. GET /health (público, também via /api-gestop/health) inclui o SHA do commit implantado quando o ambiente informa um hex de 40 caracteres.',
+    papel: 'Controllers por módulo (auth, chamados, tarefas, fiscalizações, documentos, operacional, admin, webmap-camadas, mobile, cronograma, relatórios, integrações, backup, e-mail, LGPD). A importação de camadas do Webmap lê e grava por lote, num worker com teto de heap. AuthGuard e PermissionsGuard nas rotas privadas. A matriz de tarefas separa visualizar, criar, alterar dados, andamento, concluir, cancelar e histórico; o PATCH da tarefa recusa no serviço. O relatório de tarefas agrega cartões e grupos com count/groupBy sobre o filtro inteiro (o mesmo where da listagem); a lista e os exports seguem no teto de 500, e o PDF formal repete os totais agregados. GET /health (público, também via /api-gestop/health) inclui o SHA do commit implantado quando o ambiente informa um hex de 40 caracteres.',
     onde: 'src/app.module.ts e os controllers em src/.',
   },
   {
     id: 'prisma',
     nome: 'Prisma e PostgreSQL',
-    papel: 'Persistência relacional. O schema não usa @@map: o nome do model é o nome da tabela. Enums cobrem status, origens e tipos.',
+    papel: 'Persistência relacional. O schema não usa @@map: o nome do model é o nome da tabela. Enums cobrem status, origens e tipos. Nas leituras de lista de Chamado e Fiscalizacao, o PrismaService restringe a excluidoEm nulo, salvo quando a consulta já cita excluidoEm.',
     onde: 'prisma/schema.prisma, PrismaModule em src/prisma.',
   },
   {

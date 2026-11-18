@@ -7,7 +7,7 @@ import { LockKeyhole } from 'lucide-react';
 import { Logo } from '@/components/brand/logo';
 import { SIGMA_NAME, SIGMA_TAGLINE } from '@/lib/brand';
 import { login } from '@/lib/api';
-import { getDefaultAuthenticatedHref } from '@/lib/navigation';
+import { hrefDepoisDoLogin } from '@/lib/tela-inicial';
 import { Alert } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +17,8 @@ import { Input } from '@/components/ui/input';
 import { PageSkeleton } from '@/components/ui/skeleton';
 
 const showDemoLogin = process.env.NEXT_PUBLIC_SHOW_DEMO_LOGIN === 'true';
+
+const MENSAGEM_SESSAO_EXPIRADA = 'Sua sessão expirou. Entre de novo para continuar de onde parou.';
 
 export default function LoginPage() {
   return (
@@ -48,9 +50,6 @@ function LoginContent() {
   const notice = useMemo(() => {
     const reason = searchParams.get('reason');
 
-    if (reason === 'expired') {
-      return { variant: 'warning' as const, text: 'Sua sessão expirou ou é necessária para acessar esta área.' };
-    }
     if (reason === 'logout') {
       return { variant: 'success' as const, text: 'Você saiu do sistema com segurança.' };
     }
@@ -70,8 +69,9 @@ function LoginContent() {
 
     try {
       const data = await login(email, password, remember);
-      const href = getDefaultAuthenticatedHref(data.user.permissoes, data.user);
+      // 322: sem returnTo, a primeira tela permitida (CCO quando a visualização existe).
       // 289: o modal de pendências abre no shell, uma vez por dia, quando o servidor decidir.
+      const href = hrefDepoisDoLogin(data.user.permissoes, data.user, searchParams.get('returnTo'));
       router.replace(href);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha inesperada no login.');
@@ -116,6 +116,11 @@ function LoginContent() {
           </CardHeader>
 
           <CardContent>
+            {searchParams.get('reason') === 'expired' ? (
+              <p role="status" className="mb-4 text-sm text-[var(--ink)]">
+                {MENSAGEM_SESSAO_EXPIRADA}
+              </p>
+            ) : null}
             {notice ? <Alert variant={notice.variant} className="mb-4">{notice.text}</Alert> : null}
             {error ? <Alert variant="error" className="mb-4">{error}</Alert> : null}
 

@@ -81,4 +81,11 @@ export class CronogramaController {
   deactivate(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.cronogramaService.deactivateCronograma(id, user);
   }
+
+  /** 308: mesma permissão do Inativar (excluir), como no 309. */
+  @RequireAnyPermissions(...CRONOGRAMA_EXCLUIR_KEYS)
+  @Post(':id/reativar')
+  reactivate(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
+    return this.cronogramaService.reactivateCronograma(id, user);
+  }
 }

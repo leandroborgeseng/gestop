@@ -1,0 +1,9 @@
+{
+  "criterio": "322-A3",
+  "engine": "webkit",
+  "url": "http://localhost:3000/cco",
+  "perfilId": "perfil-zzteste-cco@aion.local",
+  "secretariaId": "sec-322",
+  "manteveContexto": true,
+  "naoAbriuVistoria": true
+}

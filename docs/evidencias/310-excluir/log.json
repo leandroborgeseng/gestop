@@ -1,0 +1,53 @@
+{
+  "usuario": "zzteste.gestor.alfa (ZZTA)",
+  "permissaoExcluir": [
+    "matriz.chamados.excluir_logicamente.excluir"
+  ],
+  "semTransferenciaViaEquipe": {
+    "chamado": "CH-2026-ZZ310N (execução ZZTB, próprio ZZTB, equipe ZZTA, nunca transferido)",
+    "ver": {
+      "status": 200,
+      "podeGerirAbertura": false
+    },
+    "naLista": true,
+    "executar_planejamento": {
+      "status": 200
+    },
+    "editar": {
+      "status": 403,
+      "message": "Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir."
+    },
+    "devolver": {
+      "status": 403,
+      "message": "Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir."
+    },
+    "transferir": {
+      "status": 403,
+      "message": "Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir."
+    },
+    "excluir": {
+      "status": 403,
+      "message": "Sem permissão para excluir: a Secretaria responsável pela execução deste chamado é outra. Só ela pode excluir o chamado."
+    }
+  },
+  "semCaminho": {
+    "chamado": "CH-2026-ZZ310S (execução ZZTB, próprio ZZTB, sem equipe)",
+    "ver": {
+      "status": 404,
+      "message": "Chamado não encontrado na sua Secretaria ativa."
+    },
+    "editar": {
+      "status": 403,
+      "message": "Você não tem acesso a este chamado: ele não é da sua Secretaria ativa (nem pela execução, pelo próprio ou pela equipe)."
+    },
+    "excluir": {
+      "status": 403,
+      "message": "Você não tem acesso a este chamado: ele não é da sua Secretaria ativa (nem pela execução, pelo próprio ou pela equipe)."
+    }
+  },
+  "ui": {
+    "detalheAberto": true,
+    "botaoExcluir": 0,
+    "avisoSomenteExecucao": 1
+  }
+}

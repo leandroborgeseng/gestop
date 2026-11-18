@@ -130,21 +130,22 @@ export function readFeatures(content: string, label: string): { elementos: Eleme
   return { elementos, erros };
 }
 
-/** Leitura em fluxo: chama onElemento/onErro por feature. Lança se o GeoJSON da camada for ilegível. */
+/** Leitura em fluxo: uma feição por vez. O texto JSON da feição é parseado e solto antes da próxima. */
 export async function lerElementosStream(
   chunks: AsyncIterable<string>, label: string, grupo: string | undefined,
   onElemento: (e: ElementoLido) => Promise<void> | void, onErro: (e: ErroLeitura) => void,
 ) {
   let index = 0;
-  const pend: unknown[] = [];
+  const pend: string[] = [];
   const splitter = new FeatureStreamSplitter((json) => {
-    pend.push(JSON.parse(json));
+    pend.push(json);
   });
   try {
     for await (const chunk of chunks) {
       splitter.push(chunk);
       while (pend.length) {
-        const r = processarFeature(pend.shift(), index++, label, grupo);
+        const json = pend.shift()!;
+        const r = processarFeature(JSON.parse(json), index++, label, grupo);
         if (r.erro) onErro(r.erro);
         await onElemento(r.elemento);
       }

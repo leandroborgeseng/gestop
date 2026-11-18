@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { X, ZoomIn } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { AuthenticatedImage } from '@/components/ui/authenticated-image';
+import { useOverlayPortalHost } from '@/lib/overlay-portal-host';
 
 export function ZoomableAuthenticatedImage({
   src,
@@ -18,27 +19,21 @@ export function ZoomableAuthenticatedImage({
   previewClassName?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const host = useOverlayPortalHost();
 
   useEffect(() => {
     if (!open) return;
 
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        setOpen(false);
+      }
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', onKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
   }, [open]);
 
   return (
@@ -61,10 +56,11 @@ export function ZoomableAuthenticatedImage({
         </span>
       </button>
 
-      {open && mounted
+      {open && host
         ? createPortal(
             <div
-              className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[2px]"
+              data-zoom-lightbox
+              className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-[2px]"
               role="dialog"
               aria-modal="true"
               aria-label={alt}
@@ -73,7 +69,7 @@ export function ZoomableAuthenticatedImage({
               <button
                 type="button"
                 className="absolute top-4 right-4 inline-flex h-10 w-10 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70"
-                aria-label="Fechar visualização"
+                aria-label="Fechar"
                 onClick={() => setOpen(false)}
               >
                 <X className="h-5 w-5" />
@@ -89,7 +85,7 @@ export function ZoomableAuthenticatedImage({
                 />
               </div>
             </div>,
-            document.body,
+            host,
           )
         : null}
     </>

@@ -887,6 +887,8 @@ export type ChamadoNaoConformidade = {
 export type ChamadoModoLocalizacao = 'UNIDADE' | 'GEOLOCALIZACAO' | 'ENDERECO';
 
 export type ChamadoResumo = {
+  /** 310 (TL #48): false quando a Secretaria de execução é outra (acesso só pelo próprio ou pela equipe). */
+  podeGerirAbertura?: boolean;
   id: string;
   codigo: string;
   titulo?: string | null;
@@ -1055,6 +1057,8 @@ export type ChamadoMapPoint = {
   prioridade: string;
   equipeNome?: string | null;
   responsavelNome?: string | null;
+  /** UX-10: resumo do chamado no pop-up do pin da tarefa. */
+  resumoChamado?: string | null;
   previstaExecucaoEm?: string | null;
   prazoEm?: string | null;
   programado?: boolean;
@@ -1238,6 +1242,8 @@ export type CronogramaChecagem = {
     id: string;
     nome: string;
     tipo: UnidadeTipo;
+    /** 308 */
+    ativo?: boolean;
     secretaria: SecretariaOption;
   };
   checklist: {
@@ -1329,6 +1335,8 @@ export type FiscalizacaoResumo = {
   iniciadaEm: string | null;
   concluidaEm: string | null;
   dentroRaioPermitido: boolean | null;
+  checkinLatitude?: number | null;
+  checkinLongitude?: number | null;
   distanciaCheckinMetros: number | null;
   observacoes?: string | null;
   metadata?: Record<string, unknown> | null;

@@ -1,0 +1,17 @@
+{
+  "mecanismo": "O WebKit automatizado do Playwright não aplica default-font-size: o protocolo não tem esse ajuste e --config-file não alcança a página criada pela automação. O corte foi medido na fonte padrão real do motor.",
+  "fonte": 16,
+  "corte": 1280,
+  "abaixo": {
+    "fonte": 16,
+    "barra": "fixed",
+    "colunas": "none",
+    "estreita": true
+  },
+  "acima": {
+    "fonte": 16,
+    "barra": "sticky",
+    "colunas": "340px 612px",
+    "estreita": false
+  }
+}

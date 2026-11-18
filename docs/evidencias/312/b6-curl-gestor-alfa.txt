@@ -1,0 +1,6 @@
+# GET /operacional/tipos-proprio-disponiveis  (usuario zzteste.gestor.alfa@aion.local, so Secretaria ZZTA)
+[{"codigo":"ZZ_AREA","nome":"Área de lazer ZZTESTE"},{"codigo":"ZZ_ESCOLA","nome":"Escola ZZTESTE"},{"codigo":"ZZ_PRACA","nome":"Praça ZZTESTE"}]
+# mesmo usuario pedindo secretariaIds=41ff7448-f09e-4ec3-863a-eca4e18f2b2c (ZZTB, sem acesso)
+[]
+# controle: admin global (todas as Secretarias)
+[{"codigo":"ZZ_AREA","nome":"Área de lazer ZZTESTE"},{"codigo":"ZZ_ESCOLA","nome":"Escola ZZTESTE"},{"codigo":"ZZ_GINASIO","nome":"Ginásio ZZTESTE"},{"codigo":"ZZ_PRACA","nome":"Praça ZZTESTE"},{"codigo":"ZZ_UBS","nome":"UBS ZZTESTE"}]

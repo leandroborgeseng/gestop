@@ -3,30 +3,33 @@
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import {
   AlertTriangle,
   ArrowUpRight,
   Calendar,
   ClipboardList,
+  Eye,
   LocateFixed,
   UserRound,
   Megaphone,
-  X,
 } from 'lucide-react';
 import { getUnidadeDetalhe } from '@/lib/api';
 import { chamadoTitulo } from '@/lib/chamado-geo';
+import { hrefChamado, hrefChamadoDaNc, ncMostraLinkChamado, podeAbrirLinkChamado } from '@/lib/nc-chamado-link';
+import { useSessionUser } from '@/components/auth/session-context';
 import { UnidadeDetalhe, UnidadeOperacional } from '@/lib/types';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import { cn } from '@/lib/cn';
 import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { IconButton } from '@/components/ui/icon-button';
 import { Tabs } from '@/components/ui/tabs';
 import { ErrorState, LoadingState } from '@/components/ui-states';
 import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
+import { VistoriaConsultaModal } from '@/components/cco/vistoria-consulta-modal';
+import { ordenarVistoriasRecentes, rotuloCardVistoria } from '@/lib/cco-vistorias';
+import { CcoDetalheBarra } from '@/components/cco/cco-detalhe-barra';
 
 type DrawerTab = 'geral' | 'fisc' | 'nc' | 'chamados';
 
@@ -43,11 +46,6 @@ export function UnidadeDrawer({
   const [detalhe, setDetalhe] = useState<UnidadeDetalhe | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!open || !unidade) {
@@ -77,23 +75,7 @@ export function UnidadeDrawer({
     };
   }, [open, unidade?.id]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose();
-    }
-
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open, onClose]);
-
-  if (!open || !unidade || !mounted) return null;
+  if (!open || !unidade) return null;
 
   const ncCount =
     detalhe?.pendenciasDetalhadas.naoConformidades.filter((nc) => nc.pendenteAtiva).length ??
@@ -101,52 +83,36 @@ export function UnidadeDrawer({
   const chamadosCount = detalhe?.pendenciasDetalhadas.chamados.length ?? unidade.pendencias.chamadosAbertos;
   const fiscCount = detalhe?.ultimasFiscalizacoes.length ?? unidade.totais.fiscalizacoes;
 
-  return createPortal(
-    <>
-      <button
-        type="button"
-        aria-label="Fechar detalhe"
-        className="fixed inset-0 z-[100] bg-[rgba(15,23,42,0.35)] backdrop-blur-[1px]"
-        onClick={onClose}
-      />
-
-      <aside
-        role="dialog"
-        aria-label={`Detalhe ${unidade.nome}`}
-        className="fixed top-0 right-0 z-[110] flex h-dvh max-h-dvh w-full max-w-[min(440px,calc(100%-2.5rem))] flex-col border-l border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-lg)] lg:max-w-[440px]"
-      >
-        <header className="shrink-0 border-b border-[var(--line-2)] p-4">
-          <div className="flex items-start justify-between gap-3">
-            <span className="mono text-[12px] font-semibold text-[var(--brand-hover)]">{unidade.codigoPatrimonial}</span>
-            <IconButton variant="ghost" size="sm" aria-label="Fechar" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </IconButton>
-          </div>
-          <h2 className="mt-2 text-[17px] font-bold leading-snug text-[var(--ink)]">{unidade.nome}</h2>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <StatusBadge situacao={unidade.situacao} size="sm" />
-            <span className="text-[12px] text-[var(--ink-3)]">
-              {formatUnidadeTipo(unidade.tipo)} · {unidade.bairro ?? 'Sem bairro'}
-            </span>
-          </div>
-        </header>
-
-        <div className="shrink-0 border-b border-[var(--line-2)] px-4">
-          <Tabs
-            value={tab}
-            onChange={(value) => setTab(value as DrawerTab)}
-            items={[
-              { id: 'geral', label: 'Visão geral' },
-              { id: 'fisc', label: 'Vistorias', count: fiscCount },
-              { id: 'nc', label: 'Não conf.', count: ncCount },
-              { id: 'chamados', label: 'Chamados', count: chamadosCount },
-            ]}
-          />
+  return (
+    <CcoDetalheBarra
+      titulo={unidade.nome}
+      rotuloFechar={`Fechar detalhes de ${unidade.nome}`}
+      onClose={onClose}
+      abaKey={tab}
+      kicker={<span className="mono text-[12px] font-semibold text-[var(--brand-hover)]">{unidade.codigoPatrimonial}</span>}
+      meta={
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <StatusBadge situacao={unidade.situacao} size="sm" />
+          <span className="text-[12px] text-[var(--ink-3)]">
+            {formatUnidadeTipo(unidade.tipo)} · {unidade.bairro ?? 'Sem bairro'}
+          </span>
         </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-          {loading ? <LoadingState label="Carregando detalhe..." /> : null}
-          {error ? <ErrorState message={error} onRetry={() => void getUnidadeDetalhe(unidade.id).then(setDetalhe)} /> : null}
+      }
+      abas={
+        <Tabs
+          value={tab}
+          onChange={(value) => setTab(value as DrawerTab)}
+          items={[
+            { id: 'geral', label: 'Visão geral' },
+            { id: 'fisc', label: 'Vistorias', count: fiscCount },
+            { id: 'nc', label: 'Não conf.', count: ncCount },
+            { id: 'chamados', label: 'Chamados', count: chamadosCount },
+          ]}
+        />
+      }
+    >
+          {loading ? <LoadingState label={tab === 'fisc' ? 'Carregando vistorias…' : 'Carregando detalhe...'} /> : null}
+          {error ? <ErrorState message={tab === 'fisc' ? 'Não foi possível carregar as vistorias. Tentar de novo' : error} onRetry={() => void getUnidadeDetalhe(unidade.id).then(setDetalhe)} /> : null}
 
           {!loading && !error && detalhe ? (
             <>
@@ -158,14 +124,11 @@ export function UnidadeDrawer({
                 />
               ) : null}
               {tab === 'fisc' ? <FiscTab unidade={detalhe} /> : null}
-              {tab === 'nc' ? <NcTab unidade={detalhe} /> : null}
+              {tab === 'nc' ? <NcTab unidade={detalhe} onClose={onClose} /> : null}
               {tab === 'chamados' ? <ChamadosTab unidade={detalhe} onClose={onClose} /> : null}
             </>
           ) : null}
-        </div>
-      </aside>
-    </>,
-    document.body,
+    </CcoDetalheBarra>
   );
 }
 
@@ -246,43 +209,70 @@ function GeralTab({
 }
 
 function FiscTab({ unidade }: { unidade: UnidadeDetalhe }) {
+  // #311: card clicável → modal de consulta só-leitura; estado local, então o CCO (mapa/filtros/aba) não muda.
+  const [abertaId, setAbertaId] = useState<string | null>(null);
   if (unidade.ultimasFiscalizacoes.length === 0) {
     return <EmptyTab icon={ClipboardList} message="Nenhuma vistoria registrada" />;
   }
+  const lista = ordenarVistoriasRecentes(unidade.ultimasFiscalizacoes);
 
   return (
-    <div className="space-y-2">
-      {unidade.ultimasFiscalizacoes.map((fisc) => (
-        <div key={fisc.id} className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--ok-bg)] text-[var(--ok)]">
-            <ClipboardList className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-semibold text-[var(--ink)]">
-              {fisc.checklistVersao.checklist.nome} v{fisc.checklistVersao.versao}
-            </p>
-            <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--ink-3)]">
-              <span className="inline-flex items-center gap-1">
-                <UserRound className="h-3 w-3" />
-                {fisc.agente.nome}
+    <>
+      <ul className="space-y-2" data-testid="drawer-vistorias-lista">
+        {lista.map((fisc) => (
+          <li key={fisc.id}>
+            <button
+              type="button"
+              data-testid="drawer-vistoria-card"
+              data-fiscalizacao-id={fisc.id}
+              aria-label={rotuloCardVistoria(fisc)}
+              onClick={() => setAbertaId(fisc.id)}
+              className="flex w-full cursor-pointer gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-left transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)] focus-visible:border-[var(--brand)] focus-visible:bg-[var(--brand-soft)] focus-visible:ring-2 focus-visible:ring-[var(--brand)] focus-visible:outline-none"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--ok-bg)] text-[var(--ok)]">
+                <ClipboardList className="h-4 w-4" />
               </span>
-              {fisc.concluidaEm ? (
-                <span className="inline-flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {new Date(fisc.concluidaEm).toLocaleDateString('pt-BR')}
+              <span className="block min-w-0 flex-1">
+                <span className="block text-[13px] font-semibold text-[var(--ink)]">
+                  {fisc.checklistVersao.checklist.nome} v{fisc.checklistVersao.versao}
                 </span>
-              ) : null}
-            </p>
-            <p className="mt-1 text-[11px] text-[var(--ink-3)]">{fisc.status} · {fisc.origem}</p>
-          </div>
-        </div>
-      ))}
-    </div>
+                <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--ink-3)]">
+                  <span className="inline-flex items-center gap-1">
+                    <UserRound className="h-3 w-3" />
+                    {fisc.agente.nome}
+                  </span>
+                  {fisc.concluidaEm ? (
+                    <span className="inline-flex items-center gap-1">
+                      <Calendar className="h-3 w-3" />
+                      {new Date(fisc.concluidaEm).toLocaleDateString('pt-BR')}
+                    </span>
+                  ) : null}
+                </span>
+                <span className="mt-1 block text-[11px] text-[var(--ink-3)]">{fisc.status} · {fisc.origem}</span>
+              </span>
+              <span aria-hidden className="inline-flex shrink-0 items-center gap-1 self-center text-[11px] font-semibold text-[var(--brand)]">
+                <Eye className="h-4 w-4" />
+                Abrir
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {abertaId ? (
+        <VistoriaConsultaModal fiscalizacaoId={abertaId} unidadeNome={unidade.nome} onClose={() => setAbertaId(null)} />
+      ) : null}
+    </>
   );
 }
 
-function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
+function NcTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => void }) {
   const items = unidade.pendenciasDetalhadas.naoConformidades;
+  const sessionUser = useSessionUser();
+  // 315: sem permissão de Chamados/Execução, o número fica só como selo (sem link).
+  const linkDaNc = (chamado: Parameters<typeof hrefChamadoDaNc>[0]) => {
+    const href = hrefChamadoDaNc(chamado);
+    return href && podeAbrirLinkChamado(href, sessionUser?.permissoes ?? [], sessionUser) ? href : null;
+  };
   if (items.length === 0) {
     return <EmptyTab icon={AlertTriangle} message="Nenhuma não conformidade registrada" ok />;
   }
@@ -311,6 +301,26 @@ function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
               <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">{item.descricao}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 <Badge variant="warning">{item.severidade}</Badge>
+                {situacao === 'RESOLVIDA_CHAMADO' && hrefChamadoDaNc(item.chamado) ? (
+                  <Badge variant="neutral">Resolvida</Badge>
+                ) : null}
+                {ncMostraLinkChamado(situacao) && linkDaNc(item.chamado) ? (
+                  // 315: número do chamado abre o chamado na tela de Chamados, já selecionado.
+                  <Link
+                    href={linkDaNc(item.chamado)!}
+                    onClick={onClose}
+                    data-testid="nc-chamado-link"
+                    aria-label={`Abrir chamado ${item.chamado!.codigo}`}
+                    className="mono inline-flex items-center rounded-full border border-[var(--warn-bd)] bg-[var(--surface)] px-2 py-0.5 text-[11px] font-semibold text-[var(--brand)] underline underline-offset-2 hover:text-[var(--brand-hover)]"
+                  >
+                    {item.chamado!.codigo}
+                  </Link>
+                ) : ncMostraLinkChamado(situacao) && hrefChamadoDaNc(item.chamado) ? (
+                  // 315: sem permissão de Chamados, só o selo com o número (sem link).
+                  <Badge variant={isPendente ? 'warning' : 'neutral'} data-testid="nc-chamado-selo">
+                    {item.chamado!.codigo}
+                  </Badge>
+                ) : (
                 <Badge variant={isPendente ? 'warning' : 'neutral'}>
                   {situacao === 'ABERTA'
                     ? 'Sem chamado'
@@ -322,6 +332,7 @@ function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
                           ? 'Resolvida'
                           : item.status}
                 </Badge>
+                )}
               </div>
             </div>
           </div>
@@ -333,6 +344,7 @@ function NcTab({ unidade }: { unidade: UnidadeDetalhe }) {
 
 function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: () => void }) {
   const items = unidade.pendenciasDetalhadas.chamados;
+  const sessionUser = useSessionUser();
   if (items.length === 0) {
     return <EmptyTab icon={Megaphone} message="Nenhum chamado aberto" ok />;
   }
@@ -340,18 +352,11 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
   return (
     <div className="space-y-2">
       {items.map((chamado) => {
-        const href =
-          chamado.status === 'EM_EXECUCAO'
-            ? `/execucao/${chamado.id}`
-            : `/chamados?id=${chamado.id}`;
-
-        return (
-        <Link
-          key={chamado.id}
-          href={href}
-          onClick={onClose}
-          className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]"
-        >
+        const href = hrefChamado(chamado);
+        // 315: sem permissão de Chamados/Execução, o card fica só informativo (sem link).
+        const podeAbrir = podeAbrirLinkChamado(href, sessionUser?.permissoes ?? [], sessionUser);
+        const conteudo = (
+          <>
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--brand-soft)] text-[var(--brand)]">
             <Megaphone className="h-4 w-4" />
           </span>
@@ -365,7 +370,26 @@ function ChamadosTab({ unidade, onClose }: { unidade: UnidadeDetalhe; onClose: (
           <Badge variant={chamado.prioridade.toUpperCase().includes('URG') || chamado.prioridade.toUpperCase().includes('ALTA') ? 'danger' : 'warning'}>
             {chamado.prioridade}
           </Badge>
-        </Link>
+          </>
+        );
+        return podeAbrir ? (
+          <Link
+            key={chamado.id}
+            href={href}
+            onClick={onClose}
+            data-testid="drawer-chamado-link"
+            className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 transition-colors hover:border-[var(--brand)] hover:bg-[var(--brand-soft)]"
+          >
+            {conteudo}
+          </Link>
+        ) : (
+          <div
+            key={chamado.id}
+            data-testid="drawer-chamado-sem-link"
+            className="flex gap-3 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3"
+          >
+            {conteudo}
+          </div>
         );
       })}
     </div>

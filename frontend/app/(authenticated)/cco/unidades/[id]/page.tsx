@@ -4,7 +4,9 @@ import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
+import { AVISO_PROPRIO_INATIVO, voltarSeguro } from '@/lib/proprio-abrir';
+import { Alert } from '@/components/ui/alert';
 import {
   AlertTriangle,
   Building2,
@@ -63,10 +65,17 @@ const SITUACAO_CHIP: Record<NonNullable<NcItem['situacaoVisual']>, 'warning' | '
 
 export default function UnidadeDetalhePage() {
   const params = useParams<{ id: string }>();
-  const backHref = useSafeBackHref('/cco');
+  const searchParams = useSearchParams();
+  // 314: aberto pela Administração volta para lá (só caminho interno e com permissão).
+  const backHref = useSafeBackHref(voltarSeguro(searchParams.get('voltar')) ?? '/cco');
   const [unidade, setUnidade] = useState<UnidadeDetalhe | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 314: a página completa sempre abre no topo (não herda a rolagem da lista de origem).
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [params.id]);
 
   useEffect(() => {
     if (!params.id) return;
@@ -102,6 +111,13 @@ export default function UnidadeDetalhePage() {
       icon={Building2}
       backHref={backHref}
     >
+      {unidade && !unidade.ativo ? (
+        <div data-testid="aviso-proprio-inativo" className="mb-4">
+          <Alert variant="warning" title="Inativo">
+            {AVISO_PROPRIO_INATIVO}
+          </Alert>
+        </div>
+      ) : null}
       <TipBanner id="unidade-detalhe">
         Visão completa do patrimônio: vistorias, não conformidades e chamados vinculados a este próprio.
       </TipBanner>

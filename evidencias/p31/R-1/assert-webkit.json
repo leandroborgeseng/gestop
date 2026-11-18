@@ -1,0 +1,29 @@
+{
+  "asserts": [
+    {
+      "cenario": "604",
+      "aviso": "Mostrando 500 de 604 tarefas",
+      "pendentes": [
+        "250 pendentes",
+        "150 pendentes"
+      ],
+      "abertas": "404"
+    },
+    {
+      "cenario": "500",
+      "aviso": null,
+      "pendentes": [
+        "500 pendentes"
+      ],
+      "abertas": "500"
+    },
+    {
+      "cenario": "501",
+      "aviso": "Mostrando 500 de 501 tarefas",
+      "pendentes": [
+        "501 pendentes"
+      ],
+      "abertas": "501"
+    }
+  ]
+}

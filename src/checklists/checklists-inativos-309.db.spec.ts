@@ -12,6 +12,7 @@ import { seedChecklists309, Seed309 } from '../../scripts/seed-checklists-309-co
 import { AuthService } from '../auth/auth.service';
 import { JwtPayload } from '../auth/jwt';
 import { CHECKLIST_INATIVO } from '../common/inativos/registro-inativo';
+import { addFrequency, startOfDay } from '../cronograma/cronograma.rules';
 import { CronogramaService } from '../cronograma/cronograma.service';
 import { DocumentosService } from '../documentos/documentos.service';
 import { FiscalizacoesService } from '../fiscalizacoes/fiscalizacoes.service';
@@ -165,11 +166,17 @@ describe.skipIf(!URL)('309 — checklists inativos (Postgres local)', () => {
     const doInativo = lista.find((c) => c.id === seed.cronograma);
     expect(doInativo?.checklist.ativo).toBe(false);
     expect(lista.filter((c) => c.checklistId === seed.checklistAtivo).every((c) => c.checklist.ativo)).toBe(true);
-    const { items } = await cron.listVistoriasProgramadas({ from: '2026-11-01', to: '2026-11-30' } as never, gestor);
+    const agenda = await prisma.cronogramaChecagem.findUniqueOrThrow({ where: { id: seed.cronograma } });
+    // Do dia gravado pela seed até a ocorrência seguinte. A vistoria "hoje − 2 dias" pode cair no dia âncora.
+    const periodo = {
+      from: startOfDay(agenda.proximaChecagemEm).toISOString(),
+      to: addFrequency(agenda.proximaChecagemEm, agenda.frequencia).toISOString(),
+    };
+    const { items } = await cron.listVistoriasProgramadas(periodo as never, gestor);
     const prog = items.filter((i) => i.cronogramaId === seed.cronograma);
     expect(prog.length).toBeGreaterThan(0);
     expect(prog.every((i) => i.checklistInativo === true)).toBe(true);
-    const cal = await cron.getCalendario({ from: '2026-11-01', to: '2026-11-30' } as never, gestor);
+    const cal = await cron.getCalendario(periodo as never, gestor);
     const ev = cal.eventos.filter((e) => e.cronogramaId === seed.cronograma);
     expect(ev.length).toBeGreaterThan(0);
     expect(ev.filter((e) => e.cronogramaId === seed.cronograma).every((e) => e.checklistInativo === true)).toBe(true);

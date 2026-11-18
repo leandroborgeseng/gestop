@@ -4,7 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import {
   buildSmtpTransport,
   decryptEmailPassword,
-  explainSmtpError,
+  describeSmtpError,
   mensagemEmailNaoConfigurado,
 } from './email-transport';
 
@@ -32,6 +32,11 @@ type ResolvedMail = {
   textoIntroEquipe?: string | null;
   disabled?: boolean;
 };
+
+function smtpSecrets(transporter?: Transporter): string[] {
+  const auth = (transporter as unknown as { options?: { auth?: { user?: string; pass?: string } } })?.options?.auth;
+  return [auth?.pass, auth?.user].filter((v): v is string => typeof v === 'string');
+}
 
 @Injectable()
 export class EmailService {
@@ -144,9 +149,9 @@ export class EmailService {
       });
       return { delivered: true, driver: 'smtp' };
     } catch (error) {
-      const detail = explainSmtpError(error);
-      this.logger.error(`Falha SMTP: ${detail}`);
-      return { delivered: false, driver: 'smtp', detail };
+      const info = describeSmtpError(error, smtpSecrets(resolved.transporter));
+      this.logger.error(`Falha SMTP: ${info.mensagem} | ${info.tecnico}`);
+      return { delivered: false, driver: 'smtp', detail: info.mensagem };
     }
   }
 

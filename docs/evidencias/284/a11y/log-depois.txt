@@ -1,0 +1,9 @@
+PASS 3-role-aria {"role":"dialog","ariaModal":"true","labelledby":"preencher-documento-titulo","titulo":"Preencher documento","noBody":true}
+PASS 1-foco-preso-80-tabs {"tabs":80,"fora":0,"sidebar":0,"amostra":["Fechar","SelecioneSimNão","TEXTAREA","INPUT","Salvar rascunho","Concluir documento"]}
+PASS 4-fundo-travado {"pos":"fixed","y0":0,"htmlH":800,"y":0,"mainTop":60,"bodyTop":"0px","somaScrollForaAntes":0,"somaScrollForaDepois":0}
+PASS 5-centralizado-1280 {"x":256,"y":24,"w":768,"h":752,"maxWidth":"768px","centroX":640}
+PASS 2a-esc-fecha-e-devolve-foco-documentos {"aberto":0,"focoNoOpener":true}
+PASS 4b-posicao-restaurada {}
+PASS 2b-fechar-devolve-foco-documentos {"focoNoOpener":true}
+PASS 2c-esc-devolve-foco-chamados {"focoNoOpener":true}
+PASS 2d-fechar-devolve-foco-chamados {"focoNoOpener":true}

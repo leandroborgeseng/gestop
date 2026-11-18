@@ -3,7 +3,7 @@
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ClipboardList, ClipboardPen, FileDown, FileText, MapPin, Printer, Search, Trash2, UserRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
@@ -16,16 +16,27 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
-import { ZoomableAuthenticatedImage } from '@/components/ui/zoomable-authenticated-image';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
-import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
 import { ExcluirVistoriaDialog } from '@/components/vistorias/excluir-vistoria-dialog';
+import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
 import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
-import { canVisualizarVistoriasExcluidas, mostrarBotaoExcluirVistoria } from '@/lib/vistoria-exclusao';
+import {
+  formatDateTime,
+  NotaVistoriaDestaque,
+  RespostaEvidencias,
+  STATUS_BADGE,
+  STATUS_OPTIONS,
+  statusLabel,
+  VistoriaDetalheCorpo,
+} from '@/components/vistorias/vistoria-detalhe-consulta';
+import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
+import { useEstadoVistorias } from '@/lib/use-estado-vistorias';
 import { downloadFiscalizacaoPdf, getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
+import { buscarRegistroPorIdDaUrl, idTemFormatoPrisma } from '@/lib/id-prisma';
 import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
 import { cn } from '@/lib/cn';
 import { formatUnidadeTipo, UNIDADE_TIPO_LABELS } from '@/lib/unidade-tipo';
+import { canVisualizarVistoriasExcluidas, mostrarBotaoExcluirVistoria } from '@/lib/vistoria-exclusao';
 import { formatNotaBr, notaCorHex } from '@/lib/vistoria-nota';
 import type {
   AdminUsuario,
@@ -38,54 +49,15 @@ import type {
 
 const PAGE_SIZE = 50;
 
-const STATUS_OPTIONS: Array<{ value: '' | FiscalizacaoStatus; label: string }> = [
-  { value: '', label: 'Todas' },
-  { value: 'CONCLUIDA', label: 'Concluídas' },
-  { value: 'EM_ANDAMENTO', label: 'Em andamento' },
-  { value: 'PLANEJADA', label: 'Planejadas' },
-  { value: 'SINCRONIZACAO_PENDENTE', label: 'Sincronização pendente' },
-  { value: 'CANCELADA', label: 'Canceladas' },
-];
-
-const STATUS_LABEL_EXTRA: Partial<Record<FiscalizacaoStatus, string>> = { EXCLUIDA: 'Excluída' };
-
-const STATUS_BADGE: Record<FiscalizacaoStatus, 'success' | 'warning' | 'info' | 'muted' | 'danger'> = {
-  CONCLUIDA: 'success',
-  EM_ANDAMENTO: 'warning',
-  PLANEJADA: 'info',
-  SINCRONIZACAO_PENDENTE: 'warning',
-  CANCELADA: 'muted',
-  EXCLUIDA: 'danger',
-};
-
-function statusLabel(status: FiscalizacaoStatus) {
-  return STATUS_LABEL_EXTRA[status] ?? STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
-}
-
-function formatDateTime(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleString('pt-BR') : '—';
-}
-
-function NotaVistoriaDestaque({ notaGeral }: { notaGeral: number }) {
-  const color = notaCorHex(notaGeral);
+export default function VistoriasPage() {
   return (
-    <div
-      className="flex min-w-[92px] flex-col items-center rounded-[var(--r-md)] border px-3 py-2 text-center"
-      style={{
-        borderColor: `${color}55`,
-        backgroundColor: `${color}14`,
-      }}
-      title="Nota média dos itens Likert nesta vistoria (0 a 10)"
-    >
-      <span className="text-[10px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Nota do próprio</span>
-      <span className="text-[26px] font-bold leading-tight" style={{ color }}>
-        {formatNotaBr(notaGeral)}
-      </span>
-    </div>
+    <Suspense>
+      <VistoriasPageContent />
+    </Suspense>
   );
 }
 
-export default function VistoriasPage() {
+function VistoriasPageContent() {
   const sessionUser = useSessionUser();
   const snackbar = useSnackbar();
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -103,19 +75,23 @@ export default function VistoriasPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { estado, definir } = useEstadoVistorias();
+  const [selectedId, setSelectedId] = useState<string | null>(estado.id);
   const [detail, setDetail] = useState<FiscalizacaoDetalhe | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [questionarioOpen, setQuestionarioOpen] = useState(false);
 
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<'' | FiscalizacaoStatus>('CONCLUIDA');
-  const [tipo, setTipo] = useState<'' | UnidadeTipo>('');
-  const [secretariaId, setSecretariaId] = useState('');
-  const [agenteId, setAgenteId] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [avulsaConflito, setAvulsaConflito] = useState<'' | 'true' | 'false'>('');
+  const search = estado.search;
+  const status = estado.status;
+  const tipo = estado.tipo;
+  const secretariaId = estado.secretaria;
+  const agenteId = estado.agente;
+  const from = estado.de;
+  const to = estado.ate;
+  const avulsaConflito = estado.avulsa;
+  const [semAcesso, setSemAcesso] = useState(false);
+  const fechadoRef = useRef(false);
+  const tinhaIdRef = useRef(Boolean(estado.id));
 
   const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
@@ -156,6 +132,33 @@ export default function VistoriasPage() {
     [search, status, tipo, secretariaId, agenteId, from, to, avulsaConflito, podeVerExcluidas, mostrarExcluidas],
   );
 
+  useEffect(() => {
+    if (estado.id) {
+      fechadoRef.current = false;
+      setSelectedId(estado.id);
+      setSemAcesso(!idTemFormatoPrisma(estado.id));
+    } else if (tinhaIdRef.current) {
+      fechadoRef.current = true;
+      setSelectedId(null);
+      setDetail(null);
+      setSemAcesso(false);
+    }
+    tinhaIdRef.current = Boolean(estado.id);
+  }, [estado.id]);
+
+  useEffect(() => {
+    if (!canFilterSecretaria && secretariaId) definir({ secretaria: '' });
+    if (!canFilterAgente && agenteId) definir({ agente: '' });
+  }, [canFilterSecretaria, canFilterAgente, secretariaId, agenteId, definir]);
+
+  useEffect(() => {
+    if (secretarias.length && secretariaId && !secretarias.some((item) => item.id === secretariaId)) definir({ secretaria: '' });
+  }, [secretarias, secretariaId, definir]);
+
+  useEffect(() => {
+    if (usuarios.length && agenteId && !usuarios.some((item) => item.id === agenteId)) definir({ agente: '' });
+  }, [usuarios, agenteId, definir]);
+
   const loadList = useCallback(async (offset = 0, append = false) => {
     if (offset === 0) setLoading(true);
     else setLoadingMore(true);
@@ -167,7 +170,7 @@ export default function VistoriasPage() {
       setTotal(response.total);
       setHasMore(response.hasMore);
       if (!append) {
-        setSelectedId((current) => current ?? response.items[0]?.id ?? null);
+        setSelectedId((current) => (fechadoRef.current ? null : (current ?? response.items[0]?.id ?? null)));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar vistorias.');
@@ -189,12 +192,25 @@ export default function VistoriasPage() {
 
     let active = true;
     setDetailLoading(true);
-    getFiscalizacao(selectedId)
-      .then((data) => {
-        if (active) setDetail(data);
+    void buscarRegistroPorIdDaUrl(selectedId, getFiscalizacao)
+      .then((resultado) => {
+        if (!active) return;
+        if (resultado.tipo === 'formato') {
+          setSemAcesso(true);
+          setDetail(null);
+          return;
+        }
+        if (resultado.tipo === 'ok') setDetail(resultado.data);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe da vistoria.');
+        if (!active) return;
+        const statusHttp = (err as { status?: number } | null)?.status;
+        if (statusHttp === 403 || statusHttp === 404) {
+          setSemAcesso(true);
+          setDetail(null);
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe da vistoria.');
       })
       .finally(() => {
         if (active) setDetailLoading(false);
@@ -206,8 +222,10 @@ export default function VistoriasPage() {
   }, [selectedId]);
 
   const selected = useMemo(
-    () => items.find((item) => item.id === selectedId) ?? null,
-    [items, selectedId],
+    () =>
+      items.find((item) => item.id === selectedId) ??
+      (detail && detail.id === selectedId ? detail : null),
+    [items, selectedId, detail],
   );
 
   return (
@@ -250,14 +268,14 @@ export default function VistoriasPage() {
                   <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
                   <input
                     value={search}
-                    onChange={(event) => setSearch(event.target.value)}
+                    onChange={(event) => definir({ search: event.target.value })}
                     placeholder="Buscar por unidade, código patrimonial, agente ou checklist…"
                     className="h-10 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px]"
                   />
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Status</label>
-                  <Select value={status} onChange={(event) => setStatus(event.target.value as '' | FiscalizacaoStatus)} className="h-9 w-full text-xs">
+                  <Select value={status} onChange={(event) => definir({ status: event.target.value as '' | FiscalizacaoStatus })} className="h-9 w-full text-xs">
                     {STATUS_OPTIONS.map((item) => (
                       <option key={item.value || 'all'} value={item.value}>
                         {item.label}
@@ -273,7 +291,7 @@ export default function VistoriasPage() {
                     id="filtro-avulsa-conflito"
                     data-testid="filtro-avulsa-conflito"
                     value={avulsaConflito}
-                    onChange={(event) => setAvulsaConflito(event.target.value as '' | 'true' | 'false')}
+                    onChange={(event) => definir({ avulsa: event.target.value as '' | 'true' | 'false' })}
                     className="h-9 w-full text-xs"
                   >
                     <option value="">Todas</option>
@@ -283,7 +301,7 @@ export default function VistoriasPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Tipo de próprio</label>
-                  <Select value={tipo} onChange={(event) => setTipo(event.target.value as '' | UnidadeTipo)} className="h-9 w-full text-xs">
+                  <Select value={tipo} onChange={(event) => definir({ tipo: event.target.value as '' | UnidadeTipo })} className="h-9 w-full text-xs">
                     <option value="">Todos</option>
                     {(Object.keys(UNIDADE_TIPO_LABELS) as UnidadeTipo[]).map((item) => (
                       <option key={item} value={item}>
@@ -295,7 +313,7 @@ export default function VistoriasPage() {
                 {canFilterSecretaria ? (
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Secretaria</label>
-                    <Select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} className="h-9 w-full text-xs">
+                    <Select value={secretariaId} onChange={(event) => definir({ secretaria: event.target.value })} className="h-9 w-full text-xs">
                       <option value="">Todas</option>
                       {secretarias.map((item) => (
                         <option key={item.id} value={item.id}>
@@ -308,7 +326,7 @@ export default function VistoriasPage() {
                 {canFilterAgente ? (
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Agente</label>
-                    <Select value={agenteId} onChange={(event) => setAgenteId(event.target.value)} className="h-9 w-full text-xs">
+                    <Select value={agenteId} onChange={(event) => definir({ agente: event.target.value })} className="h-9 w-full text-xs">
                       <option value="">Todos</option>
                       {usuarios.filter((item) => item.ativo).map((item) => (
                         <option key={item.id} value={item.id}>
@@ -332,11 +350,11 @@ export default function VistoriasPage() {
                 ) : null}
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">De</label>
-                  <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
+                  <input type="date" value={from} onChange={(event) => definir({ de: event.target.value })} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Até</label>
-                  <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
+                  <input type="date" value={to} onChange={(event) => definir({ ate: event.target.value })} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
                 </div>
               </CardContent>
             </Card>
@@ -357,7 +375,12 @@ export default function VistoriasPage() {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setSelectedId(item.id)}
+                        onClick={() => {
+                          fechadoRef.current = false;
+                          setSemAcesso(false);
+                          setSelectedId(item.id);
+                          definir({ id: item.id }, detalheCobreLista() ? 'push' : 'replace');
+                        }}
                         className={cn(
                           'mb-1 flex w-full flex-col gap-1.5 rounded-[var(--r-md)] border border-transparent px-3 py-3 text-left transition-colors',
                           isSelected
@@ -421,7 +444,14 @@ export default function VistoriasPage() {
           </section>
 
           <section className="min-h-[320px]">
-            {!selected ? (
+            {selectedId && semAcesso ? (
+              <div role="status" data-testid="aviso-registro-url" className="flex items-center justify-between gap-3 rounded-[var(--r-md)] border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-[13px] text-amber-950">{AVISO_REGISTRO_URL}</p>
+                <button type="button" className="text-[13px] font-semibold text-amber-950" onClick={() => definir({ id: null })}>
+                  Fechar
+                </button>
+              </div>
+            ) : !selected ? (
               <Card elevation={1} className="flex h-full min-h-[320px] items-center justify-center p-8 text-center">
                 <div>
                   <MapPin className="mx-auto h-8 w-8 text-[var(--ink-3)]" />
@@ -518,166 +548,12 @@ export default function VistoriasPage() {
                         onClose={() => setDocsOpen(false)}
                       />
                     ) : null}
-                    <dl className="grid gap-3 sm:grid-cols-2">
-                      <DetailField label="Checklist">{selected.checklistVersao.checklist.nome} (v{selected.checklistVersao.versao})</DetailField>
-                      <DetailField label="Origem">{(detail ?? selected).origemLabel ?? selected.origem}</DetailField>
-                      {selected.avulsaPorConflito ? (
-                        <DetailField label="Enviada como avulsa por conflito">
-                          <span data-testid="detalhe-avulsa-motivo">
-                            {selected.conflitoCodigo ? `${selected.conflitoCodigo} · ` : ''}
-                            Programação de {selected.conflitoDataProgramada ? formatDateTime(selected.conflitoDataProgramada).slice(0, 10) : '—'}
-                            {' · '}Motivo: {selected.avulsaMotivo ?? '—'}
-                          </span>
-                        </DetailField>
-                      ) : null}
-                      <DetailField label="Vistoria realizada por">
-                        {(detail ?? selected).realizadaPorLabel ?? selected.agente.nome}
-                      </DetailField>
-                      {(detail ?? selected).responsaveisPrevistosLabel ? (
-                        <DetailField label="Responsável previsto no cronograma">
-                          {(detail ?? selected).responsaveisPrevistosLabel}
-                        </DetailField>
-                      ) : null}
-                      {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
-                        <DetailField label="Lançada no sistema por">
-                          {(detail ?? selected).lancadoPorLabel ?? '—'}
-                        </DetailField>
-                      ) : null}
-                      <DetailField label="Lançamento manual">
-                        {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? 'Sim' : 'Não'}
-                      </DetailField>
-                      {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
-                        <>
-                          <DetailField label="Data da vistoria">
-                            {formatDateTime((detail ?? selected).dataVistoriaInformada ?? selected.iniciadaEm)}
-                          </DetailField>
-                          <DetailField label="Data do lançamento">
-                            {formatDateTime((detail ?? selected).dataLancamento ?? selected.createdAt)}
-                          </DetailField>
-                        </>
-                      ) : (
-                        <>
-                          <DetailField label="Iniciada em">{formatDateTime(selected.iniciadaEm)}</DetailField>
-                          <DetailField label="Concluída em">{formatDateTime(selected.concluidaEm)}</DetailField>
-                        </>
-                      )}
-                      <DetailField label="Dentro do raio">
-                        {selected.dentroRaioPermitido == null ? '—' : selected.dentroRaioPermitido ? 'Sim' : 'Não'}
-                      </DetailField>
-                      <DetailField label="Distância check-in">
-                        {selected.distanciaCheckinMetros != null ? `${Math.round(selected.distanciaCheckinMetros)} m` : '—'}
-                      </DetailField>
-                    </dl>
-
-                    {!detailLoading && detail?.nota?.notasPorCategoria?.length ? (
-                      <div>
-                        <p className="mb-2 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Notas por categoria</p>
-                        <div className="flex flex-wrap gap-2">
-                          {detail.nota.notasPorCategoria.map((item) => (
-                            <div
-                              key={item.categoriaId}
-                              className="rounded-[var(--r-md)] border px-3 py-2 text-center"
-                              style={{
-                                borderColor: `${notaCorHex(item.nota)}44`,
-                                backgroundColor: `${notaCorHex(item.nota)}10`,
-                              }}
-                            >
-                              <p className="text-[11px] font-semibold text-[var(--ink-3)]">{item.categoriaNome}</p>
-                              <p className="text-[16px] font-bold" style={{ color: notaCorHex(item.nota) }}>
-                                {formatNotaBr(item.nota)}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {detail?.respostas?.length ? (
-                      <Button variant="outlined" size="sm" onClick={() => setQuestionarioOpen(true)}>
-                        <ClipboardList className="mr-1.5 h-3.5 w-3.5" />
-                        Exibir questionário
-                      </Button>
-                    ) : null}
-
-                    {detail?.observacoes ? (
-                      <div>
-                        <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Observações</p>
-                        <p className="mt-1 text-[13px] text-[var(--ink-2)]">{detail.observacoes}</p>
-                      </div>
-                    ) : null}
-
-                    {detail?.naoConformidades?.length ? (
-                      <div>
-                        <p className="mb-2 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Não conformidades</p>
-                        <div className="space-y-2">
-                          {detail.naoConformidades.map((nc) => (
-                            <div key={nc.id} className="rounded-[var(--r-md)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] p-3 text-[13px]">
-                              <p className="font-semibold text-[var(--warn)]">{nc.item.titulo}</p>
-                              <p className="mt-1 text-[var(--ink-2)]">{nc.descricao}</p>
-                              {nc.chamado ? (
-                                <p className="mt-2 text-[12px]">
-                                  Chamado gerado:{' '}
-                                  <Link href={`/chamados?search=${encodeURIComponent(nc.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
-                                    {nc.chamado.codigo}
-                                  </Link>
-                                  {nc.chamado.status ? ` · ${nc.chamado.status}` : ''}
-                                </p>
-                              ) : nc.status === 'BAIXADA_MANUAL' ? (
-                                <p className="mt-2 text-[12px] text-[var(--ink-3)]">
-                                  Baixada manualmente{nc.motivoBaixa ? `: ${nc.motivoBaixa}` : ''}
-                                </p>
-                              ) : (
-                                <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
-                                  Pendente sem chamado
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-
-                    {detail?.respostas?.length ? (
-                      <div>
-                        <p className="mb-2 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Respostas do checklist</p>
-                        <div className="space-y-2">
-                          {detail.respostas.map((resposta, index) => (
-                            <div key={resposta.id}>
-                              <CabecalhoSecao
-                                atual={resposta.item.secao}
-                                anterior={index > 0 ? detail.respostas?.[index - 1]?.item.secao : undefined}
-                              />
-                              <div className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3">
-                                <p className="text-[12px] font-semibold text-[var(--ink)]">
-                                  {resposta.item.titulo}
-                                </p>
-                                <p className="mt-1 text-[13px] text-[var(--ink-2)]">
-                                  {formatRespostaValor(resposta)}
-                                </p>
-                                {resposta.comentario ? (
-                                  <p className="mt-1 text-[12px] text-[var(--ink-3)]">{resposta.comentario}</p>
-                                ) : null}
-                                <RespostaEvidencias evidencias={resposta.evidencias} altPrefix={resposta.item.titulo} />
-                                {resposta.naoConformidade?.chamado ? (
-                                  <p className="mt-2 text-[12px]">
-                                    Chamado gerado:{' '}
-                                    <Link href={`/chamados?search=${encodeURIComponent(resposta.naoConformidade.chamado.codigo)}`} className="font-semibold text-[var(--brand)] hover:underline">
-                                      {resposta.naoConformidade.chamado.codigo}
-                                    </Link>
-                                  </p>
-                                ) : resposta.naoConformidade ? (
-                                  <p className="mt-2 text-[12px] font-medium text-[var(--warn)]">
-                                    {resposta.naoConformidade.status === 'BAIXADA_MANUAL'
-                                      ? 'NC baixada manualmente (sem chamado)'
-                                      : 'NC pendente sem chamado'}
-                                  </p>
-                                ) : null}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
+                    <VistoriaDetalheCorpo
+                      resumo={selected}
+                      detail={detail}
+                      detailLoading={detailLoading}
+                      onExibirQuestionario={() => setQuestionarioOpen(true)}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -732,8 +608,14 @@ export default function VistoriasPage() {
             onExcluida={() => {
               setExcluirOpen(false);
               snackbar.show('Vistoria excluída.', 'success');
-              if (!(podeVerExcluidas && mostrarExcluidas)) setSelectedId(null);
-              else void getFiscalizacao(selected.id).then(setDetail).catch(() => undefined);
+              if (!(podeVerExcluidas && mostrarExcluidas)) {
+                fechadoRef.current = true;
+                setSelectedId(null);
+                setDetail(null);
+                definir({ id: null });
+              } else {
+                void getFiscalizacao(selected.id).then(setDetail).catch(() => undefined);
+              }
               void loadList(0, false);
             }}
           />
@@ -745,42 +627,5 @@ export default function VistoriasPage() {
         />
       </PageShell>
     </RequirePermissions>
-  );
-}
-
-function DetailField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <dt className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">{label}</dt>
-      <dd className="mt-0.5 text-[13px] font-medium text-[var(--ink-2)]">{children}</dd>
-    </div>
-  );
-}
-
-function RespostaEvidencias({
-  evidencias,
-  altPrefix,
-}: {
-  evidencias?: Array<{ id: string; url: string }>;
-  altPrefix: string;
-}) {
-  if (!evidencias?.length) return null;
-
-  return (
-    <div className="mt-2">
-      <p className="mb-1.5 text-[11px] font-semibold text-[var(--ink-3)]">
-        Evidências ({evidencias.length})
-      </p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {evidencias.map((evidencia, index) => (
-          <ZoomableAuthenticatedImage
-            key={evidencia.id}
-            src={evidencia.url}
-            alt={`${altPrefix} — evidência ${index + 1}`}
-            className="aspect-[4/3] w-full object-cover"
-          />
-        ))}
-      </div>
-    </div>
   );
 }

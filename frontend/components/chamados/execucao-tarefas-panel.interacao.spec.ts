@@ -48,10 +48,13 @@ function tarefa(id: string, over: Partial<ChamadoTarefaResumo> = {}, chamado: Pa
   };
 }
 
+const B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1';
+const C = 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1';
+
 const itens = [
   tarefa('a'), // mesmo ponto que b → pin agrupado
-  tarefa('b', { responsavel: { id: 'u2', nome: 'Carla Mendes' } }),
-  tarefa('c', { titulo: 'Pintura', equipe: { id: 'e2', nome: 'Civil' } }, { latitude: -21, longitude: -47 }),
+  tarefa(B, { responsavel: { id: 'u2', nome: 'Carla Mendes' } }),
+  tarefa(C, { titulo: 'Pintura', equipe: { id: 'e2', nome: 'Civil' } }, { latitude: -21, longitude: -47 }),
 ];
 
 async function montar(items = itens) {
@@ -71,7 +74,7 @@ afterEach(() => cleanup());
 describe('286 2º ciclo — interação real no painel', () => {
   it('carrega as tarefas em cards e agrupa a e b num pin com contador 2', async () => {
     await montar();
-    expect(cardsVisiveis()).toEqual(['a', 'b', 'c']);
+    expect(cardsVisiveis()).toEqual(['a', B, C]);
     const pins = within(screen.getByTestId('mapa')).getAllByRole('button').filter((b) => b.dataset.testid?.startsWith('pin-'));
     expect(pins.map((p) => p.dataset.contagem)).toEqual(['2', '1']);
   });
@@ -79,9 +82,9 @@ describe('286 2º ciclo — interação real no painel', () => {
   it('T13: a busca local filtra os cards e os pins no painel', async () => {
     await montar();
     fireEvent.change(screen.getByLabelText('Buscar tarefa'), { target: { value: 'civil' } });
-    expect(cardsVisiveis()).toEqual(['c']);
+    expect(cardsVisiveis()).toEqual([C]);
     expect(screen.queryByTestId('pin-a')).toBeNull();
-    expect(screen.getByTestId('pin-c')).toBeTruthy();
+    expect(screen.getByTestId(`pin-${C}`)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Buscar tarefa'), { target: { value: 'zzz' } });
     expect(cardsVisiveis()).toEqual([]);
     expect(document.body.textContent).toContain("Nenhuma tarefa encontrada para 'zzz'");
@@ -90,17 +93,17 @@ describe('286 2º ciclo — interação real no painel', () => {
   it('T7: a busca encontra pelo nome do responsável', async () => {
     await montar();
     fireEvent.change(screen.getByLabelText('Buscar tarefa'), { target: { value: 'carla' } });
-    expect(cardsVisiveis()).toEqual(['b']);
+    expect(cardsVisiveis()).toEqual([B]);
   });
 
   it('T12: clicar no pin só seleciona — não abre o modal; o popup "Abrir tarefa" abre', async () => {
     await montar();
-    fireEvent.click(screen.getByTestId('pin-c'));
+    fireEvent.click(screen.getByTestId(`pin-${C}`));
     expect(screen.queryByTestId('sheet')).toBeNull();
-    expect(card('c')!.getAttribute('aria-current')).toBe('true');
+    expect(card(C)!.getAttribute('aria-current')).toBe('true');
     expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('Tarefa Pintura selecionada no mapa');
-    fireEvent.click(screen.getByTestId('popup-c'));
-    expect(screen.getByTestId('sheet').textContent).toBe('c');
+    fireEvent.click(screen.getByTestId(`popup-${C}`));
+    expect(screen.getByTestId('sheet').textContent).toBe(C);
   });
 
   it('T11: o pin agrupado destaca as N tarefas do ponto na lista (sem filtrar)', async () => {
@@ -108,16 +111,16 @@ describe('286 2º ciclo — interação real no painel', () => {
     fireEvent.click(screen.getByTestId('pin-a'));
     expect(screen.queryByTestId('sheet')).toBeNull();
     expect(destacado('a')).toBe(true);
-    expect(destacado('b')).toBe(true);
-    expect(destacado('c')).toBe(false);
-    expect(cardsVisiveis()).toEqual(['a', 'b', 'c']);
+    expect(destacado(B)).toBe(true);
+    expect(destacado(C)).toBe(false);
+    expect(cardsVisiveis()).toEqual(['a', B, C]);
     expect(document.querySelector('[aria-live="polite"]')!.textContent).toBe('2 tarefas neste local selecionadas no mapa');
   });
 
   it('clicar no card abre o modal da tarefa', async () => {
     await montar();
-    fireEvent.click(card('b')!);
-    expect(screen.getByTestId('sheet').textContent).toBe('b');
+    fireEvent.click(card(B)!);
+    expect(screen.getByTestId('sheet').textContent).toBe(B);
   });
 
   it('T5: tarefa que vence hoje mostra o prazo em tom danger', async () => {
