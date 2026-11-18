@@ -435,6 +435,9 @@ export class FiscalizacoesService {
       notaGeral: nota.notaGeral,
       notasPorCategoria: nota.notasPorCategoria.map((item) => ({ categoriaNome: item.categoriaNome, nota: item.nota })),
       respostas,
+      excluida: Boolean(fiscalizacao.excluidoEm),
+      excluidoEm: fiscalizacao.excluidoEm?.toISOString() ?? null,
+      exclusaoMotivo: fiscalizacao.exclusaoMotivo ?? null,
     });
   }
 

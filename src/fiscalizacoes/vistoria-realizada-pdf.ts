@@ -72,6 +72,10 @@ export type VistoriaRealizadaPdfInput = {
   notaGeral?: number | null;
   notasPorCategoria?: Array<{ categoriaNome: string; nota: number }>;
   respostas: VistoriaRealizadaPdfResposta[];
+  /** 305: marca visível quando o PDF é da vistoria excluída (só quem pode vê-la chega aqui). */
+  excluida?: boolean;
+  excluidoEm?: string | null;
+  exclusaoMotivo?: string | null;
 };
 
 function ensureSpace(doc: InstanceType<typeof PDFDocument>, y: number, needed: number, marginTop: number) {
@@ -270,6 +274,14 @@ export function buildVistoriaRealizadaPdf(input: VistoriaRealizadaPdfInput): Pro
 
     doc.font('Helvetica-Bold').fontSize(14).fillColor(BRAND_PRIMARY).text('Vistoria realizada', left, y);
     y += 18;
+    if (input.excluida) {
+      const quando = input.excluidoEm ? new Date(input.excluidoEm).toLocaleString('pt-BR') : null;
+      const marca = ['Excluída', quando ? `em ${quando}` : null, input.exclusaoMotivo ? `Motivo: ${input.exclusaoMotivo}` : null]
+        .filter(Boolean)
+        .join(' · ');
+      doc.font('Helvetica-Bold').fontSize(12).fillColor('#9b1c1c').text(marca, left, y, { width });
+      y = doc.y + 10;
+    }
     doc.font('Helvetica').fontSize(10).fillColor(TEXT_MUTED).text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, left, y);
     y += 22;
 

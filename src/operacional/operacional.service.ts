@@ -724,6 +724,8 @@ export class OperacionalService {
           },
         },
         naoConformidades: {
+          // 305/E3: NC de vistoria excluída não entra no detalhe (o contador do drawer usa pendenteAtiva desta lista).
+          where: NC_DE_VISTORIA_ATIVA_WHERE,
           orderBy: { registradaEm: 'desc' },
           take: 50,
           select: {

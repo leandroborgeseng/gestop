@@ -36,5 +36,29 @@ describe('PDF de vistoria realizada', () => {
     for (const codigo of CODIGOS_TECNICOS_AMOSTRA) {
       expect(texto).not.toContain(codigo);
     }
+    expect(texto).not.toContain('Excluída');
+  });
+
+  it('R3: vistoria excluída traz a marca Excluída, com data e motivo', async () => {
+    const excluidoEm = '2026-11-02T15:04:00.000Z';
+    const motivo = 'Vistoria lançada em duplicidade no próprio fictício';
+    const buffer = await buildVistoriaRealizadaPdf({
+      unidadeNome: 'Escola Municipal Exemplo',
+      unidadeCodigoPatrimonial: 'EM-001',
+      secretariaSigla: 'SEDUC',
+      secretariaNome: 'Secretaria de Educação',
+      checklistNome: 'Vistoria de Infraestrutura Escolar',
+      checklistVersao: 2,
+      origemLabel: 'Rotina',
+      lancamentoManual: false,
+      excluida: true,
+      excluidoEm,
+      exclusaoMotivo: motivo,
+      respostas: [],
+    });
+    const texto = await extrairTextoPdf(buffer);
+    expect(texto).toContain('Excluída');
+    expect(texto).toContain(new Date(excluidoEm).toLocaleString('pt-BR'));
+    expect(texto).toContain(motivo);
   });
 });

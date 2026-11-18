@@ -1,6 +1,9 @@
 import { FiscalizacaoStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { VISTORIA_MOTIVO_MAX, VISTORIA_MOTIVO_MIN } from './fiscalizacao-exclusao';
+
+const MSG_MOTIVO_EXCLUSAO = `Informe o motivo da exclusão (de ${VISTORIA_MOTIVO_MIN} a ${VISTORIA_MOTIVO_MAX} caracteres).`;
 
 export class ListFiscalizacoesQueryDto {
   @IsOptional()
@@ -62,7 +65,7 @@ export class ListFiscalizacoesQueryDto {
 /** 305/E1: motivo obrigatório da exclusão lógica (o service valida e responde 400). */
 export class ExcluirFiscalizacaoDto {
   @IsOptional()
-  @IsString()
+  @IsString({ message: MSG_MOTIVO_EXCLUSAO })
   motivo?: string;
 }
 

@@ -71,6 +71,22 @@ type CalendarioEvento = {
   agenteNome?: string;
 };
 
+type BaixaPorVistoriaExcluida = {
+  fiscalizacaoId: string;
+  concluidaEm: string | null;
+  excluidaEm: string | null;
+};
+
+/**
+ * 305/R1: a programação continua sinalizada para todo mundo.
+ * O id e as datas da vistoria excluída só saem para quem tem Visualizar excluídas.
+ */
+export function sinalBaixaExcluidaVisivel(baixa: BaixaPorVistoriaExcluida | undefined, podeVerExcluidas: boolean) {
+  if (!baixa) return null;
+  if (podeVerExcluidas) return baixa;
+  return { concluidaEm: null, excluidaEm: null };
+}
+
 const cronogramaInclude = {
   unidade: {
     select: {
@@ -671,7 +687,10 @@ export class CronogramaService {
         },
         responsaveis: responsaveis.map((item) => ({ id: item.id, nome: item.nome })),
         conflitoAvulsa: resumoConflito(conflito),
-        baixaPorVistoriaExcluida: baixaExcluidaPorCronograma.get(cronograma.id) ?? null,
+        baixaPorVistoriaExcluida: sinalBaixaExcluidaVisivel(
+          baixaExcluidaPorCronograma.get(cronograma.id),
+          podeVisualizarVistoriasExcluidas(user),
+        ),
       };
     };
 

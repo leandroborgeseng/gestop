@@ -805,7 +805,7 @@ export type VistoriaProgramadaItem = {
   } | null;
   /** 305/E6: a última baixa desta programação veio de uma vistoria depois excluída (não reabre sozinha). */
   baixaPorVistoriaExcluida?: {
-    fiscalizacaoId: string;
+    fiscalizacaoId?: string | null;
     concluidaEm: string | null;
     excluidaEm: string | null;
   } | null;

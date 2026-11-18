@@ -18,6 +18,7 @@ import { MonitoramentoService } from '../monitoramento/monitoramento.service';
 import { OperacionalService } from '../operacional/operacional.service';
 import { withFiltrosOperacionais } from '../prisma/filtros-operacionais';
 import { PrismaService } from '../prisma/prisma.service';
+import { extrairTextoPdf } from '../checklists/pdf-texto';
 import { RelatoriosService } from '../relatorios/relatorios.service';
 import { FiscalizacoesService } from './fiscalizacoes.service';
 
@@ -240,6 +241,35 @@ describe.skipIf(!URL)('305 — exclusão lógica de vistorias (Postgres local)',
     expect(depois.noRelatorio).toBe(false);
   });
 
+  it('E3/B1: detalhe do próprio deixa de listar a NC da vistoria excluída e o contador cai 1', async () => {
+    const sufixo = randomBytes(4).toString('hex');
+    const unidade = await raw.unidadePublica.create({
+      data: {
+        secretariaId: seed.secretariaA,
+        codigoPatrimonial: `T305-NC-${sufixo}`,
+        nome: `Próprio fictício NC ${sufixo}`,
+        tipo: 'ESCOLA',
+        endereco: 'Rua Fictícia, 305',
+        latitude: -20.53,
+        longitude: -47.4,
+      },
+    });
+    const v = await criarVistoria({ unidadeId: unidade.id });
+    const pendentes = (detalhe: Awaited<ReturnType<OperacionalService['getUnidadeDetalhe']>>) =>
+      detalhe.pendenciasDetalhadas.naoConformidades.filter((nc) => nc.pendenteAtiva);
+
+    const antes = await operacional.getUnidadeDetalhe(unidade.id, gestor);
+    expect(antes.pendenciasDetalhadas.naoConformidades.some((nc) => nc.id === v.ncId && nc.pendenteAtiva)).toBe(true);
+    expect(pendentes(antes).some((nc) => nc.fiscalizacaoId === v.id)).toBe(true);
+    const totalAntes = pendentes(antes).length;
+
+    await svc.excluir(v.id, MOTIVO, gestor);
+    const depois = await operacional.getUnidadeDetalhe(unidade.id, gestor);
+    expect(depois.pendenciasDetalhadas.naoConformidades.some((nc) => nc.id === v.ncId)).toBe(false);
+    expect(pendentes(depois)).toHaveLength(totalAntes - 1);
+    expect(JSON.stringify(depois.pendenciasDetalhadas)).not.toContain(v.id);
+  });
+
   it('E4: "Mostrar excluídas" exige Visualizar excluídas; com ela a vistoria vem com a tag e somente leitura', async () => {
     const v = await criarVistoria();
     await svc.excluir(v.id, MOTIVO, gestor);
@@ -266,6 +296,12 @@ describe.skipIf(!URL)('305 — exclusão lógica de vistorias (Postgres local)',
     const detalhe = await svc.getById(v.id, gestor);
     expect(detalhe).toMatchObject({ id: v.id, status: 'EXCLUIDA', excluida: true, somenteLeitura: true, exclusaoMotivo: MOTIVO });
     expect(detalhe.excluidoPor?.id).toBe(seed.gestor);
+
+    // R3: PDF só para quem pode ver a excluída, com a marca visível.
+    expect(await erroDe(svc.exportPdf(v.id, excluidor))).toBeInstanceOf(NotFoundException);
+    const textoPdf = await extrairTextoPdf(await svc.exportPdf(v.id, gestor));
+    expect(textoPdf).toContain('Excluída');
+    expect(textoPdf).toContain(MOTIVO);
   });
 
   it('E5: não exclui vistoria de fora da Secretaria (404, nada muda); a da própria Secretaria B o gestor B exclui', async () => {
@@ -308,6 +344,13 @@ describe.skipIf(!URL)('305 — exclusão lógica de vistorias (Postgres local)',
     const doCronograma = progDepois.items.filter((i) => i.cronogramaId === seed.cronograma);
     expect(doCronograma.length).toBeGreaterThan(0);
     expect(doCronograma.every((i) => i.baixaPorVistoriaExcluida?.fiscalizacaoId === v.id)).toBe(true);
+    // R1: sem Visualizar excluídas a programação continua sinalizada, sem id nem dados da vistoria.
+    const progSemVer = await cronograma.listVistoriasProgramadas({ ...periodo, unidadeId: seed.unidadeA }, excluidor);
+    const semVer = progSemVer.items.filter((i) => i.cronogramaId === seed.cronograma);
+    expect(semVer.length).toBeGreaterThan(0);
+    expect(semVer.every((i) => i.baixaPorVistoriaExcluida)).toBe(true);
+    expect(semVer.every((i) => i.baixaPorVistoriaExcluida?.fiscalizacaoId == null)).toBe(true);
+    expect(JSON.stringify(semVer)).not.toContain(v.id);
     // Nenhum card de hoje voltou como pendente.
     expect(doCronograma.some((i) => i.data === toDateKey(startOfDay(hoje)))).toBe(false);
 
