@@ -349,9 +349,9 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
       },
       {
         nome: 'Fiscalizacao',
-        resumo: 'Vistoria realizada ou prevista. Guarda check-in, origem (rotina, chamado, avulsa, offline, manual) e o agente.',
-        campos: ['status (FiscalizacaoStatus)', 'origem', 'iniciadaEm', 'concluidaEm', 'dentroRaioPermitido', 'dataVistoriaInformada', 'cronogramaId'],
-        relacoes: ['N:1 Secretaria, UnidadePublica, ChecklistVersao, Usuario (agente e lançamento), CronogramaChecagem', '1:N RespostaChecklist, Evidencia, NaoConformidade, Documento'],
+        resumo: 'Vistoria realizada ou prevista. Guarda check-in, origem (rotina, chamado, avulsa, offline, manual) e o agente. A exclusão é lógica: status EXCLUIDA, excluidoEm, motivo e o status anterior. Respostas, evidências, não conformidades, chamados e documentos permanecem.',
+        campos: ['status (FiscalizacaoStatus, inclusive EXCLUIDA)', 'origem', 'iniciadaEm', 'concluidaEm', 'dentroRaioPermitido', 'dataVistoriaInformada', 'cronogramaId', 'excluidoEm', 'excluidoPorId', 'exclusaoMotivo', 'statusAntesExclusao'],
+        relacoes: ['N:1 Secretaria, UnidadePublica, ChecklistVersao, Usuario (agente, lançamento e exclusão), CronogramaChecagem', '1:N RespostaChecklist, Evidencia, NaoConformidade, Documento'],
       },
       {
         nome: 'RespostaChecklist',

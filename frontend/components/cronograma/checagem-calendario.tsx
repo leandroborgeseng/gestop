@@ -157,6 +157,14 @@ export function EventoChecagemCard({ evento }: { evento: CalendarioChecagemEvent
           {evento.tipo === 'REALIZADA' ? 'Realizada' : evento.tipo === 'ATRASADA' ? 'Atrasada' : 'Agendada'}
         </span>
         <span className="mono text-[11px] text-[var(--ink-3)]">{evento.data}</span>
+        {evento.vistoriaExcluida ? (
+          <span
+            data-testid="evento-vistoria-excluida"
+            className="rounded-[var(--r-pill)] border border-[#f3c0c0] bg-[#fde8e8] px-2.5 py-1 text-[11px] font-semibold text-[var(--danger)]"
+          >
+            Vistoria excluída · baixa mantida
+          </span>
+        ) : null}
       </div>
       <h3 className="mt-2 text-[14px] font-semibold text-[var(--ink)]">{evento.unidade.nome}</h3>
       <p className="mt-1 text-[13px] text-[var(--ink-3)]">

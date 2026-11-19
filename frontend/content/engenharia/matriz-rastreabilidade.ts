@@ -190,7 +190,16 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/vistorias',
     api: 'FiscalizacoesController: GET /fiscalizacoes, GET /fiscalizacoes/:id, GET /fiscalizacoes/:id/pdf',
     tabelas: 'Fiscalizacao, RespostaChecklist, Evidencia, NaoConformidade, UnidadePublica, Usuario',
-    permissao: 'fiscalizacoes.executar, dashboard.visualizar ou chamados.gerenciar. Busca, filtros e o id aberto ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Secretaria fora do contexto é ignorada e a URL não troca o perfil. No PDF da vistoria realizada, o tipo do item não aparece e a categoria continua quando existe. A resposta não traz o código de conformidade entre parênteses. O status do chamado da não conformidade sai pelo rótulo legível.',
+    permissao: 'fiscalizacoes.executar, dashboard.visualizar ou chamados.gerenciar. Busca, filtros e o id aberto ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Secretaria fora do contexto é ignorada e a URL não troca o perfil. No PDF da vistoria realizada, o tipo do item não aparece e a categoria continua quando existe. A resposta não traz o código de conformidade entre parênteses. O status do chamado da não conformidade sai pelo rótulo legível. Listas, indicadores, CCO, Dashboard e relatórios omitem Fiscalizacao com excluidoEm preenchido.',
+  },
+  {
+    id: 'vistoria-exclusao',
+    capacidade: 'Excluir logicamente vistoria realizada',
+    ator: 'Gestor, administrador',
+    tela: '/vistorias',
+    api: 'FiscalizacoesController: POST /fiscalizacoes/:id/exclusao. GET /fiscalizacoes?incluirExcluidas=true para quem visualiza excluídas.',
+    tabelas: 'Fiscalizacao, LogAuditoria, HistoricoStatus, Usuario',
+    permissao: 'Excluir usa a ação já existente matriz.vistorias._tela.excluir. Visualizar excluídas: matriz.vistorias.excluidas_visualizar.visualizar. Sem essa subfunção, incluirExcluidas responde 403, o detalhe ou o PDF da excluída responde 404, e a programada sinalizada não traz o id da vistoria. O detalhe do próprio no CCO omite a NC da vistoria excluída. O PDF de quem pode ver traz a marca Excluída. Motivo inválido, inclusive quando não é texto, responde em português. Fora da Secretaria, 404. Só CONCLUIDA. Sem restauração.',
   },
   {
     id: 'vistoria-manual',

@@ -205,6 +205,13 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         rotas: ['/vistorias', 'GET /fiscalizacoes', 'GET /fiscalizacoes/:id', 'GET /fiscalizacoes/:id/pdf'],
       },
       {
+        id: 'excluir-vistoria',
+        nome: 'Excluir vistoria realizada',
+        atores: ['gestor', 'administrador'],
+        descricao: 'Excluir logicamente uma vistoria concluída, com motivo em português. A ação é a Excluir já existente da tela Vistorias realizadas. A vistoria vai para EXCLUIDA e sai da lista, dos indicadores, das notas, do CCO (inclusive a NC no detalhe do próprio), do Dashboard e dos relatórios. Nada é apagado. Quem tem a subfunção Visualizar excluídas pode mostrar as excluídas, inclusive a que estava concluída quando o filtro é Concluídas, abrir o detalhe em somente leitura e o PDF com a marca Excluída. Sem a subfunção, a programada continua sinalizada, sem o id da vistoria. Fora da Secretaria, a resposta é 404. A programação baixada por essa vistoria não reabre. Não há restauração neste fluxo.',
+        rotas: ['/vistorias', 'POST /fiscalizacoes/:id/exclusao', 'GET /fiscalizacoes?incluirExcluidas=true'],
+      },
+      {
         id: 'vistoria-manual',
         nome: 'Lançar vistoria manual',
         atores: ['equipe'],

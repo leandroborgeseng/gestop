@@ -743,6 +743,16 @@
           "celulas": [
             "Exibir questionário · Visualizar"
           ]
+        },
+        {
+          "id": "excluidas_visualizar",
+          "label": "Visualizar excluídas",
+          "acoes": [
+            "visualizar"
+          ],
+          "celulas": [
+            "Visualizar excluídas · Visualizar"
+          ]
         }
       ]
     },

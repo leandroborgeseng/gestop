@@ -32,10 +32,13 @@ export const STATUS_BADGE: Record<FiscalizacaoStatus, 'success' | 'warning' | 'i
   PLANEJADA: 'info',
   SINCRONIZACAO_PENDENTE: 'warning',
   CANCELADA: 'muted',
+  EXCLUIDA: 'danger',
 };
 
+const STATUS_LABEL_EXTRA: Partial<Record<FiscalizacaoStatus, string>> = { EXCLUIDA: 'Excluída' };
+
 export function statusLabel(status: FiscalizacaoStatus) {
-  return STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
+  return STATUS_LABEL_EXTRA[status] ?? STATUS_OPTIONS.find((item) => item.value === status)?.label ?? status;
 }
 
 export function formatDateTime(value: string | null | undefined) {
