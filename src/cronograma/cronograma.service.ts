@@ -1,3 +1,8 @@
+import {
+  FISCALIZACAO_COM_EXCLUIDAS_WHERE,
+  podeVisualizarVistoriasExcluidas,
+  VISTORIA_REALIZADA_OU_EXCLUIDA_WHERE,
+} from '../fiscalizacoes/fiscalizacao-exclusao';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditAction, CronogramaFrequencia, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
@@ -58,11 +63,29 @@ type CalendarioEvento = {
   checklistInativo?: boolean;
   cronogramaId?: string;
   fiscalizacaoId?: string;
+  /** 305/E6: data baixada por uma vistoria depois excluída (não reabre; fica sinalizada). */
+  vistoriaExcluida?: boolean;
   frequencia?: CronogramaFrequencia;
   responsavelNome?: string | null;
   responsaveisNomes?: string[];
   agenteNome?: string;
 };
+
+type BaixaPorVistoriaExcluida = {
+  fiscalizacaoId: string;
+  concluidaEm: string | null;
+  excluidaEm: string | null;
+};
+
+/**
+ * 305/R1: a programação continua sinalizada para todo mundo.
+ * O id e as datas da vistoria excluída só saem para quem tem Visualizar excluídas.
+ */
+export function sinalBaixaExcluidaVisivel(baixa: BaixaPorVistoriaExcluida | undefined, podeVerExcluidas: boolean) {
+  if (!baixa) return null;
+  if (podeVerExcluidas) return baixa;
+  return { concluidaEm: null, excluidaEm: null };
+}
 
 const cronogramaInclude = {
   unidade: {
@@ -408,7 +431,8 @@ export class CronogramaService {
 
     const fiscalizacoes = await this.prisma.fiscalizacao.findMany({
       where: {
-        status: 'CONCLUIDA',
+        // 305/E6: a excluída mantém a data baixada (não reabre), mas aparece sinalizada e fora do total de realizadas.
+        AND: [VISTORIA_REALIZADA_OU_EXCLUIDA_WHERE],
         concluidaEm: { gte: from, lte: new Date(to.getTime() + 86_399_999) },
         ...(query.unidadeId ? { unidadeId: query.unidadeId } : {}),
         ...(secretariaId
@@ -423,6 +447,7 @@ export class CronogramaService {
       select: {
         id: true,
         concluidaEm: true,
+        excluidoEm: true,
         realizadaPorNome: true,
         unidade: { select: { id: true, nome: true, secretaria: { select: { sigla: true } } } },
         checklistVersao: {
@@ -435,6 +460,7 @@ export class CronogramaService {
       orderBy: { concluidaEm: 'asc' },
     });
 
+    const podeVerExcluidas = podeVisualizarVistoriasExcluidas(user);
     const eventos: CalendarioEvento[] = fiscalizacoes.flatMap((fiscalizacao) => {
       if (!fiscalizacao.concluidaEm) return [];
       const data = startOfDay(fiscalizacao.concluidaEm);
@@ -452,8 +478,10 @@ export class CronogramaService {
             secretariaSigla: fiscalizacao.unidade.secretaria.sigla,
           },
           checklist: { id: checklist.id, nome: checklist.nome },
-          fiscalizacaoId: fiscalizacao.id,
+          // 305/E4: o id da excluída só vai para quem pode visualizá-la.
+          fiscalizacaoId: fiscalizacao.excluidoEm && !podeVerExcluidas ? undefined : fiscalizacao.id,
           agenteNome: fiscalizacao.realizadaPorNome?.trim() || fiscalizacao.agente.nome,
+          ...(fiscalizacao.excluidoEm ? { vistoriaExcluida: true } : {}),
         },
       ];
     });
@@ -503,7 +531,8 @@ export class CronogramaService {
     const resumo = {
       total: eventos.length,
       agendadas: eventos.filter((evento) => evento.tipo === 'AGENDADA').length,
-      realizadas: eventos.filter((evento) => evento.tipo === 'REALIZADA').length,
+      realizadas: eventos.filter((evento) => evento.tipo === 'REALIZADA' && !evento.vistoriaExcluida).length,
+      baixadasPorVistoriaExcluida: eventos.filter((evento) => evento.vistoriaExcluida).length,
       atrasadas: eventos.filter((evento) => evento.tipo === 'ATRASADA').length,
     };
 
@@ -568,7 +597,8 @@ export class CronogramaService {
     if (!query.incluirRealizadas) {
       const fiscalizacoes = await this.prisma.fiscalizacao.findMany({
         where: {
-          status: 'CONCLUIDA',
+          // 305/E6: a baixa feita por uma vistoria depois excluída continua valendo (a programação não reabre sozinha).
+          AND: [VISTORIA_REALIZADA_OU_EXCLUIDA_WHERE],
           // 304/O6a: avulsa por conflito NÃO realiza a programação (ela continua pendente e sinalizada).
           avulsaPorConflito: false,
           concluidaEm: { gte: from, lte: new Date(to.getTime() + 86_399_999) },
@@ -627,6 +657,9 @@ export class CronogramaService {
           }
         : null;
 
+    // 305/E6: programação cuja última baixa veio de uma vistoria excluída fica sinalizada até uma baixa nova.
+    const baixaExcluidaPorCronograma = await this.mapBaixaPorVistoriaExcluida(cronogramas);
+
     const montarItem = (cronograma: (typeof cronogramas)[number], date: Date, dataKey: string) => {
       const responsaveis = formatResponsaveis(cronograma.responsaveis, cronograma.responsavel);
       const chave = `${cronograma.id}:${dataKey}`;
@@ -654,6 +687,10 @@ export class CronogramaService {
         },
         responsaveis: responsaveis.map((item) => ({ id: item.id, nome: item.nome })),
         conflitoAvulsa: resumoConflito(conflito),
+        baixaPorVistoriaExcluida: sinalBaixaExcluidaVisivel(
+          baixaExcluidaPorCronograma.get(cronograma.id),
+          podeVisualizarVistoriasExcluidas(user),
+        ),
       };
     };
 
@@ -687,6 +724,52 @@ export class CronogramaService {
 
     items.sort((a, b) => a.data.localeCompare(b.data) || a.unidade.nome.localeCompare(b.unidade.nome));
     return { items };
+  }
+
+  /**
+   * 305/E6: para cada cronograma, a vistoria excluída que deu a última baixa (vínculo direto ou unidade+checklist).
+   * Some quando há baixa posterior (ultimaChecagemEm depois do dia da conclusão da excluída).
+   */
+  private async mapBaixaPorVistoriaExcluida(
+    cronogramas: Array<{ id: string; unidadeId: string; checklistId: string; ultimaChecagemEm: Date | null }>,
+  ) {
+    const mapa = new Map<string, { fiscalizacaoId: string; concluidaEm: string | null; excluidaEm: string | null }>();
+    if (cronogramas.length === 0) return mapa;
+    const excluidas = await this.prisma.fiscalizacao.findMany({
+      where: {
+        AND: [FISCALIZACAO_COM_EXCLUIDAS_WHERE],
+        excluidoEm: { not: null },
+        statusAntesExclusao: 'CONCLUIDA',
+        avulsaPorConflito: false,
+        unidadeId: { in: [...new Set(cronogramas.map((c) => c.unidadeId))] },
+      },
+      select: {
+        id: true,
+        cronogramaId: true,
+        unidadeId: true,
+        concluidaEm: true,
+        excluidoEm: true,
+        checklistVersao: { select: { checklistId: true } },
+      },
+      orderBy: { concluidaEm: 'desc' },
+    });
+    const porPar = new Map(cronogramas.map((c) => [`${c.unidadeId}:${c.checklistId}`, c]));
+    const porId = new Map(cronogramas.map((c) => [c.id, c]));
+    for (const f of excluidas) {
+      const cronograma =
+        (f.cronogramaId ? porId.get(f.cronogramaId) : undefined) ??
+        porPar.get(`${f.unidadeId}:${f.checklistVersao.checklistId}`);
+      if (!cronograma || mapa.has(cronograma.id) || !f.concluidaEm) continue;
+      const diaExcluida = startOfDay(f.concluidaEm).getTime();
+      const ultima = cronograma.ultimaChecagemEm?.getTime();
+      if (ultima != null && ultima > diaExcluida) continue; // houve baixa nova depois: sinalização resolvida
+      mapa.set(cronograma.id, {
+        fiscalizacaoId: f.id,
+        concluidaEm: f.concluidaEm.toISOString(),
+        excluidaEm: f.excluidoEm?.toISOString() ?? null,
+      });
+    }
+    return mapa;
   }
 
   async registrarChecagemRealizada(input: {

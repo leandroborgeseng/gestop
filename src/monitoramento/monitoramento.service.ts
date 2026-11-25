@@ -1,3 +1,4 @@
+import { FISCALIZACAO_ATIVA_WHERE, NC_DE_VISTORIA_ATIVA_WHERE } from '../fiscalizacoes/fiscalizacao-exclusao';
 import { Injectable } from '@nestjs/common';
 import {
   ChamadoPrioridade,
@@ -118,7 +119,8 @@ export class MonitoramentoService {
         where: {
           status: { not: NaoConformidadeStatus.RESOLVIDA },
           // 306/S5: NaoConformidade não tem secretariaId — filtra pela Secretaria da vistoria.
-          ...escopo.naoConformidade(),
+          // 305/E3: e só de vistoria não excluída.
+          AND: [escopo.naoConformidade(), NC_DE_VISTORIA_ATIVA_WHERE],
         },
       }),
       statusAbertos
@@ -151,7 +153,7 @@ export class MonitoramentoService {
           _count: {
             select: {
               chamados: { where: { status: { in: CHAMADO_OPEN_STATUSES }, excluidoEm: null } },
-              fiscalizacoes: true,
+              fiscalizacoes: { where: FISCALIZACAO_ATIVA_WHERE },
             },
           },
         },

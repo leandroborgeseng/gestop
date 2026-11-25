@@ -91,6 +91,15 @@ export class AuthController {
   }
 
   @UseGuards(AuthGuard)
+  @Post('refresh')
+  refresh(
+    @CurrentUser() user: JwtPayload,
+    @Req() req: { headers?: Record<string, string | string[] | undefined> },
+  ) {
+    return this.authService.refreshSession(user, bearerToken(req));
+  }
+
+  @UseGuards(AuthGuard)
   @Post('perfil-ativo')
   switchPerfil(@CurrentUser() user: JwtPayload, @Body() body: SwitchPerfilDto) {
     return this.authService.switchPerfilAtivo(user.sub, body.perfilId);
@@ -126,6 +135,14 @@ export class AuthController {
     @CurrentUser() user: JwtPayload,
     @Req() req: { headers?: Record<string, string | string[] | undefined>; ip?: string; socket?: { remoteAddress?: string } },
   ) {
-    return this.authService.logout(user, requestAuditMeta(req));
+    return this.authService.logout(user, requestAuditMeta(req), bearerToken(req));
   }
+}
+
+function bearerToken(req: { headers?: Record<string, string | string[] | undefined> }) {
+  const header = req.headers?.authorization;
+  const value = Array.isArray(header) ? header[0] : header;
+  if (!value?.startsWith('Bearer ')) return null;
+  const token = value.slice('Bearer '.length).trim();
+  return token || null;
 }

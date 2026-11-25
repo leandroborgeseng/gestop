@@ -15,11 +15,14 @@ import { JwtPayload } from '../auth/jwt';
 import { RequireAnyPermissions, RequirePermissions } from '../auth/permissions';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import {
+  ExcluirFiscalizacaoDto,
   ImprimirVistoriaManualDto,
   LancamentoManualFiscalizacaoDto,
   ListFiscalizacoesQueryDto,
 } from './fiscalizacoes.dto';
 import { FiscalizacoesService } from './fiscalizacoes.service';
+import { VISTORIA_EXCLUIR } from './fiscalizacao-exclusao';
+import { ParseUuidPipe } from '../common/parse-uuid.pipe';
 
 @UseGuards(AuthGuard, PermissionsGuard)
 @Controller('fiscalizacoes')
@@ -54,6 +57,17 @@ export class FiscalizacoesController {
   @RequirePermissions('fiscalizacoes.executar')
   lancamentoManual(@Body() body: LancamentoManualFiscalizacaoDto, @CurrentUser() user: JwtPayload) {
     return this.fiscalizacoesService.lancamentoManual(body, user);
+  }
+
+  /** 305/E1: exclusão lógica com motivo obrigatório. Sem permissão = 403; sem motivo = 400. */
+  @Post(':id/exclusao')
+  @RequirePermissions(VISTORIA_EXCLUIR)
+  excluir(
+    @Param('id', ParseUuidPipe) id: string,
+    @Body() body: ExcluirFiscalizacaoDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.fiscalizacoesService.excluir(id, body?.motivo, user);
   }
 
   @Get(':id/pdf')

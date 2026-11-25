@@ -1,7 +1,11 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import PDFDocument from 'pdfkit';
-import { deveExibirCabecalhoSecao, tituloPerguntaChecklist } from '../checklists/checklist-resposta-apresentacao';
+import {
+  conformidadeStatusLabel,
+  deveExibirCabecalhoSecao,
+  tituloPerguntaChecklist,
+} from '../checklists/checklist-resposta-apresentacao';
 
 const BRAND = '#0066cc';
 const TEXT = '#1a1a1a';
@@ -236,7 +240,11 @@ export function buildRelatorioExecucaoPdf(input: RelatorioExecucaoPdfInput): Pro
           );
         y = doc.y + 2;
         if (resposta.conformidade) {
-          doc.font('Helvetica').fontSize(8).fillColor(MUTED).text(`Conformidade: ${resposta.conformidade}`, left, y);
+          doc
+            .font('Helvetica')
+            .fontSize(8)
+            .fillColor(MUTED)
+            .text(`Conformidade: ${conformidadeStatusLabel(resposta.conformidade)}`, left, y);
           y = doc.y + 2;
         }
         if (resposta.comentario) {

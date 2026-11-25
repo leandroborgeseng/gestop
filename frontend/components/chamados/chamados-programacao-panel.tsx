@@ -1,6 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { hojeIso, mesAtualIso } from '@/lib/estado-url';
+import { filtrosDeEstado, patchDeFiltros, type EstadoChamados } from '@/lib/estado-url-chamados';
 import { CalendarDays, ChevronLeft, ChevronRight, Map as MapIcon, UsersRound } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,17 +33,6 @@ const WEEKDAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const WEEKDAYS_FULL = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
 type ViewMode = 'mensal' | 'semanal';
-
-const DEFAULT_FILTROS: ChamadosFiltrosValue = {
-  statuses: 'TODOS',
-  prioridade: 'TODAS',
-  sla: 'TODOS',
-  atribuicao: 'TODOS',
-  equipeId: '',
-  secretariaProprioId: '',
-  secretariaExecucaoId: '',
-  tipoChamadoId: '',
-};
 
 function matchesFiltros(
   chamado: ChamadoResumo,
@@ -78,6 +69,12 @@ function isoDateNoon(dateKey: string) {
   return `${dateKey}T12:00:00.000Z`;
 }
 
+function inicioSemanaLocal(agora = new Date()) {
+  const data = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
+  data.setDate(data.getDate() - data.getDay());
+  return toInputDate(data);
+}
+
 function monthKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
@@ -85,27 +82,33 @@ function monthKey(date: Date) {
 export function ChamadosProgramacaoPanel({
   equipes,
   tiposChamado,
+  estado,
+  definir,
   onScheduled,
 }: {
   equipes: EquipeOpcao[];
   tiposChamado: TipoChamadoOpcao[];
+  estado: EstadoChamados;
+  definir: (patch: Partial<EstadoChamados>, modo?: 'replace' | 'push') => void;
   onScheduled?: () => void;
 }) {
   const snackbar = useSnackbar();
   const sessionUser = useSessionUser();
   const requestSeq = useRef(0);
   const agendarFormRef = useRef<HTMLDivElement | null>(null);
-  const [month, setMonth] = useState(() => new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('mensal');
-  const [weekStart, setWeekStart] = useState(() => {
-    const today = new Date();
-    const day = today.getDay();
-    const start = new Date(today);
-    start.setDate(today.getDate() - day);
-    return start;
-  });
-  const [filtros, setFiltros] = useState<ChamadosFiltrosValue>(DEFAULT_FILTROS);
-  const [selectedDate, setSelectedDate] = useState<string | null>(() => toInputDate(new Date()));
+  const viewMode: ViewMode = estado.visao;
+  const month = useMemo(() => {
+    const chave = estado.mes ?? mesAtualIso();
+    const [ano, mes] = chave.split('-').map(Number);
+    return new Date(ano, mes - 1, 1);
+  }, [estado.mes]);
+  const weekStart = useMemo(() => {
+    const chave = estado.semana ?? inicioSemanaLocal();
+    const [ano, mes, dia] = chave.split('-').map(Number);
+    return new Date(ano, mes - 1, dia);
+  }, [estado.semana]);
+  const filtros = useMemo(() => filtrosDeEstado(estado, false), [estado]);
+  const selectedDate = estado.dia ?? hojeIso();
   const [data, setData] = useState<ChamadoProgramacaoResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -376,9 +379,7 @@ export function ChamadosProgramacaoPanel({
   }
 
   function navigateToScheduledDate(dateKey: string) {
-    const [year, monthIndex] = dateKey.split('-').map(Number);
-    setMonth(new Date(year, monthIndex - 1, 1));
-    setSelectedDate(dateKey);
+    definir({ mes: dateKey.slice(0, 7), dia: dateKey });
   }
 
   async function handleAgendarPendente() {
@@ -433,10 +434,10 @@ export function ChamadosProgramacaoPanel({
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-wrap gap-2">
-          <Chip active={viewMode === 'mensal'} onClick={() => setViewMode('mensal')}>
+          <Chip active={viewMode === 'mensal'} onClick={() => definir({ visao: 'mensal' })}>
             Mensal
           </Chip>
-          <Chip active={viewMode === 'semanal'} onClick={() => setViewMode('semanal')}>
+          <Chip active={viewMode === 'semanal'} onClick={() => definir({ visao: 'semanal' })}>
             Semanal
           </Chip>
         </div>
@@ -446,7 +447,7 @@ export function ChamadosProgramacaoPanel({
 
       <ChamadosFiltrosPanel
         value={filtros}
-        onChange={setFiltros}
+        onChange={(next) => definir(patchDeFiltros(next))}
         statusCounts={statusCounts}
         equipes={equipes}
         tiposChamado={tiposChamado}
@@ -483,7 +484,7 @@ export function ChamadosProgramacaoPanel({
               <div className="mb-4 flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => setMonth((value) => new Date(value.getFullYear(), value.getMonth() - 1, 1))}
+                  onClick={() => definir({ mes: toInputDate(new Date(month.getFullYear(), month.getMonth() - 1, 1)).slice(0, 7) })}
                   className="inline-flex items-center gap-1 rounded-[var(--r-sm)] px-2 py-1.5 text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--surface-2)]"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -495,7 +496,7 @@ export function ChamadosProgramacaoPanel({
                 </h2>
                 <button
                   type="button"
-                  onClick={() => setMonth((value) => new Date(value.getFullYear(), value.getMonth() + 1, 1))}
+                  onClick={() => definir({ mes: toInputDate(new Date(month.getFullYear(), month.getMonth() + 1, 1)).slice(0, 7) })}
                   className="inline-flex items-center gap-1 rounded-[var(--r-sm)] px-2 py-1.5 text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--surface-2)]"
                 >
                   Próximo
@@ -523,7 +524,7 @@ export function ChamadosProgramacaoPanel({
                     <button
                       key={cell.key}
                       type="button"
-                      onClick={() => setSelectedDate(dateKey)}
+                      onClick={() => definir({ dia: dateKey })}
                       className={cn(
                         'min-h-20 rounded-[var(--r-sm)] border p-2 text-left transition-colors',
                         isSelected
@@ -563,13 +564,11 @@ export function ChamadosProgramacaoPanel({
                   <div className="mb-2 flex items-center justify-between gap-3">
                     <button
                       type="button"
-                      onClick={() =>
-                        setWeekStart((value) => {
-                          const next = new Date(value);
-                          next.setDate(next.getDate() - 7);
-                          return next;
-                        })
-                      }
+                      onClick={() => {
+                        const next = new Date(weekStart);
+                        next.setDate(next.getDate() - 7);
+                        definir({ visao: 'semanal', semana: toInputDate(next) });
+                      }}
                       className="inline-flex items-center gap-1 rounded-[var(--r-sm)] px-2 py-1.5 text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--surface-2)]"
                     >
                       <ChevronLeft className="h-4 w-4" />
@@ -580,13 +579,11 @@ export function ChamadosProgramacaoPanel({
                     </h2>
                     <button
                       type="button"
-                      onClick={() =>
-                        setWeekStart((value) => {
-                          const next = new Date(value);
-                          next.setDate(next.getDate() + 7);
-                          return next;
-                        })
-                      }
+                      onClick={() => {
+                        const next = new Date(weekStart);
+                        next.setDate(next.getDate() + 7);
+                        definir({ visao: 'semanal', semana: toInputDate(next) });
+                      }}
                       className="inline-flex items-center gap-1 rounded-[var(--r-sm)] px-2 py-1.5 text-[13px] font-semibold text-[var(--brand)] hover:bg-[var(--surface-2)]"
                     >
                       Próxima semana
@@ -599,7 +596,7 @@ export function ChamadosProgramacaoPanel({
                       <button
                         key={day.key}
                         type="button"
-                        onClick={() => setSelectedDate(day.key)}
+                        onClick={() => definir({ dia: day.key })}
                         className={cn(
                           'w-full rounded-[var(--r-md)] border p-3 text-left transition-colors',
                           isSelected

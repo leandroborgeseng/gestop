@@ -4,10 +4,17 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { downloadRelatorioTarefas, getRelatorioTarefas, getSecretarias, listEquipesExecucao, listTiposChamadoOpcoes, listUsuariosAtivosExecucao } from '@/lib/api';
 import {
+  avisoCorteRelatorioTarefas,
   formatarGrupoIndicadoresTarefas,
+  LIMITE_GRUPOS_VISIVEIS,
+  rotuloContagem,
   montarFiltrosRelatorioTarefas,
+  resumoDoChamado,
+  textoCompletoDoChamado,
+  ordenarGruposPendencias,
   TAREFA_PRIORIDADE_LABEL,
   TAREFA_STATUS_LABEL,
+  textoCorteGrupos,
   type GrupoIndicadoresTarefas,
   type RelatorioTarefasResponse,
 } from '@/lib/chamado-tarefa';
@@ -82,6 +89,7 @@ export function RelatorioTarefasPanel() {
   }
 
   const indicadores = data?.indicadores;
+  const avisoCorte = data ? avisoCorteRelatorioTarefas(data.total, data.items.length, data.limite) : null;
 
   return (
     <div className="space-y-3">
@@ -140,6 +148,11 @@ export function RelatorioTarefasPanel() {
         </Button>
       </div>
       {erro ? <p className="text-[13px] text-[var(--danger)]">{erro}</p> : null}
+      {avisoCorte ? (
+        <p data-testid="aviso-corte-tarefas" className="text-[13px] font-medium text-[var(--ink-2)]">
+          {avisoCorte}
+        </p>
+      ) : null}
       {indicadores ? (
         <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <Indicador label="Abertas" value={indicadores.abertas} />
@@ -180,7 +193,7 @@ export function RelatorioTarefasPanel() {
             <thead className="text-[var(--ink-3)]">
               <tr>
                 <th className="p-2">Chamado</th>
-                <th className="p-2">Título do chamado</th>
+                <th className="p-2">Resumo do chamado</th>
                 <th className="p-2">Tarefa</th>
                 <th className="p-2">Status</th>
                 <th className="p-2">Prazo</th>
@@ -196,7 +209,18 @@ export function RelatorioTarefasPanel() {
               {data.items.map((item) => (
                 <tr key={item.id} className="border-t border-[var(--line)]">
                   <td className="p-2 mono">{item.chamado.codigo}</td>
-                  <td className="p-2">{item.chamado.titulo || item.chamado.descricao.slice(0, 60)}</td>
+                  <td
+                    className="group relative p-2 focus-visible:outline-2 focus-visible:outline-[var(--brand)]"
+                    tabIndex={0}
+                    title={textoCompletoDoChamado(item.chamado) || undefined}
+                  >
+                    {resumoDoChamado(item.chamado)}
+                    {textoCompletoDoChamado(item.chamado) ? (
+                      <span role="tooltip" className="pointer-events-none absolute top-full left-0 z-10 hidden max-w-xs rounded bg-[var(--ink)] px-2 py-1 text-[11px] text-white group-focus:block group-hover:block">
+                        {textoCompletoDoChamado(item.chamado)}
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="p-2">{item.titulo}</td>
                   <td className="p-2">{TAREFA_STATUS_LABEL[item.status]}</td>
                   <td className="p-2">{item.prazo ? new Date(item.prazo).toLocaleDateString('pt-BR') : '—'}</td>
@@ -219,6 +243,20 @@ export function RelatorioTarefasPanel() {
   );
 }
 
+function TextoPendencias({ item }: { item: GrupoIndicadoresTarefas }) {
+  return (
+    <span>
+      <span className="sr-only">{formatarGrupoIndicadoresTarefas(item)}</span>
+      <span aria-hidden="true">
+        {item.nome} — {rotuloContagem(item.pendentes, 'pendente', 'pendentes')},{' '}
+        <span className={item.atrasadas > 0 ? 'font-semibold text-[var(--danger)]' : undefined}>
+          {rotuloContagem(item.atrasadas, 'atrasada', 'atrasadas')}
+        </span>
+      </span>
+    </span>
+  );
+}
+
 function Indicador({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-[12px] border border-[var(--line)] p-3">
@@ -237,17 +275,32 @@ function Grupo({
   itens: GrupoIndicadoresTarefas[];
   detalharPendencias?: boolean;
 }) {
+  const [expandido, setExpandido] = useState(false);
+  const ordenados = detalharPendencias ? ordenarGruposPendencias(itens) : itens;
+  const visiveis = expandido || !detalharPendencias ? ordenados : ordenados.slice(0, LIMITE_GRUPOS_VISIVEIS);
+  const corte = detalharPendencias && !expandido ? textoCorteGrupos(ordenados.length) : null;
   return (
     <div>
       <p className="text-[12px] font-semibold text-[var(--ink-2)]">{titulo}</p>
       <ul className="mt-1 text-[12px] text-[var(--ink-3)]">
-        {itens.slice(0, 6).map((item) => (
-          <li key={item.nome}>
-            {detalharPendencias ? formatarGrupoIndicadoresTarefas(item) : `${item.nome}: ${item.total}`}
+        {visiveis.map((item) => (
+          <li key={item.nome} className={detalharPendencias && item.pendentes === 0 && item.atrasadas === 0 ? 'opacity-60' : undefined}>
+            {detalharPendencias ? <TextoPendencias item={item} /> : `${item.nome}: ${item.total}`}
           </li>
         ))}
-        {itens.length === 0 ? <li>Sem dados</li> : null}
+        {ordenados.length === 0 ? <li>Sem dados</li> : null}
       </ul>
+      {detalharPendencias ? (
+        <p className="mt-1 text-[11px] text-[var(--ink-2)]">Atrasadas estão incluídas nas pendentes</p>
+      ) : null}
+      {corte ? (
+        <p className="mt-1 text-[12px] text-[var(--ink-2)]">
+          <span data-testid={`corte-grupos-${titulo}`}>{corte}</span>{' '}
+          <button type="button" className="font-semibold text-[var(--brand)] underline" onClick={() => setExpandido(true)}>
+            Ver todas
+          </button>
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { FISCALIZACAO_ATIVA_WHERE, NC_DE_VISTORIA_ATIVA_WHERE } from '../fiscalizacoes/fiscalizacao-exclusao';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AuditAction,
@@ -57,7 +58,7 @@ export class OperacionalService {
     const unidadeWhere = resolveUnidadeSecretariaFilter(user);
     const chamadoWhere = resolveChamadoSecretariaFilter(user);
     const fiscalizacaoWhere = resolveDirectSecretariaFilter(user);
-    const ncWhere =
+    const ncEscopo =
       !scopeIds
         ? {}
         : scopeIds.length === 0
@@ -65,6 +66,8 @@ export class OperacionalService {
           : scopeIds.length === 1
             ? { unidade: { secretariaId: scopeIds[0] } }
             : { unidade: { secretariaId: { in: scopeIds } } };
+    // 305/E3: NC de vistoria excluída sai dos indicadores (a NC e o chamado continuam no banco, E7).
+    const ncWhere = { ...ncEscopo, ...NC_DE_VISTORIA_ATIVA_WHERE };
 
     const [
       unidadesAtivas,
@@ -334,7 +337,7 @@ export class OperacionalService {
         _count: {
           select: {
             fiscalizacoes: {
-              where: { status: FiscalizacaoStatus.CONCLUIDA },
+              where: { status: FiscalizacaoStatus.CONCLUIDA, ...FISCALIZACAO_ATIVA_WHERE },
             },
             naoConformidades: {
               where: this.buildNcPendenciaWhere(),
@@ -684,6 +687,7 @@ export class OperacionalService {
           },
         },
         fiscalizacoes: {
+          where: FISCALIZACAO_ATIVA_WHERE,
           // #311: mais recente → mais antiga (conclusão; senão início; senão criação). Lista rola no drawer.
           orderBy: [
             { concluidaEm: { sort: 'desc', nulls: 'last' } },
@@ -720,6 +724,8 @@ export class OperacionalService {
           },
         },
         naoConformidades: {
+          // 305/E3: NC de vistoria excluída não entra no detalhe (o contador do drawer usa pendenteAtiva desta lista).
+          where: NC_DE_VISTORIA_ATIVA_WHERE,
           orderBy: { registradaEm: 'desc' },
           take: 50,
           select: {
@@ -815,7 +821,7 @@ export class OperacionalService {
         _count: {
           select: {
             fiscalizacoes: {
-              where: { status: FiscalizacaoStatus.CONCLUIDA },
+              where: { status: FiscalizacaoStatus.CONCLUIDA, ...FISCALIZACAO_ATIVA_WHERE },
             },
             naoConformidades: {
               where: this.buildNcPendenciaWhere(),
@@ -1248,6 +1254,7 @@ export class OperacionalService {
   private buildNcPendenciaWhere(): Prisma.NaoConformidadeWhereInput {
     // NC pendente = chamado ativo ainda aberto, ou NC aberta sem chamado operacional.
     return {
+      ...NC_DE_VISTORIA_ATIVA_WHERE,
       status: { in: NON_CONFORMITY_CANDIDATE_STATUSES },
       OR: [
         { chamado: { status: { in: CHAMADO_OPEN_STATUSES }, excluidoEm: null } },
@@ -1350,6 +1357,7 @@ export class OperacionalService {
       by: ['unidadeId'],
       where: {
         unidadeId: { in: unidadeIds },
+        ...NC_DE_VISTORIA_ATIVA_WHERE,
         OR: [
           {
             status: { in: [NaoConformidadeStatus.ABERTA, NaoConformidadeStatus.EM_TRIAGEM] },

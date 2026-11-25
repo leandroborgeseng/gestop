@@ -39,6 +39,7 @@ export function OperationalMap({
   manterVista,
   ocultarPinos,
   onMapaPronto,
+  detalhe,
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -60,6 +61,8 @@ export function OperationalMap({
   ocultarPinos?: boolean;
   /** 298: instância do mapa (camadas do Webmap desenhadas por fora). null ao desmontar. */
   onMapaPronto?: (map: import('leaflet').Map | null) => void;
+  /** 321: barra de detalhes, filha do shell que entra em tela cheia. */
+  detalhe?: ReactNode;
 }) {
   return (
     <OperationalMapClient
@@ -81,6 +84,7 @@ export function OperationalMap({
       manterVista={manterVista}
       ocultarPinos={ocultarPinos}
       onMapaPronto={onMapaPronto}
+      detalhe={detalhe}
     />
   );
 }

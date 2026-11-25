@@ -803,6 +803,12 @@ export type VistoriaProgramadaItem = {
     enviadaEm: string | null;
     agente: { id: string; nome: string };
   } | null;
+  /** 305/E6: a última baixa desta programação veio de uma vistoria depois excluída (não reabre sozinha). */
+  baixaPorVistoriaExcluida?: {
+    fiscalizacaoId?: string | null;
+    concluidaEm: string | null;
+    excluidaEm: string | null;
+  } | null;
 };
 
 export type ChamadoStatus =
@@ -1051,6 +1057,8 @@ export type ChamadoMapPoint = {
   prioridade: string;
   equipeNome?: string | null;
   responsavelNome?: string | null;
+  /** UX-10: resumo do chamado no pop-up do pin da tarefa. */
+  resumoChamado?: string | null;
   previstaExecucaoEm?: string | null;
   prazoEm?: string | null;
   programado?: boolean;
@@ -1284,6 +1292,8 @@ export type CalendarioChecagemEvento = {
   responsavelNome?: string | null;
   responsaveisNomes?: string[];
   agenteNome?: string;
+  /** 305/E6: data baixada por vistoria depois excluída (não reabre; sinalizada). */
+  vistoriaExcluida?: boolean;
 };
 
 export type CalendarioChecagemResponse = {
@@ -1294,6 +1304,8 @@ export type CalendarioChecagemResponse = {
     agendadas: number;
     realizadas: number;
     atrasadas: number;
+    /** 305/E6 */
+    baixadasPorVistoriaExcluida?: number;
   };
   eventos: CalendarioChecagemEvento[];
 };
@@ -1303,7 +1315,9 @@ export type FiscalizacaoStatus =
   | 'EM_ANDAMENTO'
   | 'CONCLUIDA'
   | 'CANCELADA'
-  | 'SINCRONIZACAO_PENDENTE';
+  | 'SINCRONIZACAO_PENDENTE'
+  /** 305: exclusão lógica. */
+  | 'EXCLUIDA';
 
 export type FiscalizacaoOrigem = 'ROTINA' | 'CHAMADO' | 'AVULSA' | 'OFFLINE' | 'MANUAL';
 
@@ -1345,6 +1359,12 @@ export type FiscalizacaoResumo = {
     checklist: { id: string; nome: string };
   };
   nota?: VistoriaNotaResumo | null;
+  /** 305/E4: vistoria excluída logicamente (tag "Excluída", somente leitura). */
+  excluida?: boolean;
+  somenteLeitura?: boolean;
+  excluidoEm?: string | null;
+  exclusaoMotivo?: string | null;
+  excluidoPor?: { id: string; nome: string } | null;
 };
 
 export type FiscalizacaoOpcoesManuais = {

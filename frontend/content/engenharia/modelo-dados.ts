@@ -123,7 +123,7 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
   {
     id: 'mapas',
     titulo: 'Mapas e unidades',
-    descricao: 'Próprios públicos georreferenciados, catálogo de tipos e o registro da importação do webmap.',
+    descricao: 'Próprios públicos georreferenciados, catálogo de tipos, a sincronização de unidades e as camadas geográficas do Webmap.',
     tabelas: [
       {
         nome: 'UnidadePublica',
@@ -147,6 +147,42 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
         relacoes: ['N:1 Usuario (quem disparou, opcional)'],
       },
       {
+        nome: 'WebmapCamadaGrupo',
+        resumo: 'Grupo de camadas importado do Webmap.',
+        campos: ['chaveOrigem (única)', 'titulo', 'ordem', 'ativo', 'removidaOrigem'],
+        relacoes: ['1:N WebmapCamada'],
+      },
+      {
+        nome: 'WebmapCamada',
+        resumo: 'Camada lógica. versaoAtual aponta os elementos desenhados no mapa.',
+        campos: ['chaveOrigem (única)', 'nomeOriginal', 'geometriaTipo', 'versaoAtual', 'ativo', 'totalElementos'],
+        relacoes: ['N:1 WebmapCamadaGrupo', '1:N WebmapElemento', '1:N WebmapCamadaVersao'],
+      },
+      {
+        nome: 'WebmapCamadaVersao',
+        resumo: 'Gravação da camada numa importação (GRAVANDO, PRONTA, ATIVA ou SUBSTITUIDA).',
+        campos: ['id', 'camadaId', 'importacaoId', 'status', 'shaArquivo', 'totalElementos'],
+        relacoes: ['N:1 WebmapCamada'],
+      },
+      {
+        nome: 'WebmapElemento',
+        resumo: 'Feição gravada em lote. O id é estável na versão (camada, versão e ordem na fonte); reaplicar faz upsert e não apaga o lote já gravado.',
+        campos: ['id', 'camadaId', 'versao', 'fidOrigem', 'geometria (Json)', 'geometriaInvalida', 'minLng', 'minLat', 'maxLng', 'maxLat'],
+        relacoes: ['N:1 WebmapCamada'],
+      },
+      {
+        nome: 'WebmapImportacao',
+        resumo: 'Job de aplicar camadas (fase, heartbeat, resultado). Não é a sincronização de unidades.',
+        campos: ['status', 'fase', 'fonteHash', 'bootId', 'resultado (Json)', 'motivo'],
+        relacoes: ['Sem chave estrangeira. O autor fica em usuarioId e usuarioNome.'],
+      },
+      {
+        nome: 'WebmapIcone',
+        resumo: 'Ícone de estilo copiado para o armazenamento, endereçado pelo sha256.',
+        campos: ['sha256 (único)', 'origem', 'mimeType', 'storageKey', 'url'],
+        relacoes: ['Sem chave estrangeira. A url fica dentro de WebmapCamada.estilo.'],
+      },
+      {
         nome: 'DashboardSnapshot',
         resumo: 'Métricas materializadas por escopo geral, secretaria ou unidade.',
         campos: ['escopo (DashboardEscopo)', 'chave', 'periodoInicio', 'periodoFim', 'metricas (Json)', 'geradoEm'],
@@ -156,6 +192,9 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
     arestas: [
       { de: 'UnidadePublica', para: 'Secretaria', rotulo: 'secretariaId' },
       { de: 'WebmapImport', para: 'Usuario', rotulo: 'usuarioId' },
+      { de: 'WebmapCamada', para: 'WebmapCamadaGrupo', rotulo: 'grupoId' },
+      { de: 'WebmapElemento', para: 'WebmapCamada', rotulo: 'camadaId' },
+      { de: 'WebmapCamadaVersao', para: 'WebmapCamada', rotulo: 'camadaId' },
       { de: 'DashboardSnapshot', para: 'Secretaria', rotulo: 'secretariaId' },
       { de: 'DashboardSnapshot', para: 'UnidadePublica', rotulo: 'unidadeId' },
     ],
@@ -310,9 +349,9 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
       },
       {
         nome: 'Fiscalizacao',
-        resumo: 'Vistoria realizada ou prevista. Guarda check-in, origem (rotina, chamado, avulsa, offline, manual) e o agente.',
-        campos: ['status (FiscalizacaoStatus)', 'origem', 'iniciadaEm', 'concluidaEm', 'dentroRaioPermitido', 'dataVistoriaInformada', 'cronogramaId'],
-        relacoes: ['N:1 Secretaria, UnidadePublica, ChecklistVersao, Usuario (agente e lançamento), CronogramaChecagem', '1:N RespostaChecklist, Evidencia, NaoConformidade, Documento'],
+        resumo: 'Vistoria realizada ou prevista. Guarda check-in, origem (rotina, chamado, avulsa, offline, manual) e o agente. A exclusão é lógica: status EXCLUIDA, excluidoEm, motivo e o status anterior. Respostas, evidências, não conformidades, chamados e documentos permanecem.',
+        campos: ['status (FiscalizacaoStatus, inclusive EXCLUIDA)', 'origem', 'iniciadaEm', 'concluidaEm', 'dentroRaioPermitido', 'dataVistoriaInformada', 'cronogramaId', 'excluidoEm', 'excluidoPorId', 'exclusaoMotivo', 'statusAntesExclusao'],
+        relacoes: ['N:1 Secretaria, UnidadePublica, ChecklistVersao, Usuario (agente, lançamento e exclusão), CronogramaChecagem', '1:N RespostaChecklist, Evidencia, NaoConformidade, Documento'],
       },
       {
         nome: 'RespostaChecklist',

@@ -60,6 +60,8 @@ enum FiscalizacaoStatus {
   CONCLUIDA
   CANCELADA
   SINCRONIZACAO_PENDENTE
+  /// 305: exclusão lógica (nada é apagado; ver excluidoEm/statusAntesExclusao).
+  EXCLUIDA
 }
 
 enum FiscalizacaoOrigem {
@@ -314,6 +316,7 @@ model Usuario {
   checklistVersoes ChecklistVersao[]  @relation("ChecklistVersaoPublicadoPor")
   fiscalizacoes    Fiscalizacao[]     @relation("FiscalizacaoAgente")
   fiscalizacoesLancadas Fiscalizacao[] @relation("FiscalizacaoLancadoPor")
+  fiscalizacoesExcluidas Fiscalizacao[] @relation("FiscalizacaoExcluidaPor")
   naoConformidades NaoConformidade[]  @relation("NaoConformidadeRegistradaPor")
   naoConformidadesBaixadas NaoConformidade[] @relation("NaoConformidadeBaixadaPor")
   chamadosResponsavel Chamado[]         @relation("ChamadoResponsavel")
@@ -693,6 +696,12 @@ model Fiscalizacao {
   conflitoCronogramaId  String?
   conflitoDataProgramada DateTime?
   conflitoCodigo        String?
+  /// 305: exclusão lógica. Nenhum registro é apagado; a vistoria sai das consultas operacionais.
+  excluidoEm            DateTime?
+  excluidoPorId         String?
+  exclusaoMotivo        String?
+  /// Status que a vistoria tinha antes de ir para EXCLUIDA (auditoria e baixa da programação, E6).
+  statusAntesExclusao   FiscalizacaoStatus?
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
@@ -701,6 +710,7 @@ model Fiscalizacao {
   checklistVersao ChecklistVersao   @relation(fields: [checklistVersaoId], references: [id], onDelete: Restrict)
   agente          Usuario           @relation("FiscalizacaoAgente", fields: [agenteId], references: [id], onDelete: Restrict)
   lancadoPor      Usuario?          @relation("FiscalizacaoLancadoPor", fields: [lancadoPorId], references: [id], onDelete: SetNull)
+  excluidoPor     Usuario?          @relation("FiscalizacaoExcluidaPor", fields: [excluidoPorId], references: [id], onDelete: SetNull)
   cronograma      CronogramaChecagem? @relation(fields: [cronogramaId], references: [id], onDelete: SetNull)
   conflitoCronograma CronogramaChecagem? @relation("FiscalizacaoConflitoCronograma", fields: [conflitoCronogramaId], references: [id], onDelete: SetNull)
   respostas       RespostaChecklist[]
@@ -719,6 +729,7 @@ model Fiscalizacao {
   @@index([cronogramaId])
   @@index([avulsaPorConflito])
   @@index([conflitoCronogramaId])
+  @@index([excluidoEm])
 }
 
 model CronogramaChecagem {

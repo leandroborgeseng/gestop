@@ -3,8 +3,8 @@
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ClipboardList, ClipboardPen, FileDown, FileText, MapPin, Printer, Search, UserRound } from 'lucide-react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ClipboardList, ClipboardPen, FileDown, FileText, MapPin, Printer, Search, Trash2, UserRound } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
 import { CabecalhoSecao } from '@/components/checklists/cabecalho-secao';
@@ -17,6 +17,7 @@ import { Select } from '@/components/ui/select';
 import { Sheet } from '@/components/ui/sheet';
 import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
+import { ExcluirVistoriaDialog } from '@/components/vistorias/excluir-vistoria-dialog';
 import { ImprimirVistoriaManualDialog } from '@/components/vistorias/imprimir-vistoria-manual-dialog';
 import { LancarVistoriaManualDialog } from '@/components/vistorias/lancar-vistoria-manual-dialog';
 import {
@@ -28,11 +29,14 @@ import {
   statusLabel,
   VistoriaDetalheCorpo,
 } from '@/components/vistorias/vistoria-detalhe-consulta';
-import { lerIdVistoriaDaUrl } from '@/lib/vistoria-deep-link';
+import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
+import { useEstadoVistorias } from '@/lib/use-estado-vistorias';
 import { downloadFiscalizacaoPdf, getFiscalizacao, getSecretarias, listAdminUsuarios, listFiscalizacoes } from '@/lib/api';
+import { buscarRegistroPorIdDaUrl, idTemFormatoPrisma } from '@/lib/id-prisma';
 import { formatRespostaValor } from '@/lib/checklist-item-opcoes';
 import { cn } from '@/lib/cn';
 import { formatUnidadeTipo, UNIDADE_TIPO_LABELS } from '@/lib/unidade-tipo';
+import { canVisualizarVistoriasExcluidas, mostrarBotaoExcluirVistoria } from '@/lib/vistoria-exclusao';
 import { formatNotaBr, notaCorHex } from '@/lib/vistoria-nota';
 import type {
   AdminUsuario,
@@ -46,6 +50,14 @@ import type {
 const PAGE_SIZE = 50;
 
 export default function VistoriasPage() {
+  return (
+    <Suspense>
+      <VistoriasPageContent />
+    </Suspense>
+  );
+}
+
+function VistoriasPageContent() {
   const sessionUser = useSessionUser();
   const snackbar = useSnackbar();
   const [pdfBusy, setPdfBusy] = useState(false);
@@ -63,19 +75,23 @@ export default function VistoriasPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { estado, definir } = useEstadoVistorias();
+  const [selectedId, setSelectedId] = useState<string | null>(estado.id);
   const [detail, setDetail] = useState<FiscalizacaoDetalhe | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [questionarioOpen, setQuestionarioOpen] = useState(false);
 
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<'' | FiscalizacaoStatus>('CONCLUIDA');
-  const [tipo, setTipo] = useState<'' | UnidadeTipo>('');
-  const [secretariaId, setSecretariaId] = useState('');
-  const [agenteId, setAgenteId] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [avulsaConflito, setAvulsaConflito] = useState<'' | 'true' | 'false'>('');
+  const search = estado.search;
+  const status = estado.status;
+  const tipo = estado.tipo;
+  const secretariaId = estado.secretaria;
+  const agenteId = estado.agente;
+  const from = estado.de;
+  const to = estado.ate;
+  const avulsaConflito = estado.avulsa;
+  const [semAcesso, setSemAcesso] = useState(false);
+  const fechadoRef = useRef(false);
+  const tinhaIdRef = useRef(Boolean(estado.id));
 
   const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
@@ -83,6 +99,10 @@ export default function VistoriasPage() {
   const [lancarOpen, setLancarOpen] = useState(false);
 
   const canExecutar = Boolean(sessionUser?.permissoes.includes('fiscalizacoes.executar'));
+  // 305/E4: "Mostrar excluídas" só com a subfunção Visualizar excluídas.
+  const podeVerExcluidas = canVisualizarVistoriasExcluidas(sessionUser);
+  const [mostrarExcluidas, setMostrarExcluidas] = useState(false);
+  const [excluirOpen, setExcluirOpen] = useState(false);
 
   useEffect(() => {
     if (canFilterSecretaria) {
@@ -107,15 +127,37 @@ export default function VistoriasPage() {
       from: from || undefined,
       to: to || undefined,
       avulsaPorConflito: avulsaConflito || undefined,
+      incluirExcluidas: podeVerExcluidas && mostrarExcluidas ? true : undefined,
     }),
-    [search, status, tipo, secretariaId, agenteId, from, to, avulsaConflito],
+    [search, status, tipo, secretariaId, agenteId, from, to, avulsaConflito, podeVerExcluidas, mostrarExcluidas],
   );
 
-  // #311: deep-link `/vistorias?id=<uuid>` abre a vistoria por id único (sem depender dos filtros da lista).
   useEffect(() => {
-    const id = lerIdVistoriaDaUrl(window.location.search);
-    if (id) setSelectedId(id);
-  }, []);
+    if (estado.id) {
+      fechadoRef.current = false;
+      setSelectedId(estado.id);
+      setSemAcesso(!idTemFormatoPrisma(estado.id));
+    } else if (tinhaIdRef.current) {
+      fechadoRef.current = true;
+      setSelectedId(null);
+      setDetail(null);
+      setSemAcesso(false);
+    }
+    tinhaIdRef.current = Boolean(estado.id);
+  }, [estado.id]);
+
+  useEffect(() => {
+    if (!canFilterSecretaria && secretariaId) definir({ secretaria: '' });
+    if (!canFilterAgente && agenteId) definir({ agente: '' });
+  }, [canFilterSecretaria, canFilterAgente, secretariaId, agenteId, definir]);
+
+  useEffect(() => {
+    if (secretarias.length && secretariaId && !secretarias.some((item) => item.id === secretariaId)) definir({ secretaria: '' });
+  }, [secretarias, secretariaId, definir]);
+
+  useEffect(() => {
+    if (usuarios.length && agenteId && !usuarios.some((item) => item.id === agenteId)) definir({ agente: '' });
+  }, [usuarios, agenteId, definir]);
 
   const loadList = useCallback(async (offset = 0, append = false) => {
     if (offset === 0) setLoading(true);
@@ -128,7 +170,7 @@ export default function VistoriasPage() {
       setTotal(response.total);
       setHasMore(response.hasMore);
       if (!append) {
-        setSelectedId((current) => current ?? response.items[0]?.id ?? null);
+        setSelectedId((current) => (fechadoRef.current ? null : (current ?? response.items[0]?.id ?? null)));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Falha ao carregar vistorias.');
@@ -150,12 +192,25 @@ export default function VistoriasPage() {
 
     let active = true;
     setDetailLoading(true);
-    getFiscalizacao(selectedId)
-      .then((data) => {
-        if (active) setDetail(data);
+    void buscarRegistroPorIdDaUrl(selectedId, getFiscalizacao)
+      .then((resultado) => {
+        if (!active) return;
+        if (resultado.tipo === 'formato') {
+          setSemAcesso(true);
+          setDetail(null);
+          return;
+        }
+        if (resultado.tipo === 'ok') setDetail(resultado.data);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe da vistoria.');
+        if (!active) return;
+        const statusHttp = (err as { status?: number } | null)?.status;
+        if (statusHttp === 403 || statusHttp === 404) {
+          setSemAcesso(true);
+          setDetail(null);
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe da vistoria.');
       })
       .finally(() => {
         if (active) setDetailLoading(false);
@@ -213,14 +268,14 @@ export default function VistoriasPage() {
                   <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
                   <input
                     value={search}
-                    onChange={(event) => setSearch(event.target.value)}
+                    onChange={(event) => definir({ search: event.target.value })}
                     placeholder="Buscar por unidade, código patrimonial, agente ou checklist…"
                     className="h-10 w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px]"
                   />
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Status</label>
-                  <Select value={status} onChange={(event) => setStatus(event.target.value as '' | FiscalizacaoStatus)} className="h-9 w-full text-xs">
+                  <Select value={status} onChange={(event) => definir({ status: event.target.value as '' | FiscalizacaoStatus })} className="h-9 w-full text-xs">
                     {STATUS_OPTIONS.map((item) => (
                       <option key={item.value || 'all'} value={item.value}>
                         {item.label}
@@ -236,7 +291,7 @@ export default function VistoriasPage() {
                     id="filtro-avulsa-conflito"
                     data-testid="filtro-avulsa-conflito"
                     value={avulsaConflito}
-                    onChange={(event) => setAvulsaConflito(event.target.value as '' | 'true' | 'false')}
+                    onChange={(event) => definir({ avulsa: event.target.value as '' | 'true' | 'false' })}
                     className="h-9 w-full text-xs"
                   >
                     <option value="">Todas</option>
@@ -246,7 +301,7 @@ export default function VistoriasPage() {
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Tipo de próprio</label>
-                  <Select value={tipo} onChange={(event) => setTipo(event.target.value as '' | UnidadeTipo)} className="h-9 w-full text-xs">
+                  <Select value={tipo} onChange={(event) => definir({ tipo: event.target.value as '' | UnidadeTipo })} className="h-9 w-full text-xs">
                     <option value="">Todos</option>
                     {(Object.keys(UNIDADE_TIPO_LABELS) as UnidadeTipo[]).map((item) => (
                       <option key={item} value={item}>
@@ -258,7 +313,7 @@ export default function VistoriasPage() {
                 {canFilterSecretaria ? (
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Secretaria</label>
-                    <Select value={secretariaId} onChange={(event) => setSecretariaId(event.target.value)} className="h-9 w-full text-xs">
+                    <Select value={secretariaId} onChange={(event) => definir({ secretaria: event.target.value })} className="h-9 w-full text-xs">
                       <option value="">Todas</option>
                       {secretarias.map((item) => (
                         <option key={item.id} value={item.id}>
@@ -271,7 +326,7 @@ export default function VistoriasPage() {
                 {canFilterAgente ? (
                   <div>
                     <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Agente</label>
-                    <Select value={agenteId} onChange={(event) => setAgenteId(event.target.value)} className="h-9 w-full text-xs">
+                    <Select value={agenteId} onChange={(event) => definir({ agente: event.target.value })} className="h-9 w-full text-xs">
                       <option value="">Todos</option>
                       {usuarios.filter((item) => item.ativo).map((item) => (
                         <option key={item.id} value={item.id}>
@@ -281,13 +336,25 @@ export default function VistoriasPage() {
                     </Select>
                   </div>
                 ) : null}
+                {podeVerExcluidas ? (
+                  <label className="flex items-center gap-2 self-end pb-2 text-[12px] font-semibold text-[var(--ink-2)]">
+                    <input
+                      type="checkbox"
+                      data-testid="mostrar-excluidas"
+                      checked={mostrarExcluidas}
+                      onChange={(event) => setMostrarExcluidas(event.target.checked)}
+                      className="h-4 w-4"
+                    />
+                    Mostrar excluídas
+                  </label>
+                ) : null}
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">De</label>
-                  <input type="date" value={from} onChange={(event) => setFrom(event.target.value)} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
+                  <input type="date" value={from} onChange={(event) => definir({ de: event.target.value })} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
                 </div>
                 <div>
                   <label className="mb-1 block text-[11px] font-semibold text-[var(--ink-3)]">Até</label>
-                  <input type="date" value={to} onChange={(event) => setTo(event.target.value)} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
+                  <input type="date" value={to} onChange={(event) => definir({ ate: event.target.value })} className="h-9 w-full rounded-[var(--r-md)] border border-[var(--line)] px-3 text-[13px]" />
                 </div>
               </CardContent>
             </Card>
@@ -308,12 +375,18 @@ export default function VistoriasPage() {
                       <button
                         key={item.id}
                         type="button"
-                        onClick={() => setSelectedId(item.id)}
+                        onClick={() => {
+                          fechadoRef.current = false;
+                          setSemAcesso(false);
+                          setSelectedId(item.id);
+                          definir({ id: item.id }, detalheCobreLista() ? 'push' : 'replace');
+                        }}
                         className={cn(
                           'mb-1 flex w-full flex-col gap-1.5 rounded-[var(--r-md)] border border-transparent px-3 py-3 text-left transition-colors',
                           isSelected
                             ? 'border-[color-mix(in_srgb,var(--brand)_30%,transparent)] bg-[var(--brand-soft)]'
                             : 'hover:bg-[var(--surface-2)]',
+                          item.excluida && 'opacity-80',
                         )}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -371,7 +444,14 @@ export default function VistoriasPage() {
           </section>
 
           <section className="min-h-[320px]">
-            {!selected ? (
+            {selectedId && semAcesso ? (
+              <div role="status" data-testid="aviso-registro-url" className="flex items-center justify-between gap-3 rounded-[var(--r-md)] border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="text-[13px] text-amber-950">{AVISO_REGISTRO_URL}</p>
+                <button type="button" className="text-[13px] font-semibold text-amber-950" onClick={() => definir({ id: null })}>
+                  Fechar
+                </button>
+              </div>
+            ) : !selected ? (
               <Card elevation={1} className="flex h-full min-h-[320px] items-center justify-center p-8 text-center">
                 <div>
                   <MapPin className="mx-auto h-8 w-8 text-[var(--ink-3)]" />
@@ -423,6 +503,18 @@ export default function VistoriasPage() {
                             <FileText className="h-3.5 w-3.5" />
                             Documentos relacionados
                           </Button>
+                          {mostrarBotaoExcluirVistoria(sessionUser, detail ?? selected) ? (
+                            <Button
+                              type="button"
+                              variant="outlined"
+                              size="sm"
+                              data-testid="botao-excluir-vistoria"
+                              onClick={() => setExcluirOpen(true)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Excluir
+                            </Button>
+                          ) : null}
                           <Badge variant={STATUS_BADGE[selected.status]}>{statusLabel(selected.status)}</Badge>
                         </div>
                         {(detail ?? selected).lancamentoManual || selected.origem === 'MANUAL' ? (
@@ -434,6 +526,22 @@ export default function VistoriasPage() {
 
                   <div className="flex-1 space-y-4 overflow-y-auto p-5">
                     {detailLoading ? <LoadingState label="Carregando detalhe..." /> : null}
+                    {(detail ?? selected).excluida ? (
+                      <div
+                        role="note"
+                        data-testid="aviso-vistoria-excluida"
+                        className="rounded-[var(--r-md)] border border-[#f3c0c0] bg-[#fde8e8] p-3 text-[13px] text-[var(--ink-2)]"
+                      >
+                        <p className="font-semibold text-[var(--ink)]">Vistoria excluída · somente leitura</p>
+                        <p className="mt-1">
+                          Excluída em {formatDateTime((detail ?? selected).excluidoEm)}
+                          {(detail ?? selected).excluidoPor?.nome ? ` por ${(detail ?? selected).excluidoPor?.nome}` : ''}.
+                        </p>
+                        {(detail ?? selected).exclusaoMotivo ? (
+                          <p className="mt-1">Motivo: {(detail ?? selected).exclusaoMotivo}</p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {docsOpen ? (
                       <DocumentosRelacionadosPanel
                         fiscalizacaoId={selected.id}
@@ -491,6 +599,27 @@ export default function VistoriasPage() {
         </Sheet>
 
         <ImprimirVistoriaManualDialog open={imprimirOpen} onClose={() => setImprimirOpen(false)} />
+        {excluirOpen && selected ? (
+          <ExcluirVistoriaDialog
+            fiscalizacaoId={selected.id}
+            unidadeNome={selected.unidade.nome}
+            onClose={() => setExcluirOpen(false)}
+            onErro={(mensagem) => snackbar.show(mensagem, 'error')}
+            onExcluida={() => {
+              setExcluirOpen(false);
+              snackbar.show('Vistoria excluída.', 'success');
+              if (!(podeVerExcluidas && mostrarExcluidas)) {
+                fechadoRef.current = true;
+                setSelectedId(null);
+                setDetail(null);
+                definir({ id: null });
+              } else {
+                void getFiscalizacao(selected.id).then(setDetail).catch(() => undefined);
+              }
+              void loadList(0, false);
+            }}
+          />
+        ) : null}
         <LancarVistoriaManualDialog
           open={lancarOpen}
           onClose={() => setLancarOpen(false)}

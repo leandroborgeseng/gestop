@@ -14,5 +14,11 @@ for (const key of Object.getOwnPropertyNames(win)) {
 }
 g.window = dom.window;
 g.document = dom.window.document;
-g.navigator = dom.window.navigator;
+// Node 22+ expõe navigator só com getter. A atribuição direta falha.
+Object.defineProperty(g, 'navigator', {
+  configurable: true,
+  enumerable: true,
+  writable: true,
+  value: dom.window.navigator,
+});
 g.IS_REACT_ACT_ENVIRONMENT = true;
