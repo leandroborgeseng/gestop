@@ -86,6 +86,11 @@ npm run import:unidades data/unidades-franca.csv
 - `FRONTEND_PUBLIC_URL` configurado no backend
 - Webhook de e-mail (`INTEGRACOES_WEBHOOK_URL` ou `PASSWORD_RESET_WEBHOOK_URL`)
 
+### E-mail Microsoft 365
+- Variáveis e formato: [`docs/email-m365.md`](./email-m365.md). Valores só no cofre.
+- `EMAIL_PROVIDER=m365` com as quatro variáveis `M365_*` envia pelo Graph. Qualquer falta volta ao SMTP, webhook ou log.
+- Diagnóstico sem enviar mensagem: `npm run email:diagnostico` no ambiente do backend, ou `POST /admin/email/diagnostico` com a mesma permissão de executar o teste de e-mail.
+
 ## Relatórios CSV
 
 - Rota: `/relatorios` (permissão `dashboard.visualizar`)

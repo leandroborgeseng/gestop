@@ -7,21 +7,12 @@ import {
   describeSmtpError,
   mensagemEmailNaoConfigurado,
 } from './email-transport';
+import type { SendEmailInput, SendEmailResult } from './email.types';
+import { m365FallbackWarning, resolveEnvMailDriver, shouldUseM365, type EmailDiagnosticReport } from './m365-config';
+import { diagnoseEmailDelivery, M365GraphEmailProvider, type EmailDeliveryProvider, type M365Runtime } from './m365-graph.mailer';
 
-export type SendEmailInput = {
-  to: string | string[];
-  cc?: string | string[];
-  subject: string;
-  text: string;
-  html?: string;
-  tags?: string[];
-};
-
-export type SendEmailResult = {
-  delivered: boolean;
-  driver: 'smtp' | 'webhook' | 'log';
-  detail?: string;
-};
+export type { SendEmailInput, SendEmailResult } from './email.types';
+export type { EmailDiagnosticReport } from './m365-config';
 
 type ResolvedMail = {
   driver: 'smtp' | 'webhook' | 'log';
@@ -42,14 +33,45 @@ function smtpSecrets(transporter?: Transporter): string[] {
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private resolvedCache: { at: number; value: ResolvedMail } | null = null;
+  private m365Runtime: M365Runtime = {};
+  private m365: EmailDeliveryProvider = new M365GraphEmailProvider();
+  private m365FallbackWarned = false;
 
   constructor(@Optional() @Inject(PrismaService) private readonly prisma?: PrismaService) {}
+
+  /** Testes injetam HTTP e relógio simulados. Produção usa o Entra ID e o Graph. */
+  useM365Runtime(runtime: M365Runtime) {
+    this.m365Runtime = runtime;
+    this.m365 = new M365GraphEmailProvider(runtime);
+    this.m365FallbackWarned = false;
+  }
 
   invalidate() {
     this.resolvedCache = null;
   }
 
   async send(input: SendEmailInput): Promise<SendEmailResult> {
+    const env = this.envForMail();
+    if (shouldUseM365(env)) {
+      try {
+        const result = await this.m365.send(input);
+        if (!result.delivered) {
+          this.logger.error(`Falha M365: ${result.detail ?? 'envio não concluído'}`);
+        }
+        return result;
+      } catch {
+        const detail = 'Falha inesperada no envio pelo Microsoft 365.';
+        this.logger.error(`Falha M365: ${detail}`);
+        return { delivered: false, driver: 'm365', detail };
+      }
+    }
+
+    const warning = m365FallbackWarning(env);
+    if (warning && !this.m365FallbackWarned) {
+      this.m365FallbackWarned = true;
+      this.logger.warn(warning);
+    }
+
     const resolved = await this.resolve();
     if (resolved.disabled) {
       return { delivered: false, driver: 'smtp', detail: mensagemEmailNaoConfigurado() };
@@ -71,10 +93,22 @@ export class EmailService {
   }
 
   isConfigured() {
+    const env = this.envForMail();
+    if (shouldUseM365(env)) return true;
     const driver = this.resolveDriver();
     if (driver === 'log') return false;
     if (driver === 'webhook') return Boolean(this.webhookUrl());
-    return Boolean(process.env.SMTP_HOST?.trim() && process.env.EMAIL_FROM?.trim());
+    return Boolean(env.SMTP_HOST?.trim() && env.EMAIL_FROM?.trim());
+  }
+
+  /** Presença das variáveis e, se o provedor ativo for o Microsoft 365, só o fluxo de token. */
+  diagnoseToken(): Promise<EmailDiagnosticReport> {
+    return diagnoseEmailDelivery({
+      env: this.envForMail(),
+      http: this.m365Runtime.http,
+      now: this.m365Runtime.now,
+      fallbackDriver: this.resolveDriver(),
+    });
   }
 
   async getEquipeTemplate() {
@@ -85,19 +119,17 @@ export class EmailService {
     };
   }
 
-  private resolveDriver(): 'smtp' | 'webhook' | 'log' {
-    const explicit = process.env.EMAIL_DRIVER?.trim().toLowerCase();
-    if (explicit === 'smtp' || explicit === 'webhook' || explicit === 'log') {
-      return explicit;
-    }
+  private envForMail(): NodeJS.ProcessEnv {
+    return this.m365Runtime.env ?? process.env;
+  }
 
-    if (process.env.SMTP_HOST?.trim()) return 'smtp';
-    if (this.webhookUrl()) return 'webhook';
-    return 'log';
+  private resolveDriver(): 'smtp' | 'webhook' | 'log' {
+    return resolveEnvMailDriver(this.envForMail());
   }
 
   private webhookUrl() {
-    return process.env.EMAIL_WEBHOOK_URL?.trim() ?? process.env.INTEGRACOES_WEBHOOK_URL?.trim() ?? null;
+    const env = this.envForMail();
+    return env.EMAIL_WEBHOOK_URL?.trim() ?? env.INTEGRACOES_WEBHOOK_URL?.trim() ?? null;
   }
 
   private async sendViaWebhook(input: SendEmailInput): Promise<SendEmailResult> {
@@ -204,20 +236,21 @@ export class EmailService {
     if (driver !== 'smtp') {
       return { driver };
     }
-    const host = process.env.SMTP_HOST?.trim();
-    const from = process.env.EMAIL_FROM?.trim();
+    const env = this.envForMail();
+    const host = env.SMTP_HOST?.trim();
+    const from = env.EMAIL_FROM?.trim();
     if (!host || !from) {
       return { driver: 'smtp', disabled: true };
     }
-    const user = process.env.SMTP_USER?.trim();
-    const pass = process.env.SMTP_PASSWORD?.trim();
-    const secure = process.env.SMTP_SECURE === 'true';
+    const user = env.SMTP_USER?.trim();
+    const pass = env.SMTP_PASSWORD?.trim();
+    const secure = env.SMTP_SECURE === 'true';
     return {
       driver: 'smtp',
       from,
       transporter: buildSmtpTransport({
         host,
-        port: Number(process.env.SMTP_PORT ?? 587),
+        port: Number(env.SMTP_PORT ?? 587),
         seguranca: secure ? 'SSL' : 'TLS',
         usarAutenticacao: Boolean(user && pass),
         usuario: user,

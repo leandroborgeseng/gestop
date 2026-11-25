@@ -30,4 +30,11 @@ export class EmailConfigController {
   testar(@Body() body: EmailTesteDto, @CurrentUser() user: JwtPayload) {
     return this.emailConfig.testar(body, user);
   }
+
+  /** Só obtém token no Entra ID. Não envia e-mail e não devolve segredo nem token. */
+  @RequireAnyPermissions(...adminTabPermissionKeys('email', 'executar'))
+  @Post('diagnostico')
+  diagnosticar(@CurrentUser() user: JwtPayload) {
+    return this.emailConfig.diagnosticar(user);
+  }
 }

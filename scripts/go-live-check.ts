@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import { resolveJwtSecret } from '../src/config/env';
+import { isLivenessEmailConfigured, shouldUseM365 } from '../src/email/m365-config';
 import { logError, logInfo, logStep, logWarn, maskDatabaseUrl } from '../prisma/startup-log';
 
 const connectionString =
@@ -51,17 +52,19 @@ async function main() {
     checks.push({ ok: false, label: 'FRONTEND_PUBLIC_URL ausente (recuperacao de senha)', severity: 'critical' });
   }
 
-  const emailOk =
-    process.env.SMTP_HOST?.trim() ||
-    process.env.EMAIL_WEBHOOK_URL?.trim() ||
-    (process.env.EMAIL_DRIVER === 'webhook' && process.env.INTEGRACOES_WEBHOOK_URL?.trim());
+  const emailOk = isLivenessEmailConfigured();
   if (emailOk) {
-    checks.push({ ok: true, label: 'E-mail transacional configurado (SMTP ou webhook)' });
+    checks.push({
+      ok: true,
+      label: shouldUseM365()
+        ? 'E-mail transacional configurado (Microsoft 365)'
+        : 'E-mail transacional configurado (SMTP ou webhook)',
+    });
   } else if (prod) {
     checks.push({
       ok: false,
       label: 'E-mail transacional ausente',
-      detail: 'Configure EMAIL_DRIVER=smtp + SMTP_* ou webhook',
+      detail: 'Configure EMAIL_PROVIDER=m365 com as variáveis M365_* ou EMAIL_DRIVER=smtp + SMTP_* ou webhook',
       severity: 'critical',
     });
   }
