@@ -116,6 +116,25 @@ export class EmailConfigService {
     return { ok: true, mensagem: `E-mail de teste enviado para ${destino}.` };
   }
 
+  async diagnosticar(user: JwtPayload) {
+    const report = await this.emailService.diagnoseToken();
+    await this.audit.record({
+      user,
+      acao: AuditAction.CREATE,
+      entidadeTipo: 'ConfiguracaoEmail',
+      entidadeId: CONFIG_ID,
+      valorNovo: {
+        diagnosticoToken: true,
+        activeProvider: report.activeProvider,
+        configurationComplete: report.configurationComplete,
+        tokenAttempted: report.tokenProbe.attempted,
+        tokenOk: report.tokenProbe.ok,
+      },
+      descricao: 'Diagnóstico de token do provedor de e-mail',
+    });
+    return report;
+  }
+
   private async ensureRow() {
     return this.prisma.configuracaoEmail.upsert({
       where: { id: CONFIG_ID },

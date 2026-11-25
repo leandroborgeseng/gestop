@@ -115,6 +115,17 @@ export type ChamadosMapaQuery = {
   bairro?: string;
   bairros?: string[];
   comUnidade?: 'TODOS' | 'COM' | 'SEM';
+  /** 295: período de abertura (YYYY-MM-DD, dias inclusivos em America/Sao_Paulo) ou filtro rápido em dias. */
+  abertoDe?: string;
+  abertoAte?: string;
+  diasMinimos?: string;
+};
+
+/** 295: resposta de /operacional/chamados-mapa — `items` limitado a LIMITE_CHAMADOS_MAPA; `total` é o real. */
+export type ChamadosMapaResposta = {
+  items: ChamadoMapaItem[];
+  total: number;
+  truncado: boolean;
 };
 
 export type ChamadoMapaItem = {

@@ -1,3 +1,4 @@
+import { FISCALIZACAO_ATIVA_WHERE, NC_DE_VISTORIA_ATIVA_WHERE } from '../fiscalizacoes/fiscalizacao-exclusao';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   AuditAction,
@@ -18,6 +19,10 @@ import { computeVistoriaNotas } from '../domain/vistoria-nota';
 import { startOfDay } from '../cronograma/cronograma.rules';
 import { PrismaService } from '../prisma/prisma.service';
 import { CHAMADO_OPEN_STATUSES } from '../chamados/chamados.rules';
+import { lerFiltroAbertura, whereAbertura } from '../chamados/chamado-filtros';
+
+/** 295: limite de itens do mapa (o total real vem em `total`). */
+export const LIMITE_CHAMADOS_MAPA = 2000;
 import {
   applyInMemoryUnidadeFilters,
   countPendenciasUnicas,
@@ -30,6 +35,7 @@ import {
 import {
   ChamadoMapaItem,
   ChamadosMapaQuery,
+  ChamadosMapaResposta,
   VistoriaAtrasadaResumo,
   TipoPendencia,
   UnidadeListQuery,
@@ -52,7 +58,7 @@ export class OperacionalService {
     const unidadeWhere = resolveUnidadeSecretariaFilter(user);
     const chamadoWhere = resolveChamadoSecretariaFilter(user);
     const fiscalizacaoWhere = resolveDirectSecretariaFilter(user);
-    const ncWhere =
+    const ncEscopo =
       !scopeIds
         ? {}
         : scopeIds.length === 0
@@ -60,6 +66,8 @@ export class OperacionalService {
           : scopeIds.length === 1
             ? { unidade: { secretariaId: scopeIds[0] } }
             : { unidade: { secretariaId: { in: scopeIds } } };
+    // 305/E3: NC de vistoria excluída sai dos indicadores (a NC e o chamado continuam no banco, E7).
+    const ncWhere = { ...ncEscopo, ...NC_DE_VISTORIA_ATIVA_WHERE };
 
     const [
       unidadesAtivas,
@@ -329,7 +337,7 @@ export class OperacionalService {
         _count: {
           select: {
             fiscalizacoes: {
-              where: { status: FiscalizacaoStatus.CONCLUIDA },
+              where: { status: FiscalizacaoStatus.CONCLUIDA, ...FISCALIZACAO_ATIVA_WHERE },
             },
             naoConformidades: {
               where: this.buildNcPendenciaWhere(),
@@ -429,7 +437,35 @@ export class OperacionalService {
     return filtered;
   }
 
-  async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload): Promise<ChamadoMapaItem[]> {
+  /**
+   * 312: tipos de próprio disponíveis no filtro da CCO.
+   * Considera só próprios ATIVOS acessíveis ao usuário (escopo de Secretaria aplicado em
+   * listUnidades) e todos os demais filtros, exceto o próprio filtro de tipo.
+   */
+  async listTiposProprioDisponiveis(query: UnidadeListQuery, user: JwtPayload): Promise<TipoProprioDisponivel[]> {
+    const semTipo: UnidadeListQuery = {
+      ...query,
+      tipo: undefined,
+      tipos: undefined,
+      // Inativos nunca geram opção (B2).
+      situacao: query.situacao === 'INATIVA' ? undefined : query.situacao,
+    };
+    const unidades = await this.listUnidades(semTipo, user);
+    const codigos = [...new Set(unidades.filter((u) => u.ativo !== false).map((u) => u.tipo).filter(Boolean))];
+    if (codigos.length === 0) return [];
+    const catalogo = await this.prisma.tipoProprio.findMany({
+      where: { codigo: { in: codigos } },
+      select: { codigo: true, nome: true },
+    });
+    return montarTiposProprioDisponiveis(codigos, catalogo);
+  }
+
+  /** 295/316: where único dos chamados do mapa (escopo de Secretaria + todos os filtros). */
+  private buildChamadosMapaWhere(query: ChamadosMapaQuery, user: JwtPayload, agora: Date): Prisma.ChamadoWhereInput {
+    // 295: período de abertura — mesma função da Triagem.
+    const abertura = lerFiltroAbertura(query);
+    if ('erro' in abertura) throw new BadRequestException(abertura.erro);
+    const aberturaWhere = whereAbertura(abertura.filtro, agora);
     const bairros = query.bairros?.length ? query.bairros : query.bairro ? [query.bairro] : undefined;
 
     const conditions: Prisma.ChamadoWhereInput[] = [{ excluidoEm: null }, resolveChamadoSecretariaFilter(user)];
@@ -440,6 +476,18 @@ export class OperacionalService {
     if (query.equipeIds?.length) conditions.push({ equipeId: { in: query.equipeIds } });
     if (query.comUnidade === 'COM') conditions.push({ unidadeId: { not: null } });
     if (query.comUnidade === 'SEM') conditions.push({ unidadeId: null });
+    if (aberturaWhere) conditions.push(aberturaWhere);
+    // 295: SLA aplicado no banco ANTES do corte (antes filtrava em memória depois do take).
+    // Mesma regra de isChamadoForaPrazo (dia do prazo <= hoje, fuso do servidor — bug conhecido, fora do escopo).
+    if (query.sla === 'FORA' || query.sla === 'DENTRO') {
+      const amanha = new Date(agora);
+      amanha.setHours(0, 0, 0, 0);
+      amanha.setDate(amanha.getDate() + 1);
+      conditions.push({
+        status: { in: CHAMADO_OPEN_STATUSES },
+        prazoEm: query.sla === 'FORA' ? { lt: amanha } : { gte: amanha },
+      });
+    }
 
     if (bairros?.length) {
       conditions.push({
@@ -464,12 +512,66 @@ export class OperacionalService {
       });
     }
 
-    const where: Prisma.ChamadoWhereInput = { AND: conditions };
+    return { AND: conditions };
+  }
 
-    const chamados = await this.prisma.chamado.findMany({
+  /**
+   * 316: tipos de chamado existentes nos chamados do mapa com TODOS os filtros atuais, exceto o próprio tipo.
+   * Conjunto inteiro (não só o corte de LIMITE_CHAMADOS_MAPA nem o zoom), por consulta agregada (groupBy).
+   */
+  async listTiposChamadoDisponiveisMapa(query: ChamadosMapaQuery, user: JwtPayload, agora: Date = new Date()): Promise<TipoChamadoDisponivel[]> {
+    const where = this.buildChamadosMapaWhere({ ...query, tipoChamadoId: undefined }, user, agora);
+    return this.tiposChamadoAgregados({ AND: [where, { tipoChamadoId: { not: null } }] });
+  }
+
+  /**
+   * 316: aba Próprios — tipos dos chamados (abertos, os mesmos contados como pendência) dos próprios filtrados,
+   * com todos os filtros exceto o tipo de chamado. Escopo de Secretaria vem de listUnidades.
+   */
+  async listTiposChamadoDisponiveisUnidades(query: UnidadeListQuery, user: JwtPayload): Promise<TipoChamadoDisponivel[]> {
+    const unidades = await this.listUnidades({ ...query, tiposChamadoId: undefined }, user);
+    if (unidades.length === 0) return [];
+    return this.tiposChamadoAgregados({
+      ...this.buildChamadoPendenciaWhere({ equipeIds: query.equipeIds?.length ? query.equipeIds : undefined }),
+      unidadeId: { in: unidades.map((u) => u.id) },
+      tipoChamadoId: { not: null },
+    });
+  }
+
+  private async tiposChamadoAgregados(where: Prisma.ChamadoWhereInput): Promise<TipoChamadoDisponivel[]> {
+    const grupos = await this.prisma.chamado.groupBy({ by: ['tipoChamadoId'], where, _count: { _all: true } });
+    const ids = grupos.map((g) => g.tipoChamadoId).filter((id): id is string => Boolean(id));
+    if (ids.length === 0) return [];
+    const tipos = await this.prisma.tipoChamado.findMany({ where: { id: { in: ids } }, select: { id: true, nome: true } });
+    const total = new Map(grupos.map((g) => [g.tipoChamadoId, g._count._all]));
+    return tipos
+      .map((t) => ({ id: t.id, nome: t.nome, total: total.get(t.id) ?? 0 }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  }
+
+  /**
+   * 319: categorias do filtro "Mapa: Notas" — só as que têm avaliação válida (nota numérica) na vistoria
+   * que o mapa mostra de cada próprio filtrado (última CONCLUÍDA; canceladas/planejadas/em andamento ficam de fora).
+   * Todos os filtros da lista de próprios; conjunto inteiro; ordem alfabética pt-BR.
+   */
+  async listCategoriasNotaDisponiveis(query: UnidadeListQuery, user: JwtPayload): Promise<CategoriaNotaDisponivel[]> {
+    const unidades = await this.listUnidades(query, user);
+    const notas = unidades.map((u) => u.ultimaVistoriaNota ?? null);
+    const idsComNota = [...new Set(notas.flatMap((n) => (n?.notasPorCategoria ?? []).map((c) => c.categoriaId)))];
+    const inativas = idsComNota.length
+      ? await this.prisma.categoriaVistoria.findMany({ where: { id: { in: idsComNota }, ativo: false }, select: { id: true } })
+      : [];
+    return montarCategoriasNotaDisponiveis(notas, new Set(inativas.map((c) => c.id)));
+  }
+
+  async listChamadosMapa(query: ChamadosMapaQuery, user: JwtPayload, agora: Date = new Date()): Promise<ChamadosMapaResposta> {
+    const where = this.buildChamadosMapaWhere(query, user, agora);
+
+    const [chamados, total] = await Promise.all([this.prisma.chamado.findMany({
       where,
-      orderBy: [{ createdAt: 'desc' }],
-      take: 2000,
+      // 295: ordem estável para o corte (desempate por id).
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: LIMITE_CHAMADOS_MAPA,
       select: {
         id: true,
         codigo: true,
@@ -501,9 +603,9 @@ export class OperacionalService {
         tipoChamado: { select: { id: true, nome: true } },
         responsavel: { select: { id: true, nome: true } },
       },
-    });
+    }), this.prisma.chamado.count({ where })]);
 
-    const now = new Date();
+    const now = agora;
     const items = chamados.map((chamado): ChamadoMapaItem => {
       const latitude = chamado.latitude != null ? Number(chamado.latitude) : null;
       const longitude = chamado.longitude != null ? Number(chamado.longitude) : null;
@@ -555,13 +657,13 @@ export class OperacionalService {
       };
     });
 
-    if (!query.sla) return items;
-    return items.filter((item) => item.slaMapa === query.sla);
+    return { items, total, truncado: total > items.length };
   }
 
-  async getUnidadeDetalhe(id: string) {
-    const unidade = await this.prisma.unidadePublica.findUnique({
-      where: { id },
+  async getUnidadeDetalhe(id: string, user?: JwtPayload) {
+    // 314: respeita a Secretaria do usuário (fora do escopo = não encontrado, sem vazar existência).
+    const unidade = await this.prisma.unidadePublica.findFirst({
+      where: { id, ...(user ? resolveUnidadeSecretariaFilter(user) : {}) },
       select: {
         id: true,
         codigoPatrimonial: true,
@@ -585,8 +687,14 @@ export class OperacionalService {
           },
         },
         fiscalizacoes: {
-          orderBy: { createdAt: 'desc' },
-          take: 5,
+          where: FISCALIZACAO_ATIVA_WHERE,
+          // #311: mais recente → mais antiga (conclusão; senão início; senão criação). Lista rola no drawer.
+          orderBy: [
+            { concluidaEm: { sort: 'desc', nulls: 'last' } },
+            { iniciadaEm: { sort: 'desc', nulls: 'last' } },
+            { createdAt: 'desc' },
+          ],
+          take: 50,
           select: {
             id: true,
             status: true,
@@ -616,6 +724,8 @@ export class OperacionalService {
           },
         },
         naoConformidades: {
+          // 305/E3: NC de vistoria excluída não entra no detalhe (o contador do drawer usa pendenteAtiva desta lista).
+          where: NC_DE_VISTORIA_ATIVA_WHERE,
           orderBy: { registradaEm: 'desc' },
           take: 50,
           select: {
@@ -711,7 +821,7 @@ export class OperacionalService {
         _count: {
           select: {
             fiscalizacoes: {
-              where: { status: FiscalizacaoStatus.CONCLUIDA },
+              where: { status: FiscalizacaoStatus.CONCLUIDA, ...FISCALIZACAO_ATIVA_WHERE },
             },
             naoConformidades: {
               where: this.buildNcPendenciaWhere(),
@@ -1144,6 +1254,7 @@ export class OperacionalService {
   private buildNcPendenciaWhere(): Prisma.NaoConformidadeWhereInput {
     // NC pendente = chamado ativo ainda aberto, ou NC aberta sem chamado operacional.
     return {
+      ...NC_DE_VISTORIA_ATIVA_WHERE,
       status: { in: NON_CONFORMITY_CANDIDATE_STATUSES },
       OR: [
         { chamado: { status: { in: CHAMADO_OPEN_STATUSES }, excluidoEm: null } },
@@ -1246,6 +1357,7 @@ export class OperacionalService {
       by: ['unidadeId'],
       where: {
         unidadeId: { in: unidadeIds },
+        ...NC_DE_VISTORIA_ATIVA_WHERE,
         OR: [
           {
             status: { in: [NaoConformidadeStatus.ABERTA, NaoConformidadeStatus.EM_TRIAGEM] },
@@ -1346,4 +1458,45 @@ export class OperacionalService {
 
     return map;
   }
+}
+
+export type TipoProprioDisponivel = { codigo: string; nome: string };
+
+/** 319: opção de categoria do "Mapa: Notas" (`total` = próprios com nota nessa categoria; `ativa` = categoria ativa no catálogo). */
+export type CategoriaNotaDisponivel = { id: string; nome: string; total: number; ativa: boolean };
+
+export function montarCategoriasNotaDisponiveis(
+  notas: Array<{ notasPorCategoria: Array<{ categoriaId: string; categoriaNome: string; nota: number | null }> } | null>,
+  inativas: ReadonlySet<string> = new Set(),
+): CategoriaNotaDisponivel[] {
+  const porId = new Map<string, CategoriaNotaDisponivel>();
+  for (const resumo of notas) {
+    for (const c of resumo?.notasPorCategoria ?? []) {
+      if (typeof c.nota !== 'number' || !Number.isFinite(c.nota)) continue;
+      const atual = porId.get(c.categoriaId);
+      if (atual) atual.total += 1;
+      else porId.set(c.categoriaId, { id: c.categoriaId, nome: c.categoriaNome, total: 1, ativa: !inativas.has(c.categoriaId) });
+    }
+  }
+  const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+  // Ativas primeiro; inativas (com nota válida) no fim. Em cada grupo, ordem alfabética pt-BR.
+  return [...porId.values()].sort(
+    (a, b) => Number(b.ativa) - Number(a.ativa) || collator.compare(a.nome, b.nome) || a.id.localeCompare(b.id),
+  );
+}
+
+/** 316: opção do filtro Tipo de chamado da CCO. */
+export type TipoChamadoDisponivel = { id: string; nome: string; total: number };
+
+/** 312: une códigos com o catálogo (Nome), sem duplicar, em ordem alfabética pt-BR sem diferenciar acento/caixa. */
+export function montarTiposProprioDisponiveis(
+  codigos: string[],
+  catalogo: Array<{ codigo: string; nome: string | null }>,
+): TipoProprioDisponivel[] {
+  const nomes = new Map(catalogo.map((t) => [t.codigo, t.nome?.trim() || '']));
+  const unicos = [...new Set(codigos.filter(Boolean))];
+  const collator = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+  return unicos
+    .map((codigo) => ({ codigo, nome: nomes.get(codigo) || codigo }))
+    .sort((a, b) => collator.compare(a.nome, b.nome) || a.codigo.localeCompare(b.codigo));
 }

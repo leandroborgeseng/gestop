@@ -13,6 +13,8 @@ import {
   ItemsReadonlyPanel,
   VersionEditor,
 } from '@/components/checklists/checklist-shared';
+import { AvisoSomenteLeitura } from '@/components/inativos/inativos';
+import { TEXTOS_CHECKLIST } from '@/lib/inativos';
 import { PageShell } from '@/components/layout/page-shell';
 import { Alert } from '@/components/ui/alert';
 import { useSessionUser } from '@/components/auth/session-context';
@@ -21,7 +23,8 @@ import { hasChecklistAccess } from '@/lib/permissions-matrix';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import {
   createChecklistVersion,
-  deactivateChecklist,
+  inativarChecklist,
+  reativarChecklist,
   listAdminCategoriasVistoria,
   listChecklistSecretarias,
   getChecklist,
@@ -147,12 +150,17 @@ export default function ChecklistDetalhePage() {
 
         {!loading && checklist ? (
           <div className="space-y-6">
+            {!checklist.ativo ? <AvisoSomenteLeitura mensagem={TEXTOS_CHECKLIST.somenteLeitura} /> : null}
             <ChecklistHeader
               checklist={checklist}
               secretarias={secretarias}
               tiposChamado={tiposChamado}
               onNewVersion={() => mutate(() => createChecklistVersion(checklist.id), 'Nova versão em rascunho criada.')}
-              onDeactivate={() => mutate(() => deactivateChecklist(checklist.id), 'Checklist inativado.')}
+              onStatusAtivo={(acao) =>
+                acao === 'INATIVAR'
+                  ? mutate(() => inativarChecklist(checklist.id), 'Checklist inativado.')
+                  : mutate(() => reativarChecklist(checklist.id), 'Checklist reativado.')
+              }
               onUpdateBinding={(payload) =>
                 mutate(() => saveChecklist(payload, checklist.id), 'Vínculo do checklist atualizado.')
               }
@@ -188,7 +196,7 @@ export default function ChecklistDetalhePage() {
               />
             ) : null}
 
-            {draft && podeAlterar ? (
+            {draft && podeAlterar && checklist.ativo ? (
               <VersionEditor
                 version={draft}
                 categorias={categorias}
@@ -216,13 +224,13 @@ export default function ChecklistDetalhePage() {
             ) : draft ? (
               <ItemsReadonlyPanel
                 title="Rascunho"
-                subtitle="Somente leitura para o perfil atual"
+                subtitle={checklist.ativo ? 'Somente leitura para o perfil atual' : 'Checklist inativo · somente leitura'}
                 items={draft.itens}
               />
             ) : (
               <EmptyState
                 title="Sem rascunho ativo"
-                description="Crie uma nova versão para alterar o conteúdo deste checklist."
+                description={checklist.ativo ? 'Crie uma nova versão para alterar o conteúdo deste checklist.' : 'Reative o modelo para criar uma nova versão.'}
               />
             )}
           </div>

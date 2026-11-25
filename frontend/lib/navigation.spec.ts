@@ -31,6 +31,9 @@ describe('navigation helpers', () => {
   it('respeita rotas preferidas só quando permitidas', () => {
     expect(resolvePreferredHref(['chamados.executar'], '/cco')).toBe('/execucao');
     expect(resolvePreferredHref(['dashboard.visualizar'], '/cco')).toBe('/cco');
+    // 314: query string não invalida a rota preferida
+    expect(resolvePreferredHref(['dashboard.visualizar'], '/cco?aba=x')).toBe('/cco?aba=x');
+    expect(resolvePreferredHref(['chamados.executar'], '/cco?aba=x')).toBe('/execucao');
   });
 
   it('libera o menu Integrações para o Administrador do Sistema sem chaves da matriz', () => {

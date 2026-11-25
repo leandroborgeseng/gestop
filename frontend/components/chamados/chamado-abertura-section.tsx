@@ -5,15 +5,16 @@ import { Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
 import { useSnackbar } from '@/components/ui/snackbar';
+import { SecretariaExecucaoField } from '@/components/chamados/secretaria-execucao-field';
 import { ChamadoCoordMapDialog } from '@/components/chamados/chamado-coord-map-dialog';
-import { getSecretarias, getStoredAuth, updateChamadoAbertura } from '@/lib/api';
+import { getStoredAuth, updateChamadoAbertura } from '@/lib/api';
 import { resolveChamadoCoordinates } from '@/lib/chamado-geo';
 import { composeEnderecoTexto, parseEnderecoTexto } from '@/lib/geocoding';
 import { openMapsRoute } from '@/lib/maps-route';
-import { ChamadoResumo, SecretariaOption } from '@/lib/types';
+import { ChamadoResumo } from '@/lib/types';
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
+import { AVISO_SOMENTE_EXECUCAO } from '@/lib/secretaria-execucao';
 
 function EditableLabel({
   label,
@@ -42,27 +43,28 @@ function displayEndereco(resumo: ChamadoResumo) {
   return [texto, bairro].filter(Boolean).join(' · ') || '—';
 }
 
-function secretariaLabel(secretaria: { sigla: string; nome: string } | null | undefined) {
-  if (!secretaria) return '-';
-  return formatSecretariaLabel(secretaria);
-}
-
 export function ChamadoAberturaSection({
   resumo,
   busy,
   onSaved,
+  onPerdeuAcesso,
 }: {
   resumo: ChamadoResumo;
   busy?: boolean;
   onSaved: () => void;
+  /** 310 (TL #48): fecha o detalhe e atualiza a lista quando o usuário perde o acesso. */
+  onPerdeuAcesso?: () => void;
 }) {
   const snackbar = useSnackbar();
-  const canEdit =
+  const temPermissao =
     getStoredAuth()?.user.permissoes.includes('chamados.gerenciar') ||
     getStoredAuth()?.user.permissoes.includes('chamados.editar_abertura');
+  // 310 (TL #48): só a Secretaria de execução edita/devolve/transfere; próprio/equipe ficam só leitura/execução.
+  const somenteExecucao = resumo.podeGerirAbertura === false;
+  const canEdit = Boolean(temPermissao) && !somenteExecucao;
 
   const coords = resolveChamadoCoordinates(resumo);
-  const [editingField, setEditingField] = useState<'solicitante' | 'endereco' | 'coords' | 'secretaria' | null>(null);
+  const [editingField, setEditingField] = useState<'solicitante' | 'endereco' | 'coords' | null>(null);
   const [draftLogradouro, setDraftLogradouro] = useState('');
   const [draftNumero, setDraftNumero] = useState('');
   const [draftComplemento, setDraftComplemento] = useState('');
@@ -70,8 +72,6 @@ export function ChamadoAberturaSection({
   const [draftCidade, setDraftCidade] = useState('Franca');
   const [draftSolicitante, setDraftSolicitante] = useState('');
   const [draftTelefone, setDraftTelefone] = useState('');
-  const [draftSecretariaId, setDraftSecretariaId] = useState(resumo.secretaria.id);
-  const [secretarias, setSecretarias] = useState<SecretariaOption[]>([]);
   const [mapOpen, setMapOpen] = useState(false);
   const [mapEditable, setMapEditable] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -92,16 +92,8 @@ export function ChamadoAberturaSection({
     hydrateEnderecoDraft();
     setDraftSolicitante(resumo.solicitanteNome ?? '');
     setDraftTelefone(resumo.solicitanteTelefone ?? '');
-    setDraftSecretariaId(resumo.secretaria.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rehydrate when chamado address fields change
   }, [resumo.id, resumo.enderecoBairro, resumo.solicitanteNome, resumo.solicitanteTelefone, resumo.enderecoTexto, resumo.unidade, resumo.secretaria.id]);
-
-  useEffect(() => {
-    if (!canEdit) return;
-    void getSecretarias()
-      .then(setSecretarias)
-      .catch(() => setSecretarias([]));
-  }, [canEdit]);
 
   async function saveAbertura(payload: Parameters<typeof updateChamadoAbertura>[1]) {
     setSaving(true);
@@ -130,15 +122,6 @@ export function ChamadoAberturaSection({
     });
   }
 
-  function startEditSecretaria() {
-    if (editingField === 'secretaria') {
-      setEditingField(null);
-      return;
-    }
-    setDraftSecretariaId(resumo.secretaria.id);
-    setEditingField('secretaria');
-  }
-
   const enderecoPreview = composeEnderecoTexto({
     logradouro: draftLogradouro,
     numero: draftNumero,
@@ -147,52 +130,26 @@ export function ChamadoAberturaSection({
   });
 
   const secretariaExecucaoField = (
-    <div>
-      <EditableLabel
-        label="Secretaria responsável pela execução"
-        editable={canEdit}
-        onEdit={startEditSecretaria}
-      />
-      {editingField === 'secretaria' ? (
-        <div className="space-y-2">
-          <Select
-            value={draftSecretariaId}
-            onChange={(e) => setDraftSecretariaId(e.target.value)}
-            disabled={saving || busy}
-          >
-            {secretarias.length === 0 ? (
-              <option value={resumo.secretaria.id}>{secretariaLabel(resumo.secretaria)}</option>
-            ) : (
-              secretarias.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {formatSecretariaLabel(item)}
-                </option>
-              ))
-            )}
-          </Select>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              variant="outlined"
-              disabled={saving || busy || !draftSecretariaId}
-              onClick={() => void saveAbertura({ secretariaId: draftSecretariaId })}
-            >
-              Salvar
-            </Button>
-            <Button size="sm" variant="text" disabled={saving || busy} onClick={() => setEditingField(null)}>
-              Cancelar
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <p className="text-[13px] text-[var(--ink-2)]">{secretariaLabel(resumo.secretaria)}</p>
-      )}
-    </div>
+    <SecretariaExecucaoField
+      key={resumo.id}
+      chamadoId={resumo.id}
+      secretaria={resumo.secretaria}
+      canEdit={Boolean(canEdit)}
+      busy={busy}
+      onSaved={onSaved}
+      onTransferido={(t, mensagem) => snackbar.show(mensagem, t.saiuDoEscopo ? 'info' : 'success')}
+      onPerdeuAcesso={onPerdeuAcesso}
+    />
   );
 
   return (
     <div className="space-y-4 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] p-4">
       <DetailField label="Aberto em">{new Date(resumo.createdAt).toLocaleString('pt-BR')}</DetailField>
+      {somenteExecucao && temPermissao ? (
+        <p data-testid="abertura-somente-execucao" role="status" className="rounded-[var(--r-sm)] border border-[var(--line)] bg-[var(--surface-2,var(--surface))] p-2 text-xs text-[var(--ink-2,inherit)]">
+          {AVISO_SOMENTE_EXECUCAO}
+        </p>
+      ) : null}
 
       {resumo.unidade ? (
         <div className="grid gap-3 sm:grid-cols-2">

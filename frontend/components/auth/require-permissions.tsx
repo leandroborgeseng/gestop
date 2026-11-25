@@ -6,12 +6,14 @@ import { useSessionUser } from '@/components/auth/session-context';
 import { getStoredAuth } from '@/lib/api';
 import {
   getDefaultAuthenticatedHref,
+  getVisibleNavItems,
   hasAbrirChamado,
   hasChamadosGerenciar,
   hasMeusChamados,
   hasOperationalNavAccess,
   isNavActive,
 } from '@/lib/navigation';
+import { sanitizeReturnTo } from '@/lib/tela-inicial';
 import { isAdministradorSistemaAtivo } from '@/lib/administrador-sistema';
 import { hasAnyAdminVisualizarAccess, hasChecklistAccess, hasCronogramaAccess, hasDocumentosModuloAccess } from '@/lib/permissions-matrix';
 import { ErrorState } from '@/components/ui-states';
@@ -48,6 +50,15 @@ function permissionSatisfied(
   return userPermissions.includes(required);
 }
 
+function hrefLogin() {
+  const params = new URLSearchParams({ reason: 'expired' });
+  if (typeof window !== 'undefined') {
+    const returnTo = sanitizeReturnTo(`${window.location.pathname}${window.location.search}`);
+    if (returnTo) params.set('returnTo', returnTo);
+  }
+  return `/login?${params.toString()}`;
+}
+
 export function RequirePermissions({
   permissions = [],
   match = 'all',
@@ -69,12 +80,12 @@ export function RequirePermissions({
     const user = sessionUser ?? stored?.user;
 
     if (!stored && !sessionUser) {
-      router.replace('/login?reason=expired');
+      router.replace(hrefLogin());
       return;
     }
 
     if (!user) {
-      router.replace('/login?reason=expired');
+      router.replace(hrefLogin());
       return;
     }
 
@@ -90,29 +101,34 @@ export function RequirePermissions({
         ? permissions.some((permission) => permissionSatisfied(permission, userPermissions, user))
         : permissions.every((permission) => permissionSatisfied(permission, userPermissions, user));
 
-    if (!hasAccess) {
-      if (!hasOperationalNavAccess(userPermissions, user)) {
-        setAllowed(false);
-        setNoAccessMessage(
-          'Não há nenhuma funcionalidade liberada para o perfil atual. Procure o administrador do sistema.',
-        );
-        return;
-      }
+    const veCco =
+      (pathname === '/cco' || pathname.startsWith('/cco/')) &&
+      getVisibleNavItems(userPermissions, user).some((item) => item.id === 'cco');
 
-      const fallback = getDefaultAuthenticatedHref(userPermissions, user);
-      // Evita loop se a rota de fallback for a mesma que acabou de negar.
-      if (!isNavActive(pathname, fallback)) {
-        router.replace(fallback);
-        return;
-      }
-
-      setAllowed(false);
-      setNoAccessMessage('Seu perfil não tem permissão para acessar esta área.');
+    // 322: quem vê o CCO no menu entra na rota, mesmo só com a chave da matriz.
+    if (hasAccess || veCco) {
+      setAllowed(true);
+      setNoAccessMessage(null);
       return;
     }
 
-    setAllowed(true);
-    setNoAccessMessage(null);
+    if (!hasOperationalNavAccess(userPermissions, user)) {
+      setAllowed(false);
+      setNoAccessMessage(
+        'Não há nenhuma funcionalidade liberada para o perfil atual. Procure o administrador do sistema.',
+      );
+      return;
+    }
+
+    const fallback = getDefaultAuthenticatedHref(userPermissions, user);
+    // Evita loop se a rota de fallback for a mesma que acabou de negar.
+    if (!isNavActive(pathname, fallback)) {
+      router.replace(fallback);
+      return;
+    }
+
+    setAllowed(false);
+    setNoAccessMessage('Seu perfil não tem permissão para acessar esta área.');
   }, [router, pathname, permissionKey, permissions, match, sessionUser]);
 
   if (allowed === null) {

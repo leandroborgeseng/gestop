@@ -31,7 +31,7 @@ import {
 function createChamadoIcon(point: ChamadoMapPoint, emphasis: 'normal' | 'hover' | 'selected') {
   const scale = emphasis === 'selected' ? 1.28 : emphasis === 'hover' ? 1.12 : 1;
   const color = chamadoPinColor(point.prioridade);
-  const icon = chamadoPinIcon(Boolean(point.programado));
+  const icon = point.contagem && point.contagem > 1 ? String(point.contagem) : chamadoPinIcon(Boolean(point.programado));
   const ring =
     emphasis === 'selected'
       ? `0 0 0 4px color-mix(in srgb, ${color} 28%, transparent), 0 6px 16px rgba(15,27,45,.4)`
@@ -39,7 +39,7 @@ function createChamadoIcon(point: ChamadoMapPoint, emphasis: 'normal' | 'hover' 
 
   return L.divIcon({
     className: 'sigma-map-marker',
-    html: `<span style="
+    html: `<span data-pin="${point.id}" style="
       display:grid;place-items:center;width:26px;height:26px;
       background:${color};border:2px solid #fff;border-radius:50% 50% 50% 0;
       transform:rotate(-45deg) scale(${scale});

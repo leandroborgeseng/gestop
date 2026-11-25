@@ -1,3 +1,9 @@
+import {
+  descricaoTransferencia,
+  equipeIncompativel,
+  responsavelIncompativel,
+  RevisaoExecucao,
+} from './secretaria-execucao-310';
 import { formatSecretariaLabel } from '../common/format-secretaria';
 import { BadRequestException, ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import {
@@ -14,10 +20,14 @@ import { JwtPayload } from '../auth/jwt';
 import { isPerfilExterno } from '../auth/perfil-natureza';
 import {
   assertChamadoExecucaoAccess,
+  assertChamadoGestaoAberturaAccess,
+  podeGerirAberturaChamado,
+  MSG_SEM_GESTAO_EXCLUSAO,
   assertChamadoSecretariaAccess,
   resolveChamadoSecretariaFilter,
   resolveEquipeSecretariaFilter,
 } from '../auth/secretaria-scope';
+import { lerFiltroAbertura, whereAbertura } from './chamado-filtros';
 import { resolveMeusChamadosTimelineCaps } from './meus-chamados-timeline.permissions';
 import { DocumentosService } from '../documentos/documentos.service';
 import { buildRelatorioExecucaoPdf } from '../documentos/relatorio-execucao-pdf';
@@ -41,6 +51,7 @@ import {
   type AnexoAberturaNormalizado,
 } from './chamado-anexos-abertura';
 import { projetarMetadataHistoricoChamado } from './chamado-historico.projecao';
+import { aplicarTextoTarefaNaLinhaDoTempo } from './chamado-tarefa-texto-legado';
 import { StorageService } from '../storage/storage.service';
 import { extractStorageKeyFromUrl, resolveStoragePublicUrl } from '../storage/storage-url';
 import { shrinkImageForPdf } from '../storage/pdf-image';
@@ -75,6 +86,7 @@ import {
   buildPlanejamentoAlteracoes,
   buildTriagemAlteracoes,
   calcularPrazoSla,
+  chamadoStatusLabel,
   formatDateBr,
 } from './chamados-sla';
 import {
@@ -122,10 +134,17 @@ export class ChamadosService {
           secretariaExecucaoId?: string;
           tipoChamadoId?: string;
           incluirExcluidos?: boolean;
+          abertoDe?: string;
+          abertoAte?: string;
+          diasMinimos?: string;
         }
       | undefined,
     user: JwtPayload,
   ) {
+    // 295: período de abertura (mesma função do CCO); entra nos itens, no total e nos contadores por status.
+    const abertura = lerFiltroAbertura(params);
+    if ('erro' in abertura) throw new BadRequestException(abertura.erro);
+    const aberturaWhere = whereAbertura(abertura.filtro);
     const all = Boolean(params?.all);
     const requested = all ? 5000 : (params?.limit ?? 50);
     const limit = Math.min(Math.max(requested, 1), 5000);
@@ -133,6 +152,10 @@ export class ChamadosService {
     const scoped = resolveChamadoSecretariaFilter(user);
     const extra = await this.buildTriagemFiltros(params, user);
     const extraSemStatus = await this.buildTriagemFiltros({ ...params, statuses: undefined }, user);
+    if (aberturaWhere) {
+      extra.push(aberturaWhere);
+      extraSemStatus.push(aberturaWhere);
+    }
     const incluirExcluidos = Boolean(params?.incluirExcluidos) && podeVisualizarChamadosExcluidos(user);
     const aplicarVisibilidade = (base: Prisma.ChamadoWhereInput) =>
       incluirExcluidos ? andChamadoComExcluidos(base) : andChamadoAtivo(base);
@@ -146,7 +169,8 @@ export class ChamadosService {
     const [items, total, grouped, hasSemSla] = await Promise.all([
       this.prisma.chamado.findMany({
         where,
-        orderBy: { createdAt: 'desc' },
+        // 295: desempate por id — paginação e corte determinísticos (igual ao CCO).
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limit,
         skip: offset,
         include: this.includeRelations('lista'),
@@ -168,7 +192,8 @@ export class ChamadosService {
     }
 
     return {
-      items: items.map((item) => this.serializeChamado(item, user.sub)),
+      // 310-excluir: a lista também leva `podeGerirAbertura` (o detalhe abre a partir do item da lista).
+      items: items.map((item) => ({ ...this.serializeChamado(item, user.sub), podeGerirAbertura: podeGerirAberturaChamado(user, item) })),
       total,
       limit,
       offset,
@@ -661,6 +686,7 @@ export class ChamadosService {
     });
     return {
       ...this.serializeChamado(chamado, user.sub),
+      podeGerirAbertura: podeGerirAberturaChamado(user, chamado),
       historico: await this.enrichHistorico(historico, id),
     };
   }
@@ -1836,7 +1862,9 @@ export class ChamadosService {
     }
 
     const before = await this.getChamadoOrThrow(id);
-    assertChamadoExecucaoAccess(user, before);
+    // 310 (TL #48): editar/devolver/transferir exige a Secretaria de execução; equipe/próprio não bastam.
+    assertChamadoSecretariaAccess(user, before);
+    assertChamadoGestaoAberturaAccess(user, before);
 
     const enderecoBairro = dto.enderecoBairro === undefined ? before.enderecoBairro : dto.enderecoBairro?.trim() || null;
     const solicitanteNome =
@@ -1896,6 +1924,31 @@ export class ChamadosService {
       secretariaNova: secretariaNovaLabel,
     });
 
+    // 310: troca da Secretaria de execução — origem → destino e o que revisar (sem mexer no próprio nem limpar equipe).
+    const trocouSecretaria = secretariaId !== before.secretariaId;
+    let transferencia: {
+      origem: { id: string; nome: string; sigla: string } | null;
+      destino: { id: string; nome: string; sigla: string };
+      revisar: RevisaoExecucao;
+      saiuDoEscopo: boolean;
+      somenteExecucao: boolean;
+    } | null = null;
+    if (trocouSecretaria) {
+      const destino = await this.prisma.secretaria.findUniqueOrThrow({ where: { id: secretariaId }, select: { id: true, nome: true, sigla: true } });
+      const revisar: RevisaoExecucao = {};
+      if (before.equipe && equipeIncompativel(before.equipe, secretariaId)) {
+        revisar.equipe = { id: before.equipe.id, nome: before.equipe.nome, secretaria: before.equipe.secretaria ?? null };
+      }
+      if (before.responsavelId) {
+        const resp = await this.prisma.usuario.findUnique({
+          where: { id: before.responsavelId },
+          select: { id: true, nome: true, acessoTodasSecretarias: true, secretariaId: true, secretariasVinculos: { select: { secretariaId: true } } },
+        });
+        if (resp && responsavelIncompativel(resp, secretariaId)) revisar.responsavel = { id: resp.id, nome: resp.nome };
+      }
+      transferencia = { origem: before.secretaria ?? null, destino, revisar, saiuDoEscopo: false, somenteExecucao: false };
+    }
+
     let chamado = before;
     if (alteracoes.length > 0) {
       chamado = await this.prisma.$transaction(async (tx) => {
@@ -1925,7 +1978,16 @@ export class ChamadosService {
             metadata: {
               tipo: 'abertura_update',
               alteracoes,
-            },
+              ...(transferencia
+                ? {
+                    secretariaExecucao: {
+                      origem: transferencia.origem,
+                      destino: transferencia.destino,
+                      revisar: transferencia.revisar,
+                    },
+                  }
+                : {}),
+            } as Prisma.InputJsonValue,
           },
         });
 
@@ -1940,6 +2002,29 @@ export class ChamadosService {
           },
         });
 
+        if (transferencia) {
+          // 310: registro próprio da transferência, com origem → destino (fácil de filtrar na auditoria).
+          await tx.logAuditoria.create({
+            data: {
+              usuarioId: user.sub,
+              acao: AuditAction.UPDATE,
+              entidadeTipo: 'Chamado',
+              entidadeId: id,
+              tela: 'chamados',
+              funcao: 'secretaria_execucao',
+              descricao: descricaoTransferencia(transferencia.origem, transferencia.destino),
+              secretariaAtivaId: user.secretariaId ?? null,
+              valorAntigo: { secretariaId: before.secretariaId, secretaria: transferencia.origem } as Prisma.InputJsonValue,
+              valorNovo: {
+                secretariaId,
+                secretaria: transferencia.destino,
+                unidadeSecretariaId: before.unidade?.secretariaId ?? null,
+                revisar: transferencia.revisar,
+              } as Prisma.InputJsonValue,
+            },
+          });
+        }
+
         return updated;
       });
     }
@@ -1948,7 +2033,26 @@ export class ChamadosService {
       return this.syncObservadores(id, dto.observadorIds ?? [], user, 'abertura');
     }
 
-    return this.serializeChamado(chamado, user.sub);
+    if (transferencia) {
+      // 310: "saiu do escopo" = depois da troca o usuário perde o acesso (mesma regra da tela; equipe da Secretaria ainda dá acesso).
+      // saiuDoEscopo = perdeu a visualização (sem Secretaria, próprio ou equipe); somenteExecucao = ainda vê/executa, sem gestão.
+      try {
+        assertChamadoSecretariaAccess(user, chamado);
+        transferencia.somenteExecucao = !podeGerirAberturaChamado(user, chamado);
+      } catch {
+        transferencia.saiuDoEscopo = true;
+      }
+    }
+    return { ...this.serializeChamado(chamado, user.sub), podeGerirAbertura: podeGerirAberturaChamado(user, chamado), ...(transferencia ? { transferenciaExecucao: transferencia } : {}) };
+  }
+
+  /** 310: destino da execução — todas as Secretarias ativas, independente da Secretaria ativa da sessão. */
+  listSecretariasDestinoExecucao() {
+    return this.prisma.secretaria.findMany({
+      where: { ativo: true },
+      orderBy: [{ sigla: 'asc' }],
+      select: { id: true, nome: true, sigla: true },
+    });
   }
 
   async registrarExecucaoManual(id: string, dto: ChamadoExecucaoManualDto, user: JwtPayload) {
@@ -2291,7 +2395,7 @@ export class ChamadosService {
         : '—',
       localLabel,
       endereco: chamado.enderecoTexto || chamado.unidade?.endereco || null,
-      statusLabel: chamado.status,
+      statusLabel: chamadoStatusLabel(chamado.status),
       responsavelLabel: chamado.responsavel?.nome ?? null,
       equipeLabel: opts.equipeNome || chamado.equipe?.nome || null,
       executadoEm: new Date(opts.executadoEm).toLocaleString('pt-BR'),
@@ -3799,7 +3903,7 @@ export class ChamadosService {
         return metadata?.tipo === 'execucao_conclusao' && !(metadata.evidenciaIds?.length ?? 0);
       })?.id;
 
-    return historico.map((entry) => {
+    const saidas = historico.map((entry) => {
       const metadata = (entry.metadata ?? {}) as Record<string, unknown>;
       const ids = Array.isArray(metadata.evidenciaIds) ? (metadata.evidenciaIds as string[]) : [];
       const anexosFromIds = ids.map((id) => evidenciaMap.get(id)).filter(Boolean);
@@ -3821,6 +3925,11 @@ export class ChamadosService {
         anexos,
       };
     });
+    // 293: texto dos eventos de tarefa (novo ou legado) com a mesma regra do histórico da tarefa.
+    return aplicarTextoTarefaNaLinhaDoTempo(
+      this.prisma,
+      saidas.map((saida, i) => ({ bruta: (historico[i].metadata ?? {}) as Record<string, unknown>, saida })),
+    );
   }
 
   private buildProgramacaoDateFilter(filters?: {
@@ -3964,6 +4073,8 @@ export class ChamadosService {
     const justificativa = this.assertJustificativaExclusao(justificativaInformada);
     const chamado = await this.getChamadoOrThrow(id, { allowExcluido: true });
     assertChamadoSecretariaAccess(user, chamado);
+    // 310-excluir: excluir exige a Secretaria responsável pela execução (próprio/equipe só veem/executam).
+    assertChamadoGestaoAberturaAccess(user, chamado, MSG_SEM_GESTAO_EXCLUSAO);
     if (chamado.excluidoEm) {
       throw new BadRequestException('Este chamado já está excluído logicamente.');
     }

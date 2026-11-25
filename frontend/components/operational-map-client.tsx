@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
 import { MapPinOff } from 'lucide-react';
 import {
@@ -17,11 +17,12 @@ import {
   MapBasemap,
 } from '@/lib/franca-geo';
 import { hasPlottableCoordinates, toLatLngTuple } from '@/lib/geo-coordinates';
+import { devePreservarVistaNoLayout } from '@/lib/mapa-vista';
 import { heatCellCounts, heatCountAt, heatLegend, paintHeat } from '@/lib/map-heat';
 import { escapeHtml } from '@/lib/security';
 import { ChamadoMapaItem, UnidadeOperacional, UnidadeSituacao, UnidadeSlaMapa } from '@/lib/types';
 import { chamadoTitulo } from '@/lib/chamado-geo';
-import { formatNotaBr, notaCorHex, resolveNotaExibicao } from '@/lib/vistoria-nota';
+import { formatNotaBr, formatNotaMapa, notaCorHex, resolveNotaExibicao, TEXTO_SEM_AVALIACAO } from '@/lib/vistoria-nota';
 import { MapViewControls } from '@/components/map/map-view-controls';
 import {
   bindMapPinSelectionCleanup,
@@ -68,7 +69,8 @@ function createNotaIcon(nota: number | null, emphasis: 'normal' | 'hover' | 'sel
 
   return L.divIcon({
     className: 'sigma-map-marker-nota',
-    html: `<span style="
+    // 319: sem nota → "Sem avaliação" (cinza, "—"), nunca 0.
+    html: `<span title="${nota == null ? TEXTO_SEM_AVALIACAO : `Nota ${label}`}" aria-label="${nota == null ? TEXTO_SEM_AVALIACAO : `Nota ${label}`}" style="
       display:grid;place-items:center;width:34px;height:34px;
       background:${color};border:2px solid #fff;border-radius:9999px;
       transform:scale(${scale});
@@ -134,7 +136,7 @@ function buildUnidadePopupHtml(unidade: UnidadeOperacional, mapMode: CcoMapMode,
       : null;
   const notaLine =
     mapMode === 'notas'
-      ? `<span style="display:block;margin-top:6px;font-size:12px;font-weight:700;color:#0f1b2d;">Nota: ${escapeHtml(formatNotaBr(nota))}</span>`
+      ? `<span style="display:block;margin-top:6px;font-size:12px;font-weight:700;color:#0f1b2d;">Nota: ${escapeHtml(formatNotaMapa(nota))}</span>`
       : '';
   const slaLine =
     unidade.slaMapa
@@ -187,11 +189,15 @@ function buildChamadoPopupHtml(chamado: ChamadoMapaItem) {
   `;
 }
 
-function refreshMapSize(map: L.Map) {
-  map.invalidateSize({ animate: false });
-  requestAnimationFrame(() => map.invalidateSize({ animate: false }));
-  window.setTimeout(() => map.invalidateSize({ animate: false }), 120);
-  window.setTimeout(() => map.invalidateSize({ animate: false }), 400);
+function refreshMapSize(map: L.Map, restaurar?: { lat: number; lng: number; zoom: number }) {
+  const aplicar = () => {
+    map.invalidateSize({ animate: false });
+    if (restaurar) map.setView([restaurar.lat, restaurar.lng], restaurar.zoom, { animate: false });
+  };
+  aplicar();
+  requestAnimationFrame(aplicar);
+  window.setTimeout(aplicar, 120);
+  window.setTimeout(aplicar, 400);
 }
 
 function fitMapToPoints(map: L.Map, points: Array<{ latLng: L.LatLngTuple }>) {
@@ -279,6 +285,13 @@ function HeatLegendBox({ points }: { points: Array<{ lat: number; lng: number }>
   );
 }
 
+/** 299: contexto passado ao painel dentro do shell. */
+export type MapaPainelContexto = {
+  isFullscreen: boolean;
+  /** `fallback` = classe CSS (sem Fullscreen API): aí a página controla o Esc. */
+  fullscreenMode: 'off' | 'native' | 'fallback';
+};
+
 export function OperationalMapClient({
   view = 'unidades',
   unidades = [],
@@ -291,6 +304,14 @@ export function OperationalMapClient({
   onClearSelection,
   onHover,
   popupActionKind = 'modal',
+  notaCorte,
+  controlesExtra,
+  renderPainel,
+  alertaMapa,
+  manterVista = false,
+  ocultarPinos = false,
+  onMapaPronto,
+  detalhe = null,
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -302,8 +323,30 @@ export function OperationalMapClient({
   onSelect?: (id: string) => void;
   onClearSelection?: () => void;
   onHover?: (id: string | null) => void;
+  /** 295: nota quando o resultado foi cortado (mapa de calor e legenda). */
+  notaCorte?: string;
   popupActionKind?: MapPopupActionKind;
+  /** 299: botões extras na pilha da direita, abaixo da tela cheia (pilha passa a 44 px). */
+  controlesExtra?: ReactNode;
+  /** 299: painel renderizado DENTRO do `.sigma-map-shell` (visível na tela cheia). */
+  renderPainel?: (ctx: MapaPainelContexto) => ReactNode;
+  /** 299: alertas/status no topo à esquerda, dentro do shell. */
+  alertaMapa?: ReactNode;
+  /** 299: dados novos vindos de Aplicar/Atualizar não mudam centro nem zoom (sem fitBounds). */
+  manterVista?: boolean;
+  /** 299: camada SIGMA da aba desligada no painel Camadas (pinos ocultos; calor segue o modo). */
+  ocultarPinos?: boolean;
+  /** 298: instância do mapa (camadas do Webmap desenhadas por fora). null ao desmontar. */
+  onMapaPronto?: (map: import('leaflet').Map | null) => void;
+  /** 321: barra de detalhes renderizada dentro do shell (tela cheia nativa e fallback CSS). */
+  detalhe?: ReactNode;
 }) {
+  const onMapaProntoRef = useRef(onMapaPronto);
+  onMapaProntoRef.current = onMapaPronto;
+  const manterVistaRef = useRef(manterVista);
+  manterVistaRef.current = manterVista;
+  const vistaManualRef = useRef(false);
+  const ajustandoVistaRef = useRef(false);
   const shellRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -375,12 +418,29 @@ export function OperationalMapClient({
       window.clearTimeout(refitTimerRef.current);
     }
 
+    const zoomAoAgendar = map.getZoom();
     refitTimerRef.current = window.setTimeout(() => {
+      const preservar = devePreservarVistaNoLayout({
+        motivo: reason,
+        vistaManual: vistaManualRef.current,
+        zoomAtual: map.getZoom(),
+        zoomAoAgendar,
+      });
+      if (preservar) {
+        const centro = map.getCenter();
+        refreshMapSize(map, { lat: centro.lat, lng: centro.lng, zoom: map.getZoom() });
+        lastFitKeyRef.current = locatedKey;
+        return;
+      }
+      ajustandoVistaRef.current = true;
       refreshMapSize(map);
       fitMapToPoints(map, locatedRef.current);
-      if (reason === 'data') {
-        lastFitKeyRef.current = locatedKey;
-      }
+      window.setTimeout(() => {
+        ajustandoVistaRef.current = false;
+      }, 500);
+      // O timer de layout cancela o de dados. Sem gravar a chave, Aplicar
+      // acha que o mapa nunca foi enquadrado e chama fitBounds de novo.
+      lastFitKeyRef.current = locatedKey;
     }, reason === 'layout' ? 420 : 80);
   }, [locatedKey]);
 
@@ -531,6 +591,11 @@ export function OperationalMapClient({
       FRANCA_DEFAULT_ZOOM,
     );
     map.zoomControl.setPosition('bottomright');
+    const marcarVistaManual = () => {
+      if (!ajustandoVistaRef.current) vistaManualRef.current = true;
+    };
+    map.on('zoomend', marcarVistaManual);
+    map.on('dragend', marcarVistaManual);
 
     streetLayerRef.current = L.tileLayer(CARTO_VOYAGER_NO_LABELS, {
       attribution: CARTO_ATTRIBUTION,
@@ -578,8 +643,10 @@ export function OperationalMapClient({
     mapRef.current = map;
     setMapReady(true);
     refreshMapSize(map);
+    onMapaProntoRef.current?.(map);
 
     return () => {
+      onMapaProntoRef.current?.(null);
       unbindPopupAction();
       unbindPinCleanup();
       setMapReady(false);
@@ -600,6 +667,25 @@ export function OperationalMapClient({
       }
     };
   }, [containerReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const shell = shellRef.current;
+    if (!mapReady || !map || !shell) return;
+    const sync = () => {
+      const centro = map.getCenter();
+      shell.dataset.mapLat = centro.lat.toFixed(5);
+      shell.dataset.mapLng = centro.lng.toFixed(5);
+      shell.dataset.mapZoom = String(map.getZoom());
+    };
+    sync();
+    map.on('moveend', sync);
+    map.on('zoomend', sync);
+    return () => {
+      map.off('moveend', sync);
+      map.off('zoomend', sync);
+    };
+  }, [mapReady]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -636,7 +722,7 @@ export function OperationalMapClient({
     }
 
     // Modo calor: o clearLayers já removeu os pinos. Não recolocar marcadores de chamado nem de próprio.
-    if (!calor && view === 'chamados') {
+    if (!calor && !ocultarPinos && view === 'chamados') {
       locatedChamados.forEach(({ chamado, latLng }) => {
         const marker = L.marker(latLng, {
           icon: createUnitIcon(resolveChamadoMarkerColor(chamado.slaMapa), 'normal'),
@@ -667,7 +753,7 @@ export function OperationalMapClient({
         markerByIdRef.current.set(chamado.id, marker);
         chamadoByIdRef.current.set(chamado.id, chamado);
       });
-    } else if (!calor) {
+    } else if (!calor && !ocultarPinos && view !== 'chamados') {
       locatedUnidades.forEach(({ unidade, latLng }) => {
         const marker = L.marker(latLng, {
           icon: resolveUnidadeMarkerIcon(unidade, mapMode, categoriaFiltroId, 'normal'),
@@ -738,12 +824,19 @@ export function OperationalMapClient({
     }
 
     const shouldRefit = lastFitKeyRef.current !== locatedKey;
-    if (shouldRefit) {
+    // 299 / A7: Aplicar mantém centro e zoom. Zoom acima do inicial também conta
+    // como vista já definida — a chave pode ter ficado vazia se o timer de
+    // layout cancelou o de dados.
+    const vistaDefinida = lastFitKeyRef.current !== '' || map.getZoom() > FRANCA_DEFAULT_ZOOM;
+    if (shouldRefit && manterVistaRef.current && vistaDefinida) {
+      lastFitKeyRef.current = locatedKey;
+      refreshMapSize(map);
+    } else if (shouldRefit) {
       scheduleRefit(map, 'data');
     } else {
       refreshMapSize(map);
     }
-  }, [mapReady, locatedKey, locatedUnidades, locatedChamados, scheduleRefit, mapMode, categoriaFiltroId, view]);
+  }, [mapReady, locatedKey, locatedUnidades, locatedChamados, scheduleRefit, mapMode, categoriaFiltroId, view, ocultarPinos]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -835,11 +928,15 @@ export function OperationalMapClient({
 
   return (
     <div className="cco-map-panel flex h-full min-h-0 w-full flex-col">
+      {/* 321: no iPhone o Safari não coloca div em fullscreen. O fallback
+          .sigma-map-fullscreen (position:fixed; height:100dvh) é este mesmo shell,
+          e a barra de detalhes é filha dele — não um portal no body. */}
       <div
         ref={shellRef}
+        data-fullscreen-mode={fullscreenMode}
         className={[
-          'sigma-map-shell relative min-h-0 w-full flex-1 overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
-          fullscreenMode === 'fallback' ? 'sigma-map-fullscreen fixed inset-0 z-[70]' : '',
+          'sigma-map-shell min-h-0 w-full flex-1 overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] shadow-[var(--sh-sm)]',
+          fullscreenMode === 'fallback' ? 'sigma-map-fullscreen' : 'relative',
         ].join(' ')}
       >
         <div ref={containerRef} className="sigma-map-canvas" />
@@ -849,9 +946,20 @@ export function OperationalMapClient({
           onBasemapChange={setBasemap}
           isFullscreen={isFullscreen}
           onToggleFullscreen={() => void toggleFullscreen()}
-        />
+          alvo44={Boolean(controlesExtra)}
+        >
+          {controlesExtra}
+        </MapViewControls>
 
-        <div className="pointer-events-none absolute top-3.5 left-3.5 z-[500]">
+        {alertaMapa ? (
+          <div data-map-chrome="" className="pointer-events-none absolute top-14 left-3.5 z-[520] flex max-w-[min(420px,calc(100%-5.5rem))] flex-col gap-2">
+            {alertaMapa}
+          </div>
+        ) : null}
+
+        {renderPainel ? renderPainel({ isFullscreen, fullscreenMode }) : null}
+
+        <div data-map-chrome="" className="pointer-events-none absolute top-3.5 left-3.5 z-[500]">
           <span className="inline-flex items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-3 py-1.5 text-xs font-semibold text-[var(--ink-2)] shadow-[var(--sh-sm)] backdrop-blur-md">
             <span className="mono text-[var(--brand)]">{located.length}</span> no mapa
             {totalItems !== located.length ? (
@@ -860,8 +968,13 @@ export function OperationalMapClient({
           </span>
         </div>
 
-        <div className="pointer-events-none absolute bottom-3.5 left-3.5 z-[500] max-w-[280px] min-w-[168px] rounded-[var(--r-md)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-3 shadow-[var(--sh-md)] backdrop-blur-md">
+        <div data-map-chrome="" className="pointer-events-none absolute bottom-3.5 left-3.5 z-[500] max-w-[280px] min-w-[168px] rounded-[var(--r-md)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] p-3 shadow-[var(--sh-md)] backdrop-blur-md">
           <div className="mb-1.5 text-[10.5px] font-bold tracking-[0.05em] uppercase text-[var(--ink-3)]">Legenda</div>
+          {view === 'chamados' && notaCorte ? (
+            <p data-testid="nota-mapa-cortado" className="mb-1.5 text-[12px] text-[var(--ink-3)]">
+              {notaCorte}
+            </p>
+          ) : null}
           {view === 'chamados' && mapMode === 'calor' ? (
             <HeatLegendBox points={locatedChamados.map(({ latLng }) => ({ lat: latLng[0], lng: latLng[1] }))} />
           ) : view === 'chamados' || mapMode === 'situacao' ? (
@@ -904,7 +1017,7 @@ export function OperationalMapClient({
               ))}
               <div className="mt-1 flex items-center gap-2 py-0.5 text-xs text-[var(--ink-3)]">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#8a97a8]" />
-                <span>Sem vistoria</span>
+                <span>{TEXTO_SEM_AVALIACAO}</span>
               </div>
             </>
           )}
@@ -919,6 +1032,8 @@ export function OperationalMapClient({
             </div>
           </div>
         ) : null}
+
+        {detalhe}
       </div>
     </div>
   );

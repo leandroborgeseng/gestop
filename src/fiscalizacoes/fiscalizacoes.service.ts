@@ -1,5 +1,8 @@
+import { assertRegistroPodeIniciar, CHECKLIST_INATIVO } from '../common/inativos/registro-inativo';
 import {
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   forwardRef,
   Inject,
   Injectable,
@@ -38,6 +41,15 @@ import { StorageService } from '../storage/storage.service';
 import { shrinkImageForPdf } from '../storage/pdf-image';
 import { ListFiscalizacoesQueryDto } from './fiscalizacoes.dto';
 import {
+  FISCALIZACAO_ATIVA_WHERE,
+  FISCALIZACAO_COM_EXCLUIDAS_WHERE,
+  normalizarMotivoExclusao,
+  podeExcluirVistoria,
+  podeVisualizarVistoriasExcluidas,
+  VISTORIA_MOTIVO_MAX,
+  VISTORIA_MOTIVO_MIN,
+} from './fiscalizacao-exclusao';
+import {
   ImprimirVistoriaManualDto,
   LancamentoManualFiscalizacaoDto,
 } from './fiscalizacoes-manual.dto';
@@ -61,6 +73,7 @@ const UNIDADE_TIPO_LABELS: Record<string, string> = {
 
 const listInclude = {
   secretaria: { select: { id: true, sigla: true, nome: true } },
+  excluidoPor: { select: { id: true, nome: true } },
   unidade: { select: { id: true, nome: true, codigoPatrimonial: true, bairro: true, tipo: true } },
   agente: { select: { id: true, nome: true, email: true } },
   lancadoPor: { select: { id: true, nome: true, email: true } },
@@ -113,7 +126,23 @@ export class FiscalizacoesService {
   async list(query: ListFiscalizacoesQueryDto, user: JwtPayload) {
     const limit = query.limit ?? 50;
     const offset = query.offset ?? 0;
-    const where = this.buildWhere(query, user);
+    const incluirExcluidas = query.incluirExcluidas === 'true';
+    if (incluirExcluidas && !podeVisualizarVistoriasExcluidas(user)) {
+      throw new ForbiddenException('Sem permissão para visualizar vistorias excluídas.');
+    }
+    // 305/E3-E4: por padrão só não excluídas (filtro central); "Mostrar excluídas" traz as duas, com a tag.
+    // Com "Mostrar excluídas", o filtro de status também traz a excluída que tinha esse status (ex.: Concluídas).
+    const statusComExcluidas: Prisma.FiscalizacaoWhereInput[] =
+      incluirExcluidas && query.status && query.status !== FiscalizacaoStatus.EXCLUIDA
+        ? [{ OR: [{ status: query.status }, { status: FiscalizacaoStatus.EXCLUIDA, statusAntesExclusao: query.status }] }]
+        : [];
+    const where: Prisma.FiscalizacaoWhereInput = {
+      AND: [
+        this.buildWhere(statusComExcluidas.length ? { ...query, status: undefined } : query, user),
+        incluirExcluidas ? FISCALIZACAO_COM_EXCLUIDAS_WHERE : FISCALIZACAO_ATIVA_WHERE,
+        ...statusComExcluidas,
+      ],
+    };
 
     const [items, total] = await Promise.all([
       this.prisma.fiscalizacao.findMany({
@@ -151,11 +180,14 @@ export class FiscalizacoesService {
       where: {
         id,
         ...this.scopeFilter(user),
+        // 305/E4: a excluída só abre (somente leitura) para quem tem Visualizar excluídas.
+        ...this.exclusaoVisivel(user),
       },
       include: {
         ...listInclude,
         respostas: {
-          orderBy: { respondidoEm: 'asc' },
+          // #311/CCO-V3: ordem da versão do checklist gravada na vistoria (item pertence à versão usada), não a do checklist atual.
+          orderBy: [{ item: { ordem: 'asc' } }, { respondidoEm: 'asc' }],
           include: {
             item: {
               select: {
@@ -260,7 +292,7 @@ export class FiscalizacoesService {
 
   async exportPdf(id: string, user: JwtPayload) {
     const fiscalizacao = await this.prisma.fiscalizacao.findFirst({
-      where: { id, ...this.scopeFilter(user) },
+      where: { id, ...this.scopeFilter(user), ...this.exclusaoVisivel(user) },
       include: {
         ...listInclude,
         unidade: {
@@ -403,6 +435,9 @@ export class FiscalizacoesService {
       notaGeral: nota.notaGeral,
       notasPorCategoria: nota.notasPorCategoria.map((item) => ({ categoriaNome: item.categoriaNome, nota: item.nota })),
       respostas,
+      excluida: Boolean(fiscalizacao.excluidoEm),
+      excluidoEm: fiscalizacao.excluidoEm?.toISOString() ?? null,
+      exclusaoMotivo: fiscalizacao.exclusaoMotivo ?? null,
     });
   }
 
@@ -496,6 +531,7 @@ export class FiscalizacoesService {
     if (!versao || versao.status !== 'PUBLICADA') {
       throw new BadRequestException('Checklist/versão inválida ou não publicada.');
     }
+    assertRegistroPodeIniciar(versao.checklist, CHECKLIST_INATIVO);
     if (versao.checklist.finalidade === 'CHAMADO') {
       throw new BadRequestException('Este checklist é de execução de chamado e não pode ser impresso como vistoria.');
     }
@@ -648,6 +684,7 @@ export class FiscalizacoesService {
     if (!checklistVersao || checklistVersao.status !== 'PUBLICADA') {
       throw new BadRequestException('Somente versões publicadas podem ser usadas.');
     }
+    assertRegistroPodeIniciar(checklistVersao.checklist, CHECKLIST_INATIVO);
     if (checklistVersao.checklist.finalidade === 'CHAMADO') {
       throw new BadRequestException('Este checklist é exclusivo de execução de chamado.');
     }
@@ -1001,6 +1038,145 @@ export class FiscalizacoesService {
     return resolveChamadoSecretariaFilter(user);
   }
 
+  /**
+   * 305 — exclusão lógica de vistoria realizada (E1, E2, E5, E6, E7).
+   * Nada é apagado: status vai para EXCLUIDA, guarda quem/quando/motivo e o status anterior, e audita.
+   * NC, chamados, evidências e documentos ligados ficam intactos; a programação baixada não reabre.
+   */
+  async excluir(id: string, motivoInformado: unknown, user: JwtPayload) {
+    if (!podeExcluirVistoria(user)) {
+      throw new ForbiddenException('Sem permissão para excluir vistorias.');
+    }
+    const motivo = normalizarMotivoExclusao(motivoInformado);
+    if (!motivo) {
+      throw new BadRequestException(
+        `Informe o motivo da exclusão (de ${VISTORIA_MOTIVO_MIN} a ${VISTORIA_MOTIVO_MAX} caracteres).`,
+      );
+    }
+    // E5: fora do escopo de Secretaria responde 404, igual ao detalhe (não revela a vistoria).
+    const atual = await this.prisma.fiscalizacao.findFirst({
+      where: { id, ...this.scopeFilter(user), ...FISCALIZACAO_COM_EXCLUIDAS_WHERE },
+      select: {
+        id: true,
+        status: true,
+        excluidoEm: true,
+        secretariaId: true,
+        unidadeId: true,
+        cronogramaId: true,
+        dataProgramada: true,
+        avulsaPorConflito: true,
+        concluidaEm: true,
+        checklistVersao: { select: { checklistId: true } },
+      },
+    });
+    if (!atual) {
+      throw new NotFoundException('Vistoria não encontrada.');
+    }
+    if (atual.excluidoEm || atual.status === FiscalizacaoStatus.EXCLUIDA) {
+      throw new ConflictException('Esta vistoria já está excluída.');
+    }
+    if (atual.status !== FiscalizacaoStatus.CONCLUIDA) {
+      throw new ConflictException('Só é possível excluir vistorias realizadas (concluídas).');
+    }
+
+    // E6: a programação que esta vistoria baixou (vínculo direto ou unidade+checklist) fica registrada.
+    const programacao = atual.avulsaPorConflito
+      ? null
+      : atual.cronogramaId
+        ? await this.prisma.cronogramaChecagem.findUnique({
+            where: { id: atual.cronogramaId },
+            select: { id: true, ultimaChecagemEm: true, proximaChecagemEm: true },
+          })
+        : await this.prisma.cronogramaChecagem.findUnique({
+            where: { unidadeId_checklistId: { unidadeId: atual.unidadeId, checklistId: atual.checklistVersao.checklistId } },
+            select: { id: true, ultimaChecagemEm: true, proximaChecagemEm: true },
+          });
+
+    const [perfil, secretaria] = await Promise.all([
+      user.perfilAtivoId
+        ? this.prisma.perfil.findUnique({ where: { id: user.perfilAtivoId }, select: { nome: true } })
+        : Promise.resolve(null),
+      user.secretariaId
+        ? this.prisma.secretaria.findUnique({ where: { id: user.secretariaId }, select: { id: true, sigla: true } })
+        : Promise.resolve(null),
+    ]);
+
+    const agora = new Date();
+    const resultado = await this.prisma.$transaction(async (tx) => {
+      // Corrida: só exclui se ainda estiver concluída e não excluída (dois cliques = uma exclusão).
+      const { count } = await tx.fiscalizacao.updateMany({
+        where: { id, excluidoEm: null, status: FiscalizacaoStatus.CONCLUIDA },
+        data: {
+          status: FiscalizacaoStatus.EXCLUIDA,
+          statusAntesExclusao: atual.status,
+          excluidoEm: agora,
+          excluidoPorId: user.sub,
+          exclusaoMotivo: motivo,
+        },
+      });
+      if (count !== 1) {
+        throw new ConflictException('Esta vistoria já está excluída.');
+      }
+      await tx.historicoStatus.create({
+        data: {
+          entidadeTipo: 'Fiscalizacao',
+          entidadeId: id,
+          statusAnterior: atual.status,
+          statusNovo: FiscalizacaoStatus.EXCLUIDA,
+          motivo,
+          alteradoPorId: user.sub,
+          metadata: { tipo: 'exclusao_logica_vistoria', programacaoId: programacao?.id ?? null },
+        },
+      });
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.DELETE,
+          entidadeTipo: 'Fiscalizacao',
+          entidadeId: id,
+          tela: 'vistorias',
+          funcao: 'excluir',
+          descricao: `Vistoria excluída logicamente. Motivo: ${motivo}`,
+          perfilAtivoNome: perfil?.nome ?? user.perfis?.[0] ?? null,
+          secretariaAtivaId: secretaria?.id ?? user.secretariaId ?? null,
+          secretariaAtivaSigla: secretaria?.sigla ?? null,
+          valorAntigo: { excluida: false, status: atual.status },
+          valorNovo: {
+            excluida: true,
+            status: FiscalizacaoStatus.EXCLUIDA,
+            statusAntesExclusao: atual.status,
+            excluidoEm: agora.toISOString(),
+            excluidoPorId: user.sub,
+            motivo,
+            // E6: a programação baixada NÃO é reaberta; fica sinalizada na tela de programadas/cronograma.
+            programacaoBaixada: programacao
+              ? {
+                  cronogramaId: programacao.id,
+                  ultimaChecagemEm: programacao.ultimaChecagemEm?.toISOString() ?? null,
+                  proximaChecagemEm: programacao.proximaChecagemEm.toISOString(),
+                }
+              : null,
+          },
+        },
+      });
+      return { programacaoId: programacao?.id ?? null };
+    });
+
+    return {
+      id,
+      status: FiscalizacaoStatus.EXCLUIDA,
+      excluida: true,
+      excluidoEm: agora.toISOString(),
+      exclusaoMotivo: motivo,
+      programacaoSinalizadaId: resultado.programacaoId,
+    };
+  }
+
+  /** E4: quem não tem Visualizar excluídas não enxerga a excluída nem pelo id. */
+  private exclusaoVisivel(user: JwtPayload): Prisma.FiscalizacaoWhereInput {
+    return podeVisualizarVistoriasExcluidas(user) ? FISCALIZACAO_COM_EXCLUIDAS_WHERE : FISCALIZACAO_ATIVA_WHERE;
+  }
+
   private buildWhere(query: ListFiscalizacoesQueryDto, user: JwtPayload): Prisma.FiscalizacaoWhereInput {
     const scope = this.scopeFilter(user);
     const search = query.q?.trim();
@@ -1012,6 +1188,7 @@ export class FiscalizacoesService {
       ...(query.agenteId ? { agenteId: query.agenteId } : {}),
       ...(query.tipo ? { unidade: { tipo: query.tipo } } : {}),
       ...(query.status ? { status: query.status } : {}),
+      ...(query.avulsaPorConflito ? { avulsaPorConflito: query.avulsaPorConflito === 'true' } : {}),
       ...(query.from || query.to
         ? {
             OR: [
@@ -1068,6 +1245,7 @@ export class FiscalizacoesService {
     updatedAt?: Date;
     agente?: { id: string; nome: string; email?: string | null } | null;
     lancadoPor?: { id: string; nome: string; email?: string | null } | null;
+    excluidoEm?: Date | null;
   }>(fiscalizacao: T) {
     const metadata = asMetadataRecord(fiscalizacao.metadata);
     const lancamentoManual =
@@ -1105,6 +1283,10 @@ export class FiscalizacoesService {
       origemLabel: this.origemLabel(fiscalizacao.origem, lancamentoManual),
       realizadaPorLabel,
       lancadoPorLabel: fiscalizacao.lancadoPor?.nome ?? null,
+      // 305/E4: tag "Excluída" e somente leitura no front.
+      excluidoEm: fiscalizacao.excluidoEm?.toISOString() ?? null,
+      excluida: Boolean(fiscalizacao.excluidoEm),
+      somenteLeitura: Boolean(fiscalizacao.excluidoEm),
     };
   }
 

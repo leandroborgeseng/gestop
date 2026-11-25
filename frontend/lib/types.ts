@@ -1,3 +1,4 @@
+import type { FiltroDataAberturaValue } from '@/lib/filtro-data-abertura';
 /** Codigo do catalogo TipoProprio (string aberta; literals legado para autocompletar). */
 export type UnidadeTipo =
   | 'ESCOLA'
@@ -244,6 +245,15 @@ export type ChamadosMapaFilters = {
   bairro?: string;
   bairros?: string[];
   comUnidade?: 'TODOS' | 'COM' | 'SEM';
+  /** 295: Data de abertura (mesmo valor do componente compartilhado). */
+  abertura?: FiltroDataAberturaValue;
+};
+
+/** 295: `items` vem limitado a 2.000 (ordem createdAt desc, id desc); `total` é o real. */
+export type ChamadosMapaResposta = {
+  items: ChamadoMapaItem[];
+  total: number;
+  truncado: boolean;
 };
 
 export type ChamadoMapaItem = {
@@ -679,8 +689,20 @@ export type ChecklistModel = {
   versoes: ChecklistVersao[];
 };
 
+/** 304/O1: programação levada no pacote offline (mesmos campos da lista online + versão do checklist). */
+export type ProgramacaoOffline = VistoriaProgramadaItem & {
+  checklistVersao: { id: string; versao: number } | null;
+};
+
 export type MobileFieldPackage = {
   downloadedAt: string;
+  /** 304/O9: validade do pacote (D3: 7 dias). Pacotes antigos não têm o campo. */
+  validoAte?: string;
+  validadeDias?: number;
+  /** 303/G2a: limite de precisão do check-in (m), o mesmo do backend. */
+  config?: { precisaoMaxCheckinMetros: number };
+  contadores?: { unidades: number; checklists: number; programacoes: number };
+  programacoes?: ProgramacaoOffline[];
   secretariaEscopo?: {
     ativaId: string | null;
     todas: boolean;
@@ -709,6 +731,12 @@ export type MobileQueuedInspection = {
   concluidaEm: string;
   cronogramaId?: string;
   dataProgramada?: string;
+  /** 304/O6: `cronogramaAtualizadoEm` da programação no pacote. */
+  programacaoAtualizadaEm?: string;
+  /** 304/O10/O6: estado local do item na fila (não é enviado). */
+  sync?: FilaItemSync;
+  /** 304/O6a: "Enviar como avulsa" após conflito — referência da programação + motivo (obrigatório). */
+  avulsaPorConflito?: { motivo: string; cronogramaId: string; dataProgramada: string; codigo?: string };
   checkin: {
     latitude: number;
     longitude: number;
@@ -737,13 +765,24 @@ export type MobileQueuedInspection = {
   }>;
 };
 
+export type FilaItemSync = {
+  tipo: 'CONFLITO' | 'ESCOPO' | 'VALIDACAO' | 'REDE' | 'ERRO';
+  mensagem: string;
+  codigo?: string;
+  tentativas: number;
+  ultimaTentativaEm: string;
+};
+
 export type VistoriaProgramadaItem = {
   id: string;
   cronogramaId: string;
+  cronogramaAtualizadoEm?: string;
   data: string;
   tipo: 'AGENDADA' | 'REALIZADA' | 'ATRASADA';
   frequencia: 'SEMANAL' | 'QUINZENAL' | 'MENSAL' | 'BIMESTRAL' | 'TRIMESTRAL' | 'SEMESTRAL' | 'ANUAL';
-  checklist: { id: string; nome: string };
+  checklist: { id: string; nome: string; ativo?: boolean };
+  /** 309/C5: checklist inativo, programação sinalizada e sem iniciar vistoria. */
+  checklistInativo?: boolean;
   unidade: {
     id: string;
     nome: string;
@@ -755,6 +794,21 @@ export type VistoriaProgramadaItem = {
     secretaria: SecretariaOption;
   };
   responsaveis: Array<{ id: string; nome: string }>;
+  /** 304/O6a: vistoria avulsa enviada por conflito com esta programação (ela continua pendente). */
+  conflitoAvulsa?: {
+    fiscalizacaoId: string;
+    motivo: string | null;
+    codigo: string | null;
+    dataProgramada: string | null;
+    enviadaEm: string | null;
+    agente: { id: string; nome: string };
+  } | null;
+  /** 305/E6: a última baixa desta programação veio de uma vistoria depois excluída (não reabre sozinha). */
+  baixaPorVistoriaExcluida?: {
+    fiscalizacaoId?: string | null;
+    concluidaEm: string | null;
+    excluidaEm: string | null;
+  } | null;
 };
 
 export type ChamadoStatus =
@@ -833,6 +887,8 @@ export type ChamadoNaoConformidade = {
 export type ChamadoModoLocalizacao = 'UNIDADE' | 'GEOLOCALIZACAO' | 'ENDERECO';
 
 export type ChamadoResumo = {
+  /** 310 (TL #48): false quando a Secretaria de execução é outra (acesso só pelo próprio ou pela equipe). */
+  podeGerirAbertura?: boolean;
   id: string;
   codigo: string;
   titulo?: string | null;
@@ -1001,11 +1057,15 @@ export type ChamadoMapPoint = {
   prioridade: string;
   equipeNome?: string | null;
   responsavelNome?: string | null;
+  /** UX-10: resumo do chamado no pop-up do pin da tarefa. */
+  resumoChamado?: string | null;
   previstaExecucaoEm?: string | null;
   prazoEm?: string | null;
   programado?: boolean;
   meta?: string;
   label?: string;
+  /** 286: quantidade de itens agrupados no mesmo pin (>1 mostra o contador). */
+  contagem?: number;
 };
 
 export type PublicUnidadeChamado = {
@@ -1182,6 +1242,8 @@ export type CronogramaChecagem = {
     id: string;
     nome: string;
     tipo: UnidadeTipo;
+    /** 308 */
+    ativo?: boolean;
     secretaria: SecretariaOption;
   };
   checklist: {
@@ -1189,6 +1251,8 @@ export type CronogramaChecagem = {
     nome: string;
     escopo: ChecklistEscopo;
     unidadeTipo?: UnidadeTipo | null;
+    /** 309/C5 */
+    ativo?: boolean;
   };
   responsavel?: {
     id: string;
@@ -1196,8 +1260,17 @@ export type CronogramaChecagem = {
     email: string;
   } | null;
   responsaveis?: Array<{
-    usuario: { id: string; nome: string; email: string };
+    usuario: { id: string; nome: string; email: string; ativo?: boolean };
   }>;
+};
+
+/** 307: responsável do cronograma com a situação em relação ao escopo atual da sessão. */
+export type SituacaoResponsavel = 'OK' | 'INATIVO' | 'OUTRA_SECRETARIA';
+
+export type ResponsavelCronogramaOpcao = UsuarioExecucaoOpcao & {
+  ativo?: boolean;
+  secretarias?: SecretariaOption[];
+  situacao?: SituacaoResponsavel;
 };
 
 export type CalendarioChecagemEvento = {
@@ -1219,6 +1292,8 @@ export type CalendarioChecagemEvento = {
   responsavelNome?: string | null;
   responsaveisNomes?: string[];
   agenteNome?: string;
+  /** 305/E6: data baixada por vistoria depois excluída (não reabre; sinalizada). */
+  vistoriaExcluida?: boolean;
 };
 
 export type CalendarioChecagemResponse = {
@@ -1229,6 +1304,8 @@ export type CalendarioChecagemResponse = {
     agendadas: number;
     realizadas: number;
     atrasadas: number;
+    /** 305/E6 */
+    baixadasPorVistoriaExcluida?: number;
   };
   eventos: CalendarioChecagemEvento[];
 };
@@ -1238,7 +1315,9 @@ export type FiscalizacaoStatus =
   | 'EM_ANDAMENTO'
   | 'CONCLUIDA'
   | 'CANCELADA'
-  | 'SINCRONIZACAO_PENDENTE';
+  | 'SINCRONIZACAO_PENDENTE'
+  /** 305: exclusão lógica. */
+  | 'EXCLUIDA';
 
 export type FiscalizacaoOrigem = 'ROTINA' | 'CHAMADO' | 'AVULSA' | 'OFFLINE' | 'MANUAL';
 
@@ -1247,9 +1326,17 @@ export type FiscalizacaoResumo = {
   status: FiscalizacaoStatus;
   origem: FiscalizacaoOrigem | string;
   origemLabel?: string | null;
+  /** 304/O6a */
+  avulsaPorConflito?: boolean;
+  avulsaMotivo?: string | null;
+  conflitoCronogramaId?: string | null;
+  conflitoDataProgramada?: string | null;
+  conflitoCodigo?: string | null;
   iniciadaEm: string | null;
   concluidaEm: string | null;
   dentroRaioPermitido: boolean | null;
+  checkinLatitude?: number | null;
+  checkinLongitude?: number | null;
   distanciaCheckinMetros: number | null;
   observacoes?: string | null;
   metadata?: Record<string, unknown> | null;
@@ -1272,6 +1359,12 @@ export type FiscalizacaoResumo = {
     checklist: { id: string; nome: string };
   };
   nota?: VistoriaNotaResumo | null;
+  /** 305/E4: vistoria excluída logicamente (tag "Excluída", somente leitura). */
+  excluida?: boolean;
+  somenteLeitura?: boolean;
+  excluidoEm?: string | null;
+  exclusaoMotivo?: string | null;
+  excluidoPor?: { id: string; nome: string } | null;
 };
 
 export type FiscalizacaoOpcoesManuais = {
@@ -1478,6 +1571,8 @@ export type DocumentoOrigem = 'VISTORIA' | 'CHAMADO_EXECUCAO' | 'AVULSO' | 'SIST
 
 export type DocumentoResumo = {
   id: string;
+  /** 287: cancelamento lógico (data, usuário e motivo opcional). */
+  cancelamento?: { em: string; motivo: string | null; por: { id: string; nome: string } | null } | null;
   codigo: string;
   codigoValidacao: string;
   tipo: DocumentoTipo;
@@ -1562,6 +1657,8 @@ export type DocumentoRespostaItem = {
 };
 
 export type DocumentoDetalhe = DocumentoResumo & {
+  /** 287: o backend libera o botão Cancelar documento (permissão documentos.cancelar). */
+  podeCancelar?: boolean;
   podeEditarChamados?: boolean;
   conteudoTravado?: boolean;
   checklistItens?: ChecklistItem[];
@@ -1613,3 +1710,63 @@ export type DocumentoValidacaoPublica = {
   }>;
   valido: boolean;
 };
+
+// 296 — camadas Webmap (somente aditivo)
+export type WebmapCamadasStatusCamada = 'nova' | 'atualizada' | 'sem_mudanca' | 'reativada' | 'removida_origem';
+export type WebmapCamadasResultado = 'SUCESSO' | 'OK_COM_AVISOS' | 'PARCIAL' | 'FALHA';
+export type WebmapCamadasErro = { grupo?: string; camada: string; elemento: string | null; motivo: string };
+export type WebmapCamadasContagem = { pontos: number; linhas: number; poligonos: number };
+export type WebmapCamadasResumo = {
+  simulacaoId: string;
+  fonte: string;
+  commitSha: string;
+  fonteHash: string;
+  grupos: number;
+  camadas: number;
+  elementos: WebmapCamadasContagem & { total: number };
+  corrigidos: number;
+  invalidos: number;
+  novas: number;
+  atualizadas: number;
+  semMudanca: number;
+  reativadas: number;
+  removidasOrigem: number;
+  /** Informativo: camadas só com posição nova (já contadas no seu status). */
+  reordenadas?: number;
+  camadasDetalhe?: Array<{ chaveOrigem: string; grupo: string; nomeOriginal: string; variavel: string; ordem: number; status: WebmapCamadasStatusCamada; reordenada?: boolean; elementos: WebmapCamadasContagem; corrigidos: number; invalidos: number; bytes: number }>;
+  erros: WebmapCamadasErro[];
+  totalErros: number;
+};
+export type WebmapCamadasSimulacao = WebmapCamadasResumo & { criadaEm: string; expiraEm: string; resultadoPrevisto: Exclude<WebmapCamadasResultado, 'FALHA'> };
+export type WebmapCamadasAplicacaoIniciada = { importacaoId: string; status: 'EM_ANDAMENTO'; iniciadoEm: string; iniciadoEmBrt: string };
+export type WebmapCamadasHistoricoItem = { id: string; createdAt: string; dataHoraBrt: string; tipo: 'SIMULACAO' | 'APLICACAO'; resultado: WebmapCamadasResultado; usuario: string; camadas?: number; totalErros?: number; motivo?: string };
+export type WebmapCamadasFase = 'lendo_fonte' | 'comparando' | 'gravando' | 'ativando' | 'limpando';
+export type WebmapCamadasStatus = {
+  fonte: string;
+  emAndamento: { tipo: 'SIMULACAO' | 'APLICACAO'; usuario: string; desde: string; desdeBrt: string; fase: WebmapCamadasFase; importacaoId: string | null } | null;
+  ultimaImportacao: { id: string; status: WebmapCamadasResultado | 'EM_ANDAMENTO'; usuario: string; iniciadoEmBrt: string; concluidoEmBrt: string | null; motivo: string | null; resultado: (WebmapCamadasResumo & { resultado: WebmapCamadasResultado }) | null } | null;
+  ultima: WebmapCamadasHistoricoItem | null;
+  camadas: number;
+  ativas: number;
+  removidasOrigem: number;
+};
+
+/** 299/298 — árvore de `GET /mapa/camadas` (D-296c: todas desligadas por padrão). */
+export type MapaCamada = {
+  /** `webmap:<camadaId>` */
+  id: string;
+  camadaId: string;
+  nomeOriginal: string;
+  geometriaTipo: string | null;
+  estilo: Record<string, unknown> | null;
+  totalElementos: number;
+  /** 300 W13: elementos irreparáveis (não exibidos). */
+  totalInvalidos?: number;
+  bbox?: number[] | null;
+  versaoAtual: number | string | null;
+  /** 298: a lista não traz mais bbox nem bytes (lista leve). */
+  bytesOrigem?: number | null;
+  ligadaPorPadrao: false;
+  pesada: boolean;
+};
+export type MapaCamadaGrupo = { id: string; titulo: string; camadas: MapaCamada[] };

@@ -22,7 +22,7 @@ export const DOCUMENTO_SITUACAO_META: Record<
   SEM_ASSINATURA_EXTERNA: { label: 'Sem assinatura externa', badge: 'info' },
   ASSINATURA_PENDENTE: { label: 'Assinatura pendente', badge: 'warning' },
   ASSINADO_VIGENTE: { label: 'Assinado vigente', badge: 'success' },
-  CANCELADO: { label: 'Cancelado', badge: 'danger' },
+  CANCELADO: { label: 'Cancelado', badge: 'neutral' },
   SUBSTITUIDO: { label: 'Substituído', badge: 'neutral' },
   INVALIDO: { label: 'Inválido', badge: 'danger' },
 };

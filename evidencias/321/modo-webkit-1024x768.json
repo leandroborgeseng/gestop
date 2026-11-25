@@ -1,0 +1,6 @@
+{
+  "engine": "webkit",
+  "viewport": "1024x768",
+  "fullscreen": "fallback-css",
+  "nota": "Fallback CSS .sigma-map-fullscreen (position:fixed; height:100dvh). No iPhone o Safari não entra em fullscreen com div; o WebKit deste teste recusa requestFullscreen para seguir esse caminho."
+}

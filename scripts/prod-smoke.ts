@@ -149,8 +149,8 @@ async function main() {
   if (obs) {
     checks.push({
       ok: obs.emailConfigured === true,
-      label: 'E-mail transacional (SMTP/webhook)',
-      detail: obs.emailConfigured ? undefined : 'Configure EMAIL_DRIVER + SMTP_* em prod',
+      label: 'E-mail transacional (M365/SMTP/webhook)',
+      detail: obs.emailConfigured ? undefined : 'Configure EMAIL_PROVIDER=m365 ou EMAIL_DRIVER + SMTP_* em prod',
       severity: 'warn',
     });
     checks.push({

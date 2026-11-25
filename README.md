@@ -34,6 +34,24 @@ npm run dev
 
 O app Next.js inicia por padrao em `http://localhost:3000`.
 
+## App de vistoria em campo (303/304)
+
+Variáveis de ambiente opcionais da API (sem migração; valem para o pacote offline e para o sync):
+
+| Variável | Padrão | O que faz |
+| --- | --- | --- |
+| `MOBILE_CHECKIN_PRECISAO_MAX_METROS` | `50` (m) | Precisão máxima aceita no check-in GPS (D2). Acima disso o app pede para tentar de novo e a API recusa o sync. Aceita valores maiores que 0, até 1000. |
+| `MOBILE_PACOTE_VALIDADE_DIAS` | `7` (dias) | Validade do pacote offline (D3). Depois disso o app avisa que o pacote venceu, mas continua funcionando e não perde dados. Aceita valores maiores que 0, até 365. |
+
+Valor ausente ou inválido usa o padrão. O pacote offline informa ao app os valores em uso (`config.precisaoMaxCheckinMetros`, `validadeDias` e `validoAte`).
+
+**Envio como avulsa por conflito (O6a).** Quando o sync de uma vistoria programada dá conflito (409), o agente pode tocar em "Enviar como vistoria avulsa" e informar um motivo, que é obrigatório. O que acontece:
+
+- A vistoria é gravada com `avulsaPorConflito = true`, o motivo e a referência da programação (`conflitoCronogramaId`, `conflitoDataProgramada` e `conflitoCodigo`).
+- A programação **não** é baixada e continua sinalizada (`conflitoAvulsa`) até receber uma baixa real.
+- Fica registrada uma auditoria com quem enviou, quando e o motivo.
+- O gestor filtra essas vistorias em `GET /fiscalizacoes?avulsaPorConflito=true` ou no filtro "Avulsa por conflito" da tela de Vistorias.
+
 ## Deploy Coolify
 
 Stack completa (PostGIS + API + Web) no mesmo padrao dos outros apps deste ambiente:

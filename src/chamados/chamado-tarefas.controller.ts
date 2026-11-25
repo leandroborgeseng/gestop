@@ -2,6 +2,7 @@ import { Body, Controller, Get, Header, Param, Patch, Post, Query, StreamableFil
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
+import { SecretariaIdsQuery } from '../auth/secretaria-ids.query';
 import { PermissionsGuard } from '../auth/permissions.guard';
 import { ParseUuidPipe } from '../common/parse-uuid.pipe';
 import { AnexoChamadoTarefaDto, CreateChamadoTarefaDto, UpdateChamadoTarefaDto } from './chamado-tarefas.dto';
@@ -13,7 +14,7 @@ export class ChamadoTarefasController {
   constructor(private readonly tarefas: ChamadoTarefasService) {}
 
   @Get('opcoes')
-  opcoes(@CurrentUser() user: JwtPayload, @Query('secretariaId') secretariaId?: string) {
+  opcoes(@CurrentUser() user: JwtPayload, @SecretariaIdsQuery() secretariaId: string[]) {
     return this.tarefas.opcoes(user, secretariaId);
   }
 

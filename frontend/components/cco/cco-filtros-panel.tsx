@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, Search, SlidersHorizontal } from 'lucide-react';
 import { Hint } from '@/components/help/hint';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,27 @@ import { Chip } from '@/components/ui/chip';
 import { cn } from '@/lib/cn';
 import { formatRegiaoUnidade, RegiaoUnidade } from '@/lib/regiao-unidade';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
+import { listCategoriasNotaDisponiveis, listTiposChamadoDisponiveisMapa, listTiposChamadoDisponiveisProprios, listTiposProprioDisponiveis } from '@/lib/api';
+import {
+  categoriaAindaValida,
+  filtrosParaCategoriasNota,
+  ROTULO_NOTA_GERAL,
+  type CategoriaNotaDisponivel,
+  rotuloCategoriaNota,
+} from '@/lib/cco-categorias-nota';
+import {
+  chaveFiltrosTiposChamado,
+  filtrosParaTiposChamadoMapa,
+  filtrosParaTiposChamadoProprios,
+  podarTiposChamadoInvalidos,
+  type TipoChamadoDisponivel,
+} from '@/lib/cco-tipos-chamado';
+import {
+  chaveFiltrosTiposProprio,
+  filtrosParaTiposProprio,
+  podarTiposInvalidos,
+  TipoProprioDisponivel,
+} from '@/lib/cco-tipos-proprio';
 import {
   CHAMADO_STATUS_FINALIZADOS,
   CHAMADO_STATUS_META,
@@ -26,6 +47,8 @@ import {
 } from '@/lib/types';
 import { CcoMapMode } from '@/components/operational-map';
 import { FilterMultiSelect } from '@/components/cco/filter-multi-select';
+import { FiltroDataAbertura } from '@/components/chamados/filtro-data-abertura';
+import { resumoDataAbertura } from '@/lib/filtro-data-abertura';
 
 const SELECT_CLASS =
   'h-9 w-full min-w-0 max-w-full rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] px-2 text-xs';
@@ -76,6 +99,7 @@ function summarizeCcoFiltros(opts: {
   tiposChamado: Array<{ id: string; nome: string }>;
   equipes: Array<{ id: string; nome: string }>;
   secretarias: SecretariaOption[];
+  tiposProprio?: TipoProprioDisponivel[];
 }): string {
   const parts: string[] = [];
 
@@ -119,7 +143,7 @@ function summarizeCcoFiltros(opts: {
 
     const tiposProprio = mergeLegacySingular(opts.filters.tipos, opts.filters.tipo);
     if (tiposProprio.length) {
-      parts.push(summarizeList(tiposProprio.map((tipo) => formatUnidadeTipo(tipo as UnidadeTipo))));
+      parts.push(summarizeList(tiposProprio.map((tipo) => formatUnidadeTipo(tipo as UnidadeTipo, opts.tiposProprio))));
     }
 
     const equipeIds = opts.filters.equipeIds ?? [];
@@ -131,6 +155,9 @@ function summarizeCcoFiltros(opts: {
     else if (opts.filters.sla === 'DENTRO') parts.push('SLA dentro');
     if (opts.filters.search?.trim()) parts.push(`“${opts.filters.search.trim()}”`);
   } else {
+    // 295: o período vem antes dos demais filtros.
+    const periodo = resumoDataAbertura(opts.chamadoFilters.abertura);
+    if (periodo) parts.push(periodo);
     const status = opts.chamadoFilters.status ?? [];
     if (status.length) {
       parts.push(summarizeList(status.map((st) => CHAMADO_STATUS_META[st]?.label ?? st)));
@@ -181,6 +208,8 @@ export function CcoFiltrosPanel({
   onClear,
   resultCount,
   defaultTiposPendencia,
+  abrirSinal = 0,
+  variante = 'sanfona',
 }: {
   tab: 'proprios' | 'chamados';
   filters: UnidadeFilters;
@@ -201,8 +230,25 @@ export function CcoFiltrosPanel({
   onClear: () => void;
   resultCount: number;
   defaultTiposPendencia: TipoPendencia[];
+  /** 295: incrementar abre a sanfona e foca o primeiro campo ("Ajustar filtros"). */
+  abrirSinal?: number;
+  /** 299: `painel` = só os campos, dentro do #cco-map-painel (rascunho controlado pela página). */
+  variante?: 'sanfona' | 'painel';
 }) {
+  const painel = variante === 'painel';
   const [open, setOpen] = useState(false);
+  const painelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!abrirSinal) return;
+    setOpen(true);
+    window.setTimeout(() => {
+      const alvo =
+        painelRef.current?.querySelector<HTMLElement>('[data-autofocus-filtro]') ??
+        painelRef.current?.querySelector<HTMLElement>('input, select, button[aria-pressed]');
+      alvo?.focus();
+    }, 0);
+  }, [abrirSinal]);
 
   const tiposPendenciaSelected = filters.tiposPendencia ?? defaultTiposPendencia;
   const chamadosPendenciaAtivo = tiposPendenciaSelected.includes('CHAMADOS');
@@ -223,15 +269,111 @@ export function CcoFiltrosPanel({
     () => (opcoesFiltro?.regioes ?? []).map((r) => ({ value: r, label: formatRegiaoUnidade(r) })),
     [opcoesFiltro],
   );
+  // 312: opções de Tipo de próprio vêm do backend, calculadas com os filtros deste painel
+  // (aplicados na sanfona, rascunho no painel do mapa), exceto o próprio tipo.
+  const filtrosTipos = useMemo(
+    () => filtrosParaTiposProprio(filters, { kpiFilter, defaultTiposPendencia }),
+    [filters, kpiFilter, defaultTiposPendencia],
+  );
+  const chaveTipos = useMemo(() => chaveFiltrosTiposProprio(filtrosTipos), [filtrosTipos]);
+  const [tiposDisponiveis, setTiposDisponiveis] = useState<{ chave: string; itens: TipoProprioDisponivel[] } | null>(null);
+  const filtrosTiposRef = useRef(filtrosTipos);
+  filtrosTiposRef.current = filtrosTipos;
+  useEffect(() => {
+    if (tab !== 'proprios') return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      listTiposProprioDisponiveis(filtrosTiposRef.current, { signal: controller.signal })
+        .then((itens) => setTiposDisponiveis({ chave: chaveTipos, itens }))
+        .catch(() => {
+          // Falha: mantém a lista anterior e não poda a seleção.
+        });
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [chaveTipos, tab]);
+  const tiposAtuais = tiposDisponiveis?.chave === chaveTipos ? tiposDisponiveis.itens : null;
   const tipoOptions = useMemo(
-    () => (opcoesFiltro?.tipos ?? []).map((t) => ({ value: t, label: formatUnidadeTipo(t) })),
-    [opcoesFiltro],
+    () =>
+      tiposAtuais
+        ? tiposAtuais.map((t) => ({ value: t.codigo, label: t.nome }))
+        : // Enquanto carrega, mostra o que já está selecionado pelo Nome conhecido.
+          (tiposDisponiveis?.itens ?? []).map((t) => ({ value: t.codigo, label: t.nome })),
+    [tiposAtuais, tiposDisponiveis],
   );
   const equipeOptions = useMemo(() => equipes.map((e) => ({ value: e.id, label: e.nome })), [equipes]);
-  const tipoChamadoOptions = useMemo(
-    () => tiposChamado.map((t) => ({ value: t.id, label: t.nome })),
-    [tiposChamado],
+  // 316: opções de Tipo de chamado vêm do backend (consulta agregada sobre o conjunto inteiro),
+  // com todos os filtros da aba, exceto o próprio tipo de chamado. Mesmo componente na sanfona e no painel do mapa.
+  const filtrosTiposChamado = useMemo(
+    () =>
+      tab === 'proprios'
+        ? filtrosParaTiposChamadoProprios(filters, { kpiFilter, defaultTiposPendencia })
+        : filtrosParaTiposChamadoMapa(chamadoFilters),
+    [tab, filters, chamadoFilters, kpiFilter, defaultTiposPendencia],
   );
+  const chaveTiposChamado = useMemo(() => chaveFiltrosTiposChamado(tab, filtrosTiposChamado), [tab, filtrosTiposChamado]);
+  const [tiposChamadoDisp, setTiposChamadoDisp] = useState<{ chave: string; itens: TipoChamadoDisponivel[] } | null>(null);
+  const filtrosTiposChamadoRef = useRef(filtrosTiposChamado);
+  filtrosTiposChamadoRef.current = filtrosTiposChamado;
+  const precisaTiposChamado = tab !== 'proprios' || chamadosPendenciaAtivo;
+  useEffect(() => {
+    if (!precisaTiposChamado) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const pedido =
+        tab === 'proprios'
+          ? listTiposChamadoDisponiveisProprios(filtrosTiposChamadoRef.current as UnidadeFilters, { signal: controller.signal })
+          : listTiposChamadoDisponiveisMapa(filtrosTiposChamadoRef.current as ChamadosMapaFilters, { signal: controller.signal });
+      pedido
+        .then((itens) => setTiposChamadoDisp({ chave: chaveTiposChamado, itens }))
+        .catch(() => {
+          // Falha: mantém a lista anterior e não poda a seleção.
+        });
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [chaveTiposChamado, precisaTiposChamado, tab]);
+  const tiposChamadoAtuais = tiposChamadoDisp?.chave === chaveTiposChamado ? tiposChamadoDisp.itens : null;
+  const tipoChamadoOptions = useMemo(
+    () => (tiposChamadoAtuais ?? tiposChamadoDisp?.itens ?? []).map((t) => ({ value: t.id, label: t.nome })),
+    [tiposChamadoAtuais, tiposChamadoDisp],
+  );
+  // 319: categorias do "Mapa: Notas" vêm do backend (todos os filtros dos próprios, conjunto inteiro),
+  // só as que têm nota válida; "Nota geral (Likert)" sempre primeiro.
+  const filtrosCategoriasNota = useMemo(
+    () => filtrosParaCategoriasNota(filters, { kpiFilter, defaultTiposPendencia }),
+    [filters, kpiFilter, defaultTiposPendencia],
+  );
+  const chaveCategoriasNota = useMemo(() => chaveFiltrosTiposChamado('notas', filtrosCategoriasNota), [filtrosCategoriasNota]);
+  const [categoriasNota, setCategoriasNota] = useState<{ chave: string; itens: CategoriaNotaDisponivel[] } | null>(null);
+  const filtrosCategoriasNotaRef = useRef(filtrosCategoriasNota);
+  filtrosCategoriasNotaRef.current = filtrosCategoriasNota;
+  const precisaCategoriasNota = tab === 'proprios' && mapMode === 'notas';
+  useEffect(() => {
+    if (!precisaCategoriasNota) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      listCategoriasNotaDisponiveis(filtrosCategoriasNotaRef.current, { signal: controller.signal })
+        .then((itens) => setCategoriasNota({ chave: chaveCategoriasNota, itens }))
+        .catch(() => {
+          // Falha: mantém a lista anterior e não troca a categoria.
+        });
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [chaveCategoriasNota, precisaCategoriasNota]);
+  // Categoria que sumiu dos resultados → volta para a Nota geral.
+  useEffect(() => {
+    if (!precisaCategoriasNota || !categoriasNota || categoriasNota.chave !== chaveCategoriasNota) return;
+    if (!categoriaAindaValida(categoriaFiltroId, categoriasNota.itens)) onCategoriaFiltroChange('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoriasNota, chaveCategoriasNota, categoriaFiltroId, precisaCategoriasNota]);
   const statusOptions = useMemo(
     () => CHAMADO_STATUS_OPTIONS.map((status) => ({ value: status, label: CHAMADO_STATUS_META[status]?.label ?? status })),
     [],
@@ -245,6 +387,25 @@ export function CcoFiltrosPanel({
   const bairrosSelected = mergeLegacySingular(filters.bairros, filters.bairro);
   const regioesSelected = mergeLegacySingular(filters.regioes, filters.regiao);
   const tiposSelected = mergeLegacySingular(filters.tipos, filters.tipo);
+
+  // B4: se a troca de Secretaria (ou outro filtro) fizer um tipo selecionado sumir, limpa só ele.
+  useEffect(() => {
+    if (!tiposAtuais) return;
+    const podados = podarTiposInvalidos(tiposSelected, tiposAtuais);
+    if (podados) onFiltersChange((prev) => ({ ...prev, tipos: podados.length ? podados : undefined, tipo: undefined }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiposAtuais, tiposSelected.join('|')]);
+  // 316: se outro filtro fizer um tipo de chamado selecionado sumir, limpa só ele (na aba atual).
+  const tiposChamadoSelAba = tab === 'proprios' ? tiposChamadoSelecionados : chamadoFilters.tipoChamadoId ?? [];
+  useEffect(() => {
+    if (!tiposChamadoAtuais) return;
+    const podados = podarTiposChamadoInvalidos(tiposChamadoSelAba, tiposChamadoAtuais);
+    if (!podados) return;
+    const valor = podados.length ? podados : undefined;
+    if (tab === 'proprios') onFiltersChange((prev) => ({ ...prev, tiposChamadoId: valor }));
+    else onChamadoFiltersChange((prev) => ({ ...prev, tipoChamadoId: valor }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiposChamadoAtuais, tiposChamadoSelAba.join('|'), tab]);
   const chamadoBairrosSelected = mergeLegacySingular(chamadoFilters.bairros, chamadoFilters.bairro);
 
   const summary = useMemo(
@@ -258,45 +419,19 @@ export function CcoFiltrosPanel({
         tiposChamado,
         equipes,
         secretarias,
+        tiposProprio: tiposDisponiveis?.itens,
       }),
-    [tab, filters, chamadoFilters, kpiFilter, defaultTiposPendencia, tiposChamado, equipes, secretarias],
+    [tab, filters, chamadoFilters, kpiFilter, defaultTiposPendencia, tiposChamado, equipes, secretarias, tiposDisponiveis],
   );
 
-  return (
-    <div className="min-w-0 shrink-0 overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
-        onClick={() => setOpen((current) => !current)}
-        aria-expanded={open}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          <SlidersHorizontal className="h-4 w-4 shrink-0 text-[var(--brand)]" />
-          <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-[var(--ink)]">
-              {tab === 'proprios' ? 'Filtros de próprios' : 'Filtros de chamados'}
-            </p>
-            {!open ? <p className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
-          </div>
-          <span
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            <Hint text="Filtros aplicados simultaneamente na lista e no mapa." />
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="hidden text-[11px] text-[var(--ink-3)] sm:inline">
-            <b className="mono text-[var(--ink)]">{resultCount}</b> resultado(s)
-          </span>
-          <ChevronDown
-            className={cn('h-4 w-4 shrink-0 text-[var(--ink-3)] transition-transform', open ? 'rotate-180' : '')}
-          />
-        </div>
-      </button>
-
-      {open ? (
-        <div className="min-w-0 space-y-3 overflow-hidden border-t border-[var(--line-2)] px-3.5 py-3.5">
+  const corpo = (
+        <div
+          ref={painelRef}
+          className={cn(
+            'min-w-0 space-y-3',
+            painel ? 'cco-filtros-painel' : 'overflow-hidden border-t border-[var(--line-2)] px-3.5 py-3.5',
+          )}
+        >
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <div className="relative min-w-0 w-full flex-1 sm:min-w-[220px]">
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-[var(--ink-3)]" />
@@ -314,12 +449,16 @@ export function CcoFiltrosPanel({
                 className="h-[38px] w-full min-w-0 rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] pr-3 pl-9 text-[13px] focus:border-[var(--brand)] focus:outline-none focus:shadow-[0_0_0_3px_var(--brand-soft)]"
               />
             </div>
-            <Button variant="ghost" size="sm" className="h-8 shrink-0" onClick={onClear}>
-              Limpar
-            </Button>
-            <span className="text-[11px] text-[var(--ink-3)] sm:hidden">
-              <b className="mono text-[var(--ink)]">{resultCount}</b> resultado(s)
-            </span>
+            {painel ? null : (
+              <>
+                <Button variant="ghost" size="sm" className="h-8 shrink-0" onClick={onClear}>
+                  Limpar
+                </Button>
+                <span className="text-[11px] text-[var(--ink-3)] sm:hidden">
+                  <b className="mono text-[var(--ink)]">{resultCount}</b> resultado(s)
+                </span>
+              </>
+            )}
           </div>
 
           {tab === 'proprios' ? (
@@ -368,6 +507,7 @@ export function CcoFiltrosPanel({
                 <FilterMultiSelect
                   label="Tipo de chamado"
                   placeholder="Selecionar tipo de chamado…"
+                  textoSemOpcoes="Nenhum tipo de chamado disponível"
                   options={tipoChamadoOptions}
                   selected={tiposChamadoSelecionados}
                   onChange={(next) => onFiltersChange((prev) => ({ ...prev, tiposChamadoId: next }))}
@@ -377,6 +517,7 @@ export function CcoFiltrosPanel({
               <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 <FilterMultiSelect
                   label="Secretaria"
+                  textoSemOpcoes="Sem secretarias para os filtros atuais"
                   placeholder="Selecionar secretaria…"
                   options={secretariaOptions}
                   selected={secretariaIdsSelected}
@@ -386,6 +527,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Bairro"
+                  textoSemOpcoes="Sem bairros para os filtros atuais"
                   placeholder="Selecionar bairro…"
                   options={bairroOptions}
                   selected={bairrosSelected}
@@ -393,6 +535,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Região"
+                  textoSemOpcoes="Sem regiões para os filtros atuais"
                   placeholder="Selecionar região…"
                   options={regiaoOptions}
                   selected={regioesSelected}
@@ -400,6 +543,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Tipo de próprio"
+                  textoSemOpcoes="Nenhum tipo disponível"
                   placeholder="Selecionar tipo de próprio…"
                   options={tipoOptions}
                   selected={tiposSelected}
@@ -407,6 +551,7 @@ export function CcoFiltrosPanel({
                 />
                 <FilterMultiSelect
                   label="Equipe do chamado"
+                  textoSemOpcoes="Sem equipes para os filtros atuais"
                   placeholder="Selecionar equipe…"
                   options={equipeOptions}
                   selected={filters.equipeIds ?? []}
@@ -425,13 +570,14 @@ export function CcoFiltrosPanel({
               {mapMode === 'notas' ? (
                 <select
                   value={categoriaFiltroId}
+                  aria-label="Categoria da nota"
                   onChange={(event) => onCategoriaFiltroChange(event.target.value)}
                   className={cn(SELECT_CLASS, 'max-w-md')}
                 >
-                  <option value="">Nota geral (Likert)</option>
-                  {(opcoesFiltro?.categoriasVistoria ?? []).map((categoria) => (
+                  <option value="">{ROTULO_NOTA_GERAL}</option>
+                  {(categoriasNota?.itens ?? []).map((categoria) => (
                     <option key={categoria.id} value={categoria.id}>
-                      Categoria: {categoria.nome}
+                      {rotuloCategoriaNota(categoria)}
                     </option>
                   ))}
                 </select>
@@ -468,13 +614,22 @@ export function CcoFiltrosPanel({
               </div>
               <FilterMultiSelect
                 label="Status"
+                textoSemOpcoes="Sem status para os filtros atuais"
                 placeholder="Selecionar status…"
                 options={statusOptions}
                 selected={chamadoFilters.status ?? []}
                 onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, status: next }))}
               />
+              <div className="min-w-0 sm:col-span-2 lg:col-span-3">
+                <FiltroDataAbertura
+                  idPrefixo="cco-abertura"
+                  value={chamadoFilters.abertura ?? {}}
+                  onChange={(abertura) => onChamadoFiltersChange((prev) => ({ ...prev, abertura }))}
+                />
+              </div>
               <FilterMultiSelect
                 label="Prioridade"
+                textoSemOpcoes="Sem prioridades para os filtros atuais"
                 placeholder="Selecionar prioridade…"
                 options={prioridadeOptions}
                 selected={chamadoFilters.prioridade ?? []}
@@ -483,12 +638,14 @@ export function CcoFiltrosPanel({
               <FilterMultiSelect
                 label="Tipo de chamado"
                 placeholder="Selecionar tipo de chamado…"
+                textoSemOpcoes="Nenhum tipo de chamado disponível"
                 options={tipoChamadoOptions}
                 selected={chamadoFilters.tipoChamadoId ?? []}
                 onChange={(next) => onChamadoFiltersChange((prev) => ({ ...prev, tipoChamadoId: next }))}
               />
               <FilterMultiSelect
                 label="Bairro"
+                textoSemOpcoes="Sem bairros para os filtros atuais"
                 placeholder="Selecionar bairro…"
                 options={bairroOptions}
                 selected={chamadoBairrosSelected}
@@ -498,6 +655,7 @@ export function CcoFiltrosPanel({
               />
               <FilterMultiSelect
                 label="Equipe do chamado"
+                textoSemOpcoes="Sem equipes para os filtros atuais"
                 placeholder="Selecionar equipe…"
                 options={equipeOptions}
                 selected={chamadoFilters.equipeIds ?? []}
@@ -547,7 +705,45 @@ export function CcoFiltrosPanel({
             </select>
           </div>
         </div>
-      ) : null}
+  );
+
+  // 299: no painel do mapa só o corpo (mesmos componentes, 1 coluna); o rodapé é do painel.
+  if (painel) return corpo;
+
+  return (
+    <div className="min-w-0 shrink-0 overflow-hidden rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <SlidersHorizontal className="h-4 w-4 shrink-0 text-[var(--brand)]" />
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold text-[var(--ink)]">
+              {tab === 'proprios' ? 'Filtros de próprios' : 'Filtros de chamados'}
+            </p>
+            {!open ? <p data-testid="cco-filtros-resumo" className="mt-0.5 truncate text-[11px] text-[var(--ink-3)]">{summary}</p> : null}
+          </div>
+          <span
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <Hint text="Filtros aplicados simultaneamente na lista e no mapa." />
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="hidden text-[11px] text-[var(--ink-3)] sm:inline">
+            <b className="mono text-[var(--ink)]">{resultCount}</b> resultado(s)
+          </span>
+          <ChevronDown
+            className={cn('h-4 w-4 shrink-0 text-[var(--ink-3)] transition-transform', open ? 'rotate-180' : '')}
+          />
+        </div>
+      </button>
+
+      {open ? corpo : null}
     </div>
   );
 }

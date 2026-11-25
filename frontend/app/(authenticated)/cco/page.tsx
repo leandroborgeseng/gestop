@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Activity, AlertTriangle, Building2, ClipboardCheck, DatabaseZap } from 'lucide-react';
 import { RequirePermissions } from '@/components/auth/require-permissions';
@@ -10,7 +10,6 @@ import {
   ChamadoMapaItem,
   ChamadosMapaFilters,
   OperacionalResumo,
-  TipoPendencia,
   UnidadeFilters,
   UnidadeFiltroOpcoes,
   UnidadeOperacional,
@@ -23,6 +22,7 @@ import { UnidadeDrawer } from '@/components/cco/unidade-drawer';
 import { ChamadoMapaList } from '@/components/cco/chamado-mapa-list';
 import { ChamadoMapaDrawer } from '@/components/cco/chamado-mapa-drawer';
 import { CcoFiltrosPanel } from '@/components/cco/cco-filtros-panel';
+import { AvisoChamadosCortados, notaMapaCortado } from '@/components/cco/aviso-chamados-cortados';
 import { UnidadeAvulsoActions } from '@/components/operacional/unidade-avulso-actions';
 import { TipBanner } from '@/components/help/tip-banner';
 import { ErrorState, LoadingState } from '@/components/ui-states';
@@ -30,17 +30,47 @@ import { PageShell } from '@/components/layout/page-shell';
 import { Badge } from '@/components/ui/badge';
 import { Chip } from '@/components/ui/chip';
 import { MetricSkeleton } from '@/components/ui/skeleton';
-import { CHAMADO_STATUS_NAO_FINALIZADOS } from '@/lib/chamado-status';
+import { Button } from '@/components/ui/button';
+import { CcoMapControles, CcoPainelAba } from '@/components/cco/cco-map-controles';
+import { CcoMapPainel } from '@/components/cco/cco-map-painel';
+import { fecharDetalheAoAbrirPainel, fecharPainelAoAbrirDetalhe } from '@/lib/cco-detalhe-barra';
+import {
+  CcoFiltrosSnapshot,
+  DEFAULT_TIPOS_PENDENCIA,
+  contarFiltrosAtivos,
+  defaultChamadoFilters,
+  formatarHoraBrt,
+  formatarNumero,
+  limparSnapshot,
+  snapshotsIguais,
+} from '@/lib/cco-filtros-estado';
+import {
+  CcoCamadasEstado,
+  SIGMA_CAMADA_CHAMADOS,
+  SIGMA_CAMADA_PROPRIOS,
+  abrirGrupos,
+  alternarCamada,
+  alternarGrupoAberto,
+  camadaLigada,
+  contarCamadasAlemDoPadrao,
+  desligarWebmap,
+  estadoCamadasPadrao,
+  lerCamadasSessao,
+  salvarCamadasSessao,
+  webmapLigadas,
+} from '@/lib/cco-camadas';
+import { useArvoreCamadasWebmap } from '@/lib/use-arvore-camadas-webmap';
+import { useWebmapNoMapa } from '@/components/cco/use-webmap-no-mapa';
+import type { Map as LeafletMap } from 'leaflet';
+
+export const MSG_ERRO_ATUALIZAR_MAPA = 'Não foi possível atualizar o mapa. Tente novamente.';
 
 type KpiFilter = 'none' | 'pendencias';
 type CcoTab = 'proprios' | 'chamados';
 
-const DEFAULT_TIPOS_PENDENCIA: TipoPendencia[] = ['CHAMADOS', 'NAO_CONFORMIDADES', 'VISTORIAS'];
-
 /** Primeira entrada, recarga e “Limpar filtros” da aba Chamados. */
-const DEFAULT_CHAMADO_FILTERS: ChamadosMapaFilters = {
-  status: [...CHAMADO_STATUS_NAO_FINALIZADOS],
-};
+const DEFAULT_CHAMADO_FILTERS: ChamadosMapaFilters = defaultChamadoFilters();
+const DEBOUNCE_CCO_CHAMADOS_MS = 300;
 
 export default function CcoPage() {
   return (
@@ -68,6 +98,9 @@ function CcoPageContent() {
   const [opcoesFiltro, setOpcoesFiltro] = useState<UnidadeFiltroOpcoes | null>(null);
   const [unidades, setUnidades] = useState<UnidadeOperacional[]>([]);
   const [chamados, setChamados] = useState<ChamadoMapaItem[]>([]);
+  const [chamadosTotal, setChamadosTotal] = useState(0);
+  const [chamadosTruncado, setChamadosTruncado] = useState(false);
+  const [abrirFiltros, setAbrirFiltros] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [bootLoading, setBootLoading] = useState(true);
@@ -75,6 +108,37 @@ function CcoPageContent() {
   const [mapMode, setMapMode] = useState<CcoMapMode>('situacao');
   const [chamadoMapMode, setChamadoMapMode] = useState<'situacao' | 'calor'>('situacao');
   const [categoriaFiltroId, setCategoriaFiltroId] = useState('');
+
+  // ── 299: painel do mapa (Filtros | Camadas), Atualizar e camadas por sessão ──────────────
+  const [painelAba, setPainelAba] = useState<CcoPainelAba | null>(null);
+  const [rascunho, setRascunho] = useState<CcoFiltrosSnapshot | null>(null);
+  const rascunhoBaseRef = useRef<CcoFiltrosSnapshot | null>(null);
+  const [avisoExterno, setAvisoExterno] = useState(false);
+  const [recarga, setRecarga] = useState(0);
+  /** Dados pedidos pelo painel (Aplicar/Limpar) ou pelo Atualizar: o mapa não reenquadra. */
+  const [manterVista, setManterVista] = useState(false);
+  const acaoMapaRef = useRef<null | 'atualizar' | 'aplicar'>(null);
+  const [atualizando, setAtualizando] = useState(false);
+  const atualizandoRef = useRef(false);
+  const [atualizadoAs, setAtualizadoAs] = useState<string | null>(null);
+  const [erroMapa, setErroMapa] = useState(false);
+  const [statusMapa, setStatusMapa] = useState('');
+  const [camadas, setCamadas] = useState<CcoCamadasEstado>(estadoCamadasPadrao);
+  const camadasCarregadasRef = useRef(false);
+  const botaoFiltrosRef = useRef<HTMLButtonElement | null>(null);
+  const botaoCamadasRef = useRef<HTMLButtonElement | null>(null);
+  const origemPainelRef = useRef<CcoPainelAba>('filtros');
+
+  // D-296c: escolha das camadas vale para a sessão (Webmap desligado por padrão).
+  // 300: seção Webmap QGIS sempre ativa (flag NEXT_PUBLIC_WEBMAP_CAMADAS_MAPA removida). Tudo desligado por padrão.
+  useEffect(() => {
+    const salvo = lerCamadasSessao();
+    setCamadas(salvo);
+    camadasCarregadasRef.current = true;
+  }, []);
+  useEffect(() => {
+    if (camadasCarregadasRef.current) salvarCamadasSessao(camadas);
+  }, [camadas]);
 
   const selectedUnidade = useMemo(
     () => unidades.find((item) => item.id === selectedId) ?? null,
@@ -88,6 +152,13 @@ function CcoPageContent() {
   const selectItem = useCallback((id: string) => {
     setSelectedId(id);
     setDrawerOpen(true);
+    // 321: a barra fica no mesmo lado do painel. Fecha Filtros/Camadas sem mexer nos filtros aplicados nem no mapa.
+    if (fecharPainelAoAbrirDetalhe()) {
+      setPainelAba(null);
+      setRascunho(null);
+      rascunhoBaseRef.current = null;
+      setAvisoExterno(false);
+    }
   }, []);
 
   const handleMapHover = useCallback((id: string | null) => {
@@ -122,6 +193,32 @@ function CcoPageContent() {
     };
   }, []);
 
+  /** 299: fecha a carga pedida pelo mapa. Devolve true quando o erro já foi tratado no mapa. */
+  function concluirCargaMapa(ok: boolean, total: number): boolean {
+    const acao = acaoMapaRef.current;
+    acaoMapaRef.current = null;
+    if (atualizandoRef.current) {
+      atualizandoRef.current = false;
+      setAtualizando(false);
+    }
+    const nome = tab === 'chamados' ? (total === 1 ? 'chamado' : 'chamados') : total === 1 ? 'próprio público' : 'próprios públicos';
+    if (ok) {
+      const hora = formatarHoraBrt(new Date());
+      setAtualizadoAs(hora);
+      setErroMapa(false);
+      if (acao === 'atualizar') setStatusMapa(`Mapa atualizado às ${hora}. ${formatarNumero(total)} ${nome}.`);
+      else if (acao === 'aplicar') setStatusMapa(`Filtros aplicados: ${formatarNumero(total)} ${nome} no mapa.`);
+      return true;
+    }
+    if (acao) {
+      // Dados e hora anteriores ficam na tela; só o alerta do mapa aparece.
+      setErroMapa(true);
+      setStatusMapa('');
+      return true;
+    }
+    return false;
+  }
+
   const effectiveFilters = useMemo(() => {
     const base: UnidadeFilters = {
       ...filters,
@@ -148,10 +245,13 @@ function CcoPageContent() {
       .then((data) => {
         if (!active) return;
         setUnidades(data);
+        concluirCargaMapa(true, data.length);
       })
       .catch((err) => {
         if (!active) return;
-        setError(err instanceof Error ? err.message : 'Erro inesperado ao carregar próprios.');
+        if (!concluirCargaMapa(false, 0)) {
+          setError(err instanceof Error ? err.message : 'Erro inesperado ao carregar próprios.');
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -160,37 +260,46 @@ function CcoPageContent() {
     return () => {
       active = false;
     };
-  }, [effectiveFilters, tab]);
+  }, [effectiveFilters, tab, recarga]);
 
   useEffect(() => {
     if (tab !== 'chamados') return;
 
+    // 295: debounce (busca não consulta a cada tecla) e só a resposta mais recente é aplicada.
     let active = true;
-    setLoading(true);
-    setError(null);
-
-    listChamadosMapa(chamadoFilters)
-      .then((data) => {
-        if (!active) return;
-        setChamados(data);
-      })
-      .catch((err) => {
-        if (!active) return;
-        setError(err instanceof Error ? err.message : 'Erro inesperado ao carregar chamados.');
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      listChamadosMapa(chamadoFilters)
+        .then((data) => {
+          if (!active) return;
+          setChamados(data.items);
+          setChamadosTotal(data.total);
+          setChamadosTruncado(data.truncado);
+          concluirCargaMapa(true, data.total);
+        })
+        .catch((err) => {
+          if (!active) return;
+          if (!concluirCargaMapa(false, 0)) {
+            setError(err instanceof Error ? err.message : 'Erro inesperado ao carregar chamados.');
+          }
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, DEBOUNCE_CCO_CHAMADOS_MS);
 
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
-  }, [chamadoFilters, tab]);
+  }, [chamadoFilters, tab, recarga]);
 
   useEffect(() => {
     setSelectedId(null);
     setDrawerOpen(false);
     setHoveredId(null);
+    setManterVista(false); // trocar de aba volta a enquadrar os dados da aba
   }, [tab]);
 
   const metricas = useMemo(() => {
@@ -284,7 +393,138 @@ function CcoPageContent() {
     setKpiFilter('none');
   }
 
-  const resultCount = tab === 'proprios' ? unidades.length : chamados.length;
+  // ── 299: estado aplicado × rascunho do painel ──
+  const aplicado = useMemo<CcoFiltrosSnapshot>(
+    () => ({ filters, chamadoFilters, kpiFilter }),
+    [filters, chamadoFilters, kpiFilter],
+  );
+  const filtrosAtivos = useMemo(() => contarFiltrosAtivos(tab, aplicado), [tab, aplicado]);
+  const rascunhoPendente = Boolean(rascunho && !snapshotsIguais(rascunho, aplicado));
+  const calorLigado = chamadoMapMode === 'calor';
+  const camadasAlemDoPadrao = contarCamadasAlemDoPadrao(camadas, calorLigado);
+
+  // Sanfona mudou algo com o painel aberto: o rascunho recomeça do aplicado.
+  useEffect(() => {
+    if (!rascunho || !rascunhoBaseRef.current) return;
+    if (snapshotsIguais(rascunhoBaseRef.current, aplicado)) return;
+    rascunhoBaseRef.current = aplicado;
+    setRascunho(aplicado);
+    setAvisoExterno(true);
+  }, [aplicado]);
+
+  useEffect(() => {
+    if (!statusMapa) return;
+    const t = window.setTimeout(() => setStatusMapa(''), 8000);
+    return () => window.clearTimeout(t);
+  }, [statusMapa]);
+
+  const { arvore: arvoreCamadas, carregando: arvoreCarregando, erro: arvoreErro, semAcesso: arvoreSemAcesso, carregar: carregarArvoreCamadas, garantir: garantirArvoreCamadas } =
+    useArvoreCamadasWebmap();
+  // 298: camadas do Webmap ligadas na sessão e existentes na lista (L3) => desenhadas no mapa, sob demanda.
+  const [mapaLeaflet, setMapaLeaflet] = useState<LeafletMap | null>(null);
+  const idsWebmapLigadas = webmapLigadas(camadas);
+  const temWebmapLigada = idsWebmapLigadas.length > 0;
+  useEffect(() => {
+    if (temWebmapLigada) garantirArvoreCamadas(); // sessão com Webmap ligada (F5): só a lista, sem geometria
+  }, [temWebmapLigada, garantirArvoreCamadas]);
+  const camadasWebmapLigadas = useMemo(() => {
+    if (!arvoreCamadas) return [];
+    const porId = new Map(arvoreCamadas.flatMap((g) => g.camadas).map((c) => [c.id, c]));
+    return idsWebmapLigadas.map((id) => porId.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arvoreCamadas, idsWebmapLigadas.join(',')]);
+  const webmapMapa = useWebmapNoMapa(mapaLeaflet, camadasWebmapLigadas, carregarArvoreCamadas);
+
+  function abrirPainel(aba: CcoPainelAba) {
+    if (painelAba === aba) {
+      fecharPainel();
+      return;
+    }
+    // 321: abaixo de 1024 px só um painel. A seleção e os filtros aplicados permanecem.
+    if (fecharDetalheAoAbrirPainel(window.innerWidth)) setDrawerOpen(false);
+    if (!painelAba) origemPainelRef.current = aba;
+    if (!rascunho) {
+      rascunhoBaseRef.current = aplicado;
+      setRascunho(aplicado);
+      setAvisoExterno(false);
+    }
+    if (aba === 'camadas') garantirArvoreCamadas();
+    setPainelAba(aba);
+  }
+
+  function trocarAba(aba: CcoPainelAba) {
+    if (aba === 'camadas') garantirArvoreCamadas();
+    setPainelAba(aba);
+  }
+
+  function fecharPainel() {
+    // Fechar descarta o rascunho não aplicado; o próximo abre do aplicado.
+    setPainelAba(null);
+    setRascunho(null);
+    rascunhoBaseRef.current = null;
+    setAvisoExterno(false);
+    const alvo = origemPainelRef.current === 'camadas' ? botaoCamadasRef.current : botaoFiltrosRef.current;
+    window.setTimeout(() => alvo?.focus(), 0);
+  }
+
+  function pedirCargaMapa(acao: 'atualizar' | 'aplicar') {
+    acaoMapaRef.current = acao;
+    setManterVista(true);
+    setRecarga((n) => n + 1);
+  }
+
+  function atualizarMapa() {
+    if (atualizandoRef.current) return; // duplo clique = 1 requisição
+    atualizandoRef.current = true;
+    setAtualizando(true);
+    setErroMapa(false);
+    pedirCargaMapa('atualizar');
+  }
+
+  function aplicarRascunho(proximo: CcoFiltrosSnapshot) {
+    rascunhoBaseRef.current = proximo;
+    setRascunho(proximo);
+    setAvisoExterno(false);
+    setFilters(proximo.filters);
+    setChamadoFilters(proximo.chamadoFilters);
+    setKpiFilter(proximo.kpiFilter);
+    pedirCargaMapa('aplicar');
+  }
+
+  function limparPeloPainel() {
+    aplicarRascunho(limparSnapshot(tab, aplicado));
+    window.setTimeout(() => {
+      document.querySelector<HTMLElement>('#cco-map-painel-conteudo input, #cco-map-painel-conteudo select, #cco-map-painel-conteudo button')?.focus();
+    }, 0);
+  }
+
+  const rascunhoFilters = rascunho?.filters ?? filters;
+  const rascunhoChamados = rascunho?.chamadoFilters ?? chamadoFilters;
+
+  // Sanfona: aplica na hora (como antes) e o mapa volta a enquadrar os dados.
+  const sanfonaFilters = useCallback((next: UnidadeFilters | ((prev: UnidadeFilters) => UnidadeFilters)) => {
+    setManterVista(false);
+    setFilters(next);
+  }, []);
+  const sanfonaChamados = useCallback(
+    (next: ChamadosMapaFilters | ((prev: ChamadosMapaFilters) => ChamadosMapaFilters)) => {
+      setManterVista(false);
+      setChamadoFilters(next);
+    },
+    [],
+  );
+
+  // 295: contador mostra o total real (o mapa recebe no máximo 2.000).
+  const resultCount = tab === 'proprios' ? unidades.length : chamadosTotal;
+  const avisoCorte =
+    tab === 'chamados' ? (
+      <AvisoChamadosCortados
+        visivel={chamadosTruncado}
+        total={chamadosTotal}
+        mostrados={chamados.length}
+        onAjustar={() => setAbrirFiltros((n) => n + 1)}
+      />
+    ) : null;
 
   return (
     <RequirePermissions permissions={['dashboard.visualizar']}>
@@ -342,11 +582,14 @@ function CcoPageContent() {
         <CcoFiltrosPanel
           tab={tab}
           filters={filters}
-          onFiltersChange={setFilters}
+          onFiltersChange={sanfonaFilters}
           chamadoFilters={chamadoFilters}
-          onChamadoFiltersChange={setChamadoFilters}
+          onChamadoFiltersChange={sanfonaChamados}
           kpiFilter={kpiFilter}
-          onSituacaoChange={updateSituacao}
+          onSituacaoChange={(value) => {
+            setManterVista(false);
+            updateSituacao(value);
+          }}
           opcoesFiltro={opcoesFiltro}
           mapMode={mapMode}
           onMapModeChange={setMapMode}
@@ -354,10 +597,16 @@ function CcoPageContent() {
           onChamadoMapModeChange={setChamadoMapMode}
           categoriaFiltroId={categoriaFiltroId}
           onCategoriaFiltroChange={setCategoriaFiltroId}
-          onClear={clearFilters}
+          onClear={() => {
+            setManterVista(false);
+            clearFilters();
+          }}
           resultCount={resultCount}
+          abrirSinal={abrirFiltros}
           defaultTiposPendencia={DEFAULT_TIPOS_PENDENCIA}
         />
+
+        {avisoCorte}
 
         <div className="cco-workspace grid min-h-0 gap-3 xl:grid-cols-[minmax(300px,340px)_minmax(0,1fr)] xl:items-stretch">
           <div className="cco-list-panel flex min-h-0 flex-col overflow-hidden rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] shadow-[var(--sh-sm)]">
@@ -391,8 +640,14 @@ function CcoPageContent() {
             )}
           </div>
 
-          <div className="cco-map-host flex min-h-0 min-w-0 flex-col overflow-hidden">
+          <div className="cco-map-host relative flex min-h-0 min-w-0 flex-col overflow-hidden">
+            {tab === 'chamados' && chamadosTruncado ? (
+              <div className="pointer-events-none absolute inset-x-2 top-2 z-[500] xl:hidden">
+                <AvisoChamadosCortados espelho total={chamadosTotal} mostrados={chamados.length} />
+              </div>
+            ) : null}
             <OperationalMap
+              notaCorte={tab === 'chamados' && chamadosTruncado ? notaMapaCortado(chamados.length) : undefined}
               view={tab === 'chamados' ? 'chamados' : 'unidades'}
               unidades={unidades}
               chamados={chamados}
@@ -403,15 +658,154 @@ function CcoPageContent() {
               onSelect={selectItem}
               onClearSelection={() => setSelectedId(null)}
               onHover={handleMapHover}
+              manterVista={manterVista}
+              ocultarPinos={!camadaLigada(camadas, tab === 'chamados' ? SIGMA_CAMADA_CHAMADOS : SIGMA_CAMADA_PROPRIOS)}
+              onMapaPronto={setMapaLeaflet}
+              controlesExtra={
+                <CcoMapControles
+                  painelAberto={painelAba}
+                  onAbrir={abrirPainel}
+                  filtrosAtivos={filtrosAtivos}
+                  camadasAlemDoPadrao={camadasAlemDoPadrao}
+                  atualizando={atualizando}
+                  onAtualizar={atualizarMapa}
+                  rascunhoPendente={rascunhoPendente}
+                  filtrosRef={botaoFiltrosRef}
+                  camadasRef={botaoCamadasRef}
+                />
+              }
+              alertaMapa={
+                <>
+                  {/* 299-U1: chip no topo à esquerda (abaixo de "N no mapa"): nunca sobre o painel nem o zoom */}
+                  <span
+                    role="status"
+                    data-testid="cco-atualizado-as"
+                    className={
+                      atualizadoAs
+                        ? 'self-start rounded-[var(--r-pill)] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-2.5 py-1 text-[11.5px] font-semibold text-[var(--ink-2)] shadow-[var(--sh-sm)]'
+                        : 'sr-only'
+                    }
+                  >
+                    {atualizadoAs ? `Atualizado às ${atualizadoAs}` : ''}
+                  </span>
+                  {erroMapa ? (
+                    <div
+                      role="alert"
+                      data-testid="cco-mapa-erro"
+                      className="pointer-events-auto rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface)] p-3 text-[12.5px] text-[var(--ink)] shadow-[var(--sh-md)]"
+                    >
+                      {MSG_ERRO_ATUALIZAR_MAPA}
+                      <div className="mt-2">
+                        <Button variant="outlined" size="lg" onClick={atualizarMapa}>
+                          Tentar novamente
+                        </Button>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div
+                    role="status"
+                    data-testid="cco-mapa-status"
+                    className={
+                      statusMapa
+                        ? 'rounded-[var(--r-pill)] border border-[var(--line)] bg-[rgba(255,255,255,0.96)] px-3 py-1.5 text-xs font-semibold text-[var(--ink-2)] shadow-[var(--sh-sm)]'
+                        : 'sr-only'
+                    }
+                  >
+                    {statusMapa}
+                  </div>
+                </>
+              }
+              renderPainel={({ fullscreenMode }) =>
+                painelAba ? (
+                  <CcoMapPainel
+                    aba={painelAba}
+                    onAba={trocarAba}
+                    onFechar={fecharPainel}
+                    fullscreenMode={fullscreenMode}
+                    tituloAba={tab === 'chamados' ? 'Todos os chamados' : 'Próprios públicos'}
+                    rascunhoPendente={rascunhoPendente}
+                    avisoExterno={avisoExterno}
+                    podeAplicar={rascunhoPendente}
+                    onAplicar={() => rascunho && aplicarRascunho(rascunho)}
+                    onLimpar={limparPeloPainel}
+                    filtros={
+                      <CcoFiltrosPanel
+                        variante="painel"
+                        tab={tab}
+                        filters={rascunhoFilters}
+                        onFiltersChange={(next) =>
+                          setRascunho((d) => {
+                            const base = d ?? aplicado;
+                            return { ...base, filters: typeof next === 'function' ? next(base.filters) : next };
+                          })
+                        }
+                        chamadoFilters={rascunhoChamados}
+                        onChamadoFiltersChange={(next) =>
+                          setRascunho((d) => {
+                            const base = d ?? aplicado;
+                            return {
+                              ...base,
+                              chamadoFilters: typeof next === 'function' ? next(base.chamadoFilters) : next,
+                            };
+                          })
+                        }
+                        kpiFilter={rascunho?.kpiFilter ?? kpiFilter}
+                        onSituacaoChange={(value) =>
+                          setRascunho((d) => {
+                            const base = d ?? aplicado;
+                            return {
+                              ...base,
+                              kpiFilter: 'none',
+                              filters: { ...base.filters, situacao: value || undefined },
+                            };
+                          })
+                        }
+                        opcoesFiltro={opcoesFiltro}
+                        mapMode={mapMode}
+                        onMapModeChange={setMapMode}
+                        chamadoMapMode={chamadoMapMode}
+                        onChamadoMapModeChange={setChamadoMapMode}
+                        categoriaFiltroId={categoriaFiltroId}
+                        onCategoriaFiltroChange={setCategoriaFiltroId}
+                        onClear={limparPeloPainel}
+                        resultCount={resultCount}
+                        defaultTiposPendencia={DEFAULT_TIPOS_PENDENCIA}
+                      />
+                    }
+                    camadas={{
+                      estado: camadas,
+                      arvore: arvoreCamadas,
+                      carregando: arvoreCarregando,
+                      erro: arvoreErro,
+                      semAcesso: arvoreSemAcesso,
+                      onTentarNovamente: carregarArvoreCamadas,
+                      onAlternar: (id, ligar) => setCamadas((c) => alternarCamada(c, id, ligar)),
+                      onAlternarGrupo: (g) => setCamadas((c) => alternarGrupoAberto(c, g)),
+                      onDesligarTodas: () => {
+                        setCamadas((c) => desligarWebmap(c));
+                        setChamadoMapMode('situacao');
+                      },
+                      calorLigado,
+                      algumaLigada: calorLigado || webmapLigadas(camadas, arvoreCamadas).length > 0,
+                      onAbrirGrupos: (chaves) => setCamadas((c) => abrirGrupos(c, chaves)),
+                      onAlternarVarias: (ids, ligar) => setCamadas((c) => ids.reduce((e, id) => alternarCamada(e, id, ligar), c)),
+                      statusWebmap: webmapMapa.status,
+                      onTentarCamada: webmapMapa.tentarNovamente,
+                      onCalor: (ligar) => setChamadoMapMode(ligar ? 'calor' : 'situacao'),
+                    }}
+                  />
+                ) : null
+              }
+              detalhe={
+                  tab === 'proprios' ? (
+                    <UnidadeDrawer open={drawerOpen} unidade={selectedUnidade} onClose={() => setDrawerOpen(false)} />
+                  ) : (
+                    <ChamadoMapaDrawer open={drawerOpen} chamado={selectedChamado} onClose={() => setDrawerOpen(false)} />
+                  )
+              }
             />
           </div>
         </div>
-
-        {tab === 'proprios' ? (
-          <UnidadeDrawer open={drawerOpen} unidade={selectedUnidade} onClose={() => setDrawerOpen(false)} />
-        ) : (
-          <ChamadoMapaDrawer open={drawerOpen} chamado={selectedChamado} onClose={() => setDrawerOpen(false)} />
-        )}
       </PageShell>
     </RequirePermissions>
   );

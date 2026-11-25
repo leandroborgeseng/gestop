@@ -60,6 +60,8 @@ enum FiscalizacaoStatus {
   CONCLUIDA
   CANCELADA
   SINCRONIZACAO_PENDENTE
+  /// 305: exclusão lógica (nada é apagado; ver excluidoEm/statusAntesExclusao).
+  EXCLUIDA
 }
 
 enum FiscalizacaoOrigem {
@@ -299,6 +301,8 @@ model Usuario {
   cargoId       String?
   ativo         Boolean   @default(true)
   ultimoLoginAt DateTime?
+  /// 289: dia (America/Sao_Paulo) da última verificação automática de pendências.
+  ultimaVerificacaoPendencias DateTime? @db.Date
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -312,6 +316,7 @@ model Usuario {
   checklistVersoes ChecklistVersao[]  @relation("ChecklistVersaoPublicadoPor")
   fiscalizacoes    Fiscalizacao[]     @relation("FiscalizacaoAgente")
   fiscalizacoesLancadas Fiscalizacao[] @relation("FiscalizacaoLancadoPor")
+  fiscalizacoesExcluidas Fiscalizacao[] @relation("FiscalizacaoExcluidaPor")
   naoConformidades NaoConformidade[]  @relation("NaoConformidadeRegistradaPor")
   naoConformidadesBaixadas NaoConformidade[] @relation("NaoConformidadeBaixadaPor")
   chamadosResponsavel Chamado[]         @relation("ChamadoResponsavel")
@@ -327,6 +332,7 @@ model Usuario {
   chamadosObservadoresCriados ChamadoObservador[] @relation("ChamadoObservadorCreatedBy")
   documentosResponsavel Documento[] @relation("DocumentoResponsavel")
   documentosCriados Documento[] @relation("DocumentoCriadoPor")
+  documentosCancelados Documento[] @relation("DocumentoCanceladoPor")
   documentoAssinaturas DocumentoAssinatura[] @relation("DocumentoAssinaturaUsuario")
   documentoAssinaturasColetadas DocumentoAssinatura[] @relation("DocumentoAssinaturaColetadaPor")
   assinaturaPedidosDestino DocumentoAssinaturaPedido[] @relation("PedidoAssinaturaDestinatario")
@@ -571,6 +577,8 @@ model Checklist {
   /// Codigo do TipoProprio quando escopo = UNIDADE_TIPO.
   unidadeTipo   String?
   ativo         Boolean             @default(true)
+  /// 309/C4a: quando foi inativado (Inativar grava; Reativar limpa — o histórico fica na auditoria).
+  inativadoEm   DateTime?
   createdAt     DateTime            @default(now())
   updatedAt     DateTime            @updatedAt
 
@@ -682,6 +690,20 @@ model Fiscalizacao {
   /// Vínculo com a vistoria prevista no cronograma, quando iniciada pela aba programadas.
   cronogramaId          String?
   dataProgramada        DateTime?
+  /// 304/O6a: enviada como avulsa porque a programação deu conflito no sync (a programação NÃO é baixada).
+  avulsaPorConflito     Boolean             @default(false)
+  /// Motivo informado pelo agente ao enviar como avulsa (obrigatório quando avulsaPorConflito).
+  avulsaMotivo          String?
+  /// Programação com que conflitou (referência; não é usada para baixa).
+  conflitoCronogramaId  String?
+  conflitoDataProgramada DateTime?
+  conflitoCodigo        String?
+  /// 305: exclusão lógica. Nenhum registro é apagado; a vistoria sai das consultas operacionais.
+  excluidoEm            DateTime?
+  excluidoPorId         String?
+  exclusaoMotivo        String?
+  /// Status que a vistoria tinha antes de ir para EXCLUIDA (auditoria e baixa da programação, E6).
+  statusAntesExclusao   FiscalizacaoStatus?
   createdAt             DateTime            @default(now())
   updatedAt             DateTime            @updatedAt
 
@@ -690,7 +712,9 @@ model Fiscalizacao {
   checklistVersao ChecklistVersao   @relation(fields: [checklistVersaoId], references: [id], onDelete: Restrict)
   agente          Usuario           @relation("FiscalizacaoAgente", fields: [agenteId], references: [id], onDelete: Restrict)
   lancadoPor      Usuario?          @relation("FiscalizacaoLancadoPor", fields: [lancadoPorId], references: [id], onDelete: SetNull)
+  excluidoPor     Usuario?          @relation("FiscalizacaoExcluidaPor", fields: [excluidoPorId], references: [id], onDelete: SetNull)
   cronograma      CronogramaChecagem? @relation(fields: [cronogramaId], references: [id], onDelete: SetNull)
+  conflitoCronograma CronogramaChecagem? @relation("FiscalizacaoConflitoCronograma", fields: [conflitoCronogramaId], references: [id], onDelete: SetNull)
   respostas       RespostaChecklist[]
   evidencias      Evidencia[]
   naoConformidades NaoConformidade[]
@@ -705,6 +729,9 @@ model Fiscalizacao {
   @@index([origem])
   @@index([createdAt])
   @@index([cronogramaId])
+  @@index([avulsaPorConflito])
+  @@index([conflitoCronogramaId])
+  @@index([excluidoEm])
 }
 
 model CronogramaChecagem {
@@ -726,6 +753,7 @@ model CronogramaChecagem {
   responsavel  Usuario?       @relation("CronogramaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   responsaveis CronogramaChecagemResponsavel[]
   fiscalizacoes Fiscalizacao[]
+  fiscalizacoesAvulsasConflito Fiscalizacao[] @relation("FiscalizacaoConflitoCronograma")
 
   @@unique([unidadeId, checklistId])
   @@index([proximaChecagemEm])
@@ -1036,6 +1064,10 @@ model Documento {
   pdfAssinadoSha256      String?
   conteudoTravadoEm      DateTime?
   substituidoPorId       String?
+  /// 287: cancelamento lógico (o registro nunca é apagado).
+  canceladoEm            DateTime?
+  canceladoPorId         String?
+  canceladoMotivo        String?
   metadata               Json?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
@@ -1047,6 +1079,7 @@ model Documento {
   checklistVersao ChecklistVersao? @relation(fields: [checklistVersaoId], references: [id], onDelete: SetNull)
   responsavel     Usuario?         @relation("DocumentoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
   criadoPor       Usuario?         @relation("DocumentoCriadoPor", fields: [criadoPorId], references: [id], onDelete: SetNull)
+  canceladoPor    Usuario?         @relation("DocumentoCanceladoPor", fields: [canceladoPorId], references: [id], onDelete: SetNull)
   substituidoPor  Documento?       @relation("DocumentoSubstituicao", fields: [substituidoPorId], references: [id], onDelete: SetNull)
   substitutos     Documento[]      @relation("DocumentoSubstituicao")
   assinaturas     DocumentoAssinatura[]
@@ -1354,4 +1387,138 @@ model ConfiguracaoEmail {
   textoIntroEquipe String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+/// 296 — camadas geográficas do Webmap, separadas dos cadastros operacionais (sem FK para eles).
+/// Versionamento: elementos de cada importação entram com `versao` = id da importação; a troca da versão ativa é atômica.
+model WebmapCamadaGrupo {
+  id                  String         @id @default(uuid())
+  chaveOrigem         String         @unique
+  titulo              String
+  ordem               Int
+  ativo               Boolean        @default(true)
+  removidaOrigem      Boolean        @default(false)
+  /// Preenchido enquanto o grupo só existe numa importação ainda não ativada (descartável em falha).
+  criadaPorImportacao String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  camadas             WebmapCamada[]
+}
+
+model WebmapCamada {
+  id                  String            @id @default(uuid())
+  chaveOrigem         String            @unique
+  grupoId             String
+  grupo               WebmapCamadaGrupo @relation(fields: [grupoId], references: [id])
+  nomeOriginal        String
+  varOrigem           String
+  arquivoOrigem       String
+  ordem               Int
+  geometriaTipo       String
+  estilo              Json
+  estiloOriginal      String
+  shaArquivo          String
+  shaEstilo           String?
+  totalElementos      Int
+  totalPontos         Int               @default(0)
+  totalLinhas         Int               @default(0)
+  totalPoligonos      Int               @default(0)
+  totalCorrigidos     Int               @default(0)
+  totalInvalidos      Int               @default(0)
+  errosLeitura        Json?
+  bytesOrigem         Int               @default(0)
+  bbox                Json?
+  /// Versão ativa dos elementos (id da importação). Nulo = camada ainda não ativada.
+  versaoAtual         String?
+  ativo               Boolean           @default(true)
+  removidaOrigem      Boolean           @default(false)
+  removidaEm          DateTime?
+  criadaPorImportacao String?
+  commitSha           String
+  importadoEm         DateTime
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  elementos           WebmapElemento[]
+  versoes             WebmapCamadaVersao[]
+
+  @@index([grupoId])
+  @@index([ativo])
+}
+
+/// Dados de uma versão da camada lógica (uma por importação que mudou o conteúdo). A camada lógica (id estável) aponta para a ativa.
+model WebmapCamadaVersao {
+  id              String       @id
+  camadaId        String
+  camada          WebmapCamada @relation(fields: [camadaId], references: [id], onDelete: Cascade)
+  importacaoId    String
+  status          String
+  shaArquivo      String
+  totalElementos  Int          @default(0)
+  totalPontos     Int          @default(0)
+  totalLinhas     Int          @default(0)
+  totalPoligonos  Int          @default(0)
+  totalCorrigidos Int          @default(0)
+  totalInvalidos  Int          @default(0)
+  errosLeitura    Json?
+  bbox            Json?
+  createdAt       DateTime     @default(now())
+
+  @@index([camadaId])
+  @@index([importacaoId])
+}
+
+model WebmapElemento {
+  id                String       @id @default(uuid())
+  camadaId          String
+  camada            WebmapCamada @relation(fields: [camadaId], references: [id], onDelete: Cascade)
+  versao            String
+  fidOrigem         String?
+  geometriaTipo     String
+  geometria         Json
+  /// Geometria como veio da fonte, quando foi corrigida.
+  geometriaOriginal Json?
+  corrigida         Boolean      @default(false)
+  atributos         Json
+  /// 296: sem conserto; gravada com a geometria original e não desenhada no mapa.
+  geometriaInvalida Boolean      @default(false)
+  /// null só para geometria inválida sem coordenadas aproveitáveis.
+  minLng            Float?
+  minLat            Float?
+  maxLng            Float?
+  maxLat            Float?
+
+  @@index([camadaId, versao])
+  @@index([camadaId, minLng, maxLng, minLat, maxLat])
+  @@index([camadaId, versao, minLng, maxLng, minLat, maxLat])
+}
+
+model WebmapIcone {
+  id         String   @id @default(uuid())
+  sha256     String   @unique
+  origem     String
+  mimeType   String
+  storageKey String
+  url        String
+  createdAt  DateTime @default(now())
+}
+
+/// Execução de "aplicar" (job em segundo plano): fase, heartbeat e resultado. Histórico de usuário continua no LogAuditoria.
+model WebmapImportacao {
+  id           String    @id @default(uuid())
+  status       String
+  fase         String?
+  usuarioId    String?
+  usuarioNome  String
+  simulacaoId  String?
+  fonteHash    String?
+  iniciadoEm   DateTime  @default(now())
+  heartbeatEm  DateTime  @default(now())
+  /** Processo (boot) que está aplicando; outro bootId com heartbeat parado = processo morto. */
+  bootId       String?
+  concluidoEm  DateTime?
+  resultado    Json?
+  motivo       String?
+
+  @@index([status])
+  @@index([iniciadoEm])
 }

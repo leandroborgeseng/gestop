@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { Suspense, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { ehSemAcessoChamado, podeExcluirChamado } from '@/lib/chamado-acesso';
 import {
   CalendarDays,
   Bell,
@@ -24,13 +24,19 @@ import { ChamadoTimeline } from '@/components/chamados/chamado-timeline';
 import { ChamadoHistoricoForm } from '@/components/chamados/chamado-historico-form';
 import { ChamadoAberturaSection } from '@/components/chamados/chamado-abertura-section';
 import { ChamadoDescricaoExpandivel } from '@/components/chamados/chamado-descricao-expandivel';
+import { ChamadoAcoesMobile } from '@/components/chamados/chamado-acoes-mobile';
 import { ChamadoObservadoresSection } from '@/components/chamados/chamado-observadores-section';
-import { ChamadosFiltrosPanel, ChamadosFiltrosValue } from '@/components/chamados/chamados-filtros-panel';
+import { ChamadosFiltrosPanel } from '@/components/chamados/chamados-filtros-panel';
 import { ChamadosProgramacaoPanel } from '@/components/chamados/chamados-programacao-panel';
 import { DocumentosRelacionadosPanel } from '@/components/documentos/documentos-relacionados-panel';
 import { ChamadoTarefasPanel } from '@/components/chamados/chamado-tarefas-panel';
 import { ChamadoAnexosAberturaView } from '@/components/chamados/chamado-anexos-abertura-view';
 import { PageShell } from '@/components/layout/page-shell';
+import { AVISO_REGISTRO_URL, detalheCobreLista } from '@/lib/estado-url';
+import { buscarRegistroPorIdDaUrl, idTemFormatoPrisma } from '@/lib/id-prisma';
+import { filtrosDeEstado, patchDeFiltros, patchLimparFiltros } from '@/lib/estado-url-chamados';
+import { useEstadoChamados } from '@/lib/use-estado-chamados';
+import { aberturaParaQuery } from '@/lib/filtro-data-abertura';
 import { TipBanner } from '@/components/help/tip-banner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,7 +47,21 @@ import { useSnackbar } from '@/components/ui/snackbar';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui-states';
 import { ListPagination } from '@/components/ui/list-pagination';
 import { downloadChamadoPdf, excluirChamadoLogicamente, getChamado, getSecretarias, listChamadoEquipes, listChamados, listTarefasDoChamado, listTiposChamadoOpcoes, notificarChamadoEquipe, restaurarChamadoExcluido, updateChamadoAtribuicao, updateChamadoPlanejamento, updateChamadoStatus, updateChamadoTriagem } from '@/lib/api';
+import { buildChamadoAcoes, executarAcaoChamado, type ChamadoAcaoId } from '@/lib/chamado-acoes';
 import { cn } from '@/lib/cn';
+import {
+  DETALHE_ACOES_DESKTOP_BASE,
+  DETALHE_ACOES_DESKTOP_MOBILE,
+  DETALHE_BLOCOS_BASE,
+  DETALHE_BLOCOS_MOBILE,
+  DETALHE_CABECALHO_BASE,
+  DETALHE_CABECALHO_MOBILE,
+  DETALHE_LINHA_FIXA,
+  DETALHE_LINHA_FIXA_SOMBRA,
+  DETALHE_SCROLL_BASE,
+  DETALHE_SCROLL_MOBILE,
+  DETALHE_SECTION_MOBILE,
+} from '@/lib/chamado-detalhe-layout';
 import { chamadoLocalLabel, chamadoTitulo } from '@/lib/chamado-geo';
 import { toInputDate } from '@/lib/cronograma';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
@@ -71,17 +91,6 @@ const TRIAGEM_ALL_MAX = 5000;
 const ALTURA_PAINEL_CHAMADOS =
   'h-[min(560px,calc(100dvh-14rem-env(safe-area-inset-bottom)))] max-h-[min(560px,calc(100dvh-14rem-env(safe-area-inset-bottom)))] min-h-[320px] lg:h-[min(860px,calc(100dvh-9.5rem))] lg:max-h-[min(860px,calc(100dvh-9.5rem))]';
 
-const DEFAULT_FILTROS: ChamadosFiltrosValue = {
-  statuses: 'TODOS',
-  prioridade: 'TODAS',
-  sla: 'TODOS',
-  atribuicao: 'TODOS',
-  equipeId: '',
-  secretariaProprioId: '',
-  secretariaExecucaoId: '',
-  tipoChamadoId: '',
-};
-
 function origemMeta(origem: ChamadoOrigem) {
   switch (origem) {
     case 'QR_CODE':
@@ -104,7 +113,6 @@ export default function ChamadosPage() {
 }
 
 function ChamadosPageContent() {
-  const searchParams = useSearchParams();
   const backHref = useSafeBackHref('/cco');
   const snackbar = useSnackbar();
   const sessionUser = useSessionUser();
@@ -112,9 +120,10 @@ function ChamadosPageContent() {
   const [chamadosTotal, setChamadosTotal] = useState(0);
   const [statusCounts, setStatusCounts] = useState<Record<string, number>>({ TODOS: 0 });
   const [hasSemSlaApi, setHasSemSlaApi] = useState(false);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(TRIAGEM_PAGE_SIZE);
-  const [allSelected, setAllSelected] = useState(false);
+  const { estado, definir } = useEstadoChamados();
+  const page = estado.pagina;
+  const allSelected = estado.porPagina === 'todos';
+  const pageSize: number = estado.porPagina === 'todos' ? TRIAGEM_PAGE_SIZE : estado.porPagina;
   const [equipes, setEquipes] = useState<EquipeOpcao[]>([]);
   const [tiposChamado, setTiposChamado] = useState<TipoChamadoOpcao[]>([]);
   const [secretariasCadastro, setSecretariasCadastro] = useState<SecretariaOption[]>([]);
@@ -122,44 +131,119 @@ function ChamadosPageContent() {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filtros, setFiltros] = useState<ChamadosFiltrosValue>(DEFAULT_FILTROS);
-  const [view, setView] = useState<ChamadosView>('triagem');
-  const [search, setSearch] = useState(() => searchParams.get('search') ?? '');
-  const [searchDraft, setSearchDraft] = useState(() => searchParams.get('search') ?? '');
-  const [exibirExcluidos, setExibirExcluidos] = useState(false);
+  const filtros = useMemo(() => filtrosDeEstado(estado, true), [estado]);
+  const triagemSeq = useRef(0);
+  // 322 L1: aba, filtros, busca, página e registro ficam na URL.
+  const view: ChamadosView = estado.aba;
+  const search = estado.search;
+  const [searchDraft, setSearchDraft] = useState(estado.search);
+  const exibirExcluidos = estado.excluidos;
   const podeVerExcluidos = canVisualizarChamadosExcluidos(sessionUser);
 
   useEffect(() => {
-    const value = searchParams.get('search');
-    if (value) {
-      setSearch(value);
-      setSearchDraft(value);
-    }
-    const atribuicao = searchParams.get('atribuicao');
-    if (atribuicao === 'MIM' || atribuicao === 'MINHA_EQUIPE') {
-      setFiltros((current) => (current.atribuicao === atribuicao ? current : { ...current, atribuicao }));
-    }
-  }, [searchParams]);
+    setSearchDraft(estado.search);
+  }, [estado.search]);
 
-  const [selectedId, setSelectedId] = useState<string | null>(() => searchParams.get('id'));
+  function selecionarAba(next: ChamadosView) {
+    definir({ aba: next });
+  }
+
+  const [selectedId, setSelectedId] = useState<string | null>(estado.id);
   const [busyId, setBusyId] = useState<string | null>(null);
+  /** 315: id pedido na URL que o usuário não pode ver (outra Secretaria / inexistente). */
+  const [semAcessoId, setSemAcessoId] = useState<string | null>(null);
+  const semAcessoRef = useRef<string | null>(null);
+  /** 315: id pedido pela URL (link direto). A lista não troca essa seleção, mesmo fora da página atual, até o usuário escolher outro. */
+  const pedidoUrlRef = useRef<string | null>(estado.id);
+  const [detalheFechado, setDetalheFechado] = useState(false);
+  const detalheFechadoRef = useRef(false);
+  const tinhaIdRef = useRef(Boolean(estado.id));
+
+  function marcarDetalheFechado(fechado: boolean) {
+    detalheFechadoRef.current = fechado;
+    setDetalheFechado(fechado);
+  }
 
   useEffect(() => {
-    const id = searchParams.get('id');
-    if (id) setSelectedId(id);
-  }, [searchParams]);
+    if (estado.id) {
+      pedidoUrlRef.current = estado.id;
+      setSelectedId(estado.id);
+      marcarDetalheFechado(false);
+      if (!idTemFormatoPrisma(estado.id)) {
+        semAcessoRef.current = estado.id;
+        setSemAcessoId(estado.id);
+      } else {
+        semAcessoRef.current = null;
+        setSemAcessoId(null);
+      }
+    } else if (tinhaIdRef.current) {
+      pedidoUrlRef.current = null;
+      setSelectedId(null);
+      marcarDetalheFechado(true);
+      setSemAcessoId(null);
+      semAcessoRef.current = null;
+    }
+    tinhaIdRef.current = Boolean(estado.id);
+  }, [estado.id]);
+
+  function abrirChamado(id: string) {
+    pedidoUrlRef.current = null;
+    marcarDetalheFechado(false);
+    setSemAcessoId(null);
+    semAcessoRef.current = null;
+    setSelectedId(id);
+    definir({ id }, detalheCobreLista() ? 'push' : 'replace');
+  }
+
+  function fecharRegistro() {
+    marcarDetalheFechado(true);
+    setSelectedId(null);
+    setSemAcessoId(null);
+    semAcessoRef.current = null;
+    pedidoUrlRef.current = null;
+    if (estado.id) definir({ id: null });
+  }
+
+  const [opcoesOk, setOpcoesOk] = useState({ equipes: false, tipos: false, secretarias: false });
 
   useEffect(() => {
     listChamadoEquipes()
-      .then(setEquipes)
+      .then((lista) => {
+        setEquipes(lista);
+        setOpcoesOk((atual) => ({ ...atual, equipes: true }));
+      })
       .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar equipes.'));
     listTiposChamadoOpcoes()
-      .then(setTiposChamado)
+      .then((lista) => {
+        setTiposChamado(lista);
+        setOpcoesOk((atual) => ({ ...atual, tipos: true }));
+      })
       .catch(() => undefined);
     getSecretarias()
-      .then(setSecretariasCadastro)
+      .then((lista) => {
+        setSecretariasCadastro(lista);
+        setOpcoesOk((atual) => ({ ...atual, secretarias: true }));
+      })
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    const patch: Parameters<typeof definir>[0] = {};
+    if (opcoesOk.secretarias && estado.secProprio && !secretariasCadastro.some((item) => item.id === estado.secProprio)) {
+      patch.secProprio = '';
+    }
+    if (opcoesOk.secretarias && estado.secExecucao && !secretariasCadastro.some((item) => item.id === estado.secExecucao)) {
+      patch.secExecucao = '';
+    }
+    if (opcoesOk.equipes && estado.equipeId && estado.equipeId !== 'sem-equipe' && !equipes.some((item) => item.id === estado.equipeId)) {
+      patch.equipeId = '';
+    }
+    if (opcoesOk.tipos && estado.tipo && !tiposChamado.some((item) => item.id === estado.tipo)) {
+      patch.tipo = '';
+    }
+    if (!podeVerExcluidos && estado.excluidos) patch.excluidos = false;
+    if (Object.keys(patch).length) definir(patch);
+  }, [opcoesOk, secretariasCadastro, equipes, tiposChamado, estado.secProprio, estado.secExecucao, estado.equipeId, estado.tipo, estado.excluidos, podeVerExcluidos, definir]);
 
   function triagemQuery(nextPage = page, nextSize = pageSize, nextAll = allSelected) {
     const statuses =
@@ -174,6 +258,7 @@ function ChamadosPageContent() {
       secretariaProprioId: filtros.secretariaProprioId || undefined,
       secretariaExecucaoId: filtros.secretariaExecucaoId || undefined,
       tipoChamadoId: filtros.tipoChamadoId || undefined,
+      ...aberturaParaQuery(filtros.abertura),
       incluirExcluidos: podeVerExcluidos && exibirExcluidos ? true : undefined,
       all: nextAll || undefined,
       limit: nextAll ? TRIAGEM_ALL_MAX : nextSize,
@@ -183,32 +268,37 @@ function ChamadosPageContent() {
 
   useEffect(() => {
     if (view !== 'triagem') return;
-    setPage(1);
-  }, [filtros, search, view, exibirExcluidos]);
 
-  useEffect(() => {
-    if (view !== 'triagem') return;
-
+    // 295: só a resposta da consulta mais recente é aplicada (respostas atrasadas não sobrescrevem).
+    const seq = ++triagemSeq.current;
     const timer = window.setTimeout(() => {
       setLoading(true);
       listChamados(triagemQuery())
         .then((response) => {
+          if (seq !== triagemSeq.current) return;
           if (response.total > TRIAGEM_ALL_MAX && allSelected) {
             setError(`Há ${response.total} chamados. Use filtros ou uma quantidade menor que ${TRIAGEM_ALL_MAX}.`);
-            setAllSelected(false);
+            definir({ porPagina: TRIAGEM_PAGE_SIZE, pagina: 1 });
           }
           setChamados(response.items);
           setChamadosTotal(response.total);
           if (response.statusCounts) setStatusCounts(response.statusCounts);
           setHasSemSlaApi(Boolean(response.hasSemSla));
-          setSelectedId((current) =>
-            current && response.items.some((item) => item.id === current)
-              ? current
-              : response.items[0]?.id ?? null,
-          );
+          setSelectedId((current) => {
+            if (detalheFechadoRef.current && !pedidoUrlRef.current) return null;
+            if (current && (response.items.some((item) => item.id === current) || current === semAcessoRef.current || current === pedidoUrlRef.current)) {
+              return current;
+            }
+            if (pedidoUrlRef.current) return pedidoUrlRef.current;
+            return response.items[0]?.id ?? null;
+          });
         })
-        .catch((err) => setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.'))
-        .finally(() => setLoading(false));
+        .catch((err) => {
+          if (seq === triagemSeq.current) setError(err instanceof Error ? err.message : 'Falha ao carregar chamados.');
+        })
+        .finally(() => {
+          if (seq === triagemSeq.current) setLoading(false);
+        });
     }, 250);
 
     return () => window.clearTimeout(timer);
@@ -221,11 +311,14 @@ function ChamadosPageContent() {
     setChamadosTotal(response.total);
     if (response.statusCounts) setStatusCounts(response.statusCounts);
     setHasSemSlaApi(Boolean(response.hasSemSla));
-    setSelectedId((current) =>
-      current && response.items.some((item) => item.id === current)
-        ? current
-        : response.items[0]?.id ?? null,
-    );
+    setSelectedId((current) => {
+      if (detalheFechadoRef.current && !pedidoUrlRef.current) return null;
+      if (current && (response.items.some((item) => item.id === current) || current === semAcessoRef.current || current === pedidoUrlRef.current)) {
+        return current;
+      }
+      if (pedidoUrlRef.current) return pedidoUrlRef.current;
+      return response.items[0]?.id ?? null;
+    });
     return response;
   }
 
@@ -237,18 +330,35 @@ function ChamadosPageContent() {
 
     let active = true;
     setDetailLoading(true);
-    getChamado(selectedId)
-      .then((data) => {
+    void buscarRegistroPorIdDaUrl(selectedId, getChamado)
+      .then((resultado) => {
         if (!active) return;
+        if (resultado.tipo === 'formato') {
+          semAcessoRef.current = selectedId;
+          setSemAcessoId(selectedId);
+          setDetail(null);
+          return;
+        }
+        if (resultado.tipo !== 'ok') return;
+        const data = resultado.data;
         if (data.excluidoEm && !(podeVerExcluidos && exibirExcluidos)) {
           setDetail((current) => (current?.id === data.id ? null : current));
           setSelectedId((current) => (current === data.id ? null : current));
+          if (estado.id === data.id) definir({ id: null });
           return;
         }
         setDetail(data);
       })
       .catch((err) => {
-        if (active) setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe do chamado.');
+        if (!active) return;
+        if (ehSemAcessoChamado(err)) {
+          semAcessoRef.current = selectedId;
+          pedidoUrlRef.current = null;
+          setSemAcessoId(selectedId);
+          setDetail(null);
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Falha ao carregar detalhe do chamado.');
       })
       .finally(() => {
         if (active) setDetailLoading(false);
@@ -275,14 +385,21 @@ function ChamadosPageContent() {
   const filtered = chamados;
 
   const selected = useMemo(() => {
+    // 310 (TL #48): detalhe fechado após perder o acesso; não cai no primeiro da lista até o usuário escolher outro.
+    if (detalheFechado && !selectedId) return null;
+    // 315: não cai no primeiro da lista quando o chamado pedido é de outra Secretaria.
+    if (selectedId && selectedId === semAcessoId) return null;
     if (selectedId) {
       const match = filtered.find((item) => item.id === selectedId);
       if (match) return match;
       const anyMatch = chamados.find((item) => item.id === selectedId);
       if (anyMatch) return anyMatch;
+      // 315: link direto para chamado fora da página atual: usa o detalhe buscado pelo id.
+      if (detail?.id === selectedId) return detail;
+      if (selectedId === pedidoUrlRef.current) return null;
     }
     return filtered[0] ?? null;
-  }, [filtered, selectedId, chamados]);
+  }, [filtered, selectedId, chamados, semAcessoId, detail, detalheFechado]);
 
   async function assignTeam(
     id: string,
@@ -420,16 +537,16 @@ function ChamadosPageContent() {
         </TipBanner>
 
         <div className="mb-4 flex flex-wrap gap-2">
-          <Chip active={view === 'triagem'} onClick={() => setView('triagem')}>
+          <Chip active={view === 'triagem'} pressed={view === 'triagem'} onClick={() => selecionarAba('triagem')}>
             Triagem
           </Chip>
-          <Chip active={view === 'programacao'} onClick={() => setView('programacao')}>
+          <Chip active={view === 'programacao'} pressed={view === 'programacao'} onClick={() => selecionarAba('programacao')}>
             Programação
           </Chip>
         </div>
 
         {view === 'programacao' ? (
-          <ChamadosProgramacaoPanel equipes={equipes} tiposChamado={tiposChamado} />
+          <ChamadosProgramacaoPanel equipes={equipes} tiposChamado={tiposChamado} estado={estado} definir={definir} />
         ) : null}
 
         {view === 'triagem' ? (
@@ -439,7 +556,7 @@ function ChamadosPageContent() {
               pageSize={pageSize}
               total={chamadosTotal}
               allSelected={allSelected}
-              onPageChange={setPage}
+              onPageChange={(next) => definir({ pagina: next })}
               onPageSizeChange={(size) => {
                 if (size === 'TODOS') {
                   if (chamadosTotal > TRIAGEM_ALL_MAX) {
@@ -449,15 +566,21 @@ function ChamadosPageContent() {
                   if (chamadosTotal > TRIAGEM_ALL_WARN && !window.confirm('Carregar todos os chamados pode deixar a tela mais lenta. Continuar?')) {
                     return;
                   }
-                  setAllSelected(true);
-                  setPage(1);
+                  definir({ porPagina: 'todos', pagina: 1 });
                   return;
                 }
-                setAllSelected(false);
-                setPageSize(size);
-                setPage(1);
+                definir({ porPagina: size, pagina: 1 });
               }}
             />
+          </div>
+        ) : null}
+
+        {selectedId && selectedId === semAcessoId ? (
+          <div className="mb-4 flex shrink-0 items-center justify-between gap-3 rounded-[var(--r-md)] border border-amber-200 bg-amber-50 px-4 py-3" data-testid="chamado-sem-acesso" role="status">
+            <p data-testid="aviso-registro-url" className="text-[13px] text-amber-950">{AVISO_REGISTRO_URL}</p>
+            <button type="button" className="text-[13px] font-semibold text-amber-950" onClick={fecharRegistro}>
+              Fechar
+            </button>
           </div>
         ) : null}
 
@@ -471,7 +594,8 @@ function ChamadosPageContent() {
           <div className="mb-4 shrink-0">
             <ChamadosFiltrosPanel
               value={filtros}
-              onChange={setFiltros}
+              onChange={(next) => definir(patchDeFiltros(next))}
+              onClear={() => definir(patchLimparFiltros())}
               statusCounts={counts}
               equipes={equipes}
               tiposChamado={tiposChamado}
@@ -495,7 +619,7 @@ function ChamadosPageContent() {
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') {
                         event.preventDefault();
-                        setSearch(searchDraft.trim());
+                        definir({ search: searchDraft.trim(), pagina: 1 });
                       }
                     }}
                     placeholder="Buscar por código, descrição ou unidade…"
@@ -506,7 +630,7 @@ function ChamadosPageContent() {
                     variant="filled"
                     size="md"
                     className="shrink-0 gap-1.5 px-3"
-                    onClick={() => setSearch(searchDraft.trim())}
+                    onClick={() => definir({ search: searchDraft.trim(), pagina: 1 })}
                   >
                     <Search className="h-4 w-4" />
                     Pesquisar
@@ -518,7 +642,7 @@ function ChamadosPageContent() {
                     className="mt-2 text-[12px] font-semibold text-[var(--brand)]"
                     onClick={() => {
                       setSearchDraft('');
-                      setSearch('');
+                      definir({ search: '', pagina: 1 });
                     }}
                   >
                     Limpar busca
@@ -529,7 +653,7 @@ function ChamadosPageContent() {
                     <input
                       type="checkbox"
                       checked={exibirExcluidos}
-                      onChange={(event) => setExibirExcluidos(event.target.checked)}
+                      onChange={(event) => definir({ excluidos: event.target.checked, pagina: 1 })}
                       className="h-3.5 w-3.5 accent-[var(--danger)]"
                     />
                     Exibir chamados excluídos
@@ -560,7 +684,7 @@ function ChamadosPageContent() {
                       <button
                         key={chamado.id}
                         type="button"
-                        onClick={() => setSelectedId(chamado.id)}
+                        onClick={() => abrirChamado(chamado.id)}
                         className={cn(
                           'ch-row mb-0.5 flex w-full flex-col gap-1.5 rounded-[var(--r-md)] border border-transparent px-3 py-2.5 text-left transition-colors',
                           chamado.excluidoEm && 'border-[#f3c0c0] bg-[#fde8e8]',
@@ -631,7 +755,7 @@ function ChamadosPageContent() {
               </div>
             </section>
 
-            <section className={cn('flex min-h-0 flex-col overflow-hidden', ALTURA_PAINEL_CHAMADOS)}>
+            <section className={cn('flex min-h-0 flex-col overflow-hidden', ALTURA_PAINEL_CHAMADOS, DETALHE_SECTION_MOBILE)} data-testid="chamado-detalhe-section">
               <ChamadoDetailPanel
                 resumo={selected}
                 detail={detail?.id === selected?.id ? detail : null}
@@ -652,12 +776,27 @@ function ChamadosPageContent() {
                     })
                     .catch(() => undefined);
                 }}
+                onPerdeuAcesso={() => {
+                  // 310 (TL #48): o usuário perdeu o acesso após transferir a execução → fecha o detalhe e atualiza a lista.
+                  const removidoId = selected?.id;
+                  fecharRegistro();
+                  setDetail(null);
+                  setChamados((current) => current.filter((item) => item.id !== removidoId));
+                  setChamadosTotal((total) => Math.max(0, total - 1));
+                  void listChamados(triagemQuery())
+                    .then((response) => {
+                      setChamados(response.items);
+                      setChamadosTotal(response.total);
+                      if (response.statusCounts) setStatusCounts(response.statusCounts);
+                    })
+                    .catch(() => undefined);
+                }}
                 onExclusaoAlterada={(acao) => {
                   if (acao === 'excluir' && !exibirExcluidos) {
                     const removidoId = selected?.id;
                     setChamados((current) => current.filter((item) => item.id !== removidoId));
                     setChamadosTotal((total) => Math.max(0, total - 1));
-                    setSelectedId(null);
+                    fecharRegistro();
                     setDetail(null);
                     void refreshChamadosList();
                     return;
@@ -671,7 +810,7 @@ function ChamadosPageContent() {
                         current.map((item) => (item.id === refreshed.id ? { ...item, ...refreshed } : item)),
                       );
                     })
-                    .catch(() => setSelectedId(null));
+                    .catch(() => fecharRegistro());
                 }}
               />
             </section>
@@ -694,6 +833,7 @@ function ChamadoDetailPanel({
   onSavePlanejamento,
   onSaveTriagem,
   onRefreshDetail,
+  onPerdeuAcesso,
   onExclusaoAlterada,
 }: {
   resumo: ChamadoResumo | null;
@@ -717,11 +857,14 @@ function ChamadoDetailPanel({
     payload: { tipoChamadoId: string | null; prioridade: (typeof TRIAGEM_PRIORIDADES)[number]; motivoAlteracao?: string },
   ) => void;
   onRefreshDetail: () => void;
+  /** 310: chamado saiu do acesso do usuário (transferência da execução). */
+  onPerdeuAcesso?: () => void;
   onExclusaoAlterada: (acao: 'excluir' | 'restaurar') => void;
 }) {
   const snackbar = useSnackbar();
   const sessionUser = useSessionUser();
-  const podeExcluir = canExcluirChamadoLogicamente(sessionUser);
+  // 310-excluir: só a Secretaria de execução exclui; via próprio/equipe o botão some.
+  const podeExcluir = podeExcluirChamado(canExcluirChamadoLogicamente(sessionUser), resumo);
   const podeRestaurar = canRestaurarChamadoExcluido(sessionUser);
   const [exclusaoModal, setExclusaoModal] = useState<'excluir' | 'restaurar' | null>(null);
   const [justificativaExclusao, setJustificativaExclusao] = useState('');
@@ -731,6 +874,7 @@ function ChamadoDetailPanel({
   const [docsOpen, setDocsOpen] = useState(false);
   const [tarefasOpen, setTarefasOpen] = useState(false);
   const [tarefasPendentes, setTarefasPendentes] = useState(0);
+  const [mobileRolado, setMobileRolado] = useState(false);
   const [motivo, setMotivo] = useState('');
   const [impedimentoMotivo, setImpedimentoMotivo] = useState('');
   const [pendingEquipePlanejamentoId, setPendingEquipePlanejamentoId] = useState('');
@@ -819,12 +963,64 @@ function ChamadoDetailPanel({
     }
   }
 
+  function abrirExclusao(acao: 'excluir' | 'restaurar') {
+    setJustificativaExclusao('');
+    setExclusaoModal(acao);
+  }
+
+  function gerarPdf() {
+    if (!resumo) return;
+    setPdfBusy(true);
+    void downloadChamadoPdf(resumo.id, resumo.codigo)
+      .then(() => snackbar.show('PDF gerado.', 'success'))
+      .catch((err) => snackbar.show(err instanceof Error ? err.message : 'Falha ao gerar PDF.', 'error'))
+      .finally(() => setPdfBusy(false));
+  }
+
+  const acoesCabecalho = buildChamadoAcoes({
+    podeExcluir,
+    podeRestaurar,
+    excluido: Boolean(resumo.excluidoEm),
+    busy,
+    exclusaoBusy,
+    pdfBusy,
+    tarefasPendentes,
+  });
+
+  function executarAcao(id: ChamadoAcaoId) {
+    executarAcaoChamado(id, {
+      abrirExclusao,
+      gerarPdf,
+      alternarDocumentos: () => setDocsOpen((current) => !current),
+      alternarTarefas: () => setTarefasOpen((current) => !current),
+    });
+  }
+
   return (
     <>
     <Card elevation={1} className="h-full overflow-hidden">
-      <CardContent className="flex h-full flex-col p-0">
-        <div className="border-b border-[var(--line-2)] p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+      <CardContent
+        className={cn(DETALHE_SCROLL_BASE, DETALHE_SCROLL_MOBILE)}
+        data-testid="chamado-detalhe-scroll"
+        onScroll={(event) => setMobileRolado(event.currentTarget.scrollTop > 0)}
+      >
+        {/* 291: no celular só esta linha de 48px fica fixa; o resto rola com o conteúdo. */}
+        <div
+          data-testid="chamado-linha-fixa"
+          className={cn(DETALHE_LINHA_FIXA, mobileRolado && DETALHE_LINHA_FIXA_SOMBRA)}
+        >
+          <span className="mono truncate text-[13px] font-semibold text-[var(--brand-hover)]">{resumo.codigo}</span>
+          <Badge variant={st.badge} className="shrink-0">{st.label}</Badge>
+          <span className="flex-1" />
+          <ChamadoAcoesMobile acoes={acoesCabecalho} onAcao={executarAcao} />
+        </div>
+        <div className={cn(DETALHE_CABECALHO_BASE, DETALHE_CABECALHO_MOBILE)} data-testid="chamado-cabecalho">
+          <div className="flex md:hidden flex-wrap items-center gap-1.5" data-testid="chamado-tags-mobile">
+            <Badge variant={prioridadeVariant(resumo.prioridade)}>{resumo.prioridade}</Badge>
+            {tarefasPendentes > 0 ? <Badge variant="warning">Tarefas pendentes · {tarefasPendentes}</Badge> : null}
+            {resumo.excluidoEm ? <Badge variant="danger">Excluído</Badge> : null}
+          </div>
+          <div className={cn(DETALHE_ACOES_DESKTOP_BASE, DETALHE_ACOES_DESKTOP_MOBILE)}>
             <span className="mono text-[13px] font-semibold text-[var(--brand-hover)]">{resumo.codigo}</span>
             <div className="flex flex-wrap items-center gap-1.5">
               {podeExcluir && !resumo.excluidoEm ? (
@@ -833,10 +1029,7 @@ function ChamadoDetailPanel({
                   variant="danger"
                   size="sm"
                   disabled={busy || exclusaoBusy}
-                  onClick={() => {
-                    setJustificativaExclusao('');
-                    setExclusaoModal('excluir');
-                  }}
+                  onClick={() => abrirExclusao('excluir')}
                 >
                   Excluir chamado
                 </Button>
@@ -847,10 +1040,7 @@ function ChamadoDetailPanel({
                   variant="outlined"
                   size="sm"
                   disabled={busy || exclusaoBusy}
-                  onClick={() => {
-                    setJustificativaExclusao('');
-                    setExclusaoModal('restaurar');
-                  }}
+                  onClick={() => abrirExclusao('restaurar')}
                 >
                   Restaurar chamado
                 </Button>
@@ -860,15 +1050,7 @@ function ChamadoDetailPanel({
                 variant="outlined"
                 size="sm"
                 disabled={pdfBusy || busy}
-                onClick={() => {
-                  setPdfBusy(true);
-                  void downloadChamadoPdf(resumo.id, resumo.codigo)
-                    .then(() => snackbar.show('PDF gerado.', 'success'))
-                    .catch((err) =>
-                      snackbar.show(err instanceof Error ? err.message : 'Falha ao gerar PDF.', 'error'),
-                    )
-                    .finally(() => setPdfBusy(false));
-                }}
+                onClick={gerarPdf}
               >
                 <FileDown className="h-3.5 w-3.5" />
                 {pdfBusy ? 'Gerando…' : 'PDF'}
@@ -904,7 +1086,7 @@ function ChamadoDetailPanel({
               {resumo.excluidoEm ? <Badge variant="danger">Excluído</Badge> : null}
             </div>
           </div>
-          <h2 className="mt-3 text-[17px] font-semibold leading-snug text-[var(--ink)]">{chamadoTitulo(resumo)}</h2>
+          <h2 className="mt-3 max-md:mt-2 text-[17px] font-semibold leading-snug text-[var(--ink)]">{chamadoTitulo(resumo)}</h2>
           <ChamadoDescricaoExpandivel className="mt-2" descricao={resumo.descricao} />
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--ink-3)]">
             <span className="inline-flex items-center gap-1.5">
@@ -929,7 +1111,7 @@ function ChamadoDetailPanel({
           ) : null}
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto p-5">
+        <div className={cn(DETALHE_BLOCOS_BASE, DETALHE_BLOCOS_MOBILE)} data-testid="chamado-detalhe-blocos">
           {tarefasOpen ? (
             <ChamadoTarefasPanel
               chamadoId={resumo.id}
@@ -1280,7 +1462,7 @@ function ChamadoDetailPanel({
           </>
           )}
 
-          <ChamadoAberturaSection resumo={resumo} busy={busy || Boolean(resumo.excluidoEm)} onSaved={onRefreshDetail} />
+          <ChamadoAberturaSection resumo={resumo} busy={busy || Boolean(resumo.excluidoEm)} onSaved={onRefreshDetail} onPerdeuAcesso={onPerdeuAcesso} />
 
           <ChamadoObservadoresSection
             chamado={resumo}

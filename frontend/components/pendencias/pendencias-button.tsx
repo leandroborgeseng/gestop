@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ListTodo } from 'lucide-react';
 import { getPendenciasResumo, type PendenciasResumo } from '@/lib/api';
-import { PendenciasAcessoDialog } from '@/components/pendencias/pendencias-acesso-dialog';
+import { PendenciasAcessoDialog, PendenciasVazio } from '@/components/pendencias/pendencias-acesso-dialog';
 
 export function PendenciasButton({ compact = false }: { compact?: boolean }) {
   const [resumo, setResumo] = useState<PendenciasResumo | null>(null);
@@ -47,19 +47,5 @@ export function PendenciasButton({ compact = false }: { compact?: boolean }) {
         <PendenciasVazio onClose={() => setOpen(false)} />
       ) : null}
     </>
-  );
-}
-
-function PendenciasVazio({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-[140] flex items-end justify-center bg-black/45 p-3 sm:items-center" role="presentation">
-      <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-[16px] bg-[var(--canvas)] p-4">
-        <h2 className="text-[16px] font-semibold text-[var(--ink)]">Pendências</h2>
-        <p className="mt-1 text-[13px] text-[var(--ink-3)]">Nenhuma pendência no momento.</p>
-        <button type="button" className="mt-3 text-[13px] font-semibold text-[var(--brand)]" onClick={onClose}>
-          Fechar
-        </button>
-      </div>
-    </div>
   );
 }

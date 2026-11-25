@@ -1,0 +1,55 @@
+{
+  "api": {
+    "gestorZZTA": {
+      "status": 200,
+      "ms": 20,
+      "categorias": [
+        "ZZTESTE Água (2)",
+        "ZZTESTE Elétrica (1)"
+      ]
+    },
+    "adminTodas": {
+      "status": 200,
+      "ms": 17,
+      "categorias": [
+        "ZZTESTE Água (2)",
+        "ZZTESTE Elétrica (1)",
+        "ZZTESTE Pintura (1)"
+      ]
+    },
+    "adminFiltroZZTA": {
+      "status": 200,
+      "ms": 14,
+      "categorias": [
+        "ZZTESTE Água (2)",
+        "ZZTESTE Elétrica (1)"
+      ]
+    },
+    "adminBuscaPraca": {
+      "status": 200,
+      "ms": 14,
+      "categorias": [
+        "ZZTESTE Água (1)"
+      ]
+    }
+  },
+  "ui": {
+    "opcoes": [
+      "Nota geral (Likert)",
+      "Categoria: ZZTESTE Água",
+      "Categoria: ZZTESTE Elétrica",
+      "Categoria: ZZTESTE Pintura"
+    ],
+    "selecionada": "ZZTESTE Pintura",
+    "aposFiltrarZZTA": {
+      "opcoes": [
+        "Nota geral (Likert)",
+        "Categoria: ZZTESTE Água",
+        "Categoria: ZZTESTE Elétrica"
+      ],
+      "valor": "",
+      "voltouParaNotaGeral": true
+    },
+    "legendaSemAvaliacao": 1
+  }
+}

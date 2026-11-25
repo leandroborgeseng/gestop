@@ -1,0 +1,185 @@
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/components/ui/snackbar', () => ({
+  useSnackbar: () => ({ show: () => undefined }),
+}));
+
+import { DocumentoPreencherDialog, observarAlturaVisivel, travarRolagemFundo } from './documento-consulta-dialogs';
+import { comportamentoRolagem } from './documento-avulso-form';
+import type { DocumentoDetalhe } from '@/lib/types';
+
+const documento = {
+  id: 'doc-284',
+  codigo: 'DOC-2026-284',
+  titulo: 'Vistoria teste',
+  checklistItens: [
+    { id: 'item-1', ordem: 1, codigo: 'I1', titulo: 'Item de teste', tipo: 'TEXTO', obrigatorio: true, geraNaoConformidade: false, exigeEvidencia: false },
+  ],
+  respostas: [],
+} as unknown as DocumentoDetalhe;
+
+function render() {
+  const html = renderToStaticMarkup(
+    createElement(DocumentoPreencherDialog, { documento, onClose: () => undefined, onSaved: () => undefined }),
+  );
+  const doc = new DOMParserLite(html);
+  return { html, doc };
+}
+
+/** Parser mínimo: localiza a abertura das tags com data-testid e verifica aninhamento. */
+class DOMParserLite {
+  constructor(private readonly html: string) {}
+  indexOf(testId: string) {
+    return this.html.indexOf(`data-testid="${testId}"`);
+  }
+  /** Retorna o trecho do elemento (div) iniciado em data-testid, contando aberturas/fechamentos. */
+  elementHtml(testId: string, tag: string) {
+    const start = this.html.lastIndexOf(`<${tag}`, this.indexOf(testId));
+    const re = new RegExp(`<${tag}[\\s>]|</${tag}>`, 'g');
+    re.lastIndex = start;
+    let depth = 0;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(this.html))) {
+      depth += m[0].startsWith('</') ? -1 : 1;
+      if (depth === 0) return this.html.slice(start, m.index + m[0].length);
+    }
+    throw new Error(`unbalanced ${testId} depth=${depth} start=${start}`);
+  }
+}
+
+describe('DocumentoPreencherDialog (284)', () => {
+  it('renderiza o rodapé fora do contêiner que rola, com os dois botões', () => {
+    const { doc } = render();
+    const corpo = doc.elementHtml('documento-preencher-corpo', 'div');
+    const rodape = doc.elementHtml('documento-preencher-rodape', 'footer');
+
+    expect(corpo).toContain('overflow-y-auto');
+    expect(corpo).toContain('overscroll-contain');
+    expect(corpo).not.toContain('documento-preencher-rodape');
+    expect(corpo).not.toContain('Concluir documento');
+    expect(rodape).not.toContain('overflow-y-auto');
+    expect(rodape).toContain('shrink-0');
+    expect(rodape).toContain('env(safe-area-inset-bottom)');
+    expect(doc.indexOf('documento-preencher-rodape')).toBeGreaterThan(doc.indexOf('documento-preencher-corpo'));
+
+    expect(rodape).toContain('Salvar rascunho');
+    expect(rodape).toContain('Concluir documento');
+    expect(rodape.indexOf('Salvar rascunho')).toBeLessThan(rodape.indexOf('Concluir documento'));
+  });
+
+  it('usa folha de altura cheia em dvh no celular e botão Fechar de 44px', () => {
+    const { html } = render();
+    expect(html).toContain('h-[calc(100dvh-env(safe-area-inset-top))]');
+    expect(html).toContain('sm:max-h-[min(94dvh,920px)]');
+    expect(html).not.toContain('100vh');
+    expect(html).toMatch(/aria-label="Fechar"[^>]*h-11 w-11|h-11 w-11[^>]*aria-label="Fechar"/);
+  });
+});
+
+describe('284: rolagem respeita prefers-reduced-motion', () => {
+  it('usa auto quando reduce está ativo e smooth caso contrário', () => {
+    const mm = (matches: boolean) => vi.fn().mockReturnValue({ matches }) as unknown as Window['matchMedia'];
+    const reduz = mm(true);
+    expect(comportamentoRolagem({ matchMedia: reduz })).toBe('auto');
+    expect(reduz).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
+    expect(comportamentoRolagem({ matchMedia: mm(false) })).toBe('smooth');
+    expect(comportamentoRolagem(undefined)).toBe('smooth');
+  });
+});
+
+describe('284: trava do fundo iOS-safe', () => {
+  it('fixa o body com top negativo e restaura estilos e posição ao fechar', () => {
+    const style = { position: 'relative', top: '', left: '', right: '', width: '' };
+    const body = { style } as unknown as HTMLElement;
+    const scrollTo = vi.fn();
+    const win = { scrollY: 420, scrollTo } as unknown as Window;
+
+    const restaurar = travarRolagemFundo(win, { body });
+    expect(style).toEqual({ position: 'fixed', top: '-420px', left: '0', right: '0', width: '100%' });
+    expect(scrollTo).not.toHaveBeenCalled();
+
+    restaurar();
+    expect(style).toEqual({ position: 'relative', top: '', left: '', right: '', width: '' });
+    expect(scrollTo).toHaveBeenCalledWith(0, 420);
+  });
+});
+
+describe('284 (A3): altura acompanha o visualViewport (teclado)', () => {
+  function vvFake(height: number) {
+    const ouvintes: Array<() => void> = [];
+    return {
+      height,
+      addEventListener: vi.fn((tipo: string, fn: () => void) => (tipo === 'resize' ? ouvintes.push(fn) : 0)),
+      removeEventListener: vi.fn(),
+      disparar(h: number) { this.height = h; ouvintes.forEach((fn) => fn()); },
+    };
+  }
+  it('no celular segue a altura visível e para de ouvir ao fechar', () => {
+    const vv = vvFake(640);
+    const alturas: Array<number | null> = [];
+    const parar = observarAlturaVisivel({ innerWidth: 360, visualViewport: vv as never }, (a) => alturas.push(a));
+    vv.disparar(340);
+    expect(vv.addEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+    expect(alturas).toEqual([640, 340]);
+    parar();
+    expect(vv.removeEventListener).toHaveBeenCalled();
+  });
+  it('no desktop não força altura (sem mudança visual)', () => {
+    const alturas: Array<number | null> = [];
+    observarAlturaVisivel({ innerWidth: 1280, visualViewport: vvFake(800) as never }, (a) => alturas.push(a));
+    expect(alturas).toEqual([null]);
+  });
+  it('sem visualViewport não faz nada', () => {
+    const fn = vi.fn();
+    observarAlturaVisivel({ innerWidth: 360, visualViewport: null }, fn);
+    expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe('284: modal fora do contexto de empilhamento do <main>', () => {
+  it('renderiza via portal no document.body', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('./documento-consulta-dialogs.tsx', import.meta.url), 'utf8');
+    expect(src).toContain("createPortal(modal, portalAlvo)");
+    expect(src).toContain('setPortalAlvo(document.body)');
+  });
+});
+
+describe('284 (a11y): prenderFocoNoDialogo', () => {
+  function montar() {
+    const el = (nome: string) => ({ nome, focus: vi.fn(function (this: { nome: string }) { doc.activeElement = this; }), getClientRects: () => [1] });
+    const opener = el('opener');
+    const primeiro = el('fechar');
+    const ultimo = el('concluir');
+    let onKey: (e: KeyboardEvent) => void = () => undefined;
+    const dialogo = {
+      focus: vi.fn(() => { doc.activeElement = dialogo; }),
+      contains: (n: unknown) => n === dialogo || n === primeiro || n === ultimo,
+      querySelectorAll: () => [primeiro, ultimo],
+    };
+    const doc = {
+      activeElement: opener as unknown,
+      contains: () => true,
+      addEventListener: vi.fn((_t: string, fn: (e: KeyboardEvent) => void) => { onKey = fn; }),
+      removeEventListener: vi.fn(),
+    };
+    const tecla = (key: string, shiftKey = false) => { const e = { key, shiftKey, preventDefault: vi.fn() }; onKey(e as unknown as KeyboardEvent); return e; };
+    return { opener, primeiro, ultimo, dialogo, doc, tecla };
+  }
+  it('foca o diálogo, circula Tab/Shift+Tab, Esc fecha e devolve o foco a quem abriu', async () => {
+    const { prenderFocoNoDialogo } = await import('./documento-consulta-dialogs');
+    const m = montar();
+    const onEsc = vi.fn();
+    const soltar = prenderFocoNoDialogo(m.dialogo as never, onEsc, m.doc as never);
+    expect(m.doc.activeElement).toBe(m.dialogo);
+    m.tecla('Tab', true); expect(m.doc.activeElement).toBe(m.ultimo);
+    m.tecla('Tab'); expect(m.doc.activeElement).toBe(m.primeiro);
+    m.ultimo.focus(); const e = m.tecla('Tab'); expect(e.preventDefault).toHaveBeenCalled(); expect(m.doc.activeElement).toBe(m.primeiro);
+    m.tecla('Escape'); expect(onEsc).toHaveBeenCalledTimes(1);
+    soltar();
+    expect(m.doc.removeEventListener).toHaveBeenCalled();
+    expect(m.opener.focus).toHaveBeenCalledWith({ preventScroll: true });
+  });
+});

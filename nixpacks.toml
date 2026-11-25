@@ -11,3 +11,8 @@ cmds = ["npm run build"]
 
 [start]
 cmd = "npm start"
+
+[variables]
+# 296: limita arenas do malloc e devolve memória ao SO (pico da importação de camadas < 300 MB)
+MALLOC_ARENA_MAX = "2"
+MALLOC_TRIM_THRESHOLD_ = "131072"

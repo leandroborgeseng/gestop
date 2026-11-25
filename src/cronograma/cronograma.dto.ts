@@ -39,6 +39,14 @@ export class CronogramaDto {
   @IsBoolean()
   ativo?: boolean;
 
+  /**
+   * 307/ajuste 1: o usuário confirmou "manter os responsáveis destacados" (após troca de Secretaria).
+   * Gera um registro de auditoria com quem confirmou, o cronograma e os responsáveis mantidos.
+   */
+  @IsOptional()
+  @IsBoolean()
+  confirmarResponsaveisForaEscopo?: boolean;
+
   @IsOptional()
   @IsString()
   @MinLength(0)
@@ -52,9 +60,9 @@ export class CalendarioQueryDto {
   @IsDateString()
   to!: string;
 
+  /** Ajuste 1: aceita lista (R3); validado/normalizado em `resolveFiltroSecretaria`. */
   @IsOptional()
-  @IsString()
-  secretariaId?: string;
+  secretariaId?: string | string[];
 
   @IsOptional()
   @IsString()

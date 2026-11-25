@@ -57,3 +57,13 @@ export async function baixarStorageAutenticado(url: string, nome: string) {
   baixarBlobUmaVez(blob, filename);
   return true;
 }
+
+/** Abre o blob autenticado em nova aba (consulta). Não força download. */
+export async function abrirStorageAutenticado(url: string) {
+  const blob = await fetchAuthenticatedStorageBlob(url);
+  if (!blob) return false;
+  const objectUrl = URL.createObjectURL(blob);
+  const opened = window.open(objectUrl, '_blank', 'noopener,noreferrer');
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  return Boolean(opened);
+}

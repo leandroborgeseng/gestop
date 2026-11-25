@@ -1,5 +1,13 @@
 'use client';
 
+import { capacidadesProprios, salvarEdicaoProprio, secretariaIdDoFormulario, secretariaTravada } from '@/lib/admin-proprios';
+import {
+  atributosCampoProprio,
+  CampoSecretariaProprio,
+  CampoSelecaoProprio,
+  RodapeSheetProprio,
+  tituloSheetProprio,
+} from '@/components/admin/proprio-campos';
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -7,11 +15,14 @@ import { BookOpen, Building2, Briefcase, ClipboardList, DatabaseBackup, Download
 import { RequirePermissions } from '@/components/auth/require-permissions';
 import { useSessionUser } from '@/components/auth/session-context';
 import { ImportacaoPanel } from '@/components/admin/importacao-panel';
+import { WebmapCamadasPanel } from '@/components/admin/webmap-camadas-panel';
 import { BackupPanel } from '@/components/admin/backup-panel';
 import { EmailConfigPanel } from '@/components/admin/email-config-panel';
 import { PageShell } from '@/components/layout/page-shell';
 import { TipBanner } from '@/components/help/tip-banner';
 import { useSafeBackHref } from '@/lib/use-safe-back-href';
+import { useRouter } from 'next/navigation';
+import { consumirRetornoAdminProprios, hrefAbrirProprio, urlComAba, salvarRetornoAdminProprios } from '@/lib/proprio-abrir';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -163,6 +174,7 @@ export default function AdminPage() {
   const user = useSessionUser();
   const permissoes = user?.permissoes ?? [];
   const [tab, setTab] = useState<Tab | null>(null);
+  const importacaoCaps = useAdminCaps('importacao');
   const [secretarias, setSecretarias] = useState<AdminSecretaria[]>([]);
   const [unidades, setUnidades] = useState<AdminUnidade[]>([]);
   const [usuarios, setUsuarios] = useState<AdminUsuario[]>([]);
@@ -214,7 +226,10 @@ export default function AdminPage() {
   useEffect(() => {
     if (visibleTabs.length === 0) return;
     if (!tab || !visibleTabs.some((item) => item.id === tab)) {
-      setTab(visibleTabs[0].id);
+      // 314: ?aba=unidades (Voltar da página do próprio) reabre a aba certa.
+      const aba = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('aba') : null;
+      const pedida = visibleTabs.find((item) => item.id === aba);
+      setTab((pedida ?? visibleTabs[0]).id);
     }
   }, [visibleTabs, tab]);
 
@@ -307,7 +322,15 @@ export default function AdminPage() {
 
         {visibleTabs.length > 0 && tab ? (
           <div className="mb-6 rounded-[var(--r-card)] border border-[var(--line)] bg-[var(--surface)] px-4 shadow-[var(--sh-sm)]">
-            <Tabs value={tab} onChange={(value) => setTab(value as Tab)} items={visibleTabs} />
+            <Tabs
+              value={tab}
+              onChange={(value) => {
+                setTab(value as Tab);
+                // 314: aba na URL, para o Voltar do navegador cair na mesma aba.
+                window.history.replaceState(window.history.state, '', urlComAba(window.location.href, value));
+              }}
+              items={visibleTabs}
+            />
           </div>
         ) : null}
 
@@ -343,7 +366,10 @@ export default function AdminPage() {
         {tab === 'backup' ? <BackupPanel /> : null}
         {tab === 'email' ? <EmailConfigPanel /> : null}
         {!loading && tab === 'importacao' ? (
-          <ImportacaoPanel onSynced={() => void load()} />
+          <div className="space-y-6">
+            <ImportacaoPanel onSynced={() => void load()} />
+            <WebmapCamadasPanel canExec={importacaoCaps.canExec} />
+          </div>
         ) : null}
         {!loading && tab === 'auditoria' ? <AuditoriaPanel /> : null}
         {tab === 'documentacao' ? <DocumentacaoEngenhariaPanel /> : null}
@@ -562,6 +588,10 @@ function UnidadesPanel({
   mutate: (action: () => Promise<unknown>, message: string) => Promise<boolean>;
 }) {
   const caps = useAdminCaps('proprios');
+  const sessionUser = useSessionUser();
+  const proprioCaps = capacidadesProprios(sessionUser?.permissoes ?? [], caps.isAdminAtivo);
+  const somenteLeitura = !proprioCaps.podeSalvar;
+  const ro = atributosCampoProprio(somenteLeitura);
   const secretariasForm = useMemo(() => {
     if (caps.escopoTodas || !caps.secretariaAtivaId) return secretarias;
     return secretarias.filter((s) => s.id === caps.secretariaAtivaId);
@@ -573,6 +603,33 @@ function UnidadesPanel({
   const [filterTipo, setFilterTipo] = useState('');
   const [filterSecretaria, setFilterSecretaria] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  // 314: Abrir (consulta) leva à página completa do CCO; precisa da mesma permissão dela.
+  const router = useRouter();
+  const podeAbrir = caps.isAdminAtivo || (sessionUser?.permissoes ?? []).includes('dashboard.visualizar');
+  const [scrollPendente, setScrollPendente] = useState<number | null>(null);
+  useEffect(() => {
+    const retorno = consumirRetornoAdminProprios();
+    if (!retorno) return;
+    setFilterCodigo(retorno.filtros.codigo);
+    setFilterNome(retorno.filtros.nome);
+    setFilterOrigem(retorno.filtros.origem);
+    setFilterTipo(retorno.filtros.tipo);
+    setFilterSecretaria(retorno.filtros.secretaria);
+    setFilterStatus(retorno.filtros.status);
+    setScrollPendente(retorno.scrollY);
+  }, []);
+  useEffect(() => {
+    if (scrollPendente === null || unidades.length === 0) return;
+    const y = scrollPendente;
+    setScrollPendente(null);
+    window.requestAnimationFrame(() => window.scrollTo(0, y));
+  }, [scrollPendente, unidades.length]);
+  function guardarRetorno() {
+    salvarRetornoAdminProprios({
+      filtros: { codigo: filterCodigo, nome: filterNome, origem: filterOrigem, tipo: filterTipo, secretaria: filterSecretaria, status: filterStatus },
+      scrollY: window.scrollY,
+    });
+  }
 
   const filtersActive = Boolean(filterCodigo || filterNome || filterOrigem || filterTipo || filterSecretaria || filterStatus);
 
@@ -642,7 +699,7 @@ function UnidadesPanel({
         const latitude = parseCoordinate(form.get('latitude'));
         const longitude = parseCoordinate(form.get('longitude'));
         return saveAdminUnidade({
-          secretariaId: String(form.get('secretariaId')),
+          secretariaId: secretariaIdDoFormulario(form, caps),
           codigoPatrimonial: String(form.get('codigoPatrimonial')),
           nome: String(form.get('nome')),
           tipo: String(form.get('tipo')),
@@ -663,16 +720,17 @@ function UnidadesPanel({
 
   async function submitEdit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editing) return;
+    if (!editing || !proprioCaps.podeSalvar) return;
 
     const form = new FormData(event.currentTarget);
-    const ok = await mutate(
+    await salvarEdicaoProprio(
+      mutate,
       () => {
         const latitude = parseCoordinate(form.get('latitude'));
         const longitude = parseCoordinate(form.get('longitude'));
         return saveAdminUnidade(
           {
-            secretariaId: String(form.get('secretariaId')),
+            secretariaId: secretariaIdDoFormulario(form, caps),
             codigoPatrimonial: String(form.get('codigoPatrimonial')),
             nome: String(form.get('nome')),
             tipo: String(form.get('tipo')),
@@ -689,30 +747,26 @@ function UnidadesPanel({
         );
       },
       'Próprio atualizado. Campos alterados ficam protegidos na próxima sync QGIS.',
+      () => setEditing(null),
     );
-    if (ok) setEditing(null);
   }
 
   const editingMetadata = editing ? getUnidadeMetadata(editing) : null;
   const editingLockedFields = editing ? getLockedFields(editing) : [];
+  const opcoesSecretaria = secretariasForm.map((s) => ({ value: s.id, label: formatSecretariaLabel(s) }));
 
   return (
     <div className="space-y-6">
-      {caps.canInsert ? (
+      {proprioCaps.podeInserir ? (
       <FormSection title="Novo próprio">
         <form onSubmit={submitCreate} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Secretaria">
-              <Select
-                name="secretariaId"
-                required
-                defaultValue={caps.secretariaAtivaId ?? ''}
-                disabled={!caps.escopoTodas && Boolean(caps.secretariaAtivaId)}
-              >
-                {secretariasForm.map((s) => (
-                  <option key={s.id} value={s.id}>{formatSecretariaLabel(s)}</option>
-                ))}
-              </Select>
+              <CampoSecretariaProprio
+                travada={secretariaTravada(caps)}
+                valor={caps.secretariaAtivaId ?? ''}
+                opcoes={opcoesSecretaria}
+              />
             </Field>
             <Field label="Código patrimonial"><Input name="codigoPatrimonial" required /></Field>
             <Field label="Nome"><Input name="nome" required /></Field>
@@ -816,12 +870,25 @@ function UnidadesPanel({
                   </DataTableCell>
                   <DataTableCell>
                     <div className="flex flex-wrap gap-1">
-                      {caps.canAlter ? (
-                        <Button variant="text" size="sm" onClick={() => setEditing(unidade)}>
-                          Editar
+                      {podeAbrir ? (
+                        <Button
+                          variant="text"
+                          size="sm"
+                          aria-label={`Abrir ${unidade.nome}`}
+                          onClick={() => {
+                            guardarRetorno();
+                            router.push(hrefAbrirProprio(unidade.id));
+                          }}
+                        >
+                          Abrir
                         </Button>
                       ) : null}
-                      {caps.canDelete && unidade.ativo ? (
+                      {proprioCaps.podeSalvar || proprioCaps.podeVer ? (
+                        <Button variant="text" size="sm" onClick={() => setEditing(unidade)}>
+                          {proprioCaps.podeSalvar ? 'Editar' : 'Ver'}
+                        </Button>
+                      ) : null}
+                      {proprioCaps.podeInativar && unidade.ativo ? (
                         <Button variant="text" size="sm" className="text-red-700" onClick={() => void mutate(() => deleteAdminUnidade(unidade.id), 'Próprio inativado.')}>
                           Inativar
                         </Button>
@@ -836,23 +903,16 @@ function UnidadesPanel({
       </div>
 
       <Sheet
-        open={Boolean(editing) && caps.canAlter}
+        open={Boolean(editing) && (proprioCaps.podeSalvar || proprioCaps.podeVer)}
         onClose={() => setEditing(null)}
-        title={editing ? `Editar — ${editing.nome}` : 'Editar próprio'}
+        title={tituloSheetProprio(editing?.nome, proprioCaps.podeSalvar)}
         footer={
-          editing && caps.canAlter ? (
-            <div className="flex gap-2">
-              <Button type="submit" form="edit-unidade-form" variant="filled" className="flex-1">
-                Salvar alterações
-              </Button>
-              <Button type="button" variant="text" onClick={() => setEditing(null)}>
-                Cancelar
-              </Button>
-            </div>
+          editing ? (
+            <RodapeSheetProprio podeSalvar={proprioCaps.podeSalvar} formId="edit-unidade-form" onClose={() => setEditing(null)} />
           ) : null
         }
       >
-        {editing && caps.canAlter ? (
+        {editing && (proprioCaps.podeSalvar || proprioCaps.podeVer) ? (
           <form id="edit-unidade-form" onSubmit={submitEdit} className="space-y-4">
             {isQgisImported(editing) ? (
               <Alert variant="info">
@@ -872,64 +932,67 @@ function UnidadesPanel({
             ) : null}
 
             <Field label="Secretaria">
-              <Select
-                name="secretariaId"
-                defaultValue={
-                  !caps.escopoTodas && caps.secretariaAtivaId
-                    ? caps.secretariaAtivaId
-                    : editing.secretariaId
-                }
-                required
-                disabled={!caps.escopoTodas && Boolean(caps.secretariaAtivaId)}
-              >
-                {secretariasForm.map((s) => (
-                  <option key={s.id} value={s.id}>{formatSecretariaLabel(s)}</option>
-                ))}
-              </Select>
+              <CampoSecretariaProprio
+                travada={secretariaTravada(caps)}
+                somenteLeitura={somenteLeitura}
+                valor={secretariaTravada(caps) ? (caps.secretariaAtivaId as string) : editing.secretariaId}
+                opcoes={opcoesSecretaria}
+              />
             </Field>
             <Field label="Código patrimonial">
-              <Input name="codigoPatrimonial" defaultValue={editing.codigoPatrimonial} required />
+              <Input {...ro} name="codigoPatrimonial" defaultValue={editing.codigoPatrimonial} required />
             </Field>
             <Field label="Nome">
-              <Input name="nome" defaultValue={editing.nome} required />
+              <Input {...ro} name="nome" defaultValue={editing.nome} required />
             </Field>
             <Field label="Tipo">
-              <Select name="tipo" defaultValue={editing.tipo} required>
+              <CampoSelecaoProprio
+                name="tipo"
+                value={editing.tipo}
+                required
+                somenteLeitura={somenteLeitura}
+                opcoes={tiposParaSelect.map((tipo) => ({ value: tipo.codigo, label: `${tipo.nome}${tipo.ativo ? '' : ' (inativo)'}` }))}
+              >
                 {tiposParaSelect.map((tipo) => (
                   <option key={tipo.codigo} value={tipo.codigo}>
                     {tipo.nome}{tipo.ativo ? '' : ' (inativo)'}
                   </option>
                 ))}
-              </Select>
+              </CampoSelecaoProprio>
             </Field>
             <Field label="Endereço">
-              <Input name="endereco" defaultValue={editing.endereco} required />
+              <Input {...ro} name="endereco" defaultValue={editing.endereco} required />
             </Field>
             <Field label="Bairro">
-              <Input name="bairro" defaultValue={editing.bairro ?? ''} />
+              <Input {...ro} name="bairro" defaultValue={editing.bairro ?? ''} />
             </Field>
             <Field label="CEP">
-              <Input name="cep" defaultValue={editing.cep ?? ''} />
+              <Input {...ro} name="cep" defaultValue={editing.cep ?? ''} />
             </Field>
             <Field label="Região">
-              <Select name="regiao" defaultValue={editing.regiao ?? ''}>
+              <CampoSelecaoProprio
+                name="regiao"
+                value={editing.regiao ?? ''}
+                somenteLeitura={somenteLeitura}
+                opcoes={[{ value: '', label: 'Não informada' }, ...regioes.map((regiao) => ({ value: regiao, label: REGIAO_UNIDADE_LABELS[regiao] }))]}
+              >
                 <option value="">Não informada</option>
                 {regioes.map((regiao) => (
                   <option key={regiao} value={regiao}>
                     {REGIAO_UNIDADE_LABELS[regiao]}
                   </option>
                 ))}
-              </Select>
+              </CampoSelecaoProprio>
             </Field>
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Latitude">
-                <Input name="latitude" type="number" step="0.000001" defaultValue={String(editing.latitude)} required />
+                <Input {...ro} name="latitude" type="number" step="0.000001" defaultValue={String(editing.latitude)} required />
               </Field>
               <Field label="Longitude">
-                <Input name="longitude" type="number" step="0.000001" defaultValue={String(editing.longitude)} required />
+                <Input {...ro} name="longitude" type="number" step="0.000001" defaultValue={String(editing.longitude)} required />
               </Field>
               <Field label="Raio (m)">
-                <Input name="raioValidacaoMetros" type="number" defaultValue={String(editing.raioValidacaoMetros)} />
+                <Input {...ro} name="raioValidacaoMetros" type="number" defaultValue={String(editing.raioValidacaoMetros)} />
               </Field>
             </div>
           </form>

@@ -31,6 +31,16 @@ import {
 import { ensureGeoCoordinates, normalizeEmail, normalizeSigla } from './admin.rules';
 import { isValidCpf, normalizeCpf } from '../common/br-documents';
 
+export const PROPRIO_FORA_DO_ESCOPO_MSG =
+  'Este próprio pertence a outra Secretaria. Troque a Secretaria ativa (ou use “Todas as Secretarias”, se autorizado) para alterá-lo.';
+
+/** Campo de formulário desabilitado chegava como a string "null"/"undefined" (#292). */
+export function normalizeRequestedSecretariaId(value: string | null | undefined): string | undefined {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return undefined;
+  return trimmed;
+}
+
 @Injectable()
 export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
@@ -133,7 +143,7 @@ export class AdminService {
   async updateUnidade(id: string, dto: UnidadeDto, user: JwtPayload) {
     ensureCoordinatesOrThrow(dto.latitude, dto.longitude);
     const before = await this.getUnidadeOrThrow(id);
-    this.assertSecretariaNoEscopoAdmin(user, before.secretariaId);
+    this.assertProprioNoEscopo(user, before.secretariaId);
     const secretariaId = this.resolveSecretariaIdForCreate(user, dto.secretariaId);
     await this.ensureTipoProprioExiste(dto.tipo, { allowInactiveCodigo: before.tipo });
     const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
@@ -180,7 +190,7 @@ export class AdminService {
 
   async deleteUnidade(id: string, user: JwtPayload) {
     const before = await this.getUnidadeOrThrow(id);
-    this.assertSecretariaNoEscopoAdmin(user, before.secretariaId);
+    this.assertProprioNoEscopo(user, before.secretariaId);
     const usuarioId = await resolveAuditUsuarioId(this.prisma, user.sub);
     const beforeMetadata = (before.metadata as Record<string, unknown> | null) ?? {};
 
@@ -854,6 +864,13 @@ export class AdminService {
     }
   }
 
+  /** Próprio de outra Secretaria: 403 com mensagem que diz o que fazer (#292). */
+  private assertProprioNoEscopo(user: JwtPayload, secretariaId: string) {
+    const scopeIds = resolveSecretariaScopeIds(user);
+    if (!scopeIds || scopeIds.includes(secretariaId)) return;
+    throw new ForbiddenException(PROPRIO_FORA_DO_ESCOPO_MSG);
+  }
+
   private assertSecretariaNoEscopoAdmin(user: JwtPayload, secretariaId: string) {
     assertSecretariaNoEscopo(user, secretariaId);
   }
@@ -868,6 +885,7 @@ export class AdminService {
     options?: { required?: boolean },
   ): string {
     const required = options?.required ?? true;
+    requestedId = normalizeRequestedSecretariaId(requestedId);
     const scopeIds = resolveSecretariaScopeIds(user);
     if (!scopeIds) {
       const id = requestedId?.trim() || '';

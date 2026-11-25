@@ -24,6 +24,7 @@ import { FiscalizacoesModule } from './fiscalizacoes/fiscalizacoes.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { StorageModule } from './storage/storage.module';
 import { LgpdModule } from './lgpd/lgpd.module';
+import { WebmapCamadasModule } from './webmap-camadas/webmap-camadas.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { LgpdModule } from './lgpd/lgpd.module';
     DocumentosModule,
     RelatoriosModule,
     NotificacoesModule,
+    WebmapCamadasModule,
   ],
   controllers: [RootController, HealthController],
   providers: [

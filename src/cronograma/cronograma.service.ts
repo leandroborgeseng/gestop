@@ -1,11 +1,38 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  FISCALIZACAO_COM_EXCLUIDAS_WHERE,
+  podeVisualizarVistoriasExcluidas,
+  VISTORIA_REALIZADA_OU_EXCLUIDA_WHERE,
+} from '../fiscalizacoes/fiscalizacao-exclusao';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AuditAction, CronogramaFrequencia, Prisma } from '@prisma/client';
 import { JwtPayload } from '../auth/jwt';
 import {
   assertSecretariaNoEscopo,
+  normalizarSecretariaIds,
+  resolveSecretariaFiltroEscopo,
   resolveSecretariaScopeIds,
   resolveUnidadeSecretariaFilter,
 } from '../auth/secretaria-scope';
+import {
+  responsavelOpcao,
+  usuarioResponsavelSelect,
+  whereUsuarioNoEscopo,
+  situacaoResponsavel,
+  secretariasDoUsuario,
+  whereUsuarioComSecretaria,
+} from './responsaveis-escopo';
+import {
+  AcaoStatusAtivo,
+  assertRegistroEditavel,
+  auditoriaStatusAtivo,
+  CRONOGRAMA_INATIVO,
+  planejarStatusAtivo,
+} from '../common/inativos/registro-inativo';
+import {
+  assertDependenciasAtivas,
+  MSG_CRONOGRAMA_EXISTENTE,
+  MSG_CRONOGRAMA_INATIVO_EXISTENTE,
+} from './cronograma-inativo';
 import { checklistAppliesToUnidade } from '../checklists/checklist-matching';
 import { PrismaService } from '../prisma/prisma.service';
 import { CalendarioQueryDto, CronogramaDto } from './cronograma.dto';
@@ -13,6 +40,7 @@ import {
   addFrequency,
   CalendarioEventoTipo,
   projectChecagensNoPeriodo,
+  proximaDataAoReativar,
   resolveEventoTipo,
   startOfDay,
   toDateKey,
@@ -31,25 +59,46 @@ type CalendarioEvento = {
     id: string;
     nome: string;
   };
+  /** 309/C5: o checklist da programação está inativo. */
+  checklistInativo?: boolean;
   cronogramaId?: string;
   fiscalizacaoId?: string;
+  /** 305/E6: data baixada por uma vistoria depois excluída (não reabre; fica sinalizada). */
+  vistoriaExcluida?: boolean;
   frequencia?: CronogramaFrequencia;
   responsavelNome?: string | null;
   responsaveisNomes?: string[];
   agenteNome?: string;
 };
 
+type BaixaPorVistoriaExcluida = {
+  fiscalizacaoId: string;
+  concluidaEm: string | null;
+  excluidaEm: string | null;
+};
+
+/**
+ * 305/R1: a programação continua sinalizada para todo mundo.
+ * O id e as datas da vistoria excluída só saem para quem tem Visualizar excluídas.
+ */
+export function sinalBaixaExcluidaVisivel(baixa: BaixaPorVistoriaExcluida | undefined, podeVerExcluidas: boolean) {
+  if (!baixa) return null;
+  if (podeVerExcluidas) return baixa;
+  return { concluidaEm: null, excluidaEm: null };
+}
+
 const cronogramaInclude = {
   unidade: {
     select: {
       id: true,
       nome: true,
+      ativo: true,
       tipo: true,
       secretariaId: true,
       secretaria: { select: { id: true, nome: true, sigla: true } },
     },
   },
-  checklist: { select: { id: true, nome: true, escopo: true, unidadeTipo: true } },
+  checklist: { select: { id: true, nome: true, escopo: true, unidadeTipo: true, ativo: true } },
   responsavel: { select: { id: true, nome: true, email: true } },
   responsaveis: {
     include: {
@@ -108,7 +157,7 @@ export class CronogramaService {
     });
   }
 
-  listCronogramas(filters: { secretariaId?: string; unidadeId?: string } | undefined, user: JwtPayload) {
+  async listCronogramas(filters: { secretariaId?: string | readonly string[]; unidadeId?: string } | undefined, user: JwtPayload) {
     const secretariaId = this.resolveFiltroSecretaria(user, filters?.secretariaId);
     return this.prisma.cronogramaChecagem.findMany({
       where: {
@@ -123,9 +172,45 @@ export class CronogramaService {
     });
   }
 
+  /** 307/R3: usuários ativos no escopo da sessão (Secretaria ativa, vínculos ou "Todas" autorizadas), sem duplicar. */
+  async listResponsaveisOpcoes(user: JwtPayload, search?: string) {
+    const scopeIds = resolveSecretariaScopeIds(user);
+    const q = search?.trim();
+    const rows = await this.prisma.usuario.findMany({
+      where: {
+        ativo: true,
+        AND: [
+          whereUsuarioNoEscopo(scopeIds),
+          whereUsuarioComSecretaria,
+          ...(q
+            ? [{ OR: [{ nome: { contains: q, mode: 'insensitive' as const } }, { email: { contains: q, mode: 'insensitive' as const } }] }]
+            : []),
+        ],
+      },
+      orderBy: { nome: 'asc' },
+      take: 80,
+      select: usuarioResponsavelSelect,
+    });
+    return rows.map((row) => responsavelOpcao(row, scopeIds));
+  }
+
+  /** 307/R4/R5: situação de responsáveis já escolhidos em relação ao escopo ATUAL da sessão. */
+  async situacaoResponsaveis(user: JwtPayload, ids: string[]) {
+    const unicos = [...new Set(ids.map((id) => id.trim()).filter(Boolean))].slice(0, 100);
+    if (!unicos.length) return [];
+    const scopeIds = resolveSecretariaScopeIds(user);
+    const rows = await this.prisma.usuario.findMany({ where: { id: { in: unicos } }, select: usuarioResponsavelSelect });
+    return rows.map((row) => {
+      const opcao = responsavelOpcao(row, scopeIds);
+      // Fora do escopo: não expõe as Secretarias do usuário, só o nome e a situação.
+      return opcao.situacao === 'OUTRA_SECRETARIA' ? { ...opcao, secretaria: null, secretarias: [], email: '' } : opcao;
+    });
+  }
+
   async createCronograma(dto: CronogramaDto, user: JwtPayload) {
     await this.assertVinculoValido(dto.unidadeId, dto.checklistId, user);
-    const responsavelIds = await this.resolveResponsavelIds(dto);
+    await this.assertParSemCronograma(dto.unidadeId, dto.checklistId);
+    const responsavelIds = await this.resolveResponsavelIds(dto, user, []);
 
     const proximaChecagemEm = startOfDay(new Date(dto.proximaChecagemEm));
     const cronograma = await this.prisma.$transaction(async (tx) => {
@@ -136,7 +221,7 @@ export class CronogramaService {
           frequencia: dto.frequencia,
           proximaChecagemEm,
           responsavelId: responsavelIds[0] ?? null,
-          ativo: dto.ativo ?? true,
+          ativo: true, // 308: nasce ativo; o status só muda por Inativar/Reativar.
           observacoes: dto.observacoes?.trim() || null,
         },
       });
@@ -163,8 +248,13 @@ export class CronogramaService {
 
   async updateCronograma(id: string, dto: CronogramaDto, user: JwtPayload) {
     const before = await this.getCronogramaOrThrow(id, user);
+    assertRegistroEditavel(before, CRONOGRAMA_INATIVO); // 308 (TL): inativo é somente leitura → 409
     await this.assertVinculoValido(dto.unidadeId, dto.checklistId, user);
-    const responsavelIds = await this.resolveResponsavelIds(dto);
+    const responsavelIds = await this.resolveResponsavelIds(
+      dto,
+      user,
+      formatResponsaveis(before.responsaveis, before.responsavel).map((item) => item.id),
+    );
 
     const cronograma = await this.prisma.$transaction(async (tx) => {
       await tx.cronogramaChecagem.update({
@@ -175,7 +265,7 @@ export class CronogramaService {
           frequencia: dto.frequencia,
           proximaChecagemEm: startOfDay(new Date(dto.proximaChecagemEm)),
           responsavelId: responsavelIds[0] ?? null,
-          ativo: dto.ativo ?? true,
+          // 308: editar não muda o status; ativar/inativar só por Inativar/Reativar (confirmação, recálculo e auditoria).
           observacoes: dto.observacoes?.trim() || null,
         },
       });
@@ -204,25 +294,113 @@ export class CronogramaService {
       this.auditSnapshot(before, user),
       this.auditSnapshot(cronograma, user),
     );
+    if (dto.confirmarResponsaveisForaEscopo) {
+      await this.auditarResponsaveisMantidos(id, responsavelIds, user);
+    }
     return cronograma;
   }
 
-  async deactivateCronograma(id: string, user: JwtPayload) {
-    const before = await this.getCronogramaOrThrow(id, user);
-    const cronograma = await this.prisma.cronogramaChecagem.update({
-      where: { id },
-      data: { ativo: false },
-      include: cronogramaInclude,
+  /**
+   * 307/ajuste 1: auditoria da confirmação "manter os responsáveis destacados".
+   * Registra quem confirmou (usuarioId + Secretaria ativa), o cronograma e os responsáveis mantidos
+   * que estão INATIVO ou OUTRA_SECRETARIA no escopo atual. Sem nenhum destacado, não grava nada.
+   */
+  private async auditarResponsaveisMantidos(cronogramaId: string, responsavelIds: string[], user: JwtPayload) {
+    if (!responsavelIds.length) return null;
+    const scopeIds = resolveSecretariaScopeIds(user);
+    const rows = await this.prisma.usuario.findMany({ where: { id: { in: responsavelIds } }, select: usuarioResponsavelSelect });
+    const mantidos = rows
+      .map((u) => ({ id: u.id, nome: u.nome, situacao: situacaoResponsavel(u, scopeIds) }))
+      .filter((u) => u.situacao !== 'OK');
+    if (!mantidos.length) return null;
+    return this.prisma.logAuditoria.create({
+      data: {
+        usuarioId: user.sub,
+        acao: AuditAction.UPDATE,
+        entidadeTipo: 'CronogramaChecagem',
+        entidadeId: cronogramaId,
+        funcao: 'responsaveis.manter_fora_escopo',
+        descricao: `Confirmou manter ${mantidos.length} responsável(is) destacado(s) no cronograma.`,
+        secretariaAtivaId: user.secretariaId?.trim() || null,
+        valorNovo: JSON.parse(
+          JSON.stringify({
+            cronogramaId,
+            confirmadoPor: user.sub,
+            confirmadoEm: new Date().toISOString(),
+            secretariaAtivaId: user.secretariaId?.trim() || null,
+            responsavelIdsMantidos: mantidos.map((u) => u.id),
+            responsaveisMantidos: mantidos,
+          }),
+        ) as Prisma.InputJsonValue,
+      },
     });
+  }
 
-    await this.audit(
-      user,
-      AuditAction.DELETE,
-      id,
-      this.auditSnapshot(before, user),
-      this.auditSnapshot(cronograma, user),
+  deactivateCronograma(id: string, user: JwtPayload) {
+    return this.alterarStatusAtivo(id, 'INATIVAR', user);
+  }
+
+  reactivateCronograma(id: string, user: JwtPayload) {
+    return this.alterarStatusAtivo(id, 'REATIVAR', user);
+  }
+
+  /**
+   * 308: Inativar/Reativar com a permissão de excluir, no escopo da Secretaria (getCronogramaOrThrow) e auditoria
+   * STATUS_CHANGE (quem, quando, antes e depois) na mesma transação. Reativar recalcula só a próxima data.
+   */
+  /** 308 (TL): um par próprio + checklist tem um só cronograma; se o existente está inativo, a saída é Reativar. */
+  private async assertParSemCronograma(unidadeId: string, checklistId: string) {
+    const existente = await this.prisma.cronogramaChecagem.findUnique({
+      where: { unidadeId_checklistId: { unidadeId, checklistId } },
+      select: { id: true, ativo: true },
+    });
+    if (!existente) return;
+    throw new ConflictException(
+      existente.ativo
+        ? { statusCode: 409, error: 'Conflict', codigo: 'CRONOGRAMA_EXISTENTE', cronogramaId: existente.id, message: MSG_CRONOGRAMA_EXISTENTE }
+        : { statusCode: 409, error: 'Conflict', codigo: 'CRONOGRAMA_INATIVO_EXISTENTE', cronogramaId: existente.id, message: MSG_CRONOGRAMA_INATIVO_EXISTENTE },
     );
-    return cronograma;
+  }
+
+  private async alterarStatusAtivo(id: string, acao: AcaoStatusAtivo, user: JwtPayload) {
+    const before = await this.getCronogramaOrThrow(id, user);
+    const ativo = planejarStatusAtivo(before.ativo, acao, CRONOGRAMA_INATIVO);
+    if (acao === 'REATIVAR') assertDependenciasAtivas(before);
+    const quando = new Date();
+    const proxima = ativo ? proximaDataAoReativar(before.proximaChecagemEm, before.frequencia, startOfDay(quando)) : before.proximaChecagemEm;
+    return this.prisma.$transaction(async (tx) => {
+      const trocou = await tx.cronogramaChecagem.updateMany({
+        where: { id, ativo: before.ativo },
+        data: { ativo, proximaChecagemEm: proxima },
+      });
+      if (trocou.count !== 1) planejarStatusAtivo(!before.ativo, acao, CRONOGRAMA_INATIVO);
+      const cronograma = await tx.cronogramaChecagem.findUniqueOrThrow({ where: { id }, include: cronogramaInclude });
+      const resumo = (c: { ativo: boolean; proximaChecagemEm: Date; frequencia: CronogramaFrequencia }) => ({
+        id,
+        unidadeId: before.unidadeId,
+        checklistId: before.checklistId,
+        ativo: c.ativo,
+        frequencia: c.frequencia,
+        proximaChecagemEm: c.proximaChecagemEm.toISOString(),
+      });
+      const { valorAntigo, valorNovo } = auditoriaStatusAtivo({ acao, usuarioId: user.sub, quando, antes: resumo(before), depois: resumo(cronograma) });
+      await tx.logAuditoria.create({
+        data: {
+          usuarioId: user.sub,
+          acao: AuditAction.STATUS_CHANGE,
+          entidadeTipo: 'CronogramaChecagem',
+          entidadeId: id,
+          valorAntigo: valorAntigo as Prisma.InputJsonValue,
+          valorNovo: valorNovo as Prisma.InputJsonValue,
+          tela: 'cronograma',
+          funcao: '_tela',
+          descricao: acao === 'INATIVAR' ? 'Cronograma inativado' : 'Cronograma reativado',
+          secretariaAtivaId: user.secretariaId ?? null,
+          createdAt: quando,
+        },
+      });
+      return cronograma;
+    });
   }
 
   async getCalendario(query: CalendarioQueryDto, user: JwtPayload) {
@@ -244,6 +422,7 @@ export class CronogramaService {
         ...(query.unidadeId ? { unidadeId: query.unidadeId } : {}),
         unidade: {
           ...unidadeScope,
+          ativo: true, // 308: próprio inativo não gera checagem no calendário
           ...(secretariaId ? { secretariaId } : {}),
         },
       },
@@ -252,7 +431,8 @@ export class CronogramaService {
 
     const fiscalizacoes = await this.prisma.fiscalizacao.findMany({
       where: {
-        status: 'CONCLUIDA',
+        // 305/E6: a excluída mantém a data baixada (não reabre), mas aparece sinalizada e fora do total de realizadas.
+        AND: [VISTORIA_REALIZADA_OU_EXCLUIDA_WHERE],
         concluidaEm: { gte: from, lte: new Date(to.getTime() + 86_399_999) },
         ...(query.unidadeId ? { unidadeId: query.unidadeId } : {}),
         ...(secretariaId
@@ -267,6 +447,7 @@ export class CronogramaService {
       select: {
         id: true,
         concluidaEm: true,
+        excluidoEm: true,
         realizadaPorNome: true,
         unidade: { select: { id: true, nome: true, secretaria: { select: { sigla: true } } } },
         checklistVersao: {
@@ -279,6 +460,7 @@ export class CronogramaService {
       orderBy: { concluidaEm: 'asc' },
     });
 
+    const podeVerExcluidas = podeVisualizarVistoriasExcluidas(user);
     const eventos: CalendarioEvento[] = fiscalizacoes.flatMap((fiscalizacao) => {
       if (!fiscalizacao.concluidaEm) return [];
       const data = startOfDay(fiscalizacao.concluidaEm);
@@ -296,8 +478,10 @@ export class CronogramaService {
             secretariaSigla: fiscalizacao.unidade.secretaria.sigla,
           },
           checklist: { id: checklist.id, nome: checklist.nome },
-          fiscalizacaoId: fiscalizacao.id,
+          // 305/E4: o id da excluída só vai para quem pode visualizá-la.
+          fiscalizacaoId: fiscalizacao.excluidoEm && !podeVerExcluidas ? undefined : fiscalizacao.id,
           agenteNome: fiscalizacao.realizadaPorNome?.trim() || fiscalizacao.agente.nome,
+          ...(fiscalizacao.excluidoEm ? { vistoriaExcluida: true } : {}),
         },
       ];
     });
@@ -331,6 +515,7 @@ export class CronogramaService {
             secretariaSigla: cronograma.unidade.secretaria.sigla,
           },
           checklist: { id: cronograma.checklist.id, nome: cronograma.checklist.nome },
+          checklistInativo: !cronograma.checklist.ativo,
           cronogramaId: cronograma.id,
           frequencia: cronograma.frequencia,
           responsavelNome: responsaveisLabel(cronograma.responsaveis, cronograma.responsavel),
@@ -346,7 +531,8 @@ export class CronogramaService {
     const resumo = {
       total: eventos.length,
       agendadas: eventos.filter((evento) => evento.tipo === 'AGENDADA').length,
-      realizadas: eventos.filter((evento) => evento.tipo === 'REALIZADA').length,
+      realizadas: eventos.filter((evento) => evento.tipo === 'REALIZADA' && !evento.vistoriaExcluida).length,
+      baixadasPorVistoriaExcluida: eventos.filter((evento) => evento.vistoriaExcluida).length,
       atrasadas: eventos.filter((evento) => evento.tipo === 'ATRASADA').length,
     };
 
@@ -377,7 +563,8 @@ export class CronogramaService {
       where: {
         ativo: true,
         ...(query.unidadeId ? { unidadeId: query.unidadeId } : {}),
-        ...(query.tipo ? { unidade: { ...unidadeScope, tipo: query.tipo } } : { unidade: unidadeScope }),
+        // 308: próprio inativo não gera programação
+        ...(query.tipo ? { unidade: { ...unidadeScope, ativo: true, tipo: query.tipo } } : { unidade: { ...unidadeScope, ativo: true } }),
         ...(query.atribuidoAMim
           ? {
               OR: [{ responsavelId: user.sub }, { responsaveis: { some: { usuarioId: user.sub } } }],
@@ -398,7 +585,7 @@ export class CronogramaService {
             secretaria: { select: { id: true, nome: true, sigla: true } },
           },
         },
-        checklist: { select: { id: true, nome: true } },
+        checklist: { select: { id: true, nome: true, ativo: true } },
         responsavel: { select: { id: true, nome: true, email: true } },
         responsaveis: {
           include: { usuario: { select: { id: true, nome: true, email: true, ativo: true } } },
@@ -410,7 +597,10 @@ export class CronogramaService {
     if (!query.incluirRealizadas) {
       const fiscalizacoes = await this.prisma.fiscalizacao.findMany({
         where: {
-          status: 'CONCLUIDA',
+          // 305/E6: a baixa feita por uma vistoria depois excluída continua valendo (a programação não reabre sozinha).
+          AND: [VISTORIA_REALIZADA_OU_EXCLUIDA_WHERE],
+          // 304/O6a: avulsa por conflito NÃO realiza a programação (ela continua pendente e sinalizada).
+          avulsaPorConflito: false,
           concluidaEm: { gte: from, lte: new Date(to.getTime() + 86_399_999) },
           unidadeId: { in: cronogramas.map((item) => item.unidadeId) },
         },
@@ -428,6 +618,82 @@ export class CronogramaService {
       }
     }
 
+    // 304/O6a: programações com vistoria avulsa por conflito ficam sinalizadas para o gestor.
+    const avulsasConflito = await this.prisma.fiscalizacao.findMany({
+      where: { avulsaPorConflito: true, conflitoCronogramaId: { in: cronogramas.map((item) => item.id) } },
+      select: {
+        id: true,
+        avulsaMotivo: true,
+        conflitoCronogramaId: true,
+        conflitoDataProgramada: true,
+        conflitoCodigo: true,
+        concluidaEm: true,
+        createdAt: true,
+        agente: { select: { id: true, nome: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    // B-3: a sinalização fica SÓ no card da data que conflitou (cronograma+data), até uma baixa real depois da avulsa.
+    const conflitoPorData = new Map<string, (typeof avulsasConflito)[number]>();
+    const ultimaPorCronograma = new Map(cronogramas.map((c) => [c.id, c.ultimaChecagemEm]));
+    for (const f of avulsasConflito) {
+      if (!f.conflitoCronogramaId || !f.conflitoDataProgramada) continue;
+      const chave = `${f.conflitoCronogramaId}:${toDateKey(startOfDay(f.conflitoDataProgramada))}`;
+      if (conflitoPorData.has(chave)) continue; // mais recente primeiro
+      const ultima = ultimaPorCronograma.get(f.conflitoCronogramaId);
+      // a baixa é gravada no início do dia: baixa no mesmo dia (ou depois) da avulsa resolve a sinalização.
+      if (ultima && startOfDay(f.createdAt).getTime() <= ultima.getTime()) continue;
+      conflitoPorData.set(chave, f);
+    }
+    const resumoConflito = (f: (typeof avulsasConflito)[number] | undefined) =>
+      f
+        ? {
+            fiscalizacaoId: f.id,
+            motivo: f.avulsaMotivo,
+            codigo: f.conflitoCodigo,
+            dataProgramada: f.conflitoDataProgramada ? toDateKey(startOfDay(f.conflitoDataProgramada)) : null,
+            enviadaEm: f.concluidaEm?.toISOString() ?? null,
+            agente: f.agente,
+          }
+        : null;
+
+    // 305/E6: programação cuja última baixa veio de uma vistoria excluída fica sinalizada até uma baixa nova.
+    const baixaExcluidaPorCronograma = await this.mapBaixaPorVistoriaExcluida(cronogramas);
+
+    const montarItem = (cronograma: (typeof cronogramas)[number], date: Date, dataKey: string) => {
+      const responsaveis = formatResponsaveis(cronograma.responsaveis, cronograma.responsavel);
+      const chave = `${cronograma.id}:${dataKey}`;
+      const conflito = conflitoPorData.get(chave);
+      conflitoPorData.delete(chave);
+      return {
+        id: chave,
+        cronogramaId: cronograma.id,
+        cronogramaAtualizadoEm: cronograma.updatedAt.toISOString(),
+        data: dataKey,
+        tipo: resolveEventoTipo(date, hoje),
+        frequencia: cronograma.frequencia,
+        checklist: cronograma.checklist,
+        /** 309/C5: programação de checklist inativo fica sinalizada e não inicia vistoria. */
+        checklistInativo: !cronograma.checklist.ativo,
+        unidade: {
+          id: cronograma.unidade.id,
+          nome: cronograma.unidade.nome,
+          tipo: cronograma.unidade.tipo,
+          endereco: cronograma.unidade.endereco,
+          bairro: cronograma.unidade.bairro,
+          latitude: cronograma.unidade.latitude != null ? Number(cronograma.unidade.latitude) : null,
+          longitude: cronograma.unidade.longitude != null ? Number(cronograma.unidade.longitude) : null,
+          secretaria: cronograma.unidade.secretaria,
+        },
+        responsaveis: responsaveis.map((item) => ({ id: item.id, nome: item.nome })),
+        conflitoAvulsa: resumoConflito(conflito),
+        baixaPorVistoriaExcluida: sinalBaixaExcluidaVisivel(
+          baixaExcluidaPorCronograma.get(cronograma.id),
+          podeVisualizarVistoriasExcluidas(user),
+        ),
+      };
+    };
+
     const items = [];
     for (const cronograma of cronogramas) {
       const dates = projectChecagensNoPeriodo({
@@ -444,31 +710,66 @@ export class CronogramaService {
         }
         const tipo = resolveEventoTipo(date, hoje);
         if (!query.incluirRealizadas && tipo === 'REALIZADA') continue;
-        const responsaveis = formatResponsaveis(cronograma.responsaveis, cronograma.responsavel);
-        items.push({
-          id: `${cronograma.id}:${dataKey}`,
-          cronogramaId: cronograma.id,
-          data: dataKey,
-          tipo,
-          frequencia: cronograma.frequencia,
-          checklist: cronograma.checklist,
-          unidade: {
-            id: cronograma.unidade.id,
-            nome: cronograma.unidade.nome,
-            tipo: cronograma.unidade.tipo,
-            endereco: cronograma.unidade.endereco,
-            bairro: cronograma.unidade.bairro,
-            latitude: cronograma.unidade.latitude != null ? Number(cronograma.unidade.latitude) : null,
-            longitude: cronograma.unidade.longitude != null ? Number(cronograma.unidade.longitude) : null,
-            secretaria: cronograma.unidade.secretaria,
-          },
-          responsaveis: responsaveis.map((item) => ({ id: item.id, nome: item.nome })),
-        });
+        items.push(montarItem(cronograma, date, dataKey));
       }
+    }
+    // Data que conflitou e saiu da recorrência (ex.: PROGRAMACAO_ALTERADA): o card dela continua, sinalizado e não baixado.
+    const porId = new Map(cronogramas.map((c) => [c.id, c]));
+    for (const [chave, f] of conflitoPorData) {
+      const cronograma = porId.get(f.conflitoCronogramaId!);
+      const dia = startOfDay(f.conflitoDataProgramada!);
+      if (!cronograma || dia < from || dia > to) continue;
+      items.push(montarItem(cronograma, dia, chave.slice(cronograma.id.length + 1)));
     }
 
     items.sort((a, b) => a.data.localeCompare(b.data) || a.unidade.nome.localeCompare(b.unidade.nome));
     return { items };
+  }
+
+  /**
+   * 305/E6: para cada cronograma, a vistoria excluída que deu a última baixa (vínculo direto ou unidade+checklist).
+   * Some quando há baixa posterior (ultimaChecagemEm depois do dia da conclusão da excluída).
+   */
+  private async mapBaixaPorVistoriaExcluida(
+    cronogramas: Array<{ id: string; unidadeId: string; checklistId: string; ultimaChecagemEm: Date | null }>,
+  ) {
+    const mapa = new Map<string, { fiscalizacaoId: string; concluidaEm: string | null; excluidaEm: string | null }>();
+    if (cronogramas.length === 0) return mapa;
+    const excluidas = await this.prisma.fiscalizacao.findMany({
+      where: {
+        AND: [FISCALIZACAO_COM_EXCLUIDAS_WHERE],
+        excluidoEm: { not: null },
+        statusAntesExclusao: 'CONCLUIDA',
+        avulsaPorConflito: false,
+        unidadeId: { in: [...new Set(cronogramas.map((c) => c.unidadeId))] },
+      },
+      select: {
+        id: true,
+        cronogramaId: true,
+        unidadeId: true,
+        concluidaEm: true,
+        excluidoEm: true,
+        checklistVersao: { select: { checklistId: true } },
+      },
+      orderBy: { concluidaEm: 'desc' },
+    });
+    const porPar = new Map(cronogramas.map((c) => [`${c.unidadeId}:${c.checklistId}`, c]));
+    const porId = new Map(cronogramas.map((c) => [c.id, c]));
+    for (const f of excluidas) {
+      const cronograma =
+        (f.cronogramaId ? porId.get(f.cronogramaId) : undefined) ??
+        porPar.get(`${f.unidadeId}:${f.checklistVersao.checklistId}`);
+      if (!cronograma || mapa.has(cronograma.id) || !f.concluidaEm) continue;
+      const diaExcluida = startOfDay(f.concluidaEm).getTime();
+      const ultima = cronograma.ultimaChecagemEm?.getTime();
+      if (ultima != null && ultima > diaExcluida) continue; // houve baixa nova depois: sinalização resolvida
+      mapa.set(cronograma.id, {
+        fiscalizacaoId: f.id,
+        concluidaEm: f.concluidaEm.toISOString(),
+        excluidaEm: f.excluidoEm?.toISOString() ?? null,
+      });
+    }
+    return mapa;
   }
 
   async registrarChecagemRealizada(input: {
@@ -476,21 +777,33 @@ export class CronogramaService {
     checklistId: string;
     concluidaEm: Date;
   }) {
-    const cronograma = await this.prisma.cronogramaChecagem.findUnique({
-      where: {
-        unidadeId_checklistId: {
-          unidadeId: input.unidadeId,
-          checklistId: input.checklistId,
-        },
-      },
-    });
+    return this.registrarChecagemRealizadaTx(this.prisma, input);
+  }
+
+  /**
+   * 304 (O5a/O7): baixa da programação dentro da transação da vistoria. Com `cronogramaId`, usa o vínculo
+   * enviado pelo app; sem ele (avulsa), mantém a regra antiga por unidade+checklist. A recorrência segue
+   * (`proximaChecagemEm` a partir do dia da conclusão) e um sync atrasado nunca faz a programação regredir.
+   */
+  async registrarChecagemRealizadaTx(
+    tx: Pick<Prisma.TransactionClient, 'cronogramaChecagem'>,
+    input: { cronogramaId?: string | null; unidadeId: string; checklistId: string; concluidaEm: Date },
+  ) {
+    const cronograma = input.cronogramaId
+      ? await tx.cronogramaChecagem.findUnique({ where: { id: input.cronogramaId } })
+      : await tx.cronogramaChecagem.findUnique({
+          where: { unidadeId_checklistId: { unidadeId: input.unidadeId, checklistId: input.checklistId } },
+        });
 
     if (!cronograma || !cronograma.ativo) {
       return null;
     }
 
     const concluidaEm = startOfDay(input.concluidaEm);
-    return this.prisma.cronogramaChecagem.update({
+    if (cronograma.ultimaChecagemEm && cronograma.ultimaChecagemEm >= concluidaEm) {
+      return cronograma;
+    }
+    return tx.cronogramaChecagem.update({
       where: { id: cronograma.id },
       data: {
         ultimaChecagemEm: concluidaEm,
@@ -499,7 +812,12 @@ export class CronogramaService {
     });
   }
 
-  private async resolveResponsavelIds(dto: CronogramaDto) {
+  /**
+   * 307: responsáveis NOVOS precisam estar ativos e no escopo da sessão.
+   * Os já salvos no cronograma (`existentes`) podem continuar mesmo inativos ou de outra Secretaria (R4):
+   * o front sinaliza e pede para regularizar, mas não somem sem aviso.
+   */
+  private async resolveResponsavelIds(dto: CronogramaDto, user: JwtPayload, existentes: string[]) {
     const rawIds = [
       ...(dto.responsavelIds ?? []),
       ...(dto.responsavelId ? [dto.responsavelId] : []),
@@ -507,14 +825,25 @@ export class CronogramaService {
     const uniqueIds = [...new Set(rawIds.map((id) => id.trim()).filter(Boolean))];
     if (!uniqueIds.length) return [];
 
+    const novos = uniqueIds.filter((id) => !existentes.includes(id));
+    const mantidos = uniqueIds.filter((id) => existentes.includes(id));
+    if (!novos.length) return uniqueIds;
+
+    const scopeIds = resolveSecretariaScopeIds(user);
     const users = await this.prisma.usuario.findMany({
-      where: { id: { in: uniqueIds }, ativo: true },
-      select: { id: true },
+      where: { id: { in: novos } },
+      select: usuarioResponsavelSelect,
     });
-    if (users.length !== uniqueIds.length) {
+    if (users.length !== novos.length || users.some((u) => !u.ativo)) {
       throw new BadRequestException('Um ou mais responsaveis sao invalidos ou inativos.');
     }
-    return uniqueIds;
+    if (users.some((u) => secretariasDoUsuario(u).length === 0)) {
+      throw new BadRequestException('Usuario sem Secretaria nao pode ser atribuido como responsavel.');
+    }
+    if (users.some((u) => situacaoResponsavel(u, scopeIds) === 'OUTRA_SECRETARIA')) {
+      throw new ForbiddenException('Responsavel fora da Secretaria ativa. Remova ou substitua os responsaveis destacados para salvar.');
+    }
+    return [...mantidos, ...novos].sort((a, b) => uniqueIds.indexOf(a) - uniqueIds.indexOf(b));
   }
 
   private auditSnapshot(
@@ -557,14 +886,15 @@ export class CronogramaService {
     return cronograma;
   }
 
-  private resolveFiltroSecretaria(user: JwtPayload, secretariaId?: string) {
-    const requested = secretariaId?.trim();
-    if (requested) {
-      assertSecretariaNoEscopo(user, requested);
-      return requested;
-    }
+  /**
+   * Ajuste 1 (R3 no cronograma): `secretariaId` como array (valor único, repetido ou `secretariaId[]`).
+   * Qualquer id fora do escopo → 403. Sem filtro: Secretaria única do escopo, ou sem filtro extra.
+   */
+  private resolveFiltroSecretaria(user: JwtPayload, secretariaId?: string | readonly string[]): { in: string[] } | undefined {
+    const filtro = normalizarSecretariaIds(secretariaId);
+    if (filtro.length) return { in: resolveSecretariaFiltroEscopo(user, filtro)! };
     const scopeIds = resolveSecretariaScopeIds(user);
-    if (scopeIds?.length === 1) return scopeIds[0];
+    if (scopeIds?.length === 1) return { in: [scopeIds[0]] };
     return undefined;
   }
 

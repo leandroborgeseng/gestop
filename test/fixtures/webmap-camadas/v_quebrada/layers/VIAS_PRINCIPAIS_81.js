@@ -1,0 +1,1 @@
+var json_VIAS_PRINCIPAIS_81 = {"type": "FeatureCollection", "name": "VIAS_PRINCIPAIS_81", "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}}, "xy_coordinate_resolution": 1e-

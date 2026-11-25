@@ -2,7 +2,8 @@
 
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SESSAO_ESCOPO_EVENT } from '@/lib/session-events';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -84,6 +85,9 @@ export default function DashboardPage() {
   const [auditoria, setAuditoria] = useState<AuditoriaEvento[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 306/S3: versão do escopo (troca de Secretaria) e id da requisição corrente — resposta antiga nunca é exibida.
+  const [escopoVersao, setEscopoVersao] = useState(0);
+  const requisicaoRef = useRef(0);
 
   const buildParams = useCallback(() => {
     const params: Record<string, string> = {};
@@ -99,30 +103,53 @@ export default function DashboardPage() {
   }, [from, to, secretariaId, equipeId, cargo, tipoChamadoId, prioridade, status]);
 
   const loadDashboard = useCallback(async () => {
+    const id = ++requisicaoRef.current;
+    const atual = () => id === requisicaoRef.current;
     setLoading(true);
     setError(null);
     try {
       const [dash, alerts] = await Promise.all([getDashboard(buildParams()), getAlertasOperacionais()]);
+      if (!atual()) return;
       setDashboard(dash);
       setAlertas(alerts);
       try {
-        setAuditoria(await listAuditoria());
+        const eventos = await listAuditoria();
+        if (atual()) setAuditoria(eventos);
       } catch {
-        setAuditoria([]);
+        if (atual()) setAuditoria([]);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Falha ao carregar dashboard.');
+      if (atual()) setError(err instanceof Error ? err.message : 'Falha ao carregar dashboard.');
     } finally {
-      setLoading(false);
+      if (atual()) setLoading(false);
     }
-  }, [buildParams]);
+    // escopoVersao: recarrega quando a Secretaria ativa muda (sem reload da página).
+  }, [buildParams, escopoVersao]);
 
   useEffect(() => {
+    function onEscopo(event: Event) {
+      event.preventDefault(); // o Dashboard se atualiza sozinho
+      requisicaoRef.current += 1; // descarta respostas em voo do escopo anterior
+      setDashboard(null);
+      setAlertas(null);
+      setAuditoria([]);
+      setSecretariaId('');
+      setEquipeId('');
+      setLoading(true);
+      setEscopoVersao((v) => v + 1);
+    }
+    window.addEventListener(SESSAO_ESCOPO_EVENT, onEscopo);
+    return () => window.removeEventListener(SESSAO_ESCOPO_EVENT, onEscopo);
+  }, []);
+
+  useEffect(() => {
+    // Listas suspensas no escopo da sessão; recarregadas a cada troca de Secretaria.
+    setSecretarias([]);
     getSecretarias().then(setSecretarias).catch(() => setSecretarias([]));
     getOpcoesFiltroUnidades()
       .then(setOpcoes)
       .catch(() => setOpcoes(null));
-  }, []);
+  }, [escopoVersao]);
 
   useEffect(() => {
     void loadDashboard();
@@ -154,8 +181,8 @@ export default function DashboardPage() {
         backHref={backHref}
       >
         <TipBanner id="dashboard-alertas">
-          Os filtros do topo recalculam os cards e a análise de chamados. As seções finais de pendências e auditoria
-          permanecem sem filtro.
+          Tudo aqui respeita a Secretaria ativa da sessão (em &quot;Todas&quot;, só as Secretarias autorizadas). Os filtros do
+          topo refinam os cards, a análise e as pendências dentro desse escopo; a auditoria segue a Secretaria ativa.
         </TipBanner>
 
         {error ? (

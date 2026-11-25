@@ -74,7 +74,7 @@ export class NotificacoesService implements OnModuleInit {
   }
 
   async dispararAlertasOperacionais(origem: 'manual' | 'scheduler' = 'manual') {
-    const alertas = await this.monitoramentoService.getAlertasOperacionais();
+    const alertas = await this.monitoramentoService.getAlertasOperacionaisSistema();
     const total =
       alertas.resumo.chamadosAtrasados +
       alertas.resumo.chamadosSemTriagem +

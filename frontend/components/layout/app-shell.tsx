@@ -10,20 +10,22 @@ import {
   FileText,
   KeyRound,
   LogOut,
-  RefreshCw,
   Search,
 } from 'lucide-react';
 import { SIGMA_NAME, SIGMA_TAGLINE } from '@/lib/brand';
 import { cn } from '@/lib/cn';
 import { getAlertasOperacionais, getResumoOperacional, logout } from '@/lib/api';
 import type { AuthUser } from '@/lib/types';
+import { sidebarLogoClass, sidebarToggleLabel, sidebarToggleRowClass, sidebarTopClass } from '@/lib/sidebar-layout';
 import { buildNavBadges, resolveGlobalSearchRoute, type NavBadges } from '@/lib/nav-badges';
 import { getGroupedNavItems, getMobileNav, isNavActive, MORE_NAV_ICON, type NavItem } from '@/lib/navigation';
 import { SessionScopeSwitchers } from '@/components/auth/session-scope-switchers';
 import { useGuide } from '@/components/help/guide-provider';
 import { PendenciasButton } from '@/components/pendencias/pendencias-button';
+import { PendenciasAberturaAutomatica } from '@/components/pendencias/pendencias-abertura-automatica';
 import { Button } from '@/components/ui/button';
 import { Sheet } from '@/components/ui/sheet';
+import { ChipConexao } from '@/components/layout/chip-conexao';
 
 function NavLink({
   item,
@@ -81,7 +83,7 @@ function NavLink({
   );
 }
 
-function DesktopSidebar({
+export function DesktopSidebar({
   user,
   collapsed,
   badges,
@@ -111,8 +113,9 @@ function DesktopSidebar({
       <div
         className={cn(
           'flex h-[var(--topbar-h)] shrink-0 items-center border-b border-[var(--line-2)]',
-          collapsed ? 'flex-col justify-center gap-2 py-3' : 'gap-2.5 px-3.5 pl-4',
+          sidebarTopClass(collapsed),
         )}
+        data-testid="sidebar-top"
       >
         <div className={cn('flex min-w-0 items-center gap-2.5', collapsed ? 'justify-center' : 'flex-1')}>
           <Image
@@ -122,7 +125,7 @@ function DesktopSidebar({
             height={48}
             className={cn(
               'shrink-0 object-contain object-center',
-              collapsed ? 'h-10 w-auto max-h-10' : 'h-11 w-auto max-h-11',
+              sidebarLogoClass(collapsed),
             )}
             priority
           />
@@ -133,15 +136,16 @@ function DesktopSidebar({
             </div>
           ) : null}
         </div>
-        <button
-          type="button"
-          onClick={onToggleCollapsed}
-          aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}
-          className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] border border-[var(--line)] bg-[var(--surface)] text-[var(--ink-3)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]"
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-        </button>
+        {!collapsed ? (
+          <SidebarToggleButton collapsed={collapsed} onToggle={onToggleCollapsed} className="-mx-[9px]" />
+        ) : null}
       </div>
+
+      {collapsed ? (
+        <div className={sidebarToggleRowClass} data-testid="sidebar-toggle-row">
+          <SidebarToggleButton collapsed={collapsed} onToggle={onToggleCollapsed} />
+        </div>
+      ) : null}
 
       <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Navegação principal">
         {groups.map((group) => (
@@ -283,19 +287,8 @@ function DesktopTopbar({ syncPending, permissions }: { syncPending: number; perm
           </kbd>
         </button>
 
-        {syncPending > 0 ? (
-          <div className="flex h-[30px] items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--warn-bd)] bg-[var(--warn-bg)] px-2.5 text-xs font-semibold text-[var(--warn)]">
-            <span className="h-[7px] w-[7px] animate-pulse rounded-full bg-[var(--warn)]" />
-            <RefreshCw className="h-3.5 w-3.5" />
-            <span className="mono">{syncPending}</span>
-            <span className="hidden xl:inline">sync pendentes</span>
-          </div>
-        ) : null}
-
-        <div className="flex h-[30px] items-center gap-1.5 rounded-[var(--r-pill)] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-2.5 text-xs font-semibold text-[var(--ok)]">
-          <span className="h-[7px] w-[7px] rounded-full bg-[var(--ok)]" />
-          Online
-        </div>
+        {/* M1: chip único de conexão (estado real; nunca verde offline). */}
+        <ChipConexao syncPendentesServidor={syncPending} />
       </div>
     </header>
   );
@@ -330,14 +323,7 @@ export function MobileAppBar({ userName, syncPending }: { userName: string; sync
           >
             <FileText className="h-4 w-4" />
           </button>
-          <span className="inline-flex h-7 items-center rounded-[var(--r-pill)] border border-[var(--ok-bd)] bg-[var(--ok-bg)] px-2 text-[11px] font-semibold text-[var(--ok)]">
-            Online
-          </span>
-          {syncPending > 0 ? (
-            <span className="mono inline-flex h-7 min-w-7 items-center justify-center rounded-[var(--r-pill)] bg-[var(--warn-bg)] px-2 text-[11px] font-bold text-[var(--warn)]">
-              {syncPending}
-            </span>
-          ) : null}
+          <ChipConexao compacto syncPendentesServidor={syncPending} />
         </div>
       </div>
     </header>
@@ -508,6 +494,7 @@ export function AppShell({
 
   return (
     <div className="sigma-app flex min-h-dvh bg-[var(--canvas)]">
+      <PendenciasAberturaAutomatica />
       <DesktopSidebar
         user={user}
         collapsed={collapsed}
@@ -521,5 +508,32 @@ export function AppShell({
         <MobileBottomNav user={user} badges={navBadges} moreOpen={moreOpen} onMoreOpen={setMoreOpen} />
       </div>
     </div>
+  );
+}
+
+function SidebarToggleButton({
+  collapsed,
+  onToggle,
+  className,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={sidebarToggleLabel(collapsed)}
+      aria-expanded={!collapsed}
+      className={cn(
+        'group flex h-11 w-11 shrink-0 items-center justify-center focus-visible:outline-none!',
+        className,
+      )}
+    >
+      <span className="flex h-[26px] w-[26px] items-center justify-center rounded-[7px] border border-[var(--line)] bg-[var(--surface)] text-[var(--ink-3)] group-hover:bg-[var(--surface-2)] group-hover:text-[var(--ink)] group-focus-visible:ring-2 group-focus-visible:ring-[var(--brand)]">
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+      </span>
+    </button>
   );
 }

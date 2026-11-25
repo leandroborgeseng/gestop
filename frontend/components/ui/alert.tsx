@@ -25,18 +25,21 @@ export function Alert({
   title,
   children,
   className,
+  role = 'alert',
 }: {
   variant?: keyof typeof variants;
   title?: string;
   children: React.ReactNode;
   className?: string;
+  /** 296: opcional e aditivo (padrão 'alert'); use 'status' para mensagens não urgentes. */
+  role?: 'alert' | 'status';
 }) {
   const config = variants[variant];
   const Icon = config.icon;
 
   return (
     <div
-      role="alert"
+      role={role}
       className={cn(
         'flex items-start gap-3 rounded-[var(--md-shape-md)] border px-4 py-3 md-body-md',
         config.className,

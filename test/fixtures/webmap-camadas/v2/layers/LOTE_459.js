@@ -1,0 +1,1 @@
+var json_LOTE_459 = {"type": "FeatureCollection", "name": "LOTE_459", "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}}, "xy_coordinate_resolution": 1e-07, "features": [{"type": "Feature", "properties": {"fid": "7"}, "geometry": {"type": "Point", "coordinates": [-47.3995, -20.5195]}}]};

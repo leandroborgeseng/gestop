@@ -67,8 +67,9 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'autenticar',
         nome: 'Autenticar',
         atores: ['administrador', 'gestor', 'equipe', 'solicitante', 'externo'],
-        descricao: 'Entrar com e-mail e senha e encerrar a sessão.',
-        rotas: ['/login', 'POST /auth/login', 'GET /auth/me', 'POST /auth/logout'],
+        descricao:
+          'Entrar com e-mail e senha. Sem returnTo, a sessão percorre o menu visível, na mesma ordem do lateral e da barra inferior, pula formulários de criação e, se o item listaDeChamados está no menu, não para no item cedeParaListaDeChamados. Começa pelo CCO quando o perfil ativo e as permissões individuais liberam. Se só houver atalho de criação, abre `/conta`. A raiz `/` é o start_url do PWA e usa a mesma escolha, sem trocar Secretaria nem perfil. Rota específica, F5 e volta do segundo plano permanecem na tela atual. Retomada da aba ou do PWA (visibilitychange, focus, pageshow com bfcache) e POST /auth/refresh não trocam a rota, o perfil ativo nem a secretaria. O refresh recusa só a sessão desconectada (LogAuditoria LOGOUT com entidadeTipo sessao e entidadeId igual ao sid, ou ao sha256 do token legado sem sid) e nunca emite token além de 30 dias do instante do login (claim auth_time). Outra sessão do mesmo usuário continua. Token legado sem sid, ao renovar, recebe sid igual ao sha256 desse token, de modo que o logout do token renovado recusa o anterior, e conta o teto a partir do iat. A abertura do app e a retomada renovam a sessão quando faltam menos de 7 dias, sem passar desse teto. No fim do prazo, visibilitychange, focus ou pageshow levam ao login com returnTo da URL completa e a mensagem de sessão expirada acima do formulário. Encerrar a sessão sai do sistema.',
+        rotas: ['/', '/login', 'POST /auth/login', 'GET /auth/me', 'POST /auth/refresh', 'POST /auth/logout'],
       },
       {
         id: 'trocar-contexto',
@@ -116,7 +117,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'triar',
         nome: 'Triar e atribuir',
         atores: ['administrador', 'gestor'],
-        descricao: 'Mudar status, triagem, atribuição, planejamento, abertura, observadores e aviso à equipe. A lista e o detalhe rolam por dentro, na mesma altura. A busca por código, descrição ou unidade só dispara no botão Pesquisar ou no Enter. Documentos relacionados do chamado mostram signatários pendentes e as ações de assinatura, cada uma com a permissão correspondente.',
+        descricao: 'Mudar status, triagem, atribuição, planejamento, abertura, observadores e aviso à equipe. A lista e o detalhe rolam por dentro, na mesma altura. A busca por código, descrição ou unidade só dispara no botão Pesquisar ou no Enter. Aba, filtros, busca, página, período da programação e o chamado aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Valor de filtro fora do vocabulário some da query. Id do chamado fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso e não troca Secretaria nem perfil. No celular, abrir o chamado entra no histórico para o Voltar fechar o detalhe. Documentos relacionados do chamado mostram signatários pendentes e as ações de assinatura, cada uma com a permissão correspondente.',
         rotas: ['/chamados', 'GET /chamados', 'PUT /chamados/:id/triagem', 'PUT /chamados/:id/atribuicao', 'PUT /chamados/:id/planejamento', 'GET /documentos/por-chamado/:chamadoId'],
       },
       {
@@ -130,7 +131,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'executar',
         nome: 'Executar chamado',
         atores: ['equipe', 'gestor'],
-        descricao: 'Check-in, evidências e conclusão da ordem em execução.',
+        descricao: 'Check-in, evidências e conclusão da ordem em execução. O PDF do relatório de execução gerado na conclusão mostra a conformidade da resposta, quando existe, como Conforme, Não conforme ou Não se aplica; qualquer outro valor vira Outro. O status do chamado nesse PDF sai pelo rótulo legível. Aba, busca, filtros, painel do celular, chamado selecionado e tarefa aberta ficam na URL. Tarefa fora do UUID permanece na URL, mostra o aviso e não chama a API. No celular a tarefa entra no histórico para o Voltar fechar o detalhe.',
         rotas: ['/execucao', '/execucao/[id]', 'POST /chamados/:id/execucao/checkin', 'POST /chamados/:id/execucao/evidencias', 'POST /chamados/:id/execucao/concluir'],
       },
       {
@@ -158,7 +159,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'tratar-tarefa',
         nome: 'Tratar tarefa atribuída',
         atores: ['equipe', 'gestor'],
-        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Cancelar exige a permissão Cancelar tarefa (ou a chave antiga tarefas.excluir); alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige Alterar dados da tarefa. O histórico da tarefa só sai com tarefas_historico.visualizar. Os anexos da tarefa saem para o designado (responsável ou membro da equipe) mesmo sem essa chave. Impedida não é mais atribuída; registros antigos continuam consultáveis. Troca de responsável e de equipe geram eventos distintos na trilha, com valor anterior e novo. A lista da aba Tarefas mostra a coluna Resumo do chamado (título ou início da descrição). O pin do mapa inclui o responsável. Fechar a sanfona Filtros de tarefas não limpa os filtros; o resumo padrão é Status: não finalizados (o mesmo recorte do backend) e, sem filtro nenhum no helper, Nenhum filtro ativo.',
+        descricao: 'Abrir a tarefa registra visualização (Nova vira Visualizada na primeira abertura autorizada). Andamento, conclusão e cancelamento gravam texto obrigatório e anexos no histórico. Cancelar exige a permissão Cancelar tarefa (ou a chave antiga tarefas.excluir); alterar título, descrição, secretaria, equipe, responsável, prazo e prioridade exige Alterar dados da tarefa. O histórico da tarefa só sai com tarefas_historico.visualizar. Os anexos da tarefa saem para o designado (responsável ou membro da equipe) mesmo sem essa chave. Impedida não é mais atribuída; registros antigos continuam consultáveis. Troca de responsável e de equipe geram eventos distintos na trilha, com valor anterior e novo. Tab percorre cada tarefa da lista; Enter abre a tarefa anunciada, com código do chamado e título no nome acessível e foco visível de 2px. A lista da aba Tarefas e a grade do Dashboard usam o cabeçalho Resumo do chamado e o mesmo texto (resumoDoChamado). O texto completo aparece no mouse ou no foco. Abaixo de 600px ficam só código, tarefa, Status e Prazo. O pin do mapa mostra Tarefa, o resumo do chamado e o responsável (ou Sem responsável). Fechar a sanfona Filtros de tarefas não limpa os filtros; o resumo padrão é Status: não finalizados (o mesmo recorte do backend) e, sem filtro nenhum no helper, Nenhum filtro ativo. Os campos de prazo se chamam Prazo de e Prazo até; o dia final é inclusivo em America/Sao_Paulo e a sanfona fechada mostra Prazo: dd/mm a dd/mm (ou a partir de / até).',
         rotas: ['/execucao', 'GET /chamado-tarefas/execucao', 'PATCH /chamado-tarefas/:id'],
       },
       {
@@ -173,7 +174,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'relatorio-tarefas',
         nome: 'Relatório de tarefas',
         atores: ['administrador', 'gestor'],
-        descricao: 'A grade filtrável fica no dashboard, com exportação simples dos dados exibidos (os mesmos filtros da grade). O período do box usa a data de abertura (createdAt), o mesmo campo do modal formal. Os agrupamentos por secretaria e equipe mostram pendentes e atrasadas. Tarefas não entram na contagem de chamados. O relatório formal (PDF, CSV ou XLSX) sai do card Tarefas de chamados, no padrão dos demais relatórios.',
+        descricao: 'A grade filtrável fica no dashboard, com exportação simples dos dados exibidos (os mesmos filtros da grade). O período do box usa a data de abertura (createdAt), o mesmo campo do modal formal. Cartões e agrupamentos são agregados no banco (count/groupBy) sobre o filtro inteiro, com o mesmo where e o mesmo escopo da listagem. A soma de pendentes por secretaria é a do banco, e os grupos somam o total do filtro. O PDF formal mostra esses mesmos totais. Secretaria e equipe aparecem na ordem atrasadas, pendentes e nome, com singular e plural e a legenda de que atrasadas estão incluídas nas pendentes. Atrasadas acima de zero saem em vermelho. Grupos sem pendência nem atraso ficam esmaecidos. Acima de seis grupos o rodapé mostra +N outras e Ver todas. Tarefas não entram na contagem de chamados. O relatório formal (PDF, CSV ou XLSX) sai do card Tarefas de chamados, no padrão dos demais relatórios. A lista, o modal e os arquivos trazem no máximo 500 linhas. Grade e modal formal avisam "Mostrando 500 de N tarefas" quando o filtro passa de 500; PDF, CSV e XLSX repetem o aviso. Com 500 linhas não há aviso.',
         rotas: ['/dashboard', '/relatorios', 'GET /chamado-tarefas/relatorio', 'GET /chamado-tarefas/relatorio.csv', 'GET /chamado-tarefas/relatorio.pdf', 'GET /chamado-tarefas/relatorio.xlsx'],
       },
     ],
@@ -200,8 +201,15 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'consultar-vistorias',
         nome: 'Consultar vistorias',
         atores: ['gestor', 'equipe', 'administrador'],
-        descricao: 'Listar fiscalizações realizadas e abrir o PDF. As respostas de múltipla escolha saem formatadas; o código técnico da pergunta não aparece; seções agrupam perguntas consecutivas.',
+        descricao: 'Listar fiscalizações realizadas e abrir o PDF. Busca, status, tipo, período, avulsa e o id (UUID) ficam na URL; o padrão concluídas fica de fora. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir a vistoria entra no histórico. As respostas de múltipla escolha saem formatadas; o código técnico da pergunta não aparece; seções agrupam perguntas consecutivas. O PDF da vistoria realizada não imprime o tipo do item; a categoria continua quando existe. A linha da resposta não traz o código de conformidade entre parênteses. O status do chamado da não conformidade sai pelo rótulo legível.',
         rotas: ['/vistorias', 'GET /fiscalizacoes', 'GET /fiscalizacoes/:id', 'GET /fiscalizacoes/:id/pdf'],
+      },
+      {
+        id: 'excluir-vistoria',
+        nome: 'Excluir vistoria realizada',
+        atores: ['gestor', 'administrador'],
+        descricao: 'Excluir logicamente uma vistoria concluída, com motivo em português. A ação é a Excluir já existente da tela Vistorias realizadas. A vistoria vai para EXCLUIDA e sai da lista, dos indicadores, das notas, do CCO (inclusive a NC no detalhe do próprio), do Dashboard e dos relatórios. Nada é apagado. Quem tem a subfunção Visualizar excluídas pode mostrar as excluídas, inclusive a que estava concluída quando o filtro é Concluídas, abrir o detalhe em somente leitura e o PDF com a marca Excluída. Sem a subfunção, a programada continua sinalizada, sem o id da vistoria. Fora da Secretaria, a resposta é 404. A programação baixada por essa vistoria não reabre. Não há restauração neste fluxo.',
+        rotas: ['/vistorias', 'POST /fiscalizacoes/:id/exclusao', 'GET /fiscalizacoes?incluirExcluidas=true'],
       },
       {
         id: 'vistoria-manual',
@@ -214,8 +222,8 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'cronograma',
         nome: 'Programar cronograma',
         atores: ['administrador', 'gestor'],
-        descricao: 'Agendar a recorrência de checagem por unidade e checklist.',
-        rotas: ['/cronograma', 'GET /cronograma', 'POST /cronograma', 'PUT /cronograma/:id', 'DELETE /cronograma/:id'],
+        descricao: 'Agendar a recorrência de checagem por unidade e checklist. Mês, Secretaria, próprio e dia ficam na URL; o mês corrente e o dia vazio ficam de fora. A query não abre checagem por id. O id da checagem no caminho é UUID. Secretaria fora do contexto ativo é ignorada e a URL não troca o perfil.',
+        rotas: ['/cronograma', 'GET /cronograma', 'POST /cronograma', 'PUT /cronograma/:id', 'DELETE /cronograma/:id', 'POST /cronograma/:id/reativar'],
       },
       {
         id: 'nao-conformidade',
@@ -234,7 +242,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'consultar-documentos',
         nome: 'Consultar documentos',
         atores: ['administrador', 'gestor', 'equipe', 'solicitante'],
-        descricao: 'Listar peças, gerar PDF e ajustar vínculos com chamado ou vistoria. GET /documentos/por-chamado/:id devolve signatários pendentes e assinaturas vigentes no mesmo serialize da tela Documentos.',
+        descricao: 'Listar peças, gerar PDF e ajustar vínculos com chamado ou vistoria. Busca, tipo, situação, assinatura, histórico e o documento aberto ficam na URL; F5, voltar e um link copiado reabrem o mesmo estado. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Id inexistente ou sem acesso mostra a lista com o aviso. No celular, abrir o documento entra no histórico. GET /documentos/por-chamado/:id devolve signatários pendentes e assinaturas vigentes no mesmo serialize da tela Documentos. No PDF do documento e no PDF do relatório de execução, a conformidade da resposta, quando existe, sai como Conforme, Não conforme ou Não se aplica. Qualquer outro valor vira Outro. O status do chamado no relatório de execução sai pelo rótulo legível.',
         rotas: ['/documentos', '/chamados', '/meus-chamados', 'GET /documentos', 'GET /documentos/por-chamado/:chamadoId', 'GET /documentos/:id/pdf/original', 'PATCH /documentos/:id/vinculos'],
       },
       {
@@ -282,7 +290,7 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'cco',
         nome: 'Acompanhar o CCO',
         atores: ['administrador', 'gestor', 'equipe'],
-        descricao: 'Mapa operacional, próprios, filtros e chamados georreferenciados.',
+        descricao: 'Mapa operacional, próprios, filtros e chamados georreferenciados. Zoom ou arraste manual permanece ao abrir a barra, cruzar o corte da grade ou girar a tela. Aplicar filtros continua sem mover a vista. A barra e a grade empilham no mesmo corte de 80rem, então 125% e 150% de fonte mudam as duas juntas.',
         rotas: ['/cco', '/cco/unidades/[id]', 'GET /operacional/resumo', 'GET /operacional/unidades', 'GET /operacional/chamados-mapa'],
       },
       {
@@ -328,6 +336,13 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         rotas: ['/admin', 'GET /admin/importacao/webmap/status', 'POST /admin/importacao/webmap/apply'],
       },
       {
+        id: 'webmap-camadas',
+        nome: 'Importar camadas do Webmap',
+        atores: ['administrador'],
+        descricao: 'Simular e aplicar grupos, camadas e feições. A fonte é lida e gravada por camada, em lotes, sem montar todas as feições. Reaplicar a mesma versão faz upsert pela chave estável da feição e não apaga o lote já gravado; a versão ativa anterior só é trocada no fim.',
+        rotas: ['/admin', 'POST /admin/importacao/webmap-camadas/simular', 'POST /admin/importacao/webmap-camadas/aplicar', 'GET /admin/importacao/webmap-camadas/status'],
+      },
+      {
         id: 'auditoria',
         nome: 'Consultar auditoria',
         atores: ['administrador'],
@@ -338,8 +353,9 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'backup-email',
         nome: 'Configurar backup e e-mail',
         atores: ['administrador'],
-        descricao: 'Backup compatível com S3 e SMTP. Segredos não retornam nas respostas.',
-        rotas: ['/admin', 'GET /admin/backup', 'POST /admin/backup/run', 'PUT /admin/email', 'POST /admin/email/teste'],
+        descricao:
+          'Backup compatível com S3. A tela grava SMTP. O envio usa Microsoft Graph quando EMAIL_PROVIDER=m365 está completo no ambiente; se o provedor não for m365 ou faltar variável, permanece o fluxo SMTP, webhook ou log. Segredos e o token não retornam nas respostas. O diagnóstico só obtém o token.',
+        rotas: ['/admin', 'GET /admin/backup', 'POST /admin/backup/run', 'PUT /admin/email', 'POST /admin/email/teste', 'POST /admin/email/diagnostico'],
       },
       {
         id: 'lgpd',

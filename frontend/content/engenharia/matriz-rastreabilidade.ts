@@ -16,9 +16,10 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Autenticar e encerrar sessão',
     ator: 'Usuário interno (qualquer perfil)',
     tela: '/login',
-    api: 'AuthController: POST /auth/login, GET /auth/me, POST /auth/logout',
-    tabelas: 'Usuario, Perfil, UsuarioPerfil, Permissao, PerfilPermissao, UsuarioPermissao, UsuarioSecretaria, Secretaria',
-    permissao: 'Login é público. As demais rotas exigem sessão (AuthGuard).',
+    api: 'AuthController: POST /auth/login, GET /auth/me, POST /auth/refresh, POST /auth/logout',
+    tabelas: 'Usuario, Perfil, UsuarioPerfil, Permissao, PerfilPermissao, UsuarioPermissao, UsuarioSecretaria, Secretaria, LogAuditoria',
+    permissao:
+      'Login é público. As demais rotas exigem sessão (AuthGuard). Depois do login, ou ao abrir `/`, a primeira tela percorre o menu visível (mesma ordem do lateral e da barra inferior), pula formulários de criação e, se o item listaDeChamados está no menu, não para no item cedeParaListaDeChamados. Usa as permissões efetivas do perfil ativo somadas às individuais (UsuarioPermissao). Só atalhos de criação levam a `/conta`. A escolha não altera perfilAtivoId nem secretariaAtivaId. POST /auth/refresh reemite o token com o mesmo perfil ativo e a mesma secretaria, copia sid e auth_time e não passa de 30 dias do login; token legado sem sid recebe sid igual ao sha256 do token apresentado. Responde 401 se houver LOGOUT da mesma sessão (entidadeTipo sessao e entidadeId = sid, ou sha256 do token legado). Logout de outra sessão do mesmo usuário não revoga esta. Abertura e retomada renovam quando faltam menos de 7 dias. Token vencido nesses eventos vai a /login com returnTo da rota e da query; a renovação de token ainda válido não redireciona.',
   },
   {
     id: 'contexto',
@@ -45,7 +46,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/cco, /cco/unidades/[id]',
     api: 'OperacionalController: GET /operacional/resumo, /secretarias, /bairros, /opcoes-filtro, /unidades, /chamados-mapa',
     tabelas: 'UnidadePublica, Secretaria, Chamado, NaoConformidade, Fiscalizacao',
-    permissao: 'OPERACIONAL_READ_KEYS (dashboard.visualizar, chamados.*, fiscalizacoes.executar e matriz.cco._tela.visualizar, entre outras).',
+    permissao: 'OPERACIONAL_READ_KEYS (dashboard.visualizar, chamados.*, fiscalizacoes.executar e matriz.cco._tela.visualizar, entre outras). Zoom ou arraste manual não muda no reflow da barra. Barra e grade empilham em 80rem.',
   },
   {
     id: 'dashboard',
@@ -99,7 +100,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/chamados',
     api: 'ChamadosController: GET /chamados, PUT /:id/status, /triagem, /atribuicao, /planejamento, /abertura, /observadores, POST /:id/historico, POST /:id/notificar-equipe',
     tabelas: 'Chamado, HistoricoStatus, Equipe, EquipeUsuario, Usuario, ChamadoObservador, TipoChamado',
-    permissao: 'chamados.gerenciar. Edição da abertura também aceita chamados.editar_abertura. Escopo pela secretaria ativa. A busca da lista consulta o conjunto do escopo, não só a página visível.',
+    permissao: 'chamados.gerenciar. Edição da abertura também aceita chamados.editar_abertura. Escopo pela secretaria ativa. A busca da lista consulta o conjunto do escopo, não só a página visível. Aba, filtros, busca, página, período da programação e o id ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Valor fora do contexto da secretaria é ignorado e a URL não troca o perfil ativo.',
   },
   {
     id: 'meus',
@@ -117,7 +118,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/execucao, /execucao/[id], /chamados/em-execucao',
     api: 'ChamadosController: GET /chamados/em-execucao, GET /:id/execucao, POST checkin, evidencias, concluir',
     tabelas: 'Chamado, Evidencia, HistoricoStatus, Equipe, Usuario',
-    permissao: 'chamados.gerenciar ou chamados.executar. Menu Execução usa as duas.',
+    permissao: 'chamados.gerenciar ou chamados.executar. Menu Execução usa as duas. Aba, busca, filtros, painel e a tarefa aberta ficam na query. Tarefa fora do UUID permanece na URL, mostra o aviso e não chama a API. A URL não troca Secretaria nem perfil. O PDF do relatório de execução gerado na conclusão mostra a conformidade, quando existe, como Conforme, Não conforme ou Não se aplica; qualquer outro valor vira Outro. O status do chamado nesse PDF sai pelo rótulo legível.',
   },
   {
     id: 'manual',
@@ -153,7 +154,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/execucao (aba tarefas)',
     api: 'ChamadoTarefasController: GET /chamado-tarefas/execucao, PATCH /chamado-tarefas/:id, GET /chamado-tarefas/:id/chamado/:chamadoId (anexos e histórico em leitura; metadata do histórico na mesma whitelist da ficha: tipo, descricao, alteracoes, observadorNome, observadorIds, perfilAtivo, perfilAtivoNome, secretariaAtiva, secretariaAtivaSigla, resumo, temAnexos, documentoCodigo, impedimento, impedimentoMotivo, relatorio, distanciaMetros, evidenciasCount, equipeExecutora, membrosExecutores, membrosExternos, participantes, checklistComplementar). Gestão do chamado continua nas rotas reais de ChamadosController (POST /chamados/:id/historico, PUT /:id/status, POST|DELETE /:id/execucao/evidencias, POST /:id/exclusao-logica).',
     tabelas: 'ChamadoTarefa, EquipeUsuario, Usuario, Chamado, Evidencia, HistoricoStatus',
-    permissao: 'As mesmas chaves de chamados.tarefas, mais matriz.execucao.tarefas e chamados.tarefas_atribuidas.visualizar. Cancelar: tarefas_cancelar.executar (compatível com tarefas.excluir). Histórico da tarefa: tarefas_historico.visualizar ou Administrador do Sistema. Anexos: a mesma chave ou designado na tarefa. Filtros da aba ficam na sanfona Filtros de tarefas: fechar não limpa; o resumo padrão é Status: não finalizados (whereExecucao sem historico/status). Sem filtro nenhum no helper: Nenhum filtro ativo. A lista tem a coluna Resumo do chamado (título ou início da descrição). O pin do mapa mostra o responsável da tarefa. A leitura do chamado pela tarefa exige ver a tarefa e o vínculo tarefa↔chamado; não concede gestão do chamado.',
+    permissao: 'As mesmas chaves de chamados.tarefas, mais matriz.execucao.tarefas e chamados.tarefas_atribuidas.visualizar. Cancelar: tarefas_cancelar.executar (compatível com tarefas.excluir). Histórico da tarefa: tarefas_historico.visualizar ou Administrador do Sistema. Anexos: a mesma chave ou designado na tarefa. Filtros da aba ficam na sanfona Filtros de tarefas: fechar não limpa; o resumo padrão é Status: não finalizados (whereExecucao sem historico/status). Sem filtro nenhum no helper: Nenhum filtro ativo. Prazo de/Prazo até vão como YYYY-MM-DD e o serviço inclui o dia final até 23:59:59.999 em America/Sao_Paulo. O resumo fechado mostra Prazo: dd/mm a dd/mm, em até duas linhas com o texto completo no title. O título conta os filtros fora do padrão não finalizados. Limpar filtros volta a esse padrão e recarrega a lista. Tab percorre a lista e Enter abre a tarefa anunciada (código e título, foco de 2px). A lista e a grade do Dashboard usam o cabeçalho Resumo do chamado e resumoDoChamado, com o texto completo no mouse ou no foco. O pin do mapa mostra Tarefa, Chamado (resumo) e Responsável, usando Sem responsável quando vazio. O botão do pop-up tem no mínimo 32px de altura. A leitura do chamado pela tarefa exige ver a tarefa e o vínculo tarefa↔chamado; não concede gestão do chamado.',
   },
   {
     id: 'tarefas-rel',
@@ -162,7 +163,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/dashboard (grade) e /relatorios (card Gerar)',
     api: 'ChamadoTarefasController: GET /chamado-tarefas/relatorio e /relatorio.csv|pdf|xlsx. capa=simples exporta a grade; o PDF formal usa o cabeçalho SIGMA.',
     tabelas: 'ChamadoTarefa, Chamado, Secretaria, Equipe',
-    permissao: 'chamados.gerenciar, dashboard.visualizar ou matriz de relatórios/tarefas. O escopo de secretaria do usuário é aplicado na consulta. O período da grade do dashboard e do modal formal filtra createdAt (data de abertura). Os agrupamentos por secretaria e equipe devolvem pendentes e atrasadas. Tarefas não entram nos indicadores de chamados do MonitoramentoService. O export da grade reenvia os mesmos filtros aplicados.',
+    permissao: 'chamados.gerenciar, dashboard.visualizar ou matriz de relatórios/tarefas. O escopo de secretaria do usuário é aplicado na consulta. O período da grade do dashboard e do modal formal filtra createdAt (data de abertura). Cartões e agrupamentos saem de count/groupBy no banco, com o mesmo where da listagem, sobre o filtro inteiro: a soma de pendentes por secretaria é a do banco, e os grupos somam o total. Na tela, secretaria e equipe ordenam por atrasadas, pendentes e nome, com +N outras e Ver todas acima de seis. O PDF formal repete esses totais. Tarefas não entram nos indicadores de chamados do MonitoramentoService. O export da grade reenvia os mesmos filtros aplicados. A lista, o modal e o export PDF/CSV/XLSX continuam no teto de 500 linhas; acima disso a tela e o arquivo dizem "Mostrando 500 de N tarefas". Com 500 linhas não há aviso.',
   },
   {
     id: 'mobile',
@@ -184,12 +185,21 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
   },
   {
     id: 'vistorias',
-    capacidade: 'Consultar vistorias realizadas (PDF e tela sem código técnico; múltipla escolha formatada)',
+    capacidade: 'Consultar vistorias realizadas (PDF e tela sem código técnico; múltipla escolha formatada; sem tipo do item)',
     ator: 'Gestor, equipe, administrador',
     tela: '/vistorias',
     api: 'FiscalizacoesController: GET /fiscalizacoes, GET /fiscalizacoes/:id, GET /fiscalizacoes/:id/pdf',
     tabelas: 'Fiscalizacao, RespostaChecklist, Evidencia, NaoConformidade, UnidadePublica, Usuario',
-    permissao: 'fiscalizacoes.executar, dashboard.visualizar ou chamados.gerenciar.',
+    permissao: 'fiscalizacoes.executar, dashboard.visualizar ou chamados.gerenciar. Busca, filtros e o id aberto ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. Secretaria fora do contexto é ignorada e a URL não troca o perfil. No PDF da vistoria realizada, o tipo do item não aparece e a categoria continua quando existe. A resposta não traz o código de conformidade entre parênteses. O status do chamado da não conformidade sai pelo rótulo legível. Listas, indicadores, CCO, Dashboard e relatórios omitem Fiscalizacao com excluidoEm preenchido.',
+  },
+  {
+    id: 'vistoria-exclusao',
+    capacidade: 'Excluir logicamente vistoria realizada',
+    ator: 'Gestor, administrador',
+    tela: '/vistorias',
+    api: 'FiscalizacoesController: POST /fiscalizacoes/:id/exclusao. GET /fiscalizacoes?incluirExcluidas=true para quem visualiza excluídas.',
+    tabelas: 'Fiscalizacao, LogAuditoria, HistoricoStatus, Usuario',
+    permissao: 'Excluir usa a ação já existente matriz.vistorias._tela.excluir. Visualizar excluídas: matriz.vistorias.excluidas_visualizar.visualizar. Sem essa subfunção, incluirExcluidas responde 403, o detalhe ou o PDF da excluída responde 404, e a programada sinalizada não traz o id da vistoria. O detalhe do próprio no CCO omite a NC da vistoria excluída. O PDF de quem pode ver traz a marca Excluída. Motivo inválido, inclusive quando não é texto, responde em português. Fora da Secretaria, 404. Só CONCLUIDA. Sem restauração.',
   },
   {
     id: 'vistoria-manual',
@@ -214,9 +224,9 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Programar cronograma de checagem',
     ator: 'Administrador do Sistema, gestor',
     tela: '/cronograma',
-    api: 'CronogramaController: GET /cronograma, GET /calendario, POST, PUT /:id, DELETE /:id',
+    api: 'CronogramaController: GET /cronograma, GET /calendario, POST, PUT /:id, DELETE /:id (inativar), POST /:id/reativar',
     tabelas: 'CronogramaChecagem, CronogramaChecagemResponsavel, Checklist, UnidadePublica, Usuario',
-    permissao: 'cronograma.visualizar/inserir/alterar/excluir, legado dashboard.visualizar e checklists.gerenciar, ou matriz.cronograma.',
+    permissao: 'cronograma.visualizar/inserir/alterar/excluir, legado dashboard.visualizar e checklists.gerenciar, ou matriz.cronograma. Mês, Secretaria, próprio e dia ficam na query. A query não abre checagem por id; o id no caminho é UUID. Secretaria fora do contexto é ignorada.',
   },
   {
     id: 'nc',
@@ -234,7 +244,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: '/documentos, painel Documentos relacionados em /chamados e /meus-chamados',
     api: 'DocumentosController: GET /documentos, GET /:id, GET /por-chamado/:chamadoId, GET /chamados-busca, GET /:id/pdf/original, GET /:id/pdf/assinado, POST /:id/gerar-pdf, PATCH /:id/vinculos, /respostas, POST /:id/concluir',
     tabelas: 'Documento, DocumentoChamado, DocumentoResposta, DocumentoAssinatura, DocumentoAssinaturaPedido, ChecklistItem, Chamado, Fiscalizacao',
-    permissao: 'documentos.visualizar ou documentos.administrar (módulo). PDF e listagem relacionada também aceitam dashboard, chamados e fiscalização. O card no chamado mostra signatários pendentes (DocumentoAssinaturaPedido PENDENTE) e assinaturas vigentes. Vínculo de avulso em rascunho: documentos.criar_avulso. Depois da conclusão: documentos.editar_vinculo.',
+    permissao: 'documentos.visualizar ou documentos.administrar (módulo). PDF e listagem relacionada também aceitam dashboard, chamados e fiscalização. Busca, filtros e o id aberto ficam na query. Id fora do UUID permanece na URL, mostra o aviso e não chama a API. A URL não troca Secretaria nem perfil. O card no chamado mostra signatários pendentes (DocumentoAssinaturaPedido PENDENTE) e assinaturas vigentes. Vínculo de avulso em rascunho: documentos.criar_avulso. Depois da conclusão: documentos.editar_vinculo. No PDF do documento e no PDF do relatório de execução, a conformidade da resposta, quando existe, sai como Conforme, Não conforme ou Não se aplica. Qualquer outro valor vira Outro. O status do chamado no relatório de execução sai pelo rótulo legível.',
   },
   {
     id: 'avulso',
@@ -300,6 +310,15 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     permissao: 'Aba importacao: unidades.gerenciar ou usuarios.gerenciar, ou matriz.admin.importacao.',
   },
   {
+    id: 'webmap-camadas',
+    capacidade: 'Importar camadas do Webmap',
+    ator: 'Administrador do Sistema',
+    tela: '/admin (Importação › Camadas do Webmap)',
+    api: 'WebmapCamadasAdminController: POST /admin/importacao/webmap-camadas/simular|aplicar, GET /status|/historico|/erros.csv. Mapa: GET /mapa/camadas e /mapa/camadas/:id/geojson',
+    tabelas: 'WebmapCamadaGrupo, WebmapCamada, WebmapCamadaVersao, WebmapElemento, WebmapImportacao, WebmapIcone',
+    permissao: 'Simular e aplicar exigem a aba importacao. O mapa usa dashboard.visualizar.',
+  },
+  {
     id: 'auditoria',
     capacidade: 'Consultar e configurar auditoria',
     ator: 'Administrador do Sistema',
@@ -322,9 +341,9 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Configurar e-mail transacional',
     ator: 'Administrador do Sistema',
     tela: '/admin (E-mail)',
-    api: 'EmailConfigController: GET|PUT /admin/email, POST /admin/email/teste',
+    api: 'EmailConfigController: GET|PUT /admin/email, POST /admin/email/teste, POST /admin/email/diagnostico. O diagnóstico só obtém token no Entra ID e informa a presença das variáveis.',
     tabelas: 'ConfiguracaoEmail',
-    permissao: 'Aba email, em geral usuarios.gerenciar ou matriz.admin.email. A senha SMTP não sai na API.',
+    permissao: 'Aba email, em geral usuarios.gerenciar ou matriz.admin.email. Senha SMTP, segredo do aplicativo e token não saem na API. O diagnóstico exige a mesma ação executar do teste.',
   },
   {
     id: 'integracoes',

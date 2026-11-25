@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { Chip } from '@/components/ui/chip';
 import { Select } from '@/components/ui/select';
@@ -10,6 +10,8 @@ import { SlaFilter, AtribuicaoFilter, summarizeChamadoFiltros } from '@/lib/cham
 import { ChamadoStatus, EquipeOpcao, SecretariaOption, TipoChamadoOpcao } from '@/lib/types';
 import { CHAMADO_STATUS_META } from '@/lib/chamado-status';
 import { formatSecretariaLabel } from '@/lib/format-secretaria';
+import { FiltroDataAbertura } from '@/components/chamados/filtro-data-abertura';
+import { type FiltroDataAberturaValue, resumoDataAbertura } from '@/lib/filtro-data-abertura';
 
 type PrioridadeFilter = 'TODAS' | string;
 
@@ -51,6 +53,8 @@ export type ChamadosFiltrosValue = {
   secretariaProprioId: string;
   secretariaExecucaoId: string;
   tipoChamadoId: string;
+  /** 295: Data de abertura (só na Triagem; ausente = grupo não aparece, ex.: Programação). */
+  abertura?: FiltroDataAberturaValue;
 };
 
 export function ChamadosFiltrosPanel({
@@ -62,6 +66,7 @@ export function ChamadosFiltrosPanel({
   secretariasProprio,
   secretariasExecucao,
   showSemSla = true,
+  onClear,
   className,
 }: {
   value: ChamadosFiltrosValue;
@@ -72,9 +77,20 @@ export function ChamadosFiltrosPanel({
   secretariasProprio: SecretariaOption[];
   secretariasExecucao: SecretariaOption[];
   showSemSla?: boolean;
+  /** 295: "Limpar filtros" (volta ao padrão da tela, inclusive o período). */
+  onClear?: () => void;
   className?: string;
 }) {
   const [open, setOpen] = useState(true);
+  const valorRef = useRef(value);
+  useEffect(() => {
+    valorRef.current = value;
+  }, [value]);
+
+  function publicar(next: ChamadosFiltrosValue) {
+    valorRef.current = next;
+    onChange(next);
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -94,7 +110,7 @@ export function ChamadosFiltrosPanel({
       value.equipeId === 'sem-equipe'
         ? 'Sem equipe'
         : equipes.find((item) => item.id === value.equipeId)?.nome;
-    return summarizeChamadoFiltros({
+    const outros = summarizeChamadoFiltros({
       statusTodos,
       statusCount,
       prioridade: value.prioridade,
@@ -109,7 +125,11 @@ export function ChamadosFiltrosPanel({
       secretariaProprioNome: secretariasProprio.find((item) => item.id === value.secretariaProprioId)?.sigla,
       secretariaExecucaoNome: secretariasExecucao.find((item) => item.id === value.secretariaExecucaoId)?.sigla,
     });
+    // 295: o período vem antes dos demais filtros.
+    const periodo = resumoDataAbertura(value.abertura);
+    return periodo ? (outros === 'Nenhum filtro ativo' ? periodo : `${periodo} · ${outros}`) : outros;
   }, [
+    value.abertura,
     equipes,
     secretariasExecucao,
     secretariasProprio,
@@ -127,13 +147,13 @@ export function ChamadosFiltrosPanel({
 
   function toggleStatus(next: 'TODOS' | ChamadoStatus) {
     if (next === 'TODOS') {
-      onChange({ ...value, statuses: 'TODOS' });
+      publicar({ ...valorRef.current, statuses: 'TODOS' });
       return;
     }
-    const current = value.statuses === 'TODOS' ? new Set<ChamadoStatus>() : new Set(value.statuses);
+    const current = valorRef.current.statuses === 'TODOS' ? new Set<ChamadoStatus>() : new Set(valorRef.current.statuses);
     if (current.has(next)) current.delete(next);
     else current.add(next);
-    onChange({ ...value, statuses: current.size === 0 ? 'TODOS' : current });
+    publicar({ ...valorRef.current, statuses: current.size === 0 ? 'TODOS' : current });
   }
 
   const slaChips = showSemSla ? SLA_CHIPS : SLA_CHIPS.filter((item) => item.value !== 'SEM');
@@ -156,7 +176,18 @@ export function ChamadosFiltrosPanel({
       </button>
 
       {open ? (
-        <div className="space-y-4 border-t border-[var(--line-2)] px-3.5 py-3.5">
+        <div className="min-w-0 space-y-4 border-t border-[var(--line-2)] px-3.5 py-3.5">
+          {onClear ? (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center rounded-[var(--r-md)] px-2 text-[12px] font-semibold text-[var(--brand-hover)] hover:bg-[var(--surface-2)] sm:min-h-8"
+                onClick={onClear}
+              >
+                Limpar filtros
+              </button>
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Status</p>
             <div className="situ-chips flex flex-wrap gap-1.5">
@@ -179,6 +210,14 @@ export function ChamadosFiltrosPanel({
             </div>
           </div>
 
+          {value.abertura ? (
+            <FiltroDataAbertura
+              idPrefixo="triagem-abertura"
+              value={value.abertura}
+              onChange={(abertura) => publicar({ ...valorRef.current, abertura })}
+            />
+          ) : null}
+
           <div className="space-y-1.5">
             <p className="text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Prioridade</p>
             <div className="flex flex-wrap gap-1.5">
@@ -186,7 +225,7 @@ export function ChamadosFiltrosPanel({
                 <Chip
                   key={item.value}
                   active={value.prioridade === item.value}
-                  onClick={() => onChange({ ...value, prioridade: item.value })}
+                  onClick={() => publicar({ ...valorRef.current, prioridade: item.value })}
                 >
                   {item.label}
                 </Chip>
@@ -201,7 +240,7 @@ export function ChamadosFiltrosPanel({
                 <Chip
                   key={item.value}
                   active={value.sla === item.value}
-                  onClick={() => onChange({ ...value, sla: item.value })}
+                  onClick={() => publicar({ ...valorRef.current, sla: item.value })}
                 >
                   {item.label}
                 </Chip>
@@ -216,7 +255,7 @@ export function ChamadosFiltrosPanel({
                 <Chip
                   key={item.value}
                   active={value.atribuicao === item.value}
-                  onClick={() => onChange({ ...value, atribuicao: item.value })}
+                  onClick={() => publicar({ ...valorRef.current, atribuicao: item.value })}
                 >
                   {item.label}
                 </Chip>
@@ -229,7 +268,7 @@ export function ChamadosFiltrosPanel({
               <p className="mb-1 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Equipe</p>
               <Select
                 value={value.equipeId}
-                onChange={(event) => onChange({ ...value, equipeId: event.target.value })}
+                onChange={(event) => publicar({ ...valorRef.current, equipeId: event.target.value })}
                 className="h-8 w-full text-xs"
                 aria-label="Filtrar por equipe"
               >
@@ -250,7 +289,7 @@ export function ChamadosFiltrosPanel({
               </p>
               <Select
                 value={value.secretariaProprioId}
-                onChange={(event) => onChange({ ...value, secretariaProprioId: event.target.value })}
+                onChange={(event) => publicar({ ...valorRef.current, secretariaProprioId: event.target.value })}
                 className="h-8 w-full text-xs"
                 aria-label="Secretaria responsável pelo próprio"
               >
@@ -269,7 +308,7 @@ export function ChamadosFiltrosPanel({
               </p>
               <Select
                 value={value.secretariaExecucaoId}
-                onChange={(event) => onChange({ ...value, secretariaExecucaoId: event.target.value })}
+                onChange={(event) => publicar({ ...valorRef.current, secretariaExecucaoId: event.target.value })}
                 className="h-8 w-full text-xs"
                 aria-label="Secretaria responsável pelo chamado"
               >
@@ -286,7 +325,7 @@ export function ChamadosFiltrosPanel({
               <p className="mb-1 text-[11px] font-bold tracking-wide text-[var(--ink-3)] uppercase">Tipo de chamado</p>
               <TipoChamadoSelect
                 value={value.tipoChamadoId}
-                onChange={(tipoChamadoId) => onChange({ ...value, tipoChamadoId })}
+                onChange={(tipoChamadoId) => publicar({ ...valorRef.current, tipoChamadoId })}
                 tipos={tiposChamado}
                 allowEmpty
                 emptyOptionLabel="Todos os tipos"

@@ -28,6 +28,7 @@ export function ChamadoDescricaoExpandivel({
         <button
           type="button"
           className="mt-1 text-[12px] font-semibold text-[var(--brand)] hover:underline"
+          aria-expanded={expanded}
           onClick={() => setExpanded((value) => !value)}
         >
           {expanded ? 'Ver menos' : 'Ver mais'}

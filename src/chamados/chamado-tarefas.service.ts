@@ -13,12 +13,15 @@ import {
 import { AuditService } from '../audit/audit.service';
 import { hasAnyPermission, isAdministradorSistema } from '../auth/permissions';
 import { JwtPayload } from '../auth/jwt';
-import { resolveChamadoSecretariaFilter, resolveSecretariaScopeIds } from '../auth/secretaria-scope';
+import { normalizarSecretariaIds, resolveChamadoSecretariaFilter, resolveSecretariaFiltroEscopo, resolveSecretariaScopeIds } from '../auth/secretaria-scope';
 import { permissionMatrixKey } from '../domain/permissions-catalog';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { normalizarMimeAnexo, validarBufferAnexo } from './anexos-midia';
-import { buildCsv } from '../relatorios/relatorios.csv';
+import { buildCsv, escapeCsvValue } from '../relatorios/relatorios.csv';
+import { agregarIndicadoresTarefas, linhasTotaisRelatorioFormal, type DbAgregacaoTarefas } from './relatorio-tarefas-agregacao';
+import { avisoCorteRelatorioTarefas, TETO_LINHAS_RELATORIO_TAREFAS } from './relatorio-tarefas-corte';
+import { instantePrazoFiltro } from './prazo-filtro';
 import { buildTablePdf } from '../relatorios/relatorios.pdf';
 import { buildXlsx } from '../relatorios/relatorios.xlsx';
 import {
@@ -32,6 +35,7 @@ import {
 } from './chamado-tarefa.regras';
 import { montarAnexosAberturaLeitura, serializarAnexoHistoricoLeitura } from './chamado-leitura-via-tarefa';
 import { projetarMetadataHistoricoChamado } from './chamado-historico.projecao';
+import { aplicarTextoTarefaNaLinhaDoTempo, resolverTextoEventoTarefa } from './chamado-tarefa-texto-legado';
 import { AnexoChamadoTarefaDto, CreateChamadoTarefaDto, UpdateChamadoTarefaDto } from './chamado-tarefas.dto';
 
 const TAREFA_EXPORT_HEADERS = [
@@ -116,16 +120,20 @@ export class ChamadoTarefasService {
     private readonly audit: AuditService,
   ) {}
 
-  async opcoes(user: JwtPayload, secretariaId?: string) {
+  async opcoes(user: JwtPayload, secretariaIdFiltro?: string | readonly string[]) {
     this.assertPodeAtribuir(user);
+    // 306: listas suspensas no escopo da sessão; secretariaId fora do escopo → 403. R3: filtro sempre como array.
+    const filtroIds = normalizarSecretariaIds(secretariaIdFiltro);
+    resolveSecretariaFiltroEscopo(user, filtroIds);
+    const scopeIds = resolveSecretariaScopeIds(user);
     const secretarias = await this.prisma.secretaria.findMany({
-      where: { ativo: true },
+      where: { ativo: true, ...(scopeIds ? { id: { in: scopeIds } } : {}) },
       orderBy: { nome: 'asc' },
       select: { id: true, nome: true, sigla: true },
     });
-    const equipes = secretariaId
+    const equipes = filtroIds.length
       ? await this.prisma.equipe.findMany({
-          where: { ativo: true, secretariaId },
+          where: { ativo: true, secretariaId: { in: filtroIds } },
           orderBy: { nome: 'asc' },
           select: {
             id: true,
@@ -270,7 +278,7 @@ export class ChamadoTarefasService {
       data.justificativa = justificativa;
       data.canceladaEm = new Date();
       acao = 'cancelada';
-      detalhe = justificativa;
+      detalhe = dto.justificativa ?? justificativa; // 293: texto do evento exatamente como digitado
     } else if (dto.status === ChamadoTarefaStatus.CONCLUIDA) {
       if (encerrada) throw new BadRequestException('Tarefa concluída ou cancelada não muda de status.');
       if (!this.podeConcluir(user) && !designado) throw new ForbiddenException('Sem permissão para concluir a tarefa.');
@@ -281,7 +289,7 @@ export class ChamadoTarefasService {
       data.concluidaEm = new Date();
       data.concluidaPor = { connect: { id: user.sub } };
       acao = 'concluida';
-      detalhe = texto;
+      detalhe = dto.conclusaoTexto ?? texto; // 293: texto do evento exatamente como digitado
     } else if (dto.status === ChamadoTarefaStatus.EM_ANDAMENTO) {
       if (encerrada) throw new BadRequestException('Tarefa concluída ou cancelada não muda de status.');
       if (!this.podeAndamento(user) && !designado) throw new ForbiddenException('Sem permissão para registrar andamento.');
@@ -290,7 +298,7 @@ export class ChamadoTarefasService {
       data.status = ChamadoTarefaStatus.EM_ANDAMENTO;
       data.observacao = texto;
       acao = 'andamento';
-      detalhe = texto;
+      detalhe = dto.observacao ?? texto; // 293: texto do evento exatamente como digitado
     } else if (dto.status && dto.status !== before.status) {
       throw new BadRequestException('Transição de status não permitida.');
     } else if (mudaCampo) {
@@ -344,7 +352,7 @@ export class ChamadoTarefasService {
       codigo: tarefa.chamado.codigo,
       somenteLeitura: true,
       anexosAbertura: montarAnexosAberturaLeitura(chamado, evidencias),
-      historico: historico.map((entry) => {
+      historico: await aplicarTextoTarefaNaLinhaDoTempo(this.prisma, historico.map((entry) => {
         const metadata =
           entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata)
             ? (entry.metadata as Record<string, unknown>)
@@ -365,7 +373,7 @@ export class ChamadoTarefasService {
             .filter((item): item is NonNullable<typeof item> => Boolean(item))
             .map(serializarAnexoHistoricoLeitura),
         };
-      }),
+      }).map((saida, i) => ({ bruta: (historico[i].metadata ?? {}) as Record<string, unknown>, saida }))),
     };
   }
 
@@ -410,70 +418,64 @@ export class ChamadoTarefasService {
 
   async relatorio(query: Record<string, string | undefined>, user: JwtPayload) {
     if (!this.podeVerRelatorio(user)) throw new ForbiddenException('Sem permissão para o relatório de tarefas.');
-    const linhas = await this.carregarLinhas(query, user, 500);
-    const por = (chave: (item: (typeof linhas)[number]) => string) => {
-      const map = new Map<string, { total: number; pendentes: number; atrasadas: number }>();
-      for (const item of linhas) {
-        const nome = chave(item);
-        const atual = map.get(nome) ?? { total: 0, pendentes: 0, atrasadas: 0 };
-        atual.total += 1;
-        if (TAREFA_STATUS_PENDENTES.includes(item.status as (typeof TAREFA_STATUS_PENDENTES)[number])) {
-          atual.pendentes += 1;
-        }
-        if (item.atrasada) atual.atrasadas += 1;
-        map.set(nome, atual);
-      }
-      return [...map.entries()]
-        .map(([nome, counts]) => ({ nome, ...counts }))
-        .sort((a, b) => b.total - a.total);
-    };
+    const where = this.whereRelatorio(query, user);
+    const [total, linhas, indicadores] = await Promise.all([
+      this.prisma.chamadoTarefa.count({ where }),
+      this.carregarLinhas(query, user, TETO_LINHAS_RELATORIO_TAREFAS),
+      agregarIndicadoresTarefas(this.prisma as unknown as DbAgregacaoTarefas, where),
+    ]);
     return {
-      indicadores: {
-        abertas: linhas.filter((item) => !TAREFA_STATUS_FINAIS.includes(item.status as (typeof TAREFA_STATUS_FINAIS)[number])).length,
-        novas: linhas.filter((item) => item.status === 'NOVA').length,
-        emAndamento: linhas.filter((item) => item.status === 'EM_ANDAMENTO' || item.status === 'VISUALIZADA').length,
-        impedidas: linhas.filter((item) => item.status === 'IMPEDIDA').length,
-        concluidas: linhas.filter((item) => item.status === 'CONCLUIDA').length,
-        atrasadas: linhas.filter((item) => item.atrasada).length,
-        porSecretaria: por((item) => item.secretaria?.sigla || item.secretaria?.nome || '—'),
-        porEquipe: por((item) => item.equipe?.nome || 'Sem equipe'),
-        porResponsavel: por((item) => item.responsavel?.nome || 'Sem responsável'),
-        porTipoChamado: por((item) => item.chamado.tipoChamado?.nome || 'Sem tipo'),
-      },
+      total,
+      limite: TETO_LINHAS_RELATORIO_TAREFAS,
+      indicadores,
       items: linhas,
     };
   }
 
   exportarCsv(query: Record<string, string | undefined>, user: JwtPayload) {
-    return this.linhasExportacao(query, user).then((rows) => buildCsv(TAREFA_EXPORT_HEADERS, rows));
+    return this.linhasExportacao(query, user).then(({ rows, aviso }) => {
+      const csv = buildCsv(TAREFA_EXPORT_HEADERS, rows);
+      return aviso ? `${csv}\n${escapeCsvValue(aviso)}` : csv;
+    });
   }
 
   exportarXlsx(query: Record<string, string | undefined>, user: JwtPayload) {
-    return this.linhasExportacao(query, user).then((rows) => buildXlsx('Tarefas de chamados', TAREFA_EXPORT_HEADERS, rows));
+    return this.linhasExportacao(query, user).then(({ rows, aviso }) =>
+      buildXlsx('Tarefas de chamados', TAREFA_EXPORT_HEADERS, rows, aviso ? { summaryLines: [aviso] } : undefined),
+    );
   }
 
-  exportarPdf(query: Record<string, string | undefined>, user: JwtPayload) {
-    return this.linhasExportacao(query, user).then((rows) => {
-      const simples = query.capa === 'simples';
-      const filtros = this.resumoFiltros(query);
-      return buildTablePdf({
-        title: simples ? 'Tarefas de chamados' : 'SIGMA — Tarefas de chamados',
-        subtitle: simples
-          ? `Dados exibidos conforme os filtros aplicados · ${new Date().toLocaleString('pt-BR')}`
-          : [`Gerado em ${new Date().toLocaleString('pt-BR')}`, filtros || 'Sem filtros adicionais'].join(' · '),
-        headers: TAREFA_EXPORT_HEADERS,
-        rows: rows.map((row) => row.map((cell) => String(cell ?? ''))),
-        wrapFully: true,
-        plain: simples,
-      });
+  async exportarPdf(query: Record<string, string | undefined>, user: JwtPayload) {
+    const { rows, aviso, where } = await this.linhasExportacao(query, user);
+    const simples = query.capa === 'simples';
+    const filtros = this.resumoFiltros(query);
+    const corte = aviso ? ` · ${aviso}` : '';
+    const indicadores = simples ? null : await agregarIndicadoresTarefas(this.prisma as unknown as DbAgregacaoTarefas, where);
+    const totais = indicadores ? linhasTotaisRelatorioFormal(indicadores) : undefined;
+    return buildTablePdf({
+      title: simples ? 'Tarefas de chamados' : 'SIGMA — Tarefas de chamados',
+      subtitle: simples
+        ? `Dados exibidos conforme os filtros aplicados · ${new Date().toLocaleString('pt-BR')}${corte}`
+        : [`Gerado em ${new Date().toLocaleString('pt-BR')}`, filtros || 'Sem filtros adicionais'].join(' · ') + corte,
+      headers: TAREFA_EXPORT_HEADERS,
+      rows: rows.map((row) => row.map((cell) => String(cell ?? ''))),
+      wrapFully: true,
+      plain: simples,
+      summaryLines: totais,
     });
   }
 
   private async linhasExportacao(query: Record<string, string | undefined>, user: JwtPayload) {
     if (!this.podeVerRelatorio(user)) throw new ForbiddenException('Sem permissão para o relatório de tarefas.');
-    const limite = query.capa === 'simples' ? 500 : 2000;
+    const limite = TETO_LINHAS_RELATORIO_TAREFAS;
+    const where = this.whereRelatorio(query, user);
+    const total = await this.prisma.chamadoTarefa.count({ where });
     const linhas = await this.carregarLinhas(query, user, limite);
-    return linhas.map((item) => this.linhaExportacao(item));
+    return {
+      where,
+      rows: linhas.map((item) => this.linhaExportacao(item)),
+      aviso: avisoCorteRelatorioTarefas(total, linhas.length, limite),
+    };
   }
 
   private async carregarLinhas(query: Record<string, string | undefined>, user: JwtPayload, limite: number) {
@@ -600,10 +602,12 @@ export class ChamadoTarefasService {
       and.push({ status: { in: [...TAREFA_STATUS_PENDENTES] }, prazo: { lt: new Date() } });
     }
     if (query.prazoFrom || query.prazoTo) {
+      const gte = instantePrazoFiltro(query.prazoFrom, 'de');
+      const lte = instantePrazoFiltro(query.prazoTo, 'ate');
       and.push({
         prazo: {
-          ...(query.prazoFrom ? { gte: new Date(query.prazoFrom) } : {}),
-          ...(query.prazoTo ? { lte: new Date(query.prazoTo) } : {}),
+          ...(gte ? { gte } : {}),
+          ...(lte ? { lte } : {}),
         },
       });
     }
@@ -691,6 +695,11 @@ export class ChamadoTarefasService {
           secretaria: typeof meta.secretariaAtiva === 'string' ? meta.secretariaAtiva : null,
           temAnexos: meta.temAnexos === true || anexoIds.length > 0,
           anexoIds,
+          // 293: evento novo usa metadata.texto; legado: conclusão → conclusaoTexto, andamento → resumo ("Registro anterior").
+          ...(() => {
+            const r = resolverTextoEventoTarefa(meta, tarefa.conclusaoTexto);
+            return { texto: r?.texto ?? null, textoOrigem: r?.origem ?? null };
+          })(),
         };
       }),
     };
@@ -822,6 +831,8 @@ export class ChamadoTarefasService {
       secretariaAtivaSigla: contexto.secretariaSigla,
       temAnexos: anexoIds.length > 0,
       anexoIds,
+      // 293: texto digitado pelo usuário, íntegro (quebras de linha preservadas), por evento.
+      ...(textoDoEventoTarefa(acao, detalhe) != null ? { texto: textoDoEventoTarefa(acao, detalhe) } : {}),
       ...(extras?.valorAnterior != null ? { valorAnterior: extras.valorAnterior } : {}),
       ...(extras?.valorNovo != null ? { valorNovo: extras.valorNovo } : {}),
       resumo: [
@@ -1128,6 +1139,14 @@ function motivoTarefa(acao: string, titulo: string) {
   if (acao === 'prazo') return `Prazo da tarefa atualizado: ${titulo}`;
   if (acao === 'atribuicao') return `Atribuição da tarefa atualizada: ${titulo}`;
   return `Tarefa atualizada: ${titulo}`;
+}
+
+/** 293: ações cujo `detalhe` é texto livre digitado no modal (andamento, conclusão, justificativa de cancelamento). */
+export const ACOES_TAREFA_COM_TEXTO = ['andamento', 'concluida', 'cancelada'] as const;
+
+export function textoDoEventoTarefa(acao: string, detalhe: string | null) {
+  if (!(ACOES_TAREFA_COM_TEXTO as readonly string[]).includes(acao)) return null;
+  return detalhe && detalhe.trim() ? detalhe : null;
 }
 
 function encerradaTarefa(status: string) {

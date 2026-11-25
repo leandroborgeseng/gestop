@@ -1,6 +1,9 @@
 import { FiscalizacaoStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
+import { VISTORIA_MOTIVO_MAX, VISTORIA_MOTIVO_MIN } from './fiscalizacao-exclusao';
+
+const MSG_MOTIVO_EXCLUSAO = `Informe o motivo da exclusão (de ${VISTORIA_MOTIVO_MIN} a ${VISTORIA_MOTIVO_MAX} caracteres).`;
 
 export class ListFiscalizacoesQueryDto {
   @IsOptional()
@@ -35,6 +38,16 @@ export class ListFiscalizacoesQueryDto {
   @IsString()
   q?: string;
 
+  /** 304/O6a: `true` = só as enviadas como avulsa por conflito de programação; `false` = exclui. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  avulsaPorConflito?: 'true' | 'false';
+
+  /** 305/E4: `true` = inclui as excluídas (exige a subfunção Visualizar excluídas). */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  incluirExcluidas?: 'true' | 'false';
+
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -47,6 +60,13 @@ export class ListFiscalizacoesQueryDto {
   @IsInt()
   @Min(0)
   offset?: number;
+}
+
+/** 305/E1: motivo obrigatório da exclusão lógica (o service valida e responde 400). */
+export class ExcluirFiscalizacaoDto {
+  @IsOptional()
+  @IsString({ message: MSG_MOTIVO_EXCLUSAO })
+  motivo?: string;
 }
 
 export {

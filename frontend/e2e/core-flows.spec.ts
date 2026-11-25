@@ -61,6 +61,8 @@ test.describe('Fluxo autenticado', () => {
 test.describe('Chamado publico', () => {
   test('pagina de chamado publico renderiza', async ({ page }) => {
     await page.goto('/chamado/PMF-ESC-001');
-    await expect(page.getByRole('heading', { name: /chamado/i })).toBeVisible();
+    // A tela (6c65f00) não tem mais heading antes do envio: confere o cabeçalho e o próprio vindo do backend (seed).
+    await expect(page.getByText('Chamado via QR Code')).toBeVisible();
+    await expect(page.getByText('EMEB Prof. Florestan Fernandes')).toBeVisible();
   });
 });

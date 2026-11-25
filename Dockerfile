@@ -24,6 +24,9 @@ FROM base AS runner
 ARG SOURCE_COMMIT
 ENV NODE_ENV=production
 ENV SOURCE_COMMIT=${SOURCE_COMMIT}
+# 296: limita arenas do malloc e devolve memória ao SO (pico da importação de camadas < 300 MB)
+ENV MALLOC_ARENA_MAX=2
+ENV MALLOC_TRIM_THRESHOLD_=131072
 WORKDIR /app
 
 COPY package.json package-lock.json ./

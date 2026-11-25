@@ -1,4 +1,13 @@
+import { gzipSync } from 'node:zlib';
 import { NextRequest, NextResponse } from 'next/server';
+
+/**
+ * 298: gzip só nas respostas do mapa de camadas (lista e GeoJSON), quando o navegador aceita.
+ * O JSON de geometria comprime ~5–8x; as demais rotas seguem como antes.
+ */
+export function deveComprimirCamadas(path: string, acceptEncoding: string | null, status: number, bytes: number) {
+  return /^mapa\/camadas(\/|$)/.test(path) && status === 200 && bytes > 1024 && /\bgzip\b/i.test(acceptEncoding ?? '');
+}
 import { resolveBackendUrl } from '@/lib/backend-url';
 
 const PROXY_RETRY_ATTEMPTS = 3;
@@ -107,6 +116,12 @@ export async function proxyToBackend(request: NextRequest, pathSegments: string[
     const contentDisposition = response.headers.get('content-disposition');
     if (contentDisposition) {
       responseHeaders.set('content-disposition', contentDisposition);
+    }
+
+    if (typeof body === 'string' && deveComprimirCamadas(path, request.headers.get('accept-encoding'), response.status, body.length)) {
+      responseHeaders.set('content-encoding', 'gzip');
+      responseHeaders.set('vary', 'Accept-Encoding');
+      return new NextResponse(new Uint8Array(gzipSync(body, { level: 6 })), { status: response.status, headers: responseHeaders });
     }
 
     return new NextResponse(body, {

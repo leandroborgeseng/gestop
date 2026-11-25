@@ -1,4 +1,4 @@
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { JwtPayload } from './jwt';
 
@@ -83,6 +83,13 @@ export function resolveUnidadeSecretariaFilter(user: JwtPayload): Prisma.Unidade
   return ids.length === 1 ? { secretariaId: ids[0] } : { secretariaId: { in: ids } };
 }
 
+/** Sem nenhum caminho de acesso (Secretaria de execução, próprio ou equipe). */
+export const MSG_SEM_ACESSO_CHAMADO =
+  'Você não tem acesso a este chamado: ele não é da sua Secretaria ativa (nem pela execução, pelo próprio ou pela equipe).';
+
+export const MSG_SEM_GESTAO_EXCLUSAO =
+  'Sem permissão para excluir: a Secretaria responsável pela execução deste chamado é outra. Só ela pode excluir o chamado.';
+
 /** Visualização: execução, próprio OU secretaria da equipe atribuída. */
 export function assertChamadoSecretariaAccess(
   user: JwtPayload,
@@ -111,7 +118,7 @@ export function assertChamadoSecretariaAccess(
   const equipeSec = chamado.equipe?.secretariaId ?? chamado.equipe?.secretaria?.id;
   if (equipeSec && ids.includes(equipeSec)) return;
 
-  throw new ForbiddenException('Chamado fora da secretaria autorizada.');
+  throw new ForbiddenException(MSG_SEM_ACESSO_CHAMADO);
 }
 
 /**
@@ -141,6 +148,30 @@ export function assertChamadoExecucaoAccess(
   throw new ForbiddenException('Sem permissão de tratativa: secretaria de execução diferente da ativa.');
 }
 
+/**
+ * 310 (TL #48): gestão da abertura (editar, devolver, transferir a execução) — só a Secretaria responsável
+ * pela execução (`chamado.secretariaId`). Próprio e equipe dão só visualização/execução.
+ */
+export const MSG_SEM_GESTAO_ABERTURA =
+  'Sem permissão para alterar a abertura: a Secretaria responsável pela execução deste chamado é outra. Você pode ver e executar, mas não editar, devolver ou transferir.';
+
+export function podeGerirAberturaChamado(user: JwtPayload, chamado: { secretariaId: string }) {
+  if (user.permissoes.includes('usuarios.gerenciar') || user.acessoTodasSecretarias) {
+    if (!user.secretariaId?.trim()) return true;
+  }
+  const ids = resolveSecretariaScopeIds(user);
+  if (!ids) return true;
+  return ids.includes(chamado.secretariaId);
+}
+
+export function assertChamadoGestaoAberturaAccess(
+  user: JwtPayload,
+  chamado: { secretariaId: string },
+  mensagem: string = MSG_SEM_GESTAO_ABERTURA,
+) {
+  if (!podeGerirAberturaChamado(user, chamado)) throw new ForbiddenException(mensagem);
+}
+
 /** Garante que a secretaria alvo está no escopo ativo (abertura / cadastro). */
 export function assertSecretariaNoEscopo(user: JwtPayload, secretariaId: string) {
   const ids = resolveSecretariaScopeIds(user);
@@ -155,4 +186,53 @@ export function resolveDirectSecretariaFilter(user: JwtPayload): { secretariaId?
   if (!ids) return {};
   if (ids.length === 0) return { id: { in: [] } };
   return ids.length === 1 ? { secretariaId: ids[0] } : { secretariaId: { in: ids } };
+}
+
+/**
+ * 306 — função única de escopo para leituras agregadas (Dashboard, pendências, sync, auditoria, alertas).
+ * Escopo efetivo = escopo da sessão (Secretaria ativa / vínculos / global) refinado pelo filtro superior.
+ * - `undefined` = visão global real (administrador em "Todas"), sem filtro.
+ * - `[]` = sem Secretaria autorizada (nada é retornado).
+ * - Filtro fora do escopo (URL/API forçada) → 403.
+ */
+export function resolveSecretariaFiltroEscopo(
+  user: JwtPayload,
+  filtroSecretariaId?: string | readonly string[] | null,
+): string[] | undefined {
+  const scope = resolveSecretariaScopeIds(user);
+  const filtro = normalizarSecretariaIds(filtroSecretariaId);
+  if (!filtro.length) return scope;
+  if (scope && filtro.some((id) => !scope.includes(id))) {
+    throw new ForbiddenException('Secretaria fora do escopo da sessão.');
+  }
+  return filtro;
+}
+
+/**
+ * R3 (306) — forma única do filtro `secretariaId` em query: sempre array de ids (trim, sem vazios, sem repetidos).
+ * Aceita `secretariaId=A`, `secretariaId=A&secretariaId=B` e `secretariaId[]=A`. Qualquer outro tipo → 400.
+ */
+export function normalizarSecretariaIds(raw: unknown): string[] {
+  if (raw === undefined || raw === null) return [];
+  const lista = Array.isArray(raw) ? raw : [raw];
+  if (lista.some((v) => typeof v !== 'string')) {
+    throw new BadRequestException('secretariaId deve ser um id ou uma lista de ids.');
+  }
+  return [...new Set((lista as string[]).map((v) => v.trim()).filter(Boolean))];
+}
+
+/** Lê `secretariaId` e `secretariaId[]` de um objeto de query (Express 5, parser simples). */
+export function secretariaIdsDaQuery(query: Record<string, unknown> | undefined): string[] {
+  // Ciclo 2 (F2): só `secretariaId` e `secretariaId[]`; `secretariaId[x]`, `secretariaId[0]` etc. → 400.
+  const invalida = Object.keys(query ?? {}).find((k) => k.startsWith('secretariaId[') && k !== 'secretariaId[]');
+  if (invalida) throw new BadRequestException('secretariaId deve ser um id ou uma lista de ids.');
+  return normalizarSecretariaIds([
+    ...normalizarSecretariaIds(query?.secretariaId),
+    ...normalizarSecretariaIds(query?.['secretariaId[]']),
+  ]);
+}
+
+/** `{ secretariaId: { in: ids } }` ou `{}` (global). `[]` vira `{ in: [] }` (zero linhas). */
+export function whereSecretariaIdIn(ids: string[] | undefined): { secretariaId?: { in: string[] } } {
+  return ids ? { secretariaId: { in: ids } } : {};
 }

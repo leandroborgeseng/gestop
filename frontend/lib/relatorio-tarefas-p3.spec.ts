@@ -1,22 +1,84 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { razaoContraste } from './tarefa-card';
 import {
+  avisoCorteRelatorioTarefas,
   formatarGrupoIndicadoresTarefas,
   montarFiltrosRelatorioTarefas,
+  ordenarGruposPendencias,
+  textoCorteGrupos,
+  TETO_LINHAS_RELATORIO_TAREFAS,
 } from './chamado-tarefa';
 
 const panelSrc = readFileSync(join(__dirname, '../components/relatorios/relatorio-tarefas-panel.tsx'), 'utf8');
 const formalSrc = readFileSync(join(__dirname, '../app/(authenticated)/relatorios/page.tsx'), 'utf8');
 
+describe('UX-01 — teto de 500 e aviso de corte', () => {
+  it('com 600 tarefas avisa na grade; com 500 ou menos não avisa', () => {
+    expect(TETO_LINHAS_RELATORIO_TAREFAS).toBe(500);
+    expect(avisoCorteRelatorioTarefas(600, 500)).toBe('Mostrando 500 de 600 tarefas');
+    expect(avisoCorteRelatorioTarefas(500, 500)).toBeNull();
+    expect(avisoCorteRelatorioTarefas(120, 120)).toBeNull();
+  });
+
+  it('a grade e o modal formal renderizam o mesmo aviso', () => {
+    expect(panelSrc).toContain('avisoCorteRelatorioTarefas(data.total, data.items.length, data.limite)');
+    expect(panelSrc).toContain('data-testid="aviso-corte-tarefas"');
+    expect(formalSrc).toContain('avisoCorteRelatorioTarefas(data.total, data.items.length, data.limite)');
+    expect(formalSrc).toContain('data-testid="aviso-corte-tarefas-modal"');
+    expect(formalSrc).toContain('getRelatorioTarefas');
+  });
+});
+
 describe('254 — agrupamentos do dashboard', () => {
   it('secretaria e equipe mostram pendentes e atrasadas, não só o total', () => {
-    expect(
-      formatarGrupoIndicadoresTarefas({ nome: 'EDU', pendentes: 3, atrasadas: 1 }),
-    ).toBe('EDU: 3 pendentes · 1 atrasadas');
+    expect(formatarGrupoIndicadoresTarefas({ nome: 'EDU', pendentes: 3, atrasadas: 1 })).toBe(
+      'EDU — 3 pendentes, 1 atrasada',
+    );
     expect(panelSrc).toContain('<Grupo titulo="Por secretaria" itens={indicadores.porSecretaria} detalharPendencias />');
     expect(panelSrc).toContain('<Grupo titulo="Por equipe" itens={indicadores.porEquipe} detalharPendencias />');
     expect(panelSrc).toContain('formatarGrupoIndicadoresTarefas(item)');
+  });
+
+  it('UX-05: singular e plural em 0, 1 e N, vermelho com contraste e legenda', () => {
+    expect(formatarGrupoIndicadoresTarefas({ nome: 'SEMAD', pendentes: 0, atrasadas: 0 })).toBe(
+      'SEMAD — 0 pendentes, 0 atrasadas',
+    );
+    expect(formatarGrupoIndicadoresTarefas({ nome: 'SEMAD', pendentes: 1, atrasadas: 1 })).toBe(
+      'SEMAD — 1 pendente, 1 atrasada',
+    );
+    expect(formatarGrupoIndicadoresTarefas({ nome: 'SEMAD', pendentes: 12, atrasadas: 3 })).toBe(
+      'SEMAD — 12 pendentes, 3 atrasadas',
+    );
+    expect(razaoContraste('#d62b2b', '#ffffff')).toBeGreaterThanOrEqual(4.5);
+    expect(panelSrc).toContain("item.atrasadas > 0 ? 'font-semibold text-[var(--danger)]'");
+    expect(panelSrc).toContain('Atrasadas estão incluídas nas pendentes');
+    expect(panelSrc).toContain('opacity-60');
+  });
+});
+
+describe('UX-04 — ordem e corte dos agrupamentos', () => {
+  it('ordena atrasadas, pendentes e nome, e avisa as que ficam de fora', () => {
+    const grupos = [
+      { nome: 'OBRAS', pendentes: 1, atrasadas: 0 },
+      { nome: 'SAUDE', pendentes: 4, atrasadas: 2 },
+      { nome: 'EDU', pendentes: 9, atrasadas: 0 },
+      { nome: 'CULT', pendentes: 1, atrasadas: 3 },
+      { nome: 'TRANS', pendentes: 2, atrasadas: 2 },
+      { nome: 'ASSIST', pendentes: 0, atrasadas: 0 },
+      { nome: 'FAZENDA', pendentes: 0, atrasadas: 1 },
+      { nome: 'MEIO', pendentes: 8, atrasadas: 0 },
+    ];
+    const ordem = ordenarGruposPendencias(grupos).map((item) => item.nome);
+    expect(ordem[0]).toBe('CULT');
+    expect(ordem).toEqual(['CULT', 'SAUDE', 'TRANS', 'FAZENDA', 'EDU', 'MEIO', 'OBRAS', 'ASSIST']);
+    expect(textoCorteGrupos(8)).toBe('+2 outras');
+    expect(textoCorteGrupos(6)).toBeNull();
+    expect(ordem.filter((nome) => grupos.find((item) => item.nome === nome)!.atrasadas > 0).every((nome) => ordem.indexOf(nome) < 6 || textoCorteGrupos(ordem.length))).toBe(true);
+    expect(panelSrc).toContain('ordenarGruposPendencias(itens)');
+    expect(panelSrc).toContain('Ver todas');
+    expect(panelSrc).toContain('textoCorteGrupos');
   });
 });
 

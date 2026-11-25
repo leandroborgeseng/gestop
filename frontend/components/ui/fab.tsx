@@ -28,7 +28,7 @@ export const Fab = forwardRef<HTMLButtonElement, FabProps>(
           onPointerDown?.(event);
         }}
         className={cn(
-          'md-ripple-host fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom)+1rem)] right-4 z-20 inline-flex items-center justify-center overflow-hidden rounded-[var(--md-shape-lg)] bg-[var(--color-brand-primary-container,var(--color-brand-primary))] font-medium text-[var(--color-brand-on-primary)] shadow-[var(--md-elevation-3)] transition-all duration-[var(--md-duration-short)] hover:bg-[var(--color-brand-primary-hover)] hover:shadow-[var(--md-elevation-4)] active:scale-[0.96] focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 lg:bottom-6',
+          'md-ripple-host fixed bottom-[calc(var(--bottom-nav-h)+env(safe-area-inset-bottom)+1rem)] right-4 z-20 inline-flex items-center justify-center overflow-hidden rounded-[var(--md-shape-lg)] bg-[var(--color-brand-primary-container,var(--color-brand-primary))] font-medium text-[var(--color-brand-on-primary)] shadow-[var(--md-elevation-3)] transition-all duration-[var(--md-duration-short)] hover:bg-[var(--color-brand-primary-hover)] hover:shadow-[var(--md-elevation-4)] active:scale-[0.96] focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 lg:bottom-6',
           extended ? sizes.lg : sizes[size],
           className,
         )}

@@ -102,6 +102,11 @@ export async function syncPermissionsCatalog(prisma: PrismaClient) {
       modulo: 'documentos',
     },
     {
+      chave: 'documentos.cancelar',
+      descricao: 'Cancelar documento (cancelamento lógico)',
+      modulo: 'documentos',
+    },
+    {
       chave: 'documentos.administrar',
       descricao: 'Administrar documentos',
       modulo: 'documentos',

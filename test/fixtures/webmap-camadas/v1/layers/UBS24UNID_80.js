@@ -1,0 +1,1 @@
+var json_UBS24UNID_80 = {"type": "FeatureCollection", "name": "UBS24UNID_80", "crs": {"type": "name", "properties": {"name": "urn:ogc:def:crs:OGC:1.3:CRS84"}}, "xy_coordinate_resolution": 1e-07, "features": [{"type": "Feature", "properties": {"fid": "1", "NOME": "UBS Centro"}, "geometry": {"type": "Point", "coordinates": [-47.39, -20.54]}}]};

@@ -101,6 +101,8 @@ export function bindMapPinSelectionCleanup(
     const selectedId = opts.getSelectedId();
     if (!selectedId) return;
     if (closedId && closedId !== selectedId) return;
+    // 321: abrir a barra fecha o balão e mantém a seleção.
+    if (document.querySelector('[data-testid="cco-detalhe-barra"]')) return;
     opts.onClear();
   };
   const onMapClick = (event: unknown) => {

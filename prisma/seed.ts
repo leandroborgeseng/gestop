@@ -190,6 +190,7 @@ async function main() {
       ['documentos.gerar_pdf', 'Gerar e visualizar PDF de documento', 'documentos'],
       ['documentos.coletar_assinatura', 'Coletar assinatura de documento', 'documentos'],
       ['documentos.cancelar_assinado', 'Cancelar PDF assinado', 'documentos'],
+      ['documentos.cancelar', 'Cancelar documento (cancelamento lógico)', 'documentos'],
       ['documentos.administrar', 'Administrar documentos', 'documentos'],
       ['dashboard.visualizar', 'Visualizar indicadores operacionais', 'dashboard'],
       ['auditoria.visualizar', 'Visualizar trilhas de auditoria', 'auditoria'],

@@ -27,6 +27,7 @@ import {
   downloadRelatorioPdf,
   downloadRelatorioTarefas,
   downloadRelatorioXlsx,
+  getRelatorioTarefas,
   getOpcoesFiltroUnidades,
   getSecretarias,
   getUnidades,
@@ -34,7 +35,7 @@ import {
   listUsuariosAtivosExecucao,
 } from '@/lib/api';
 import { CHAMADO_STATUS_META } from '@/lib/chamado-status';
-import { TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL } from '@/lib/chamado-tarefa';
+import { avisoCorteRelatorioTarefas, TAREFA_PRIORIDADE_LABEL, TAREFA_STATUS_LABEL } from '@/lib/chamado-tarefa';
 import { CRONOGRAMA_FREQUENCIAS, CRONOGRAMA_FREQUENCIA_LABELS } from '@/lib/cronograma';
 import { formatUnidadeTipo } from '@/lib/unidade-tipo';
 import {
@@ -191,6 +192,25 @@ const EMPTY_TAREFAS: TarefasModalState = {
   canceladas: false,
 };
 
+function paramsModalTarefas(tarefasModal: TarefasModalState): Record<string, string | undefined> {
+  const params: Record<string, string | undefined> = { capa: 'formal' };
+  if (tarefasModal.secretariaId) params.secretariaId = tarefasModal.secretariaId;
+  if (tarefasModal.from) params.from = tarefasModal.from;
+  if (tarefasModal.to) params.to = tarefasModal.to;
+  if (tarefasModal.status) params.status = tarefasModal.status;
+  if (tarefasModal.prioridade) params.prioridade = tarefasModal.prioridade;
+  if (tarefasModal.equipeId) params.equipeId = tarefasModal.equipeId;
+  if (tarefasModal.responsavelId) params.responsavelId = tarefasModal.responsavelId;
+  if (tarefasModal.tipoChamadoId) params.tipoChamadoId = tarefasModal.tipoChamadoId;
+  if (tarefasModal.numero.trim()) params.numero = tarefasModal.numero.trim();
+  if (tarefasModal.texto.trim()) params.texto = tarefasModal.texto.trim();
+  if (tarefasModal.situacaoPrazo) params.situacaoPrazo = tarefasModal.situacaoPrazo;
+  if (tarefasModal.atrasadas) params.atrasadas = '1';
+  if (tarefasModal.concluidas) params.concluidas = '1';
+  if (tarefasModal.canceladas) params.canceladas = '1';
+  return params;
+}
+
 const EMPTY_COBERTURA: CoberturaModalState = {
   secretariaId: '',
   tipo: '',
@@ -217,6 +237,7 @@ export default function RelatoriosPage() {
   const [prodModal, setProdModal] = useState<ProdutividadeModalState>(EMPTY_PROD);
   const [coberturaModal, setCoberturaModal] = useState<CoberturaModalState>(EMPTY_COBERTURA);
   const [tarefasModal, setTarefasModal] = useState<TarefasModalState>(EMPTY_TAREFAS);
+  const [avisoCorteModal, setAvisoCorteModal] = useState<string | null>(null);
 
   useEffect(() => {
     getSecretarias().then(setSecretarias).catch(() => setSecretarias([]));
@@ -295,22 +316,30 @@ export default function RelatoriosPage() {
     await exportar('chamados-produtividade', prodModal.formato, params);
   }
 
+  const filtrosModalTarefas = paramsModalTarefas(tarefasModal);
+  const chaveFiltrosModalTarefas = JSON.stringify(filtrosModalTarefas);
+
+  useEffect(() => {
+    if (activeTipo !== 'tarefas-chamados') {
+      setAvisoCorteModal(null);
+      return;
+    }
+    let vivo = true;
+    getRelatorioTarefas(JSON.parse(chaveFiltrosModalTarefas) as Record<string, string | undefined>)
+      .then((data) => {
+        if (!vivo) return;
+        setAvisoCorteModal(avisoCorteRelatorioTarefas(data.total, data.items.length, data.limite));
+      })
+      .catch(() => {
+        if (vivo) setAvisoCorteModal(null);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [activeTipo, chaveFiltrosModalTarefas]);
+
   async function gerarTarefas() {
-    const params: Record<string, string | undefined> = { capa: 'formal' };
-    if (tarefasModal.secretariaId) params.secretariaId = tarefasModal.secretariaId;
-    if (tarefasModal.from) params.from = tarefasModal.from;
-    if (tarefasModal.to) params.to = tarefasModal.to;
-    if (tarefasModal.status) params.status = tarefasModal.status;
-    if (tarefasModal.prioridade) params.prioridade = tarefasModal.prioridade;
-    if (tarefasModal.equipeId) params.equipeId = tarefasModal.equipeId;
-    if (tarefasModal.responsavelId) params.responsavelId = tarefasModal.responsavelId;
-    if (tarefasModal.tipoChamadoId) params.tipoChamadoId = tarefasModal.tipoChamadoId;
-    if (tarefasModal.numero.trim()) params.numero = tarefasModal.numero.trim();
-    if (tarefasModal.texto.trim()) params.texto = tarefasModal.texto.trim();
-    if (tarefasModal.situacaoPrazo) params.situacaoPrazo = tarefasModal.situacaoPrazo;
-    if (tarefasModal.atrasadas) params.atrasadas = '1';
-    if (tarefasModal.concluidas) params.concluidas = '1';
-    if (tarefasModal.canceladas) params.canceladas = '1';
+    const params = filtrosModalTarefas;
     setLoading(`tarefas-chamados-${tarefasModal.formato}`);
     setError(null);
     try {
@@ -857,6 +886,11 @@ export default function RelatoriosPage() {
               </Select>
             </Field>
           </div>
+          {avisoCorteModal ? (
+            <p data-testid="aviso-corte-tarefas-modal" className="mt-4 text-[13px] font-medium text-[var(--ink-2)]">
+              {avisoCorteModal}
+            </p>
+          ) : null}
           <div className="mt-4 flex flex-wrap gap-4 text-[13px] text-[var(--ink-2)]">
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={tarefasModal.atrasadas} onChange={(e) => setTarefasModal((prev) => ({ ...prev, atrasadas: e.target.checked }))} />

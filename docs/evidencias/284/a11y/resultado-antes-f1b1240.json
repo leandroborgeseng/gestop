@@ -1,0 +1,94 @@
+[
+ {
+  "id": "3-role-aria",
+  "pass": true,
+  "det": {
+   "role": "dialog",
+   "ariaModal": "true",
+   "labelledby": "preencher-documento-titulo",
+   "titulo": "Preencher documento",
+   "noBody": true
+  }
+ },
+ {
+  "id": "1-foco-preso-80-tabs",
+  "pass": false,
+  "det": {
+   "tabs": 80,
+   "fora": 39,
+   "sidebar": 23,
+   "amostra": [
+    "Gerar PDF original",
+    "Copiar link de validação",
+    "Marcar assinatura pendente",
+    "Cancelar documento",
+    "Ver respostas do documento",
+    "NEXTJS-PORTAL",
+    "Fechar",
+    "SelecioneSimNão",
+    "TEXTAREA",
+    "INPUT",
+    "Salvar rascunho",
+    "Concluir documento"
+   ]
+  }
+ },
+ {
+  "id": "4-fundo-travado",
+  "pass": true,
+  "det": {
+   "pos": "fixed",
+   "y0": 0,
+   "htmlH": 800,
+   "y": 0,
+   "mainTop": 60,
+   "bodyTop": "0px"
+  }
+ },
+ {
+  "id": "5-centralizado-1280",
+  "pass": true,
+  "det": {
+   "x": 256,
+   "y": 24,
+   "w": 768,
+   "h": 752,
+   "maxWidth": "768px",
+   "centroX": 640
+  }
+ },
+ {
+  "id": "2a-esc-fecha-e-devolve-foco-documentos",
+  "pass": false,
+  "det": {
+   "aberto": 1,
+   "focoNoOpener": false
+  }
+ },
+ {
+  "id": "4b-posicao-restaurada",
+  "pass": false,
+  "det": {}
+ },
+ {
+  "id": "2b-fechar-devolve-foco-documentos",
+  "pass": false,
+  "det": {
+   "focoNoOpener": false
+  }
+ },
+ {
+  "id": "2c-esc-devolve-foco-chamados",
+  "pass": false,
+  "det": {
+   "focoNoOpener": true
+  }
+ },
+ {
+  "id": "2d-fechar-devolve-foco-chamados",
+  "pass": false,
+  "det": {
+   "focoNoOpener": false
+  }
+ }
+]

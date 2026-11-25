@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { ChamadoMapaItem, UnidadeOperacional } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,6 +32,14 @@ export function OperationalMap({
   onClearSelection,
   onHover,
   popupActionKind = 'modal',
+  notaCorte,
+  controlesExtra,
+  renderPainel,
+  alertaMapa,
+  manterVista,
+  ocultarPinos,
+  onMapaPronto,
+  detalhe,
 }: {
   view?: CcoMapView;
   unidades?: UnidadeOperacional[];
@@ -42,7 +51,18 @@ export function OperationalMap({
   onSelect?: (id: string) => void;
   onClearSelection?: () => void;
   onHover?: (id: string | null) => void;
+  /** 295: nota quando o resultado foi cortado (mapa de calor e legenda). */
+  notaCorte?: string;
   popupActionKind?: import('@/lib/map-popup-action').MapPopupActionKind;
+  controlesExtra?: ReactNode;
+  renderPainel?: (ctx: import('./operational-map-client').MapaPainelContexto) => ReactNode;
+  alertaMapa?: ReactNode;
+  manterVista?: boolean;
+  ocultarPinos?: boolean;
+  /** 298: instância do mapa (camadas do Webmap desenhadas por fora). null ao desmontar. */
+  onMapaPronto?: (map: import('leaflet').Map | null) => void;
+  /** 321: barra de detalhes, filha do shell que entra em tela cheia. */
+  detalhe?: ReactNode;
 }) {
   return (
     <OperationalMapClient
@@ -57,6 +77,14 @@ export function OperationalMap({
       onClearSelection={onClearSelection}
       onHover={onHover}
       popupActionKind={popupActionKind}
+      notaCorte={notaCorte}
+      controlesExtra={controlesExtra}
+      renderPainel={renderPainel}
+      alertaMapa={alertaMapa}
+      manterVista={manterVista}
+      ocultarPinos={ocultarPinos}
+      onMapaPronto={onMapaPronto}
+      detalhe={detalhe}
     />
   );
 }

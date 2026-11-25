@@ -1,4 +1,5 @@
 import { formatSecretariaLabel } from '../common/format-secretaria';
+import { chamadoStatusLabel } from '../chamados/chamados-sla';
 import { deveExibirCabecalhoSecao, tituloPerguntaChecklist } from '../checklists/checklist-resposta-apresentacao';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -71,6 +72,10 @@ export type VistoriaRealizadaPdfInput = {
   notaGeral?: number | null;
   notasPorCategoria?: Array<{ categoriaNome: string; nota: number }>;
   respostas: VistoriaRealizadaPdfResposta[];
+  /** 305: marca visível quando o PDF é da vistoria excluída (só quem pode vê-la chega aqui). */
+  excluida?: boolean;
+  excluidoEm?: string | null;
+  exclusaoMotivo?: string | null;
 };
 
 function ensureSpace(doc: InstanceType<typeof PDFDocument>, y: number, needed: number, marginTop: number) {
@@ -207,18 +212,13 @@ function drawPergunta(
   doc.font('Helvetica-Bold').fontSize(9).fillColor(BRAND_PRIMARY).text(title, left, y, { width });
   y = doc.y + 4;
 
-  const metaLine = [
-    resposta.categoriaNome ? `Categoria: ${resposta.categoriaNome}` : null,
-    `Tipo: ${resposta.tipo}`,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED).text(metaLine, left, y, { width });
-  y = doc.y + 6;
+  const metaLine = [resposta.categoriaNome ? `Categoria: ${resposta.categoriaNome}` : null].filter(Boolean).join(' · ');
+  if (metaLine) {
+    doc.font('Helvetica').fontSize(8).fillColor(TEXT_MUTED).text(metaLine, left, y, { width });
+    y = doc.y + 6;
+  }
 
-  const respostaLine = `Resposta: ${resposta.respostaTexto}${
-    resposta.conformidade ? ` (${resposta.conformidade})` : ''
-  }`;
+  const respostaLine = `Resposta: ${resposta.respostaTexto}`;
   y = ensureSpace(doc, y, 14, marginTop);
   doc.font('Helvetica').fontSize(9).fillColor(TEXT_PRIMARY).text(respostaLine, left, y, { width });
   y = doc.y + 4;
@@ -234,7 +234,9 @@ function drawPergunta(
   if (resposta.naoConformidade) {
     const nc = resposta.naoConformidade;
     const ncLine = nc.chamado
-      ? `Não conformidade → chamado ${nc.chamado.codigo}${nc.chamado.status ? ` (${nc.chamado.status})` : ''}`
+      ? `Não conformidade — chamado ${nc.chamado.codigo}${
+          nc.chamado.status ? ` (${chamadoStatusLabel(nc.chamado.status)})` : ''
+        }`
       : nc.status === 'BAIXADA_MANUAL'
         ? `Não conformidade baixada manualmente${nc.motivoBaixa ? `: ${nc.motivoBaixa}` : ''}`
         : 'Não conformidade pendente sem chamado';
@@ -272,6 +274,14 @@ export function buildVistoriaRealizadaPdf(input: VistoriaRealizadaPdfInput): Pro
 
     doc.font('Helvetica-Bold').fontSize(14).fillColor(BRAND_PRIMARY).text('Vistoria realizada', left, y);
     y += 18;
+    if (input.excluida) {
+      const quando = input.excluidoEm ? new Date(input.excluidoEm).toLocaleString('pt-BR') : null;
+      const marca = ['Excluída', quando ? `em ${quando}` : null, input.exclusaoMotivo ? `Motivo: ${input.exclusaoMotivo}` : null]
+        .filter(Boolean)
+        .join(' · ');
+      doc.font('Helvetica-Bold').fontSize(12).fillColor('#9b1c1c').text(marca, left, y, { width });
+      y = doc.y + 10;
+    }
     doc.font('Helvetica').fontSize(10).fillColor(TEXT_MUTED).text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, left, y);
     y += 22;
 

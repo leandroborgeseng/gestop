@@ -1,6 +1,7 @@
 import type { ChamadoTarefaChamadoLeitura, ChamadoTarefaDetalhe, ChamadoTarefaResumo, RelatorioTarefasResponse, TarefasExecucaoResponse } from '@/lib/chamado-tarefa';
 import {
   AuthUser,
+  ResponsavelCronogramaOpcao,
   AdminPerfil,
   AdminSecretaria,
   AdminUnidade,
@@ -34,6 +35,7 @@ import {
   ChamadoProgramacaoResponse,
   ChamadoProtocoloPublico,
   ChamadoMapaItem,
+  ChamadosMapaResposta,
   ChamadosMapaFilters,
   FiscalizacaoDetalhe,
   FiscalizacaoOpcoesManuais,
@@ -61,8 +63,11 @@ import {
   DocumentosListResponse,
   DocumentoValidacaoPublica,
 } from './types';
+import { aberturaParaQuery } from '@/lib/filtro-data-abertura';
 import { toGeoCheckin } from '@/lib/geolocation';
 import { notifyAuthExpired } from './security';
+import { extractApiErrorMessage, readForbiddenMessage } from './api-errors';
+import { caminhoRegistro, recusarIdForaDoPrisma } from './id-prisma';
 
 // Sempre usa proxy interno do Next.js no browser.
 // NEXT_PUBLIC_API_URL apontando para URL externa quebra login no Railway.
@@ -70,12 +75,15 @@ import { notifyAuthExpired } from './security';
 export const API_PROXY_PREFIX = '/api-gestop';
 const API_BASE_URL = API_PROXY_PREFIX;
 const AUTH_STORAGE_KEY = 'sigma.auth';
+/** 1 quando o login marcou "manter conectado" (sessão de 30 dias). */
+export const AUTH_REMEMBER_STORAGE_KEY = 'gestop.auth.remember';
+/** Chave do localStorage da sessão (para o evento `storage` entre abas). */
+export const AUTH_STORAGE_KEY_PUBLICA = AUTH_STORAGE_KEY;
 const LEGACY_AUTH_STORAGE_KEY = 'gestop.auth';
 
 async function readApiError(response: Response, fallback: string) {
   try {
-    const payload = (await response.json()) as { message?: string; error?: string };
-    return payload.message ?? payload.error ?? fallback;
+    return extractApiErrorMessage(await response.json(), fallback);
   } catch {
     return fallback;
   }
@@ -150,7 +158,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : 'erro de rede';
-    throw new Error(`Falha de conexao com a API (${API_BASE_URL}). ${detail}`);
+    // 304: `rede: true` para a fila distinguir "sem conexão" de erro do servidor.
+    throw Object.assign(new Error(`Falha de conexao com a API (${API_BASE_URL}). ${detail}`), { rede: true });
   }
 
   if (response.status === 401) {
@@ -159,11 +168,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (response.status === 403) {
-    throw new Error('Acesso negado para o seu perfil.');
+    // 300: status no erro para a tela distinguir "sem acesso" de falha temporária.
+    throw Object.assign(new Error(await readForbiddenMessage(response)), { status: 403 });
   }
 
   if (!response.ok) {
-    throw new Error(await readApiError(response, `Falha ao consultar API (${response.status})`));
+    // 304: status e `codigo` (ex.: conflito da programação) junto da mensagem, sem mudar o texto do erro.
+    const fallback = `Falha ao consultar API (${response.status})`;
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch {
+      body = null;
+    }
+    const codigo = body && typeof body === 'object' && typeof (body as { codigo?: unknown }).codigo === 'string' ? (body as { codigo: string }).codigo : undefined;
+    throw Object.assign(new Error(body ? extractApiErrorMessage(body, fallback) : fallback), { status: response.status, codigo });
   }
 
   return response.json() as Promise<T>;
@@ -200,7 +219,7 @@ export async function login(email: string, password: string, remember = false) {
     expiresAt: Date.now() + data.expiresInSeconds * 1000,
   });
   if (typeof window !== 'undefined') {
-    window.localStorage.setItem('gestop.auth.remember', remember ? '1' : '0');
+    window.localStorage.setItem(AUTH_REMEMBER_STORAGE_KEY, remember ? '1' : '0');
   }
 
   return data;
@@ -256,6 +275,21 @@ export function getSecretarias() {
   return request<SecretariaOption[]>('/operacional/secretarias');
 }
 
+/** 310: todas as Secretarias ativas como destino da execução (independe da Secretaria ativa). */
+export function getSecretariasDestinoExecucao() {
+  return request<SecretariaOption[]>('/chamados/secretarias/destino-execucao');
+}
+
+/** 310: retorno da troca de Secretaria de execução. */
+export type TransferenciaExecucao = {
+  origem: SecretariaOption | null;
+  destino: SecretariaOption;
+  revisar: { equipe?: { id: string; nome: string; secretaria: SecretariaOption | null }; responsavel?: { id: string; nome: string } };
+  saiuDoEscopo: boolean;
+  /** Ainda vê/executa (próprio ou equipe), mas perdeu a gestão da abertura. */
+  somenteExecucao?: boolean;
+};
+
 export function getSecretariasExecucao() {
   return request<SecretariaOption[]>('/chamados/secretarias/execucao');
 }
@@ -287,10 +321,88 @@ export function getUnidades(filters: UnidadeFilters) {
   return request<UnidadeOperacional[]>(`/operacional/unidades${query ? `?${query}` : ''}`);
 }
 
+/** 319: categorias com nota válida nos próprios filtrados (todos os filtros da lista de próprios). */
+export function listCategoriasNotaDisponiveis(filters: UnidadeFilters, init?: { signal?: AbortSignal }) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
+    if (value) params.set(key, String(value));
+  });
+  const query = params.toString();
+  return request<import('./cco-categorias-nota').CategoriaNotaDisponivel[]>(
+    `/operacional/categorias-nota-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
+/** 312: tipos de próprio com próprios ativos acessíveis nos filtros atuais (exceto tipo). */
+export function listTiposProprioDisponiveis(filters: UnidadeFilters, init?: { signal?: AbortSignal }) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (key === 'tipo' || key === 'tipos') return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
+    if (value) params.set(key, String(value));
+  });
+  const query = params.toString();
+  return request<import('./cco-tipos-proprio').TipoProprioDisponivel[]>(
+    `/operacional/tipos-proprio-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
+function paramsDe(filters: object, ignorar: string[] = []) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (ignorar.includes(key)) return;
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item) params.append(key, String(item));
+      });
+      return;
+    }
+    if (value && value !== 'TODOS') params.set(key, String(value));
+  });
+  return params;
+}
+
+/** 316: tipos de chamado dos chamados abertos dos próprios filtrados (todos os filtros, exceto o tipo de chamado). */
+export function listTiposChamadoDisponiveisProprios(filters: UnidadeFilters, init?: { signal?: AbortSignal }) {
+  const query = paramsDe(filters, ['tiposChamadoId']).toString();
+  return request<import('./cco-tipos-chamado').TipoChamadoDisponivel[]>(
+    `/operacional/tipos-chamado-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
+/** 316: tipos de chamado dos chamados do mapa (todos os filtros, rápidos e datas inclusive, exceto o tipo). */
+export function listTiposChamadoDisponiveisMapa(filters: ChamadosMapaFilters, init?: { signal?: AbortSignal }) {
+  const { abertura, ...resto } = filters;
+  const params = paramsDe(resto, ['tipoChamadoId']);
+  Object.entries(aberturaParaQuery(abertura)).forEach(([key, value]) => params.set(key, value));
+  const query = params.toString();
+  return request<import('./cco-tipos-chamado').TipoChamadoDisponivel[]>(
+    `/operacional/chamados-mapa/tipos-chamado-disponiveis${query ? `?${query}` : ''}`,
+    init,
+  );
+}
+
 export function listChamadosMapa(filters: ChamadosMapaFilters = {}) {
   const params = new URLSearchParams();
+  // 295: o período vira abertoDe/abertoAte ou diasMinimos (mesma regra da Triagem).
+  const { abertura, ...resto } = filters;
+  Object.entries(aberturaParaQuery(abertura)).forEach(([key, value]) => params.set(key, value));
 
-  Object.entries(filters).forEach(([key, value]) => {
+  Object.entries(resto).forEach(([key, value]) => {
     if (Array.isArray(value)) {
       value.forEach((item) => {
         if (item) params.append(key, String(item));
@@ -303,7 +415,7 @@ export function listChamadosMapa(filters: ChamadosMapaFilters = {}) {
   });
 
   const query = params.toString();
-  return request<ChamadoMapaItem[]>(`/operacional/chamados-mapa${query ? `?${query}` : ''}`);
+  return request<ChamadosMapaResposta>(`/operacional/chamados-mapa${query ? `?${query}` : ''}`);
 }
 
 export function getUnidadeDetalhe(id: string) {
@@ -714,7 +826,20 @@ export function saveChecklist(payload: Record<string, unknown>, id?: string) {
 }
 
 export function deactivateChecklist(id: string) {
-  return request<ChecklistModel>(`/checklists/${id}`, { method: 'DELETE' });
+  return inativarChecklist(id);
+}
+
+/** 309: inativar/reativar com permissão e auditoria no backend. */
+export function inativarChecklist(id: string) {
+  return request<ChecklistModel>(`/checklists/${id}/inativar`, { method: 'POST' });
+}
+
+export function reativarChecklist(id: string) {
+  return request<ChecklistModel>(`/checklists/${id}/reativar`, { method: 'POST' });
+}
+
+export function getChecklistsResumo() {
+  return request<{ ativos: number; inativos: number; total: number }>('/checklists/resumo');
 }
 
 export function listCronogramas(filters?: { secretariaId?: string; unidadeId?: string }) {
@@ -737,8 +862,24 @@ export function getCalendarioChecagens(filters: {
   return request<CalendarioChecagemResponse>(`/cronograma/calendario?${params.toString()}`);
 }
 
+/** 307/R3: responsáveis no escopo da sessão (Secretaria ativa / vínculos / "Todas" autorizadas). */
+export function listResponsaveisCronograma(search?: string) {
+  const query = search?.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+  return request<ResponsavelCronogramaOpcao[]>(`/cronograma/responsaveis/opcoes${query}`);
+}
+
+/** 307/R4/R5: situação dos responsáveis escolhidos no escopo ATUAL. */
+export function getSituacaoResponsaveisCronograma(ids: string[]) {
+  if (!ids.length) return Promise.resolve([] as ResponsavelCronogramaOpcao[]);
+  return request<ResponsavelCronogramaOpcao[]>(`/cronograma/responsaveis/situacao?ids=${encodeURIComponent(ids.join(','))}`);
+}
+
 export function saveCronograma(payload: Record<string, unknown>, id?: string) {
-  return request<CronogramaChecagem>(`/cronograma${id ? `/${id}` : ''}`, {
+  if (id) {
+    const recusa = recusarIdForaDoPrisma<CronogramaChecagem>(id);
+    if (recusa) return recusa;
+  }
+  return request<CronogramaChecagem>(id ? caminhoRegistro('/cronograma', id) : '/cronograma', {
     method: id ? 'PUT' : 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -746,7 +887,16 @@ export function saveCronograma(payload: Record<string, unknown>, id?: string) {
 }
 
 export function deactivateCronograma(id: string) {
-  return request<CronogramaChecagem>(`/cronograma/${id}`, { method: 'DELETE' });
+  const recusa = recusarIdForaDoPrisma<CronogramaChecagem>(id);
+  if (recusa) return recusa;
+  return request<CronogramaChecagem>(caminhoRegistro('/cronograma', id), { method: 'DELETE' });
+}
+
+/** 308 */
+export function reactivateCronograma(id: string) {
+  const recusa = recusarIdForaDoPrisma<CronogramaChecagem>(id);
+  if (recusa) return recusa;
+  return request<CronogramaChecagem>(`${caminhoRegistro('/cronograma', id)}/reativar`, { method: 'POST' });
 }
 
 export function createChecklistVersion(id: string) {
@@ -816,8 +966,11 @@ export function listMobileChamadosPendentes(unidadeId: string) {
   }>(`/mobile/unidades/${unidadeId}/chamados-pendentes`);
 }
 
-export function syncMobileInspection(payload: MobileQueuedInspection) {
-  const sanitized: MobileQueuedInspection = {
+export function syncMobileInspection(item: MobileQueuedInspection) {
+  // 304: `sync` (estado/erro do item na fila) é só local; não vai para a API (forbidNonWhitelisted).
+  const { sync: _estadoLocal, ...payload } = item;
+  void _estadoLocal;
+  const sanitized: Omit<MobileQueuedInspection, 'sync'> = {
     ...payload,
     checkin: toGeoCheckin(payload.checkin),
     respostas: payload.respostas.map((resposta) => ({
@@ -829,7 +982,13 @@ export function syncMobileInspection(payload: MobileQueuedInspection) {
     })),
   };
 
-  return request<{ status: string; fiscalizacaoId?: string; syncEventId: string }>('/mobile/sync/fiscalizacoes', {
+  return request<{
+    status: string;
+    reenvio?: boolean;
+    fiscalizacaoId?: string;
+    syncEventId: string | null;
+    programacao?: { cronogramaId: string; baixada: boolean; proximaChecagemEm: string } | null;
+  }>('/mobile/sync/fiscalizacoes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(sanitized),
@@ -988,8 +1147,15 @@ export function listChamados(params?: {
   secretariaExecucaoId?: string;
   tipoChamadoId?: string;
   incluirExcluidos?: boolean;
+  /** 295 */
+  abertoDe?: string;
+  abertoAte?: string;
+  diasMinimos?: string;
 }) {
   const search = new URLSearchParams();
+  if (params?.abertoDe) search.set('abertoDe', params.abertoDe);
+  if (params?.abertoAte) search.set('abertoAte', params.abertoAte);
+  if (params?.diasMinimos) search.set('diasMinimos', params.diasMinimos);
   if (params?.limit != null) search.set('limit', String(params.limit));
   if (params?.offset != null) search.set('offset', String(params.offset));
   if (params?.all) search.set('all', 'true');
@@ -1059,7 +1225,9 @@ export function createChamado(payload: {
 }
 
 export function getChamado(id: string) {
-  return request<ChamadoDetalhe>(`/chamados/${id}`);
+  const recusa = recusarIdForaDoPrisma<ChamadoDetalhe>(id);
+  if (recusa) return recusa;
+  return request<ChamadoDetalhe>(caminhoRegistro('/chamados', id));
 }
 
 export function listMeusChamados(params?: {
@@ -1200,7 +1368,7 @@ export function updateChamadoAbertura(
     observadorIds?: string[];
   },
 ) {
-  return request<ChamadoResumo>(`/chamados/${id}/abertura`, {
+  return request<ChamadoResumo & { transferenciaExecucao?: TransferenciaExecucao }>(`/chamados/${id}/abertura`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -1216,11 +1384,16 @@ export function listFiscalizacoes(params?: {
   from?: string;
   to?: string;
   q?: string;
+  avulsaPorConflito?: 'true' | 'false';
+  /** 305/E4: exige a subfunção Visualizar excluídas. */
+  incluirExcluidas?: boolean;
   limit?: number;
   offset?: number;
 }) {
   const query = new URLSearchParams();
   if (params?.secretariaId) query.set('secretariaId', params.secretariaId);
+  if (params?.incluirExcluidas) query.set('incluirExcluidas', 'true');
+  if (params?.avulsaPorConflito) query.set('avulsaPorConflito', params.avulsaPorConflito);
   if (params?.unidadeId) query.set('unidadeId', params.unidadeId);
   if (params?.agenteId) query.set('agenteId', params.agenteId);
   if (params?.tipo) query.set('tipo', params.tipo);
@@ -1234,8 +1407,22 @@ export function listFiscalizacoes(params?: {
   return request<FiscalizacoesListResponse>(`/fiscalizacoes${suffix}`);
 }
 
+/** 305/E1: exclusão lógica da vistoria realizada, com motivo obrigatório. */
+export function excluirFiscalizacao(id: string, motivo: string) {
+  return request<{ id: string; status: 'EXCLUIDA'; excluida: true; excluidoEm: string; exclusaoMotivo: string }>(
+    `/fiscalizacoes/${id}/exclusao`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ motivo }),
+    },
+  );
+}
+
 export function getFiscalizacao(id: string) {
-  return request<FiscalizacaoDetalhe>(`/fiscalizacoes/${id}`);
+  const recusa = recusarIdForaDoPrisma<FiscalizacaoDetalhe>(id);
+  if (recusa) return recusa;
+  return request<FiscalizacaoDetalhe>(caminhoRegistro('/fiscalizacoes', id));
 }
 
 export function getFiscalizacaoOpcoesManuais() {
@@ -1664,12 +1851,15 @@ export function listDocumentos(params?: {
   assinatura?: string;
   pendentesAssinatura?: string;
   avulso?: string;
+  /** 287: `1` inclui documentos cancelados. */
+  historico?: string;
   limit?: number;
   offset?: number;
 }) {
   const query = new URLSearchParams();
   if (params?.search) query.set('search', params.search);
   if (params?.tipo) query.set('tipo', params.tipo);
+  if (params?.historico) query.set('historico', params.historico);
   if (params?.situacao) query.set('situacao', params.situacao);
   if (params?.origem) query.set('origem', params.origem);
   if (params?.secretariaId) query.set('secretariaId', params.secretariaId);
@@ -1710,6 +1900,13 @@ export type PendenciasResumo = {
     verMaisHref?: string;
   }>;
 };
+
+/** 289: o servidor calcula, marca o dia (America/Sao_Paulo) de forma atômica e decide `abrir`. */
+export function verificarAberturaDiariaPendencias() {
+  return request<{ abrir: boolean; pendencias: PendenciasResumo }>('/documentos/pendencias-abertura-diaria', {
+    method: 'POST',
+  });
+}
 
 export function getPendenciasResumo() {
   return request<PendenciasResumo>('/documentos/pendencias-resumo');
@@ -1766,7 +1963,9 @@ export function recusarPedidoAssinatura(pedidoId: string, motivo?: string) {
 }
 
 export function getDocumento(id: string) {
-  return request<DocumentoDetalhe>(`/documentos/${id}`);
+  const recusa = recusarIdForaDoPrisma<DocumentoDetalhe>(id);
+  if (recusa) return recusa;
+  return request<DocumentoDetalhe>(caminhoRegistro('/documentos', id));
 }
 
 export function listDocumentosPorChamado(chamadoId: string) {
@@ -1919,6 +2118,15 @@ export function marcarAssinaturaPendenteDocumento(id: string) {
   return toggleAssinaturaPendenteDocumento(id);
 }
 
+/** 287: cancelamento lógico (nunca DELETE). Motivo opcional. */
+export function cancelarDocumento(id: string, motivo?: string) {
+  return request<DocumentoResumo>(`/documentos/${id}/cancelar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(motivo?.trim() ? { motivo: motivo.trim() } : {}),
+  });
+}
+
 export function cancelarDocumentoAssinado(id: string, motivo: string) {
   return request<DocumentoResumo>(`/documentos/${id}/cancelar-assinado`, {
     method: 'POST',
@@ -2000,11 +2208,19 @@ export function listTarefasDoChamado(chamadoId: string) {
 }
 
 export function getChamadoTarefa(id: string) {
-  return request<ChamadoTarefaDetalhe>(`/chamado-tarefas/${id}`);
+  const recusa = recusarIdForaDoPrisma<ChamadoTarefaDetalhe>(id);
+  if (recusa) return recusa;
+  return request<ChamadoTarefaDetalhe>(caminhoRegistro('/chamado-tarefas', id));
 }
 
 export function getChamadoLeituraViaTarefa(tarefaId: string, chamadoId: string) {
-  return request<ChamadoTarefaChamadoLeitura>(`/chamado-tarefas/${tarefaId}/chamado/${chamadoId}`);
+  const recusaTarefa = recusarIdForaDoPrisma<ChamadoTarefaChamadoLeitura>(tarefaId);
+  if (recusaTarefa) return recusaTarefa;
+  const recusaChamado = recusarIdForaDoPrisma<ChamadoTarefaChamadoLeitura>(chamadoId);
+  if (recusaChamado) return recusaChamado;
+  return request<ChamadoTarefaChamadoLeitura>(
+    `/chamado-tarefas/${encodeURIComponent(tarefaId)}/chamado/${encodeURIComponent(chamadoId)}`,
+  );
 }
 
 export function getOpcoesTarefa(secretariaId?: string) {
@@ -2096,4 +2312,82 @@ export function getPublicDocumentoValidacaoPorDocumento(codigoDocumento: string,
   return publicRequest<DocumentoValidacaoPublica>(
     `/public/documentos/validar-por-documento?${query.toString()}`,
   );
+}
+
+// 296 — Importar apenas camadas Webmap (somente aditivo)
+export function getWebmapCamadasStatus() {
+  return request<import('./types').WebmapCamadasStatus>('/admin/importacao/webmap-camadas/status');
+}
+
+/** 299 — árvore das camadas do Webmap para o mapa (usuários do CCO). */
+export function getMapaCamadas() {
+  return request<import('./types').MapaCamadaGrupo[]>('/mapa/camadas');
+}
+
+/**
+ * 298 — GeoJSON de UMA camada ligada (versão ativa), por bbox+zoom quando pesada. Cancelável (AbortSignal).
+ * 409 versao_mudou => VersaoMudouError (o mapa recarrega a lista; o cache da versão antiga não é usado).
+ */
+export async function getMapaCamadaGeojson(
+  camadaId: string,
+  opts: { bbox?: [number, number, number, number]; zoom?: number; versao?: string | number | null; signal?: AbortSignal },
+): Promise<{ dados: import('./webmap-mapa').RespostaGeojson; bytes: number }> {
+  const q = new URLSearchParams();
+  if (opts.bbox) q.set('bbox', opts.bbox.join(','));
+  if (opts.zoom !== undefined) q.set('zoom', String(opts.zoom));
+  if (opts.versao !== undefined && opts.versao !== null) q.set('v', String(opts.versao));
+  const token = getStoredAuth()?.accessToken;
+  const response = await fetch(`${API_BASE_URL}/mapa/camadas/${encodeURIComponent(camadaId)}/geojson${q.size ? `?${q}` : ''}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    signal: opts.signal,
+  });
+  if (response.status === 401) {
+    handleUnauthorized();
+    throw new Error('Sessão expirada. Faça login novamente.');
+  }
+  if (response.status === 409) {
+    const { VersaoMudouError } = await import('./webmap-mapa');
+    throw new VersaoMudouError();
+  }
+  if (!response.ok) throw new Error(`Falha ao carregar camada (${response.status})`);
+  const texto = await response.text();
+  return { dados: JSON.parse(texto), bytes: texto.length };
+}
+
+export function getWebmapCamadasHistorico(limit = 10) {
+  return request<import('./types').WebmapCamadasHistoricoItem[]>(`/admin/importacao/webmap-camadas/historico?limit=${limit}`);
+}
+
+export function simularWebmapCamadas() {
+  return request<import('./types').WebmapCamadasSimulacao>('/admin/importacao/webmap-camadas/simular', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+}
+
+export function aplicarWebmapCamadas(simulacaoId: string) {
+  return request<import('./types').WebmapCamadasAplicacaoIniciada>('/admin/importacao/webmap-camadas/aplicar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ simulacaoId }),
+  });
+}
+
+export async function downloadWebmapCamadasErrosCsv(simulacaoId?: string) {
+  const token = getStoredAuth()?.accessToken;
+  const query = simulacaoId ? `?simulacaoId=${encodeURIComponent(simulacaoId)}` : '';
+  const response = await fetch(`${API_BASE_URL}/admin/importacao/webmap-camadas/erros.csv${query}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    throw new Error('Não foi possível baixar o CSV de erros.');
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = `erros-camadas-webmap-${(simulacaoId ?? 'ultima').slice(0, 8)}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
