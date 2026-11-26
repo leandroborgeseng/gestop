@@ -25,7 +25,7 @@ export const ATORES: AtorSistema[] = [
     id: 'administrador',
     nome: 'Administrador do Sistema',
     descricao:
-      'No backend a exceção é o flag administradorSistema do perfil ativo, não o nome. O seed e o sync-rbac ligam esse flag só no perfil de sistema com este nome. O frontend continua reconhecendo o mesmo nome.',
+      'No backend a exceção é o flag administradorSistema do perfil ativo, não o nome. O seed liga o flag ao criar este perfil. No boot, o sync-rbac liga o flag somente se o perfil Administrador do Sistema acabou de ser criado, ou se nenhum perfil da base tem o flag. Desligar o flag à mão, com outro perfil ainda marcado, permanece. O frontend continua reconhecendo o nome.',
   },
   {
     id: 'gestor',

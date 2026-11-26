@@ -21,6 +21,8 @@ import {
   Severidade,
 } from '@prisma/client';
 import { hashPassword } from '../src/auth/password';
+import { catalogActionLabel, catalogEntryForKey } from '../src/domain/permissions-catalog';
+import { SOLICITACAO_CHAVES } from './rbac-padrao';
 import { logError, logInfo, logStep, logWarn, maskDatabaseUrl, isProductionRuntime } from './startup-log';
 
 const connectionString =
@@ -201,6 +203,25 @@ async function main() {
     ),
   );
 
+  const chavesSolicitacao = new Set<string>(SOLICITACAO_CHAVES);
+  const extrasSolicitacao: typeof permissoes = [];
+  for (const chave of SOLICITACAO_CHAVES) {
+    if (permissoes.some((permissao) => permissao.chave === chave)) continue;
+    const entry = catalogEntryForKey(chave);
+    extrasSolicitacao.push(
+      await prisma.permissao.create({
+        data: {
+          chave,
+          descricao: entry ? `${entry.tela.label} · ${catalogActionLabel(entry.funcao, entry.acao)}` : chave,
+          modulo: entry?.tela.id ?? 'matriz',
+        },
+      }),
+    );
+  }
+  const permissoesSolicitacao = [...permissoes, ...extrasSolicitacao].filter((permissao) =>
+    chavesSolicitacao.has(permissao.chave),
+  );
+
   const [adminPerfil, gestorPerfil, fiscalPerfil, manutencaoPerfil, solicitacaoPerfil] = await Promise.all([
     prisma.perfil.create({
       data: { nome: 'Administrador do Sistema', sistema: true, administradorSistema: true, descricao: 'Acesso total ao SIGMA' },
@@ -235,12 +256,10 @@ async function main() {
       ...permissoes
         .filter((permissao) => permissao.chave === 'chamados.executar')
         .map((permissao) => ({ perfilId: manutencaoPerfil.id, permissaoId: permissao.id })),
-      ...permissoes
-        .filter(
-          (permissao) =>
-            permissao.chave === 'chamados.abrir' || permissao.chave === 'meus_chamados.visualizar',
-        )
-        .map((permissao) => ({ perfilId: solicitacaoPerfil.id, permissaoId: permissao.id })),
+      ...permissoesSolicitacao.map((permissao) => ({
+        perfilId: solicitacaoPerfil.id,
+        permissaoId: permissao.id,
+      })),
     ],
   });
 

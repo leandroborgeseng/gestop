@@ -23,7 +23,7 @@ export const BLOCOS_ARQUITETURA: BlocoArquitetura[] = [
   {
     id: 'prisma',
     nome: 'Prisma e PostgreSQL',
-    papel: 'Persistência relacional. O schema não usa @@map: o nome do model é o nome da tabela. Enums cobrem status, origens e tipos. Nas leituras de lista de Chamado e Fiscalizacao, o PrismaService restringe a excluidoEm nulo, salvo quando a consulta já cita excluidoEm.',
+    papel: 'Persistência relacional. O schema não usa @@map: o nome do model é o nome da tabela. Enums cobrem status, origens e tipos. Nas leituras de lista de Chamado e Fiscalizacao, o PrismaService restringe a excluidoEm nulo, salvo quando a consulta já cita excluidoEm. No boot, sync-rbac só cria permissões do catálogo e perfis padrão ausentes. Não altera descrição, vínculo ou senha já gravados. Usuários de demonstração só entram com SYNC_RBAC_DEMO_USERS=true.',
     onde: 'prisma/schema.prisma, PrismaModule em src/prisma.',
   },
   {
