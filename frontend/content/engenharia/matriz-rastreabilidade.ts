@@ -31,6 +31,16 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     permissao: 'Sessão autenticada. A secretaria precisa estar no vínculo do usuário, salvo acesso a todas.',
   },
   {
+    id: 'matriz-permissoes',
+    capacidade: 'Aplicar a matriz central de permissões',
+    ator: 'Qualquer sessão, conforme a entrada da rota',
+    tela: 'Todas as telas autenticadas',
+    api: 'MatrizPermissoesGuard global, antes do handler. Fonte: src/auth/matriz/permissoes-matriz.ts.',
+    tabelas: 'Perfil.administradorSistema, Permissao, PerfilPermissao, UsuarioPermissao',
+    permissao:
+      'Rota sem entrada responde 403 com a mensagem “Você não possui permissão para executar esta ação.”. Público não exige sessão. Sessão basta para a própria conta (inclui POST /auth/refresh e POST /documentos/pendencias-abertura-diaria). Mutação e GET com efeito exigem a chave da matriz. GET sem efeito mantém o decorador atual. A exceção de acesso total é Perfil.administradorSistema do perfil ativo, não o nome.',
+  },
+  {
     id: 'senha',
     capacidade: 'Recuperar e redefinir senha',
     ator: 'Usuário interno',
@@ -44,7 +54,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Acompanhar o centro de controle e o mapa',
     ator: 'Administrador do Sistema, gestor, equipe com leitura operacional',
     tela: '/cco, /cco/unidades/[id]',
-    api: 'OperacionalController: GET /operacional/resumo, /secretarias, /bairros, /opcoes-filtro, /unidades, /chamados-mapa',
+    api: 'OperacionalController: GET /operacional/resumo, /secretarias, /bairros, /opcoes-filtro, /unidades, /chamados-mapa, /chamados-mapa/tipos-chamado-disponiveis, /tipos-chamado-disponiveis, /categorias-nota-disponiveis, /tipos-proprio-disponiveis. Mapa: GET /mapa/camadas, /mapa/camadas/status, /mapa/camadas/:id/geojson. O modal só-leitura da vistoria (311) usa GET /fiscalizacoes/:id.',
     tabelas: 'UnidadePublica, Secretaria, Chamado, NaoConformidade, Fiscalizacao',
     permissao: 'OPERACIONAL_READ_KEYS (dashboard.visualizar, chamados.*, fiscalizacoes.executar e matriz.cco._tela.visualizar, entre outras). Zoom ou arraste manual não muda no reflow da barra. Barra e grade empilham em 80rem.',
   },
@@ -215,9 +225,10 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Modelar e publicar checklists',
     ator: 'Administrador do Sistema, gestor com a permissão',
     tela: '/checklists, /checklists/[id]',
-    api: 'ChecklistsController: GET|POST|PUT|DELETE /checklists, POST /:id/versions, POST /versions/:versionId/publish',
+    api: 'ChecklistsController: GET|POST|PUT|DELETE /checklists, GET /resumo, POST /:id/inativar, POST /:id/reativar, POST /:id/versions, POST /versions/:versionId/publish',
     tabelas: 'Checklist, ChecklistVersao, ChecklistItem, ChecklistTipoChamado, CategoriaVistoria, TipoProprio',
-    permissao: 'checklists.gerenciar ou matriz.checklists._tela / gerenciar.',
+    permissao:
+      'Leitura: checklists.gerenciar. Inativar, reativar e DELETE exigem Excluir (matriz.checklists.gerenciar.excluir ou matriz.checklists._tela.excluir).',
   },
   {
     id: 'cronograma',
@@ -269,9 +280,10 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Disponibilizar e assinar internamente',
     ator: 'Gestor (disponibiliza); destinatário interno (assina)',
     tela: '/documentos, aviso em /login, painel Documentos relacionados em /chamados',
-    api: 'DocumentosController: GET /pendencias-resumo, GET /minhas-pendencias-assinatura, GET /signatarios-internos, POST /:id/disponibilizar-assinatura, POST /:id/assinatura-interna, POST pedidos-assinatura/:id/retirar|recusar',
+    api: 'DocumentosController: GET /pendencias-resumo, POST /pendencias-abertura-diaria, GET /minhas-pendencias-assinatura, GET /signatarios-internos, POST /:id/disponibilizar-assinatura, POST /:id/assinatura-interna, POST pedidos-assinatura/:id/retirar|recusar, POST /:id/cancelar',
     tabelas: 'DocumentoAssinaturaPedido, DocumentoAssinatura, Documento, Usuario',
-    permissao: 'documentos.disponibilizar_assinatura ou documentos.assinar_interno (e as chaves de matriz correspondentes). Administrador e documentos.administrar também passam.',
+    permissao:
+      'documentos.disponibilizar_assinatura ou documentos.assinar_interno (e as chaves de matriz correspondentes). Administrador e documentos.administrar também passam. A abertura diária é da própria sessão. Cancelar o documento (cancelamento lógico) exige matriz.documentos.cancelar.executar.',
   },
   {
     id: 'validar',
@@ -314,9 +326,10 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     capacidade: 'Importar camadas do Webmap',
     ator: 'Administrador do Sistema',
     tela: '/admin (Importação › Camadas do Webmap)',
-    api: 'WebmapCamadasAdminController: POST /admin/importacao/webmap-camadas/simular|aplicar, GET /status|/historico|/erros.csv. Mapa: GET /mapa/camadas e /mapa/camadas/:id/geojson',
+    api: 'WebmapCamadasAdminController: POST /admin/importacao/webmap-camadas/simular|aplicar, GET /status|/historico|/erros.csv. Mapa: GET /mapa/camadas, /mapa/camadas/status e /mapa/camadas/:id/geojson',
     tabelas: 'WebmapCamadaGrupo, WebmapCamada, WebmapCamadaVersao, WebmapElemento, WebmapImportacao, WebmapIcone',
-    permissao: 'Simular e aplicar exigem a aba importacao. O mapa usa dashboard.visualizar.',
+    permissao:
+      'Simular, aplicar e o CSV de erros exigem Executar da aba Importação (matriz.admin.importacao.executar). Status e histórico da aba são leitura. O mapa usa dashboard.visualizar.',
   },
   {
     id: 'auditoria',
@@ -379,7 +392,8 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     tela: 'Embutido na execução, vistoria, chamado e documento',
     api: 'StorageController: GET /storage/* (somente driver local). HealthController: GET /health/storage',
     tabelas: 'Evidencia, Documento, Chamado, ChamadoTarefaAnexo, DocumentoAssinatura',
-    permissao: 'AuthGuard. O binário não fica no PostgreSQL; a tabela guarda url e storageKey.',
+    permissao:
+      'Sessão e StorageAcessoService.assertPodeBaixar: visualizar a rotina dona (chamado, tarefa, vistoria ou documento) e o registro no escopo de Secretaria. Sem dono identificado, 403. O binário não fica no PostgreSQL; a tabela guarda url e storageKey.',
   },
   {
     id: 'saude',

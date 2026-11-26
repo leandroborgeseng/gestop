@@ -22,8 +22,14 @@ describe('paridade Administrador do Sistema front × backend', () => {
       { perfilAtivo: null, perfis: ['Gestor'] },
     ];
 
+    // 285: no backend a exceção vem do flag `administradorSistema` do perfil ativo (sessão),
+    // que o seed/migração liga só no perfil de sistema com esse nome. O front segue pelo nome.
     for (const user of casos) {
-      expect(front.isAdministradorSistemaAtivo(user)).toBe(isAdministradorSistema({ perfis: [...(user.perfis ?? [])] }));
+      // Na sessão do backend `perfis` = [nome do perfil ativo]; o flag acompanha esse perfil.
+      const flag = (user.perfis ?? []).includes(ADMINISTRADOR_SISTEMA_NOME);
+      const sessao = { perfis: [...(user.perfis ?? [])], administradorSistema: flag };
+      expect(front.isAdministradorSistemaAtivo(user)).toBe(isAdministradorSistema(sessao));
     }
+    expect(isAdministradorSistema({ perfis: [ADMINISTRADOR_SISTEMA_NOME] })).toBe(false);
   });
 });

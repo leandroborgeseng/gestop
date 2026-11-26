@@ -111,7 +111,7 @@ describe('292 · permissões no guard (critérios 4–8)', () => {
   });
 
   it('C6: Administrador do Sistema tem acesso total sem chave da matriz', () => {
-    const u = user({ perfis: [ADMINISTRADOR_SISTEMA_NOME], permissoes: [] });
+    const u = user({ perfis: [ADMINISTRADOR_SISTEMA_NOME], permissoes: [], administradorSistema: true });
     for (const h of ['listUnidades', 'createUnidade', 'updateUnidade', 'deleteUnidade'] as const) {
       expect(pode(u, h)).toBe(true);
     }

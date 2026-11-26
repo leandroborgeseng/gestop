@@ -11,6 +11,8 @@ export type JwtPayload = {
   perfilNatureza?: 'INTERNO' | 'EXTERNO';
   acessoTodasSecretarias?: boolean;
   secretariasIds?: string[];
+  /** 285: perfil ativo marcado como Administrador do Sistema (flag no banco). Só preenchido pelo AuthGuard. */
+  administradorSistema?: boolean;
   /** Unix segundos do login original. O refresh copia o valor e não passa de 30 dias a partir dele. */
   auth_time?: number;
   /** Sessão. O refresh copia. O logout revoga só este id, não as outras sessões do usuário. */

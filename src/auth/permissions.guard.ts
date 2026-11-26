@@ -13,6 +13,12 @@ export class PermissionsGuard implements CanActivate {
   constructor(private readonly reflector: Reflector) {}
 
   canActivate(context: ExecutionContext) {
+    // 285: o guard global da matriz (MatrizPermissoesGuard) é quem decide. Quando ele já
+    // autorizou a requisição, este guard (ainda presente nos @UseGuards) não decide de novo.
+    if (context.switchToHttp().getRequest<AuthenticatedRequest>().matrizAutorizada) {
+      return true;
+    }
+
     const requiredAll =
       this.reflector.getAllAndOverride<string[]>(REQUIRED_PERMISSIONS_KEY, [
         context.getHandler(),

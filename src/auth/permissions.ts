@@ -1,11 +1,15 @@
 import { SetMetadata } from '@nestjs/common';
-import { ADMINISTRADOR_SISTEMA_NOME, isMatrixPermissionKey } from '../domain/permissions-catalog';
+import { isMatrixPermissionKey } from '../domain/permissions-catalog';
 import { deriveLegacyPermissionKeys } from '../domain/permissions-matrix';
 import { JwtPayload } from './jwt';
 
-/** Perfil ativo Administrador do Sistema: acesso total, sem depender da matriz. */
+/**
+ * Perfil ativo Administrador do Sistema: acesso total, sem depender da matriz.
+ * 285: decidido pelo flag `Perfil.administradorSistema` do perfil ATIVO (preenchido pelo
+ * AuthGuard a partir do banco), nunca pelo nome do perfil.
+ */
 export function isAdministradorSistema(user?: Pick<JwtPayload, 'perfis'> | null) {
-  return Boolean(user?.perfis?.includes(ADMINISTRADOR_SISTEMA_NOME));
+  return (user as Pick<JwtPayload, 'administradorSistema'> | null | undefined)?.administradorSistema === true;
 }
 
 export const REQUIRED_PERMISSIONS_KEY = 'requiredPermissions';

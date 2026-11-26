@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AdminModule } from './admin/admin.module';
 import { AuthModule } from './auth/auth.module';
+import { MatrizPermissoesGuard } from './auth/matriz/matriz-permissoes.guard';
 import { BackupModule } from './backup/backup.module';
 import { ChecklistsModule } from './checklists/checklists.module';
 import { GlobalHttpExceptionFilter } from './common/http-exception.filter';
@@ -55,6 +56,8 @@ import { WebmapCamadasModule } from './webmap-camadas/webmap-camadas.module';
   controllers: [RootController, HealthController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // 285: guard global único da matriz de permissões (deny-by-default).
+    { provide: APP_GUARD, useClass: MatrizPermissoesGuard },
     { provide: APP_FILTER, useClass: GlobalHttpExceptionFilter },
   ],
 })
