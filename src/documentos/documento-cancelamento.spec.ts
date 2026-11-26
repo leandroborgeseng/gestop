@@ -88,13 +88,13 @@ describe('287 · permissão', () => {
     expect(keys).toEqual([DOCUMENTOS_CANCELAR]);
     expect(hasAnyPermission({ perfis: [], permissoes: ['documentos.cancelar_assinado', 'documentos.visualizar'] }, keys)).toBe(false);
     expect(hasAnyPermission({ perfis: [], permissoes: ['matriz.documentos.cancelar.executar'] }, keys)).toBe(true);
-    expect(hasAnyPermission({ perfis: [ADMINISTRADOR_SISTEMA_NOME], permissoes: [] }, keys)).toBe(true);
+    expect(hasAnyPermission({ perfis: [ADMINISTRADOR_SISTEMA_NOME], permissoes: [], administradorSistema: true }, keys)).toBe(true);
   });
 
   it('podeCancelarDocumento (flag do botão)', () => {
     expect(podeCancelarDocumento({ perfis: [], permissoes: [DOCUMENTOS_CANCELAR] })).toBe(true);
     expect(podeCancelarDocumento({ perfis: [], permissoes: ['documentos.administrar'] })).toBe(false);
-    expect(podeCancelarDocumento({ perfis: [ADMINISTRADOR_SISTEMA_NOME], permissoes: [] })).toBe(true);
+    expect(podeCancelarDocumento({ perfis: [ADMINISTRADOR_SISTEMA_NOME], permissoes: [], administradorSistema: true })).toBe(true);
   });
 
   it('service sem permissão: 403 antes de tocar no banco', async () => {

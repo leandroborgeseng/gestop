@@ -175,6 +175,28 @@
       "tipo": "leitura-legada",
       "efeito": "leitura"
     },
+    "GET /admin/importacao/webmap-camadas/erros.csv": {
+      "tipo": "permissao",
+      "rotina": "admin.importacao",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.importacao.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "exportacao",
+      "escopo": "nenhum",
+      "nota": "296: CSV de erros da simulação de camadas. Mesma ação Executar da importação."
+    },
+    "GET /admin/importacao/webmap-camadas/historico": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "296: visualizar a aba Importação."
+    },
+    "GET /admin/importacao/webmap-camadas/status": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "296: visualizar a aba Importação."
+    },
     "GET /admin/importacao/webmap/status": {
       "tipo": "leitura-legada",
       "efeito": "leitura"
@@ -336,6 +358,11 @@
       "tipo": "leitura-legada",
       "efeito": "leitura"
     },
+    "GET /chamados/secretarias/destino-execucao": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "310: secretarias de destino. Decorador: chamados.gerenciar ou chamados.editar_abertura."
+    },
     "GET /chamados/secretarias/execucao": {
       "tipo": "leitura-legada",
       "efeito": "leitura"
@@ -356,6 +383,11 @@
       "tipo": "leitura-legada",
       "efeito": "leitura"
     },
+    "GET /checklists/resumo": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "Resumo da tela. Decorador de classe: checklists.gerenciar."
+    },
     "GET /checklists/secretarias": {
       "tipo": "leitura-legada",
       "efeito": "leitura"
@@ -375,6 +407,16 @@
     "GET /cronograma/checklists": {
       "tipo": "leitura-legada",
       "efeito": "leitura"
+    },
+    "GET /cronograma/responsaveis/opcoes": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "307: opções de responsáveis. Decorador: inserir ou alterar do cronograma."
+    },
+    "GET /cronograma/responsaveis/situacao": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "307: situação dos responsáveis. Decorador: inserir ou alterar do cronograma."
     },
     "GET /documentos": {
       "tipo": "leitura-legada",
@@ -484,6 +526,21 @@
       "tipo": "leitura-legada",
       "efeito": "leitura"
     },
+    "GET /mapa/camadas": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "300/311: árvore de camadas do mapa. Mesma permissão da tela do CCO (dashboard.visualizar)."
+    },
+    "GET /mapa/camadas/:id/geojson": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "300/311: GeoJSON da camada no mapa do CCO (dashboard.visualizar)."
+    },
+    "GET /mapa/camadas/status": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "300: status da importação para quem abre o CCO (dashboard.visualizar)."
+    },
     "GET /meus-chamados": {
       "tipo": "leitura-legada",
       "efeito": "leitura"
@@ -538,9 +595,19 @@
       "tipo": "leitura-legada",
       "efeito": "leitura"
     },
+    "GET /operacional/categorias-nota-disponiveis": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "319: categorias de nota do CCO."
+    },
     "GET /operacional/chamados-mapa": {
       "tipo": "leitura-legada",
       "efeito": "leitura"
+    },
+    "GET /operacional/chamados-mapa/tipos-chamado-disponiveis": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "316: tipos de chamado do mapa. Decorador de classe OPERACIONAL_READ_KEYS (mesma leitura do CCO)."
     },
     "GET /operacional/opcoes-filtro": {
       "tipo": "leitura-legada",
@@ -553,6 +620,16 @@
     "GET /operacional/secretarias": {
       "tipo": "leitura-legada",
       "efeito": "leitura"
+    },
+    "GET /operacional/tipos-chamado-disponiveis": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "316: tipos de chamado disponíveis no CCO."
+    },
+    "GET /operacional/tipos-proprio-disponiveis": {
+      "tipo": "leitura-legada",
+      "efeito": "leitura",
+      "nota": "312: tipos de próprio do CCO."
     },
     "GET /operacional/unidades": {
       "tipo": "leitura-legada",
@@ -887,6 +964,18 @@
       "efeito": "mutacao",
       "escopo": "nenhum"
     },
+    "POST /admin/email/diagnostico": {
+      "tipo": "permissao",
+      "rotina": "admin.email",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.email.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum",
+      "nota": "320: diagnóstico do token Microsoft 365. Mesma ação Executar do teste. Não envia e-mail."
+    },
     "POST /admin/email/teste": {
       "tipo": "permissao",
       "rotina": "admin.email",
@@ -910,6 +999,28 @@
       "escopo": "nenhum"
     },
     "POST /admin/importacao/secretarias/sync": {
+      "tipo": "permissao",
+      "rotina": "admin.importacao",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.importacao.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/importacao/webmap-camadas/aplicar": {
+      "tipo": "permissao",
+      "rotina": "admin.importacao",
+      "acao": "executar",
+      "chaves": [
+        "matriz.admin.importacao.executar",
+        "matriz.admin._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum"
+    },
+    "POST /admin/importacao/webmap-camadas/simular": {
       "tipo": "permissao",
       "rotina": "admin.importacao",
       "acao": "executar",
@@ -1069,6 +1180,11 @@
       "efeito": "sessao",
       "nota": "Troca do perfil ativo entre perfis ATIVOS do próprio usuário."
     },
+    "POST /auth/refresh": {
+      "tipo": "sessao",
+      "efeito": "sessao",
+      "nota": "322: renova o access token da própria sessão. Não troca perfil, secretaria nem rota."
+    },
     "POST /auth/reset-password": {
       "tipo": "publico",
       "efeito": "sessao",
@@ -1224,6 +1340,30 @@
       "efeito": "mutacao",
       "escopo": "nenhum"
     },
+    "POST /checklists/:id/inativar": {
+      "tipo": "permissao",
+      "rotina": "checklists.gerenciar",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.checklists.gerenciar.excluir",
+        "matriz.checklists._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum",
+      "nota": "308: inativar. Equivale ao DELETE. Exige Excluir de Checklists."
+    },
+    "POST /checklists/:id/reativar": {
+      "tipo": "permissao",
+      "rotina": "checklists.gerenciar",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.checklists.gerenciar.excluir",
+        "matriz.checklists._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "nenhum",
+      "nota": "308: reativar. Mesma ação Excluir do inativar."
+    },
     "POST /checklists/:id/versions": {
       "tipo": "permissao",
       "rotina": "checklists.gerenciar",
@@ -1256,6 +1396,18 @@
       ],
       "efeito": "mutacao",
       "escopo": "secretaria-ativa"
+    },
+    "POST /cronograma/:id/reativar": {
+      "tipo": "permissao",
+      "rotina": "cronograma.gerenciar",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.cronograma.gerenciar.excluir",
+        "matriz.cronograma._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa",
+      "nota": "308: reativar. Mesma ação Excluir do inativar (DELETE)."
     },
     "POST /documentos/:id/assinatura": {
       "tipo": "permissao",
@@ -1290,6 +1442,18 @@
       ],
       "efeito": "mutacao",
       "escopo": "secretaria-ativa"
+    },
+    "POST /documentos/:id/cancelar": {
+      "tipo": "permissao",
+      "rotina": "documentos.cancelar",
+      "acao": "executar",
+      "chaves": [
+        "matriz.documentos.cancelar.executar",
+        "matriz.documentos._tela.executar"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa",
+      "nota": "287: cancelamento lógico. Exige Executar de documentos.cancelar."
     },
     "POST /documentos/:id/cancelar-assinado": {
       "tipo": "permissao",
@@ -1370,6 +1534,22 @@
       ],
       "efeito": "mutacao",
       "escopo": "secretaria-ativa"
+    },
+    "POST /documentos/pendencias-abertura-diaria": {
+      "tipo": "sessao",
+      "efeito": "sessao",
+      "nota": "289: marca a abertura diária das pendências do próprio usuário. Qualquer sessão; sem permissão de tela."
+    },
+    "POST /fiscalizacoes/:id/exclusao": {
+      "tipo": "permissao",
+      "rotina": "vistorias._tela",
+      "acao": "excluir",
+      "chaves": [
+        "matriz.vistorias._tela.excluir"
+      ],
+      "efeito": "mutacao",
+      "escopo": "secretaria-ativa",
+      "nota": "305/E1: exclusão lógica da vistoria concluída. Exige Excluir da tela Vistorias realizadas."
     },
     "POST /fiscalizacoes/imprimir-manual": {
       "tipo": "permissao",

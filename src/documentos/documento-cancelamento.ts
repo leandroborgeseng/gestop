@@ -13,7 +13,7 @@ export const SITUACOES_NAO_CANCELAVEIS: DocumentoSituacao[] = [
   DocumentoSituacao.INVALIDO,
 ];
 
-export function podeCancelarDocumento(user: Pick<JwtPayload, 'perfis' | 'permissoes'>) {
+export function podeCancelarDocumento(user: Pick<JwtPayload, 'perfis' | 'permissoes' | 'administradorSistema'>) {
   return isAdministradorSistema(user) || hasAnyPermission(user, [DOCUMENTOS_CANCELAR]);
 }
 

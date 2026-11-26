@@ -78,7 +78,7 @@ describe('292 · outras abas da Administração mantêm o legado', () => {
   });
 
   it('Admin do Sistema entra em todas as rotas, sem chave alguma (isAdministradorSistema)', () => {
-    const admin = u([], [ADMINISTRADOR_SISTEMA_NOME]);
+    const admin = { ...u([], [ADMINISTRADOR_SISTEMA_NOME]), administradorSistema: true };
     for (const tab of ['proprios', ...ABAS.map((a) => a.tab)]) {
       const ctrl = tab === 'importacao' ? AdminImportController : AdminController;
       for (const r of rotasDaAba(ctrl, tab)) expect(hasAnyPermission(admin, r.keys), r.name).toBe(true);

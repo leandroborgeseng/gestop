@@ -25,7 +25,7 @@ export const ATORES: AtorSistema[] = [
     id: 'administrador',
     nome: 'Administrador do Sistema',
     descricao:
-      'Perfil ativo com esse nome. Enxerga a administração inteira e passa nas checagens que tratam o administrador de sistema como exceção.',
+      'No backend a exceção é o flag administradorSistema do perfil ativo, não o nome. O seed e o sync-rbac ligam esse flag só no perfil de sistema com este nome. O frontend continua reconhecendo o mesmo nome.',
   },
   {
     id: 'gestor',
@@ -257,7 +257,21 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         nome: 'Coletar assinatura externa',
         atores: ['administrador', 'gestor', 'equipe'],
         descricao: 'Registrar a assinatura de quem não é usuário, ou marcar pendência e cancelar a assinada. Erros de validação, inclusive a justificativa de CPF ou e-mail ausente, aparecem dentro do modal e acima do overlay. No chamado, o botão Coletar nova assinatura só aparece quando o PermissionsGuard deixaria passar: documentos.coletar_assinatura (ou matriz executar), documentos.administrar, ou Administrador do Sistema. usuarios.gerenciar sozinho não basta.',
-        rotas: ['/documentos', '/chamados', 'POST /documentos/:id/assinatura', 'POST /documentos/:id/assinatura-pendente', 'POST /documentos/:id/cancelar-assinado'],
+        rotas: [
+          '/documentos',
+          '/chamados',
+          'POST /documentos/:id/assinatura',
+          'POST /documentos/:id/assinatura-pendente',
+          'POST /documentos/:id/cancelar-assinado',
+        ],
+      },
+      {
+        id: 'cancelar-documento',
+        nome: 'Cancelar documento',
+        atores: ['administrador', 'gestor'],
+        descricao:
+          'Cancelamento lógico do documento. Exige Executar de documentos.cancelar (matriz.documentos.cancelar.executar). Não apaga o registro.',
+        rotas: ['/documentos', 'POST /documentos/:id/cancelar'],
       },
       {
         id: 'disponibilizar-assinatura',
@@ -270,8 +284,15 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'assinar-interno',
         nome: 'Assinar internamente',
         atores: ['administrador', 'gestor', 'equipe'],
-        descricao: 'O destinatário assina o pedido pendente. O modal de pendências abre no login e no botão do topo, com atalho por grupo e Abrir em cada item.',
-        rotas: ['/documentos', '/login', 'GET /documentos/pendencias-resumo', 'POST /documentos/:id/assinatura-interna'],
+        descricao:
+          'O destinatário assina o pedido pendente. O modal de pendências abre no login e no botão do topo, com atalho por grupo e Abrir em cada item. POST /documentos/pendencias-abertura-diaria marca o dia do próprio usuário e não exige permissão de tela.',
+        rotas: [
+          '/documentos',
+          '/login',
+          'GET /documentos/pendencias-resumo',
+          'POST /documentos/pendencias-abertura-diaria',
+          'POST /documentos/:id/assinatura-interna',
+        ],
       },
       {
         id: 'validar-documento',
@@ -325,8 +346,17 @@ export const GRUPOS_CASOS: GrupoCasosDeUso[] = [
         id: 'checklists',
         nome: 'Modelar checklists',
         atores: ['administrador', 'gestor'],
-        descricao: 'Criar o formulário, ordenar as perguntas pelas setas, agrupar por seção e publicar. Múltipla escolha pode aceitar uma ou várias opções.',
-        rotas: ['/checklists', '/checklists/[id]', 'POST /checklists', 'POST /checklists/:id/versions', 'POST /checklists/versions/:versionId/publish'],
+        descricao:
+          'Criar o formulário, ordenar as perguntas pelas setas, agrupar por seção e publicar. Múltipla escolha pode aceitar uma ou várias opções. Inativar e reativar exigem a ação Excluir de Checklists.',
+        rotas: [
+          '/checklists',
+          '/checklists/[id]',
+          'POST /checklists',
+          'POST /checklists/:id/versions',
+          'POST /checklists/versions/:versionId/publish',
+          'POST /checklists/:id/inativar',
+          'POST /checklists/:id/reativar',
+        ],
       },
       {
         id: 'webmap',

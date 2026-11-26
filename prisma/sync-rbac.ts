@@ -39,6 +39,15 @@ export async function syncSystemRbac(prisma: PrismaClient) {
   const catalogTotal = await syncPermissionsCatalog(prisma);
   logInfo('sync-rbac', `Catalogo de permissoes sincronizado (${catalogTotal} chaves).`);
 
+  // 285: a migration só cria a coluna. O flag do perfil de sistema é ligado aqui, de forma idempotente.
+  const adminMarcados = await prisma.perfil.updateMany({
+    where: { nome: 'Administrador do Sistema', sistema: true, administradorSistema: false },
+    data: { administradorSistema: true },
+  });
+  if (adminMarcados.count > 0) {
+    logInfo('sync-rbac', `Perfil Administrador do Sistema marcado com administradorSistema (${adminMarcados.count}).`);
+  }
+
   for (const [chave, descricao, modulo] of NOVAS_PERMISSOES) {
     await prisma.permissao.upsert({
       where: { chave },

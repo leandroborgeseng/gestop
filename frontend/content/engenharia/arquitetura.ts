@@ -29,7 +29,8 @@ export const BLOCOS_ARQUITETURA: BlocoArquitetura[] = [
   {
     id: 'evidencias',
     nome: 'Armazenamento de evidências',
-    papel: 'Abertura, histórico do chamado e anexos de tarefa aceitam JPG, JPEG, PNG, WEBP, PDF, MP4, MOV, M4V, 3GP e WEBM. O binário fica no armazenamento; GET /storage exige sessão. Backup S3 é outro fluxo.',
+    papel:
+      'Abertura, histórico do chamado e anexos de tarefa aceitam JPG, JPEG, PNG, WEBP, PDF, MP4, MOV, M4V, 3GP e WEBM. O binário fica no armazenamento. GET /storage exige sessão, permissão de visualizar a rotina dona do arquivo e o escopo de Secretaria desse registro. Backup S3 é outro fluxo.',
     onde: 'src/storage. Modelos Evidencia, Chamado, ChamadoTarefaAnexo, Documento e DocumentoAssinatura.',
   },
 ];
@@ -37,7 +38,7 @@ export const BLOCOS_ARQUITETURA: BlocoArquitetura[] = [
 export const FLUXO_ARQUITETURA = [
   'O navegador fala com o Next.js.',
   'As telas chamam a API NestJS com o token da sessão.',
-  'A API aplica perfil, permissão e escopo de secretaria.',
+  'A API aplica a matriz central de permissões (rota sem entrada responde 403), o perfil ativo e o escopo de secretaria.',
   'O Prisma grava e lê o PostgreSQL.',
   'Arquivos grandes seguem para o armazenamento; o banco fica com a referência.',
 ] as const;

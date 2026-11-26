@@ -154,6 +154,7 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
   'POST /auth/forgot-password': publico('Recuperação de senha.', 'sessao'),
   'POST /auth/reset-password': publico('Redefinição de senha por token.', 'sessao'),
   'GET /auth/me': sessao('Dados da própria sessão.'),
+  'POST /auth/refresh': sessao('322: renova o access token da própria sessão. Não troca perfil, secretaria nem rota.'),
   'POST /auth/change-password': sessao('Troca da própria senha.'),
   'POST /auth/logout': sessao('Logoff.'),
   'POST /auth/perfil-ativo': sessao('Troca do perfil ativo entre perfis ATIVOS do próprio usuário.'),
@@ -173,6 +174,10 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
   'GET /admin/email': leitura(),
   'PUT /admin/email': admin('email', 'alterar'),
   'POST /admin/email/teste': admin('email', 'executar'),
+  'POST /admin/email/diagnostico': {
+    ...admin('email', 'executar'),
+    nota: '320: diagnóstico do token Microsoft 365. Mesma ação Executar do teste. Não envia e-mail.',
+  },
   'GET /admin/cargos': leitura(),
   'POST /admin/cargos': admin('cargos', 'inserir'),
   'PUT /admin/cargos/:id': admin('cargos', 'alterar'),
@@ -221,6 +226,15 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
   'POST /admin/importacao/webmap/apply': admin('importacao', 'executar'),
   'POST /admin/importacao/webmap/sync': admin('importacao', 'executar'),
   'POST /admin/importacao/webmap/sync-all': admin('importacao', 'executar'),
+  'POST /admin/importacao/webmap-camadas/simular': admin('importacao', 'executar'),
+  'POST /admin/importacao/webmap-camadas/aplicar': admin('importacao', 'executar'),
+  'GET /admin/importacao/webmap-camadas/erros.csv': {
+    ...admin('importacao', 'executar'),
+    efeito: 'exportacao',
+    nota: '296: CSV de erros da simulação de camadas. Mesma ação Executar da importação.',
+  },
+  'GET /admin/importacao/webmap-camadas/status': leitura('296: visualizar a aba Importação.'),
+  'GET /admin/importacao/webmap-camadas/historico': leitura('296: visualizar a aba Importação.'),
   'POST /lgpd/auditoria/purge': admin('auditoria', 'executar'),
   'POST /lgpd/usuarios/:id/anonymize': admin('usuarios', 'excluir'),
 
@@ -233,6 +247,7 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
   'GET /chamados/equipes/opcoes': leitura(),
   'GET /chamados/programacao': leitura(),
   'GET /chamados/secretarias/execucao': leitura(),
+  'GET /chamados/secretarias/destino-execucao': leitura('310: secretarias de destino. Decorador: chamados.gerenciar ou chamados.editar_abertura.'),
   'GET /chamados/tipos/opcoes': leitura(),
   'GET /chamados/usuarios/ativos': leitura(),
   'GET /chamados/:id/pdf': regra('chamados', 'exportar_pdf', 'executar', { efeito: 'exportacao' }),
@@ -292,6 +307,7 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
 
   // ── Checklists ──────────────────────────────────────────────────────────────
   'GET /checklists': leitura(),
+  'GET /checklists/resumo': leitura('Resumo da tela. Decorador de classe: checklists.gerenciar.'),
   'GET /checklists/:id': leitura(),
   'GET /checklists/secretarias': leitura(),
   'GET /checklists/tipos-proprio/opcoes': leitura(),
@@ -301,14 +317,27 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
   'PUT /checklists/versions/:versionId': regra('checklists', 'gerenciar', 'alterar', { escopo: 'nenhum' }),
   'POST /checklists/versions/:versionId/publish': regra('checklists', 'gerenciar', 'alterar', { escopo: 'nenhum' }),
   'DELETE /checklists/:id': regra('checklists', 'gerenciar', 'excluir', { escopo: 'nenhum' }),
+  'POST /checklists/:id/inativar': regra('checklists', 'gerenciar', 'excluir', {
+    escopo: 'nenhum',
+    nota: '308: inativar. Equivale ao DELETE. Exige Excluir de Checklists.',
+  }),
+  'POST /checklists/:id/reativar': regra('checklists', 'gerenciar', 'excluir', {
+    escopo: 'nenhum',
+    nota: '308: reativar. Mesma ação Excluir do inativar.',
+  }),
 
   // ── Cronograma ──────────────────────────────────────────────────────────────
   'GET /cronograma': leitura(),
   'GET /cronograma/calendario': leitura(),
   'GET /cronograma/checklists': leitura(),
+  'GET /cronograma/responsaveis/opcoes': leitura('307: opções de responsáveis. Decorador: inserir ou alterar do cronograma.'),
+  'GET /cronograma/responsaveis/situacao': leitura('307: situação dos responsáveis. Decorador: inserir ou alterar do cronograma.'),
   'POST /cronograma': regra('cronograma', 'gerenciar', 'inserir'),
   'PUT /cronograma/:id': regra('cronograma', 'gerenciar', 'alterar'),
   'DELETE /cronograma/:id': regra('cronograma', 'gerenciar', 'excluir'),
+  'POST /cronograma/:id/reativar': regra('cronograma', 'gerenciar', 'excluir', {
+    nota: '308: reativar. Mesma ação Excluir do inativar (DELETE).',
+  }),
 
   // ── Documentos (ações aninhadas em chamado/vistoria também caem aqui) ──────
   'GET /documentos': leitura(),
@@ -316,6 +345,9 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
   'GET /documentos/chamados-busca': leitura(),
   'GET /documentos/checklists-avulso': leitura(),
   'GET /documentos/minhas-pendencias-assinatura': leitura('Pendências do próprio usuário.'),
+  'POST /documentos/pendencias-abertura-diaria': sessao(
+    '289: marca a abertura diária das pendências do próprio usuário. Qualquer sessão; sem permissão de tela.',
+  ),
   'GET /documentos/pendencias-resumo': leitura('Pendências do próprio usuário.'),
   'GET /documentos/por-chamado/:chamadoId': leitura(),
   'GET /documentos/por-fiscalizacao/:fiscalizacaoId': leitura(),
@@ -346,7 +378,9 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
   'POST /documentos/:id/disponibilizar-assinatura': regra('documentos', 'disponibilizar_assinatura', 'executar'),
   'POST /documentos/pedidos-assinatura/:pedidoId/retirar': regra('documentos', 'disponibilizar_assinatura', 'executar'),
   'POST /documentos/:id/cancelar-assinado': regra('documentos', 'cancelar_assinado', 'executar'),
-  // 287 (fase futura): 'POST /documentos/:id/cancelar': regra('documentos', 'cancelar', 'executar'),
+  'POST /documentos/:id/cancelar': regra('documentos', 'cancelar', 'executar', {
+    nota: '287: cancelamento lógico. Exige Executar de documentos.cancelar.',
+  }),
 
   // ── Vistorias / campo ───────────────────────────────────────────────────────
   'GET /fiscalizacoes': leitura(),
@@ -358,6 +392,9 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
   }),
   'POST /fiscalizacoes/imprimir-manual': regra('vistoria_campo', 'iniciar_vistoria', 'executar', { efeito: 'exportacao' }),
   'POST /fiscalizacoes/lancamento-manual': REGRA_REALIZAR_VISTORIA(),
+  'POST /fiscalizacoes/:id/exclusao': regra('vistorias', '_tela', 'excluir', {
+    nota: '305/E1: exclusão lógica da vistoria concluída. Exige Excluir da tela Vistorias realizadas.',
+  }),
   'POST /mobile/sync/fiscalizacoes': REGRA_REALIZAR_VISTORIA(),
   'GET /mobile/field-package': REGRA_VISTORIA_OFFLINE(),
   'GET /mobile/unidades/:id/chamados-pendentes': leitura(),
@@ -366,6 +403,12 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
   // ── Operacional / monitoramento / integrações ──────────────────────────────
   'GET /operacional/bairros': leitura(),
   'GET /operacional/chamados-mapa': leitura(),
+  'GET /operacional/chamados-mapa/tipos-chamado-disponiveis': leitura(
+    '316: tipos de chamado do mapa. Decorador de classe OPERACIONAL_READ_KEYS (mesma leitura do CCO).',
+  ),
+  'GET /operacional/tipos-chamado-disponiveis': leitura('316: tipos de chamado disponíveis no CCO.'),
+  'GET /operacional/categorias-nota-disponiveis': leitura('319: categorias de nota do CCO.'),
+  'GET /operacional/tipos-proprio-disponiveis': leitura('312: tipos de próprio do CCO.'),
   'GET /operacional/opcoes-filtro': leitura(),
   'GET /operacional/resumo': leitura(),
   'GET /operacional/secretarias': leitura(),
@@ -378,6 +421,9 @@ export const PERMISSOES_MATRIZ: Record<string, EntradaMatriz> = {
   'POST /operacional/nao-conformidades/:id/vincular-chamado': regra('chamados', 'salvar_chamado', 'alterar', {
     tambem: [chaveMatriz('cco', '_tela', 'executar')],
   }),
+  'GET /mapa/camadas': leitura('300/311: árvore de camadas do mapa. Mesma permissão da tela do CCO (dashboard.visualizar).'),
+  'GET /mapa/camadas/status': leitura('300: status da importação para quem abre o CCO (dashboard.visualizar).'),
+  'GET /mapa/camadas/:id/geojson': leitura('300/311: GeoJSON da camada no mapa do CCO (dashboard.visualizar).'),
   'GET /monitoramento/alertas': leitura(),
   'GET /monitoramento/auditoria': leitura(),
   'GET /monitoramento/dashboard': leitura(),
