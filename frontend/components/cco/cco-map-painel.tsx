@@ -65,6 +65,8 @@ export type CcoCamadasProps = {
   arvore: MapaCamadaGrupo[] | null;
   carregando: boolean;
   erro: boolean;
+  /** Detalhe do erro da API (status/mensagem), exibido junto de MSG_CAMADAS_ERRO. */
+  erroMensagem?: string | null;
   /** 300: 403 na lista — mensagem fixa, sem Tentar novamente. */
   semAcesso?: boolean;
   onTentarNovamente: () => void;
@@ -215,6 +217,9 @@ function CamadasConteudo(p: CcoCamadasProps) {
             ) : p.erro ? (
               <div role="alert" data-testid="cco-camadas-erro" className="rounded-[var(--r-md)] border border-[var(--line)] bg-[var(--surface-2)] p-3 text-[12.5px] text-[var(--ink-2)]">
                 {MSG_CAMADAS_ERRO}
+                {p.erroMensagem ? (
+                  <p data-testid="cco-camadas-erro-detalhe" className="mt-1 text-[12px] text-[var(--ink-3)]">{p.erroMensagem}</p>
+                ) : null}
                 <div className="mt-2">
                   <Button variant="outlined" size="lg" onClick={p.onTentarNovamente}>Tentar novamente</Button>
                 </div>

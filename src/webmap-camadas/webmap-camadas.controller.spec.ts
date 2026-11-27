@@ -6,6 +6,7 @@ import { adminTabPermissionKeys } from '../domain/admin-permissions';
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PermissionsGuard } from '../auth/permissions.guard';
+import { trackerThrottlerMapaCamadas } from '../common/throttler-tracker-mapa';
 import { WebmapCamadasAdminController, WebmapCamadasMapaController, WEBMAP_MAPA_KEYS } from './webmap-camadas.controller';
 import { WebmapCamadasService } from './webmap-camadas.service';
 
@@ -21,6 +22,10 @@ describe('296 — permissões e concorrência', () => {
   it('300 (QA2): camadas do mapa usam a mesma chave da tela do CCO (dashboard.visualizar)', () => {
     expect(perms(WebmapCamadasMapaController)).toEqual(['dashboard.visualizar']);
     expect(WEBMAP_MAPA_KEYS).toEqual(perms(WebmapCamadasMapaController));
+  });
+
+  it('GET /mapa/camadas usa tracker por sub do JWT (não o IP compartilhado do proxy)', () => {
+    expect(Reflect.getMetadata('THROTTLER:TRACKERdefault', WebmapCamadasMapaController)).toBe(trackerThrottlerMapaCamadas);
   });
 
   describe('300 W4: guard real nas rotas do mapa (lista, geojson, status)', () => {

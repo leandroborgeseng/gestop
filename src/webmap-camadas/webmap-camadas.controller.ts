@@ -1,4 +1,6 @@
 import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { trackerThrottlerMapaCamadas } from '../common/throttler-tracker-mapa';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -59,6 +61,7 @@ export const WEBMAP_MAPA_KEYS = ['dashboard.visualizar'];
 /** Leitura das camadas para o mapa (usuários do CCO). */
 @UseGuards(AuthGuard, PermissionsGuard)
 @RequireAnyPermissions(...WEBMAP_MAPA_KEYS)
+@Throttle({ default: { getTracker: trackerThrottlerMapaCamadas } })
 @Controller('mapa/camadas')
 export class WebmapCamadasMapaController {
   constructor(private readonly service: WebmapCamadasService) {}
