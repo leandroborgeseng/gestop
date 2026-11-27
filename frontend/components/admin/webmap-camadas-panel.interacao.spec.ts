@@ -24,7 +24,7 @@ const sim = (totalErros: number) => ({
   totalErros, resultadoPrevisto: totalErros ? 'PARCIAL' : 'SUCESSO',
 });
 
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.clearAllMocks(); });
 
 describe('296 · WebmapCamadasPanel', () => {
   it('sem permissão de executar: não mostra o botão', async () => {
@@ -140,5 +140,56 @@ describe('296 · A3 · string real do backend (Intl pt-BR)', () => {
     api.getWebmapCamadasStatus.mockResolvedValue({ ...base, ultimaImportacao: { id: 'j', status: 'FALHA', usuario: 'Tester Importação', iniciadoEmBrt: real, concluidoEmBrt: null, motivo: 'x', resultado: null } });
     await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
     expect(screen.getByText('Última aplicação: Falha · 20/10/2026 16:23 (BRT) · Tester Importação')).toBeTruthy();
+  });
+});
+
+describe('estabilidade · status some quando a API falha', () => {
+  it('erro (502): tira o aviso em andamento, mantém as contagens, continua o poll e atualiza quando a API volta', async () => {
+    vi.useFakeTimers();
+    const emAndamento = { tipo: 'APLICACAO', usuario: 'Petersson Alves Faciroli', desde: '', desdeBrt: '26/11/2026 15:18:55 (BRT)', fase: 'gravando', importacaoId: 'j' };
+    api.getWebmapCamadasStatus
+      .mockResolvedValueOnce({ ...base, ativas: 532, removidasOrigem: 29, emAndamento })
+      .mockRejectedValueOnce(new Error('Falha ao consultar API (502)'))
+      .mockResolvedValueOnce({ ...base, ativas: 558, removidasOrigem: 29, emAndamento: null, ultimaImportacao: { id: 'j', status: 'PARCIAL', usuario: 'Petersson Alves Faciroli', iniciadoEmBrt: 'x', concluidoEmBrt: '26/11/2026 15:24:22 (BRT)', motivo: null, resultado: { ...sim(3), resultado: 'PARCIAL' } } });
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    expect(screen.getByText(/Petersson Alves Faciroli desde 26\/11\/2026 15:18:55 \(BRT\)/)).toBeTruthy();
+    expect(screen.getByText(/532 camada\(s\) ativa\(s\) · 29 removida\(s\) da origem/)).toBeTruthy();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(screen.getByText('Falha ao consultar API (502)')).toBeTruthy();
+    expect(screen.queryByText(/Importação de camadas em andamento/)).toBeNull();
+    expect(screen.queryByText(/Petersson Alves Faciroli desde/)).toBeNull();
+    expect(screen.getByText(/532 camada\(s\) ativa\(s\) · 29 removida\(s\) da origem/)).toBeTruthy();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(screen.queryByText('Falha ao consultar API (502)')).toBeNull();
+    expect(screen.getByText(/558 camada\(s\) ativa\(s\) · 29 removida\(s\) da origem/)).toBeTruthy();
+    expect(screen.getByText(/Última aplicação: Parcial/)).toBeTruthy();
+    vi.useRealTimers();
+  });
+});
+
+describe('estabilidade · erro de ação não some no recarregamento', () => {
+  it('falha em Importar mantém a mensagem visível depois do recarregamento', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockRejectedValue(new Error('Falha ao importar camadas'));
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByText('Falha ao importar camadas')).toBeTruthy();
+  });
+
+  it('409 em Aplicar mantém a mensagem visível', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockResolvedValue(sim(0));
+    api.aplicarWebmapCamadas.mockRejectedValue(new Error('Já existe uma importação em andamento (409)'));
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Aplicar' })); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByText('Já existe uma importação em andamento (409)')).toBeTruthy();
   });
 });

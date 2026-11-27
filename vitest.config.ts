@@ -17,6 +17,6 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/**/*.spec.ts', 'test/**/*.test.ts', 'prisma/**/*.spec.ts', 'frontend/lib/**/*.spec.ts', 'frontend/components/**/*.spec.ts'],
+    include: ['src/**/*.spec.ts', 'test/**/*.test.ts', 'prisma/**/*.spec.ts', 'frontend/lib/**/*.spec.ts', 'frontend/components/**/*.spec.ts', 'frontend/scripts/**/*.spec.ts'],
   },
 });

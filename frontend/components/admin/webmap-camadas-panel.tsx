@@ -123,15 +123,20 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
   const [historico, setHistorico] = useState<WebmapCamadasHistoricoItem[]>([]);
   const [simulacao, setSimulacao] = useState<WebmapCamadasSimulacao | null>(null);
   const [simulando, setSimulando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
+  const [erroCarga, setErroCarga] = useState<string | null>(null);
+  const [erroAcao, setErroAcao] = useState<string | null>(null);
 
   const carregar = useCallback(async () => {
     try {
       const [s, h] = await Promise.all([getWebmapCamadasStatus(), getWebmapCamadasHistorico(10)]);
       setStatus(s);
       setHistorico(h);
+      setErroCarga(null);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Erro ao carregar o status das camadas.');
+      setErroCarga(e instanceof Error ? e.message : 'Erro ao carregar o status das camadas.');
+      // 502/API caída: não congelar o aviso "em andamento" de uma leitura anterior.
+      // Mantém ativas/removidas já conhecidas; o poll continua enquanto houver erro.
+      setStatus((prev) => (prev?.emAndamento ? { ...prev, emAndamento: null } : prev));
     }
   }, []);
 
@@ -142,19 +147,19 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
   // A aplicação roda no servidor: acompanha fase e resultado (também ao sair e voltar à tela). Sem % falso.
   const emAndamento = status?.emAndamento ?? null;
   useEffect(() => {
-    if (!emAndamento && !simulando) return;
+    if (!emAndamento && !simulando && !erroCarga) return;
     const t = window.setInterval(() => void carregar(), POLL_MS);
     return () => window.clearInterval(t);
-  }, [emAndamento, simulando, carregar]);
+  }, [emAndamento, simulando, erroCarga, carregar]);
 
   async function simular() {
-    setErro(null);
+    setErroAcao(null);
     setSimulando(true);
     try {
       setSimulacao(await simularWebmapCamadas());
     } catch (e) {
       setSimulacao(null);
-      setErro(e instanceof Error ? e.message : 'Falha na simulação.');
+      setErroAcao(e instanceof Error ? e.message : 'Falha na simulação.');
     } finally {
       setSimulando(false);
       void carregar();
@@ -176,12 +181,12 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
   async function aplicar() {
     setConfirmando(false);
     if (!simulacao) return;
-    setErro(null);
+    setErroAcao(null);
     try {
       await aplicarWebmapCamadas(simulacao.simulacaoId);
       setSimulacao(null);
     } catch (e) {
-      setErro(e instanceof Error ? e.message : 'Não foi possível iniciar a aplicação.');
+      setErroAcao(e instanceof Error ? e.message : 'Não foi possível iniciar a aplicação.');
     } finally {
       void carregar();
     }
@@ -201,7 +206,8 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {erro ? <Alert variant="error">{erro}</Alert> : null}
+        {erroCarga ? <Alert variant="error">{erroCarga}</Alert> : null}
+        {erroAcao ? <Alert variant="error">{erroAcao}</Alert> : null}
 
         {emAndamento ? (
           <Alert variant="warning" role="status" title="Importação de camadas em andamento">
