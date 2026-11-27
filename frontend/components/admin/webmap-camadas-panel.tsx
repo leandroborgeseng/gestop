@@ -130,8 +130,12 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
       const [s, h] = await Promise.all([getWebmapCamadasStatus(), getWebmapCamadasHistorico(10)]);
       setStatus(s);
       setHistorico(h);
+      setErro(null);
     } catch (e) {
       setErro(e instanceof Error ? e.message : 'Erro ao carregar o status das camadas.');
+      // 502/API caída: não congelar o aviso "em andamento" de uma leitura anterior.
+      // Mantém ativas/removidas já conhecidas; o poll continua enquanto houver erro.
+      setStatus((prev) => (prev?.emAndamento ? { ...prev, emAndamento: null } : prev));
     }
   }, []);
 
@@ -142,10 +146,10 @@ export function WebmapCamadasPanel({ canExec }: { canExec: boolean }) {
   // A aplicação roda no servidor: acompanha fase e resultado (também ao sair e voltar à tela). Sem % falso.
   const emAndamento = status?.emAndamento ?? null;
   useEffect(() => {
-    if (!emAndamento && !simulando) return;
+    if (!emAndamento && !simulando && !erro) return;
     const t = window.setInterval(() => void carregar(), POLL_MS);
     return () => window.clearInterval(t);
-  }, [emAndamento, simulando, carregar]);
+  }, [emAndamento, simulando, erro, carregar]);
 
   async function simular() {
     setErro(null);
