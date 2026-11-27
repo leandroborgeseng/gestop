@@ -52,7 +52,7 @@ export const DOMINIOS_DADOS: DominioModelo[] = [
       {
         nome: 'Perfil',
         resumo:
-          'Papel de acesso. Natureza INTERNO ou EXTERNO. O perfil de sistema “Administrador do Sistema” não é um model à parte. A exceção de acesso total no backend é o flag administradorSistema do perfil ativo.',
+          'Papel de acesso. Natureza INTERNO ou EXTERNO. O perfil de sistema “Administrador do Sistema” não é um model à parte. A exceção de acesso total no backend é o flag administradorSistema do perfil ativo. O boot liga esse flag só ao criar o perfil ou quando nenhum perfil da base o tem; não o desliga.',
         campos: ['nome (único)', 'natureza (PerfilNatureza)', 'sistema', 'administradorSistema', 'ativo'],
         relacoes: ['1:N UsuarioPerfil, PerfilPermissao', '1:N Usuario.perfilAtivo'],
       },

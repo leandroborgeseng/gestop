@@ -1,276 +1,206 @@
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
-import { syncPermissionsCatalog } from '../src/domain/permissions-sync';
 import { hashPassword } from '../src/auth/password';
+import { ensurePermissionsCatalog, ensurePermissoesCreateOnly } from '../src/domain/permissions-sync';
+import {
+  ADMINISTRADOR_SISTEMA_NOME,
+  DEMO_FACEF_EMAIL,
+  DEMO_GESTOR_EMAIL,
+  PERFIS_PADRAO,
+  PERMISSOES_FORA_DO_CATALOGO,
+  SYNC_RBAC_DEMO_PASSWORD_ENV,
+  syncRbacDemoUsersEnabled,
+} from './rbac-padrao';
 import { logInfo, logStep } from './startup-log';
-
-const GESTOR_SECRETARIA_PERMISSOES = [
-  'secretaria.gerenciar',
-  'chamados.gerenciar',
-  'chamados.executar',
-  'chamados.editar_abertura',
-  'chamados.execucao_manual',
-  'dashboard.visualizar',
-  'documentos.visualizar',
-  'documentos.gerar_pdf',
-  'documentos.coletar_assinatura',
-] as const;
-
-const NOVAS_PERMISSOES = [
-  ['chamados.editar_abertura', 'Editar informacoes de abertura do chamado', 'chamados'],
-  ['chamados.execucao_manual', 'Lancar execucao de chamado manualmente', 'chamados'],
-  ['meus_chamados.visualizar', 'Visualizar chamados abertos por mim ou em que sou observador', 'meus_chamados'],
-  ['documentos.visualizar', 'Visualizar documentos do modulo Documentos', 'documentos'],
-  ['documentos.criar_avulso', 'Criar documento avulso', 'documentos'],
-  ['documentos.editar_vinculo', 'Editar vinculos de documento', 'documentos'],
-  ['documentos.gerar_pdf', 'Gerar e visualizar PDF de documento', 'documentos'],
-  ['documentos.coletar_assinatura', 'Coletar assinatura de documento', 'documentos'],
-  ['documentos.cancelar_assinado', 'Cancelar PDF assinado', 'documentos'],
-  ['documentos.cancelar', 'Cancelar documento (cancelamento lógico)', 'documentos'],
-  ['documentos.administrar', 'Administrar documentos', 'documentos'],
-] as const;
 
 const connectionString =
   process.env.DATABASE_URL ?? 'postgresql://gestop:gestop@localhost:5432/gestop?schema=public';
 
 export async function syncSystemRbac(prisma: PrismaClient) {
-  logStep('sync-rbac', 'Sincronizando permissoes e perfis de sistema');
+  logStep('sync-rbac', 'Garantindo permissoes e perfis de sistema ausentes');
 
-  const catalogTotal = await syncPermissionsCatalog(prisma);
-  logInfo('sync-rbac', `Catalogo de permissoes sincronizado (${catalogTotal} chaves).`);
+  const catalogo = await ensurePermissionsCatalog(prisma);
+  const legadasCriadas = await ensurePermissoesCreateOnly(prisma, PERMISSOES_FORA_DO_CATALOGO);
+  logInfo(
+    'sync-rbac',
+    `Catalogo: ${catalogo.total} chaves conhecidas, ${catalogo.created} criadas; legadas criadas: ${legadasCriadas}. Descricoes existentes preservadas.`,
+  );
 
-  // 285: a migration só cria a coluna. O flag do perfil de sistema é ligado aqui, de forma idempotente.
-  const adminMarcados = await prisma.perfil.updateMany({
-    where: { nome: 'Administrador do Sistema', sistema: true, administradorSistema: false },
-    data: { administradorSistema: true },
-  });
-  if (adminMarcados.count > 0) {
-    logInfo('sync-rbac', `Perfil Administrador do Sistema marcado com administradorSistema (${adminMarcados.count}).`);
-  }
+  const adminCriado = await ensurePerfisPadrao(prisma);
+  await ensureFlagAdministradorSistema(prisma, adminCriado);
+  await ensureDemoUsers(prisma);
+}
 
-  for (const [chave, descricao, modulo] of NOVAS_PERMISSOES) {
-    await prisma.permissao.upsert({
-      where: { chave },
-      update: { descricao, modulo },
-      create: { chave, descricao, modulo },
+async function ensurePerfisPadrao(prisma: PrismaClient) {
+  let adminCriado = false;
+
+  for (const definicao of PERFIS_PADRAO) {
+    const existente = await prisma.perfil.findUnique({
+      where: { nome: definicao.nome },
+      select: { id: true },
     });
-  }
+    if (existente) {
+      logInfo('sync-rbac', `Perfil "${definicao.nome}" ja existe; descricao e vinculos preservados.`);
+      continue;
+    }
 
-  await prisma.permissao.upsert({
-    where: { chave: 'secretaria.gerenciar' },
-    update: {
-      descricao: 'Gerenciar operacao da propria secretaria',
-      modulo: 'operacao',
-    },
-    create: {
-      chave: 'secretaria.gerenciar',
-      descricao: 'Gerenciar operacao da propria secretaria',
-      modulo: 'operacao',
-    },
-  });
+    const perfil = await prisma.perfil.create({
+      data: {
+        nome: definicao.nome,
+        descricao: definicao.descricao,
+        sistema: true,
+        ativo: true,
+        administradorSistema: definicao.administradorSistema,
+      },
+    });
 
-  const perfil = await prisma.perfil.upsert({
-    where: { nome: 'Gestor de Secretaria' },
-    update: {
-      descricao: 'Gestao operacional limitada a uma secretaria municipal',
-      sistema: true,
-    },
-    create: {
-      nome: 'Gestor de Secretaria',
-      descricao: 'Gestao operacional limitada a uma secretaria municipal',
-      sistema: true,
-    },
-  });
-
-  const permissoes = await prisma.permissao.findMany({
-    where: { chave: { in: [...GESTOR_SECRETARIA_PERMISSOES] } },
-    select: { id: true },
-  });
-
-  for (const permissao of permissoes) {
-    await prisma.perfilPermissao.upsert({
-      where: {
-        perfilId_permissaoId: {
+    const permissoes = await prisma.permissao.findMany({
+      where: { chave: { in: [...definicao.chaves] } },
+      select: { id: true, chave: true },
+    });
+    if (permissoes.length > 0) {
+      await prisma.perfilPermissao.createMany({
+        data: permissoes.map((permissao) => ({
           perfilId: perfil.id,
           permissaoId: permissao.id,
-        },
-      },
-      update: {},
-      create: {
-        perfilId: perfil.id,
-        permissaoId: permissao.id,
-      },
-    });
+        })),
+      });
+    }
+
+    if (definicao.nome === ADMINISTRADOR_SISTEMA_NOME) {
+      adminCriado = true;
+    }
+
+    logInfo(
+      'sync-rbac',
+      `Perfil "${definicao.nome}" criado com ${permissoes.length} vinculos iniciais.`,
+    );
   }
 
+  return adminCriado;
+}
+
+/**
+ * Liga administradorSistema somente se (a) o perfil Administrador do Sistema
+ * acabou de ser criado neste boot, ou (b) nenhum perfil da base tem o flag.
+ * O caso (a) já grava o flag na criação. Aqui só resta o caso (b).
+ */
+async function ensureFlagAdministradorSistema(prisma: PrismaClient, adminCriadoNesteBoot: boolean) {
+  if (adminCriadoNesteBoot) {
+    logInfo('sync-rbac', 'Administrador do Sistema criado neste boot com administradorSistema.');
+    return;
+  }
+
+  const comFlag = await prisma.perfil.count({ where: { administradorSistema: true } });
+  if (comFlag > 0) {
+    return;
+  }
+
+  const marcados = await prisma.perfil.updateMany({
+    where: { nome: ADMINISTRADOR_SISTEMA_NOME, administradorSistema: false },
+    data: { administradorSistema: true },
+  });
+  if (marcados.count > 0) {
+    logInfo(
+      'sync-rbac',
+      'Nenhum perfil com administradorSistema; flag ligado em Administrador do Sistema.',
+    );
+  }
+}
+
+/** Usuários de demonstração e senha só com SYNC_RBAC_DEMO_USERS=true. Não reescreve quem já existe. */
+async function ensureDemoUsers(prisma: PrismaClient) {
+  if (!syncRbacDemoUsersEnabled()) {
+    return;
+  }
+
+  const senha = process.env[SYNC_RBAC_DEMO_PASSWORD_ENV]?.trim();
+  if (!senha) {
+    logInfo(
+      'sync-rbac',
+      `${SYNC_RBAC_DEMO_PASSWORD_ENV} ausente; usuarios de demonstracao nao foram criados.`,
+    );
+    return;
+  }
+
+  const senhaHash = hashPassword(senha);
+  await ensureGestorSecretariaDemo(prisma, senhaHash);
+  await ensureAdministradorFacef(prisma, senhaHash);
+}
+
+async function ensureGestorSecretariaDemo(prisma: PrismaClient, senhaHash: string) {
+  const perfil = await prisma.perfil.findUnique({
+    where: { nome: 'Gestor de Secretaria' },
+    select: { id: true },
+  });
   const educacao = await prisma.secretaria.findFirst({
     where: { sigla: 'SME' },
     select: { id: true },
   });
-
-  if (educacao) {
-    const senha = process.env.INITIAL_ADMIN_PASSWORD?.trim() || 'Gestop@123';
-    const senhaHash = await hashPassword(senha);
-
-    const usuario = await prisma.usuario.upsert({
-      where: { email: 'gestor.educacao@franca.sp.gov.br' },
-      update: {
-        nome: 'Patricia Gestora SME',
-        secretariaId: educacao.id,
-        ativo: true,
-      },
-      create: {
-        nome: 'Patricia Gestora SME',
-        email: 'gestor.educacao@franca.sp.gov.br',
-        cpf: '44444444444',
-        senhaHash,
-        cargo: 'Gestora de Secretaria — Educacao',
-        secretariaId: educacao.id,
-        ativo: true,
-      },
-    });
-
-    await prisma.usuarioPerfil.upsert({
-      where: {
-        usuarioId_perfilId: {
-          usuarioId: usuario.id,
-          perfilId: perfil.id,
-        },
-      },
-      update: {},
-      create: {
-        usuarioId: usuario.id,
-        perfilId: perfil.id,
-      },
-    });
-
-    logInfo('sync-rbac', `Usuario demo gestor secretaria: ${usuario.email}`);
-  }
-
-  logInfo('sync-rbac', `Perfil "${perfil.nome}" sincronizado (${permissoes.length} permissoes).`);
-
-  const adminPerfil = await prisma.perfil.findFirst({ where: { nome: 'Administrador do Sistema' }, select: { id: true } });
-  const gestorPerfil = await prisma.perfil.findFirst({ where: { nome: 'Gestor CCO' }, select: { id: true } });
-  const novasPermissoes = await prisma.permissao.findMany({
-    where: { chave: { in: NOVAS_PERMISSOES.map(([chave]) => chave) } },
-    select: { id: true },
-  });
-
-  for (const target of [adminPerfil, gestorPerfil, perfil].filter(Boolean)) {
-    for (const permissao of novasPermissoes) {
-      await prisma.perfilPermissao.upsert({
-        where: {
-          perfilId_permissaoId: {
-            perfilId: target!.id,
-            permissaoId: permissao.id,
-          },
-        },
-        update: {},
-        create: {
-          perfilId: target!.id,
-          permissaoId: permissao.id,
-        },
-      });
-    }
-  }
-
-  // Perfil Solicitação: apenas Novo chamado (abrir_chamado), sem triagem/listagem.
-  const solicitacaoPerfil = await prisma.perfil.upsert({
-    where: { nome: 'Solicitação' },
-    update: {
-      descricao: 'Abertura de chamados sem acesso à triagem ou gerenciamento',
-      sistema: true,
-      ativo: true,
-    },
-    create: {
-      nome: 'Solicitação',
-      descricao: 'Abertura de chamados sem acesso à triagem ou gerenciamento',
-      sistema: true,
-      ativo: true,
-    },
-  });
-
-  const solicitacaoKeys = [
-    'matriz.chamados.abrir_chamado.visualizar',
-    'matriz.chamados.abrir_chamado.inserir',
-    'chamados.abrir',
-    'matriz.meus_chamados._tela.visualizar',
-    'matriz.meus_chamados.consultar.visualizar',
-    'meus_chamados.visualizar',
-  ] as const;
-
-  const solicitacaoPermissoes = await prisma.permissao.findMany({
-    where: { chave: { in: [...solicitacaoKeys] } },
-    select: { id: true, chave: true },
-  });
-
-  // Garante que o perfil Solicitação tenha abertura + Meus chamados (sem triagem).
-  await prisma.perfilPermissao.deleteMany({ where: { perfilId: solicitacaoPerfil.id } });
-  if (solicitacaoPermissoes.length > 0) {
-    await prisma.perfilPermissao.createMany({
-      data: solicitacaoPermissoes.map((permissao) => ({
-        perfilId: solicitacaoPerfil.id,
-        permissaoId: permissao.id,
-      })),
-    });
-  }
-
-  logInfo(
-    'sync-rbac',
-    `Perfil "${solicitacaoPerfil.nome}" sincronizado (${solicitacaoPermissoes.length} permissoes de abertura/meus chamados).`,
-  );
-
-  await ensureAdministradorFacef(prisma);
-}
-
-/** Conta administrativa pedida para acesso ao sistema. A senha é reaplicada a cada subida da API. */
-async function ensureAdministradorFacef(prisma: PrismaClient) {
-  const perfil = await prisma.perfil.findFirst({
-    where: { nome: 'Administrador do Sistema' },
-    select: { id: true },
-  });
-  if (!perfil) {
-    logInfo('sync-rbac', 'Perfil Administrador do Sistema ausente; admin@facef.br nao foi criado.');
+  if (!perfil || !educacao) {
     return;
   }
 
-  const email = 'admin@facef.br';
-  const existente = await prisma.usuario.findUnique({ where: { email }, select: { id: true } });
-  const usuario = existente
-    ? await prisma.usuario.update({
-        where: { id: existente.id },
-        data: {
-          perfilAtivoId: perfil.id,
-          acessoTodasSecretarias: true,
-        },
-      })
-    : await prisma.usuario.create({
-        data: {
-          nome: 'Administrador FACEF',
-          email,
-          senhaHash: hashPassword('Lean1234$'),
-          cargo: 'Administrador do Sistema',
-          perfilAtivoId: perfil.id,
-          acessoTodasSecretarias: true,
-          ativo: true,
-        },
-      });
+  const existente = await prisma.usuario.findUnique({
+    where: { email: DEMO_GESTOR_EMAIL },
+    select: { id: true },
+  });
+  if (existente) {
+    logInfo('sync-rbac', `Usuario demo ${DEMO_GESTOR_EMAIL} ja existe; senha e cadastro preservados.`);
+    return;
+  }
 
-  await prisma.usuarioPerfil.upsert({
-    where: {
-      usuarioId_perfilId: {
-        usuarioId: usuario.id,
-        perfilId: perfil.id,
-      },
-    },
-    update: {},
-    create: {
-      usuarioId: usuario.id,
-      perfilId: perfil.id,
+  const usuario = await prisma.usuario.create({
+    data: {
+      nome: 'Patricia Gestora SME',
+      email: DEMO_GESTOR_EMAIL,
+      cpf: '44444444444',
+      senhaHash,
+      cargo: 'Gestora de Secretaria — Educacao',
+      secretariaId: educacao.id,
+      ativo: true,
     },
   });
+  await prisma.usuarioPerfil.create({
+    data: { usuarioId: usuario.id, perfilId: perfil.id },
+  });
+  logInfo('sync-rbac', `Usuario demo gestor secretaria criado: ${usuario.email}`);
+}
 
-  logInfo('sync-rbac', `Administrador ${email} sincronizado com perfil Administrador do Sistema.`);
+async function ensureAdministradorFacef(prisma: PrismaClient, senhaHash: string) {
+  const perfil = await prisma.perfil.findUnique({
+    where: { nome: ADMINISTRADOR_SISTEMA_NOME },
+    select: { id: true },
+  });
+  if (!perfil) {
+    logInfo('sync-rbac', `Perfil Administrador do Sistema ausente; ${DEMO_FACEF_EMAIL} nao foi criado.`);
+    return;
+  }
+
+  const existente = await prisma.usuario.findUnique({
+    where: { email: DEMO_FACEF_EMAIL },
+    select: { id: true },
+  });
+  if (existente) {
+    logInfo('sync-rbac', `Usuario ${DEMO_FACEF_EMAIL} ja existe; senha e vinculos preservados.`);
+    return;
+  }
+
+  const usuario = await prisma.usuario.create({
+    data: {
+      nome: 'Administrador FACEF',
+      email: DEMO_FACEF_EMAIL,
+      senhaHash,
+      cargo: 'Administrador do Sistema',
+      perfilAtivoId: perfil.id,
+      acessoTodasSecretarias: true,
+      ativo: true,
+    },
+  });
+  await prisma.usuarioPerfil.create({
+    data: { usuarioId: usuario.id, perfilId: perfil.id },
+  });
+  logInfo('sync-rbac', `Usuario ${DEMO_FACEF_EMAIL} criado com perfil Administrador do Sistema.`);
 }
 
 async function main() {
@@ -285,7 +215,9 @@ async function main() {
   }
 }
 
-void main().catch((error) => {
-  console.error('[SIGMA:sync-rbac] Falha:', error);
-  process.exit(1);
-});
+if (require.main === module) {
+  void main().catch((error) => {
+    console.error('[SIGMA:sync-rbac] Falha:', error);
+    process.exit(1);
+  });
+}

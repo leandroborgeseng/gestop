@@ -52,6 +52,8 @@ export function logEnvSummary() {
   logInfo('env', `FORCE_DB_RESET=${process.env.FORCE_DB_RESET ?? 'false'}`);
   logInfo('env', `FORCE_SEED_ON_START=${process.env.FORCE_SEED_ON_START ?? 'false'}`);
   logInfo('env', `INITIAL_ADMIN_PASSWORD=${process.env.INITIAL_ADMIN_PASSWORD ? '[definida]' : '(nao definida)'}`);
+  logInfo('env', `SYNC_RBAC_DEMO_USERS=${process.env.SYNC_RBAC_DEMO_USERS === 'true' ? 'true' : 'false (padrao)'}`);
+  logInfo('env', `SYNC_RBAC_DEMO_PASSWORD=${process.env.SYNC_RBAC_DEMO_PASSWORD?.trim() ? '[definida]' : '(nao definida)'}`);
   logInfo('env', `JWT_SECRET=${summarizeSecret(process.env.JWT_SECRET)}`);
   logInfo('env', `STORAGE_DRIVER=${process.env.STORAGE_DRIVER ?? 'local'}`);
   logInfo('env', `STORAGE_LOCAL_DIR=${process.env.STORAGE_LOCAL_DIR ?? '(nao definido — usa ./storage efemero)'}`);

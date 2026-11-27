@@ -114,9 +114,10 @@ describe('287 · permissão', () => {
 
   it('a permissão é sincronizada (seed, sync-rbac e permissions-sync)', () => {
     const raiz = path.resolve(__dirname, '../..');
-    for (const f of ['prisma/seed.ts', 'prisma/sync-rbac.ts', 'src/domain/permissions-sync.ts']) {
+    for (const f of ['prisma/seed.ts', 'prisma/rbac-padrao.ts', 'src/domain/permissions-sync.ts']) {
       expect(readFileSync(path.join(raiz, f), 'utf8')).toMatch(/'documentos\.cancelar'/);
     }
+    expect(readFileSync(path.join(raiz, 'prisma/sync-rbac.ts'), 'utf8')).toMatch(/rbac-padrao/);
   });
 });
 

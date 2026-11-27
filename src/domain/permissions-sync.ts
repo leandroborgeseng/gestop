@@ -1,7 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import { catalogActionLabel, catalogEntryForKey, listCatalogMatrixKeys } from '../domain/permissions-catalog';
 
-export async function syncPermissionsCatalog(prisma: PrismaClient) {
+export type PermissaoCatalogo = {
+  chave: string;
+  descricao: string;
+  modulo: string;
+};
+
+export function listPermissionsCatalogEntries(): PermissaoCatalogo[] {
   const entries = listCatalogMatrixKeys().map((chave) => {
     const entry = catalogEntryForKey(chave);
     const descricao = entry
@@ -112,6 +118,34 @@ export async function syncPermissionsCatalog(prisma: PrismaClient) {
       modulo: 'documentos',
     },
   );
+
+  return entries;
+}
+
+/** Cria chaves ausentes. Não altera descrição nem módulo do que já existe. */
+export async function ensurePermissoesCreateOnly(prisma: PrismaClient, entries: readonly PermissaoCatalogo[]) {
+  if (entries.length === 0) return 0;
+  const existing = await prisma.permissao.findMany({
+    where: { chave: { in: entries.map((entry) => entry.chave) } },
+    select: { chave: true },
+  });
+  const have = new Set(existing.map((entry) => entry.chave));
+  const missing = entries.filter((entry) => !have.has(entry.chave));
+  if (missing.length > 0) {
+    await prisma.permissao.createMany({ data: [...missing] });
+  }
+  return missing.length;
+}
+
+/** Boot: só insere permissão nova. Descrição já gravada permanece. */
+export async function ensurePermissionsCatalog(prisma: PrismaClient) {
+  const entries = listPermissionsCatalogEntries();
+  const created = await ensurePermissoesCreateOnly(prisma, entries);
+  return { total: entries.length, created };
+}
+
+export async function syncPermissionsCatalog(prisma: PrismaClient) {
+  const entries = listPermissionsCatalogEntries();
 
   for (const entry of entries) {
     await prisma.permissao.upsert({

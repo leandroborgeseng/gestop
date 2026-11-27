@@ -114,6 +114,18 @@ Frontend:
 - `/dashboard`: indicadores operacionais e auditoria.
 - `/integracoes`: eventos técnicos, notificações mock e retentativa de sync.
 
+## Boot do RBAC (`sync-rbac`)
+
+A cada subida (`npm start` / container), depois do seed, o boot só cria o que falta:
+
+- permissões novas do catálogo (descrição já gravada não é reescrita);
+- perfis padrão que não existem (Administrador do Sistema, Gestor de Secretaria e Solicitação), com os vínculos iniciais apenas nessa criação;
+- o flag `administradorSistema` do Administrador do Sistema, somente se esse perfil acabou de ser criado ou se nenhum perfil da base tem o flag.
+
+Não apaga vínculo, não remove perfil e não altera senha.
+
+Usuários de demonstração (gestor de secretaria e `admin@facef.br`) não são criados em produção. Eles só entram com a flag explícita `SYNC_RBAC_DEMO_USERS=true`, desligada por padrão, e a senha vem de `SYNC_RBAC_DEMO_PASSWORD`. Quem já existe não tem a senha reaplicada. O CI, o E2E Smoke e o `npm run dev` não usam esses usuários: o smoke sobe a API depois do seed e entra com o administrador do seed. Deixe a flag desligada nesses ambientes.
+
 ## Usuarios Seed
 
 Todos os usuarios seed usam a senha `Gestop@123`.

@@ -38,7 +38,7 @@ export const MATRIZ_RASTREABILIDADE: LinhaRastreabilidade[] = [
     api: 'MatrizPermissoesGuard global, antes do handler. Fonte: src/auth/matriz/permissoes-matriz.ts.',
     tabelas: 'Perfil.administradorSistema, Permissao, PerfilPermissao, UsuarioPermissao',
     permissao:
-      'Rota sem entrada responde 403 com a mensagem “Você não possui permissão para executar esta ação.”. Público não exige sessão. Sessão basta para a própria conta (inclui POST /auth/refresh e POST /documentos/pendencias-abertura-diaria). Mutação e GET com efeito exigem a chave da matriz. GET sem efeito mantém o decorador atual. A exceção de acesso total é Perfil.administradorSistema do perfil ativo, não o nome.',
+      'Rota sem entrada responde 403 com a mensagem “Você não possui permissão para executar esta ação.”. Público não exige sessão. Sessão basta para a própria conta (inclui POST /auth/refresh e POST /documentos/pendencias-abertura-diaria). Mutação e GET com efeito exigem a chave da matriz. GET sem efeito mantém o decorador atual. A exceção de acesso total é Perfil.administradorSistema do perfil ativo, não o nome. No boot, o sync-rbac só cria permissões e perfis padrão que faltam, com vínculos iniciais apenas na criação do perfil, e não reescreve descrição nem vínculo já gravado. O flag é ligado só se o perfil Administrador do Sistema acabou de ser criado ou se nenhum perfil tem o flag.',
   },
   {
     id: 'senha',
