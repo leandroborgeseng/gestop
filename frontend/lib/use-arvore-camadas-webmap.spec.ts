@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const getMapaCamadas = vi.fn(async () => [{ id: 'g', titulo: 'Drenagem', camadas: [] }]);
 vi.mock('@/lib/api', () => ({ getMapaCamadas: () => getMapaCamadas() }));
 
-import { useArvoreCamadasWebmap } from './use-arvore-camadas-webmap';
+import { mensagemErroArvoreCamadas, useArvoreCamadasWebmap } from './use-arvore-camadas-webmap';
 import { contarCamadasAlemDoPadrao, estadoCamadasPadrao, filtrarArvore, resumoGrupo } from './cco-camadas';
 import type { MapaCamada } from './types';
 
@@ -67,6 +67,7 @@ describe('300 QA2 · 403 na lista', () => {
     act(() => result.current.garantir());
     await waitFor(() => expect(result.current.erro).toBe(true));
     expect(result.current.semAcesso).toBe(false);
+    expect(result.current.erroMensagem).toBe('Falha de conexao');
   });
 });
 
@@ -76,5 +77,36 @@ describe('300 · seção Webmap QGIS recolhida por padrão', () => {
     expect(e.gruposAbertos).toContain('sigma');
     expect(e.gruposAbertos).not.toContain('webmap');
     expect(e.gruposAbertos.some((g) => g.startsWith('webmap-grupo:'))).toBe(false);
+  });
+});
+
+describe('estabilidade · loop de retry e mensagem real', () => {
+  it('mensagemErroArvoreCamadas: usa e.message e inclui o status se ainda não estiver no texto', () => {
+    expect(mensagemErroArvoreCamadas(new Error('Falha ao consultar API (502)'))).toBe('Falha ao consultar API (502)');
+    expect(mensagemErroArvoreCamadas(Object.assign(new Error('Backend indisponível'), { status: 502 }))).toBe('Backend indisponível (502)');
+    expect(mensagemErroArvoreCamadas('x')).toBe('Erro ao carregar as camadas do Webmap.');
+  });
+
+  it('erro: garantir não recarrega (evita o loop do efeito da sessão); só carregar ("Tentar novamente") tenta de novo', async () => {
+    getMapaCamadas
+      .mockRejectedValueOnce(Object.assign(new Error('Falha ao consultar API (502)'), { status: 502 }))
+      .mockResolvedValueOnce([{ id: 'g', titulo: 'Drenagem', camadas: [] }]);
+    const { result } = renderHook(() => useArvoreCamadasWebmap());
+    const garantirAntes = result.current.garantir;
+    act(() => result.current.garantir());
+    await waitFor(() => expect(result.current.erro).toBe(true));
+    expect(result.current.erroMensagem).toBe('Falha ao consultar API (502)');
+    expect(result.current.garantir).toBe(garantirAntes);
+    act(() => {
+      result.current.garantir();
+      result.current.garantir();
+      result.current.garantir();
+    });
+    expect(getMapaCamadas).toHaveBeenCalledTimes(1);
+    act(() => result.current.carregar());
+    await waitFor(() => expect(result.current.arvore).toHaveLength(1));
+    expect(result.current.erro).toBe(false);
+    expect(result.current.erroMensagem).toBeNull();
+    expect(getMapaCamadas).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,4 +1,8 @@
 import { Body, Controller, Get, Header, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
+import { definirSecretJwtDoTracker, trackerThrottlerMapaCamadas } from '../common/throttler-tracker-mapa';
+import { resolveJwtSecret } from '../config/env';
 import { AuthGuard } from '../auth/auth.guard';
 import { CurrentUser } from '../auth/current-user';
 import { JwtPayload } from '../auth/jwt';
@@ -59,9 +63,16 @@ export const WEBMAP_MAPA_KEYS = ['dashboard.visualizar'];
 /** Leitura das camadas para o mapa (usuários do CCO). */
 @UseGuards(AuthGuard, PermissionsGuard)
 @RequireAnyPermissions(...WEBMAP_MAPA_KEYS)
+@Throttle({ default: { getTracker: trackerThrottlerMapaCamadas } })
 @Controller('mapa/camadas')
 export class WebmapCamadasMapaController {
-  constructor(private readonly service: WebmapCamadasService) {}
+  constructor(
+    private readonly service: WebmapCamadasService,
+    config: ConfigService,
+  ) {
+    // Mesma fonte do AuthGuard, para o tracker verificar a assinatura antes da auth.
+    definirSecretJwtDoTracker(() => resolveJwtSecret(config.get<string>('JWT_SECRET')));
+  }
 
   /** Sem a permissão de Importação: só "importação em andamento" (fase, quem e desde quando ficam no status do Admin). */
   @Get('status')

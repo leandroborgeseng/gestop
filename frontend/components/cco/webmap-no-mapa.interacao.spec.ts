@@ -137,6 +137,11 @@ describe('300 · painel Webmap QGIS', () => {
     montar([], { erro: true });
     expect(screen.getByTestId('cco-camadas-erro').textContent).toContain('Não foi possível carregar as camadas do Webmap.');
     expect(screen.getByRole('button', { name: 'Tentar novamente' })).toBeTruthy();
+    expect(screen.queryByTestId('cco-camadas-erro-detalhe')).toBeNull();
+    cleanup();
+    montar([], { erro: true, erroMensagem: 'Falha ao consultar API (429)' });
+    expect(screen.getByTestId('cco-camadas-erro').textContent).toContain('Não foi possível carregar as camadas do Webmap.');
+    expect(screen.getByTestId('cco-camadas-erro-detalhe').textContent).toBe('Falha ao consultar API (429)');
     cleanup();
     montar([], { arvore: [] });
     expect(screen.getByTestId('cco-camadas-vazio').textContent).toBe('Nenhuma camada do Webmap foi importada ainda.');

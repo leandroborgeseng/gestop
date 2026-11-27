@@ -217,4 +217,11 @@ describe('301 · X e setas do painel', () => {
     fireEvent.click(screen.getByText('Drenagem'));
     expect(onAlternarGrupo).toHaveBeenLastCalledWith('webmap-grupo:g');
   });
+
+  it('mostra a mensagem real da API junto de MSG_CAMADAS_ERRO', () => {
+    render(painel({ aba: 'camadas', camadas: camadasBase({ erro: true, erroMensagem: 'Falha ao consultar API (502)' }) }));
+    const alerta = screen.getByTestId('cco-camadas-erro');
+    expect(alerta.textContent).toContain(MSG_CAMADAS_ERRO);
+    expect(screen.getByTestId('cco-camadas-erro-detalhe').textContent).toBe('Falha ao consultar API (502)');
+  });
 });

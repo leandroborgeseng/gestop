@@ -418,15 +418,18 @@ function CcoPageContent() {
     return () => window.clearTimeout(t);
   }, [statusMapa]);
 
-  const { arvore: arvoreCamadas, carregando: arvoreCarregando, erro: arvoreErro, semAcesso: arvoreSemAcesso, carregar: carregarArvoreCamadas, garantir: garantirArvoreCamadas } =
+  const { arvore: arvoreCamadas, carregando: arvoreCarregando, erro: arvoreErro, erroMensagem: arvoreErroMensagem, semAcesso: arvoreSemAcesso, carregar: carregarArvoreCamadas, garantir: garantirArvoreCamadas } =
     useArvoreCamadasWebmap();
   // 298: camadas do Webmap ligadas na sessão e existentes na lista (L3) => desenhadas no mapa, sob demanda.
   const [mapaLeaflet, setMapaLeaflet] = useState<LeafletMap | null>(null);
   const idsWebmapLigadas = webmapLigadas(camadas);
   const temWebmapLigada = idsWebmapLigadas.length > 0;
+  const garantirArvoreRef = useRef(garantirArvoreCamadas);
+  garantirArvoreRef.current = garantirArvoreCamadas;
   useEffect(() => {
-    if (temWebmapLigada) garantirArvoreCamadas(); // sessão com Webmap ligada (F5): só a lista, sem geometria
-  }, [temWebmapLigada, garantirArvoreCamadas]);
+    // Só quando passa a haver camada ligada na sessão (F5). Não rearma se carregando/erro mudarem.
+    if (temWebmapLigada) garantirArvoreRef.current();
+  }, [temWebmapLigada]);
   const camadasWebmapLigadas = useMemo(() => {
     if (!arvoreCamadas) return [];
     const porId = new Map(arvoreCamadas.flatMap((g) => g.camadas).map((c) => [c.id, c]));
@@ -777,6 +780,7 @@ function CcoPageContent() {
                       arvore: arvoreCamadas,
                       carregando: arvoreCarregando,
                       erro: arvoreErro,
+                      erroMensagem: arvoreErroMensagem,
                       semAcesso: arvoreSemAcesso,
                       onTentarNovamente: carregarArvoreCamadas,
                       onAlternar: (id, ligar) => setCamadas((c) => alternarCamada(c, id, ligar)),
