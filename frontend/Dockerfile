@@ -35,6 +35,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Redundante com o bundle do prepare, mas garante npm start (Coolify) e CMD
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/start-standalone.mjs ./start-standalone.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/start-standalone.mjs ./scripts/start-standalone.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/healthcheck.mjs ./scripts/healthcheck.mjs
 
 USER nextjs
 EXPOSE 3000
