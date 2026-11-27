@@ -5,13 +5,40 @@
  * - Nixpacks / npm start: .next/standalone/server.js
  * - Nixpacks aninhado: .next/standalone/<pasta>/server.js
  */
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 export function mensagemSaidaServer(code, signal) {
   return `start-standalone: server.js encerrou code=${code == null ? '-' : code} signal=${signal ?? '-'}`;
+}
+
+export function scriptEhPrincipal(argv1, href) {
+  if (!argv1) return false;
+  try {
+    return realpathSync(argv1) === realpathSync(fileURLToPath(href));
+  } catch {
+    return false;
+  }
+}
+
+export const ESPERA_ENCERRAMENTO_MS = 8000;
+
+export function forcarSaidaDoFilho(child) {
+  console.error('start-standalone: server.js não encerrou a tempo; saindo.');
+  try {
+    if (child?.pid) child.kill('SIGKILL');
+  } catch {
+    /* processo já saiu */
+  }
+}
+
+export function agendarSaidaForcada(child, sair, esperaMs = ESPERA_ENCERRAMENTO_MS) {
+  return setTimeout(() => {
+    forcarSaidaDoFilho(child);
+    sair();
+  }, esperaMs);
 }
 
 function findNestedServer(standaloneDir) {
@@ -76,10 +103,7 @@ function main() {
     } catch {
       /* processo já saiu */
     }
-    setTimeout(() => {
-      console.error('start-standalone: server.js não encerrou a tempo; saindo.');
-      process.exit(1);
-    }, 8000).unref();
+    agendarSaidaForcada(child, () => process.exit(1)).unref();
   }
 
   process.on('SIGTERM', () => encaminharSinal('SIGTERM'));
@@ -97,5 +121,5 @@ function main() {
   });
 }
 
-const isMain = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = scriptEhPrincipal(process.argv[1], import.meta.url);
 if (isMain) main();

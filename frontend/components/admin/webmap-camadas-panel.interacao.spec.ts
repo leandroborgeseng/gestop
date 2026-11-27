@@ -169,3 +169,27 @@ describe('estabilidade · status some quando a API falha', () => {
     vi.useRealTimers();
   });
 });
+
+describe('estabilidade · erro de ação não some no recarregamento', () => {
+  it('falha em Importar mantém a mensagem visível depois do recarregamento', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockRejectedValue(new Error('Falha ao importar camadas'));
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByText('Falha ao importar camadas')).toBeTruthy();
+  });
+
+  it('409 em Aplicar mantém a mensagem visível', async () => {
+    api.getWebmapCamadasStatus.mockResolvedValue(base);
+    api.getWebmapCamadasHistorico.mockResolvedValue([]);
+    api.simularWebmapCamadas.mockResolvedValue(sim(0));
+    api.aplicarWebmapCamadas.mockRejectedValue(new Error('Já existe uma importação em andamento (409)'));
+    await act(async () => { render(createElement(WebmapCamadasPanel, { canExec: true })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Importar apenas camadas Webmap/ })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Aplicar' })); });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByText('Já existe uma importação em andamento (409)')).toBeTruthy();
+  });
+});

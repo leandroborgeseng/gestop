@@ -1,5 +1,7 @@
 import { createServer } from 'node:http';
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -53,5 +55,24 @@ describe('healthcheck', () => {
 
   it('porta fechada resulta em saída 1', async () => {
     expect(await executar('9')).toBe(1);
+  });
+
+  it('symlink com 503 resulta em saída 1', async () => {
+    const srv = await ouvir(503);
+    const dir = mkdtempSync(join(tmpdir(), 'healthcheck-'));
+    const link = join(dir, 'healthcheck.mjs');
+    symlinkSync(script, link);
+    try {
+      const code = await new Promise<number>((resolve) => {
+        const child = spawn(process.execPath, [link], {
+          env: { ...process.env, PORT: String(srv.port) },
+        });
+        child.on('exit', (c) => resolve(c ?? 1));
+      });
+      expect(code).toBe(1);
+    } finally {
+      await srv.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
